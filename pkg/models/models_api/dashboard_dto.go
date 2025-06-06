@@ -15,7 +15,7 @@ type DashboardStatsDTO struct {
 }
 
 // MarketOverviewDTO - DTO cho market overview
-type MarketOverviewDTO struct {
+type MarketOverview1DTO struct {
 	VN30Index     decimal.Decimal `json:"vn30_index"`
 	Change        decimal.Decimal `json:"change"`
 	ChangePercent decimal.Decimal `json:"change_percent"`
