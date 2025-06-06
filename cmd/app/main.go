@@ -5,6 +5,7 @@ import (
 	"go-stock-prediction/pkg/config"
 	"go-stock-prediction/pkg/logger"
 	"go-stock-prediction/pkg/server"
+	"go-stock-prediction/pkg/service/crawler"
 	"go-stock-prediction/pkg/store/repository"
 	"os"
 	"os/signal"
@@ -22,6 +23,8 @@ func main() {
 	repository.Init()
 
 	go server.StartHTTPServer()
+
+	go crawler.Init()
 
 	stopOrKillServer()
 }
