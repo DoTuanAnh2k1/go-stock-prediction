@@ -1,0 +1,138 @@
+{{template "base.html" .}}
+
+{{define "content"}}
+<!-- Stock Search & Filters -->
+<div class="panel">
+    <h2>🔍 Stock Search & Filters</h2>
+    <div class="search-filters">
+        <div class="search-box">
+            <input type="text" id="stockSearch" placeholder="Search stocks (e.g., VCB, FPT...)" />
+            <button class="search-btn" onclick="searchStocks()">Search</button>
+        </div>
+        <div class="filter-row">
+            <select id="sectorFilter">
+                <option value="">All Sectors</option>
+                <option value="Banking">Banking</option>
+                <option value="Technology">Technology</option>
+                <option value="Real Estate">Real Estate</option>
+                <option value="Energy">Energy</option>
+                <option value="Consumer Goods">Consumer Goods</option>
+            </select>
+            <select id="exchangeFilter">
+                <option value="">All Exchanges</option>
+                <option value="HOSE">HOSE</option>
+                <option value="HNX">HNX</option>
+                <option value="UPCOM">UPCOM</option>
+            </select>
+            <button class="filter-btn" onclick="applyFilters()">Apply Filters</button>
+        </div>
+    </div>
+</div>
+
+<!-- VN30 Overview -->
+<div class="panel">
+    <h2>📈 VN30 Overview</h2>
+    <div class="vn30-stats">
+        <div class="stat-row">
+            <div class="stat-item">
+                <span class="label">Index:</span>
+                <span class="value" id="vn30Index">1,234.56</span>
+                <span class="change positive" id="vn30Change">+12.34 (+1.02%)</span>
+            </div>
+            <div class="stat-item">
+                <span class="label">Volume:</span>
+                <span class="value" id="totalVolume">125.6M</span>
+            </div>
+            <div class="stat-item">
+                <span class="label">Value:</span>
+                <span class="value" id="totalValue">3.2T VND</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- All Stocks Table -->
+<div class="panel">
+    <h2>
+        📊 All Stocks
+        <div class="table-controls">
+            <button class="refresh-btn" onclick="refreshStocks()">Refresh</button>
+            <select id="sortBy">
+                <option value="symbol">Sort by Symbol</option>
+                <option value="price">Sort by Price</option>
+                <option value="change">Sort by Change</option>
+                <option value="volume">Sort by Volume</option>
+            </select>
+        </div>
+    </h2>
+    <div class="loading" id="stocksLoading">
+        <div class="spinner"></div>
+        <p>Loading stocks data...</p>
+    </div>
+    <div class="stocks-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>Company</th>
+                    <th>Sector</th>
+                    <th>Price</th>
+                    <th>Change</th>
+                    <th>%Change</th>
+                    <th>Volume</th>
+                    <th>Value</th>
+                    <th>VN30</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="stocksTableBody">
+                <!-- Dynamic content will be loaded here -->
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination" id="stocksPagination">
+        <!-- Pagination will be loaded here -->
+    </div>
+</div>
+
+<!-- Top Movers -->
+<div class="main-grid">
+    <div class="panel">
+        <h2>🚀 Top Gainers</h2>
+        <div class="loading" id="gainersLoading">
+            <div class="spinner"></div>
+            <p>Loading gainers...</p>
+        </div>
+        <div class="movers-list" id="topGainers">
+            <!-- Dynamic content -->
+        </div>
+    </div>
+    
+    <div class="panel">
+        <h2>📉 Top Losers</h2>
+        <div class="loading" id="losersLoading">
+            <div class="spinner"></div>
+            <p>Loading losers...</p>
+        </div>
+        <div class="movers-list" id="topLosers">
+            <!-- Dynamic content -->
+        </div>
+    </div>
+</div>
+
+<!-- Most Active -->
+<div class="panel">
+    <h2>🔥 Most Active (by Volume)</h2>
+    <div class="loading" id="activeLoading">
+        <div class="spinner"></div>
+        <p>Loading most active stocks...</p>
+    </div>
+    <div class="active-stocks" id="mostActive">
+        <!-- Dynamic content -->
+    </div>
+</div>
+{{end}}
+
+{{define "extra-js"}}
+<script src="/static/js/stocks.js"></script>
+{{end}}

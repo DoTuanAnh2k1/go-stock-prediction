@@ -1,0 +1,198 @@
+{{template "base.html" .}}
+
+{{define "content"}}
+<!-- Prediction Filters -->
+<div class="panel">
+    <h2>🎯 Prediction Filters</h2>
+    <div class="prediction-filters">
+        <div class="filter-row">
+            <select id="algorithmFilter">
+                <option value="">All Algorithms</option>
+                <option value="lstm_nn">LSTM Neural Network</option>
+                <option value="arima_garch">ARIMA-GARCH</option>
+                <option value="moving_average">Moving Average</option>
+            </select>
+            <select id="timeRangeFilter">
+                <option value="7">Last 7 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+            </select>
+            <select id="stockFilter">
+                <option value="">All Stocks</option>
+                <option value="VCB">VCB - Vietcombank</option>
+                <option value="VIC">VIC - Vingroup</option>
+                <option value="FPT">FPT - FPT Corp</option>
+            </select>
+            <button class="filter-btn" onclick="applyPredictionFilters()">Apply</button>
+        </div>
+    </div>
+</div>
+
+<!-- Algorithm Performance -->
+<div class="main-grid">
+    <div class="panel">
+        <h2>🏆 Algorithm Performance</h2>
+        <div class="algo-performance" id="algoPerformance">
+            <div class="algo-card">
+                <h3>LSTM Neural Network</h3>
+                <div class="performance-stats">
+                    <div class="stat">
+                        <span class="label">Accuracy:</span>
+                        <span class="value">93.2%</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Predictions:</span>
+                        <span class="value">156</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Avg Error:</span>
+                        <span class="value">2.1%</span>
+                    </div>
+                </div>
+                <div class="trend positive">↗ Improving</div>
+            </div>
+            
+            <div class="algo-card">
+                <h3>ARIMA-GARCH</h3>
+                <div class="performance-stats">
+                    <div class="stat">
+                        <span class="label">Accuracy:</span>
+                        <span class="value">80.1%</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Predictions:</span>
+                        <span class="value">142</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Avg Error:</span>
+                        <span class="value">3.2%</span>
+                    </div>
+                </div>
+                <div class="trend stable">→ Stable</div>
+            </div>
+            
+            <div class="algo-card">
+                <h3>Moving Average</h3>
+                <div class="performance-stats">
+                    <div class="stat">
+                        <span class="label">Accuracy:</span>
+                        <span class="value">75.5%</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Predictions:</span>
+                        <span class="value">148</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Avg Error:</span>
+                        <span class="value">4.1%</span>
+                    </div>
+                </div>
+                <div class="trend negative">↘ Declining</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="panel">
+        <h2>📊 Prediction Summary</h2>
+        <div class="prediction-summary">
+            <div class="summary-stat">
+                <div class="number">446</div>
+                <div class="label">Total Predictions</div>
+                <div class="sublabel">Last 30 days</div>
+            </div>
+            <div class="summary-stat">
+                <div class="number">83.2%</div>
+                <div class="label">Overall Accuracy</div>
+                <div class="sublabel">All algorithms</div>
+            </div>
+            <div class="summary-stat">
+                <div class="number">127</div>
+                <div class="label">Confirmed</div>
+                <div class="sublabel">With actual prices</div>
+            </div>
+            <div class="summary-stat">
+                <div class="number">2.8%</div>
+                <div class="label">Avg Error</div>
+                <div class="sublabel">Price difference</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Predictions Table -->
+<div class="panel">
+    <h2>
+        🔮 All Predictions
+        <div class="table-controls">
+            <button class="refresh-btn" onclick="refreshPredictions()">Refresh</button>
+            <button class="export-btn" onclick="exportPredictions()">Export CSV</button>
+        </div>
+    </h2>
+    <div class="loading" id="predictionsLoading">
+        <div class="spinner"></div>
+        <p>Loading predictions...</p>
+    </div>
+    <div class="predictions-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Stock</th>
+                    <th>Algorithm</th>
+                    <th>Predicted Price</th>
+                    <th>Current Price</th>
+                    <th>Expected Change</th>
+                    <th>Confidence</th>
+                    <th>Target Date</th>
+                    <th>Actual Price</th>
+                    <th>Accuracy</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="predictionsTableBody">
+                <!-- Dynamic content will be loaded here -->
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination" id="predictionsPagination">
+        <!-- Pagination controls -->
+    </div>
+</div>
+
+<!-- Prediction Accuracy Chart -->
+<div class="panel">
+    <h2>📈 Accuracy Trend</h2>
+    <div class="chart-container">
+        <canvas id="accuracyChart" width="800" height="400"></canvas>
+    </div>
+    <div class="chart-legend">
+        <div class="legend-item">
+            <span class="color-box lstm"></span>
+            <span>LSTM Neural Network</span>
+        </div>
+        <div class="legend-item">
+            <span class="color-box arima"></span>
+            <span>ARIMA-GARCH</span>
+        </div>
+        <div class="legend-item">
+            <span class="color-box ma"></span>
+            <span>Moving Average</span>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Successful Predictions -->
+<div class="panel">
+    <h2>✅ Recent Successful Predictions</h2>
+    <div class="loading" id="successfulLoading">
+        <div class="spinner"></div>
+        <p>Loading successful predictions...</p>
+    </div>
+    <div class="successful-predictions" id="successfulPredictions">
+        <!-- Dynamic content will be loaded here -->
+    </div>
+</div>
+{{end}}
+
+{{define "extra-js"}}
+<script src="/static/js/predictions.js"></script>
+{{end}}
