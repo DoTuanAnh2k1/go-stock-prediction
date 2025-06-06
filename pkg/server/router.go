@@ -48,6 +48,9 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("/api/stocks/watchlist", GetStockWatchlist)
 	mux.HandleFunc("/api/market/overview", GetMarketOverview)
 
+	// Trigger Apis
+	mux.HandleFunc("/api/trigger/crawler", TriggerCrawlerHandler)
+
 	return mux
 }
 

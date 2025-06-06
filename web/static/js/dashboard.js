@@ -129,10 +129,11 @@ async function loadWatchlist(showSpinner = true) {
         }
         
         const data = await response.json();
-        
-        if (data.success && data.data && data.data.stocks) {
-            console.log(`✅ Loaded ${data.data.stocks.length} stocks`);
-            renderWatchlist(data.data.stocks);
+        console.log("data:", data)
+        // if (data.success && data.data && data.data.stocks) {
+        if (data && data.stocks) {
+            console.log(`✅ Loaded ${data.stocks.length} stocks`);
+            renderWatchlist(data.stocks);
         } else {
             console.warn('⚠️ API returned unexpected format, using sample data');
             renderWatchlistError();
@@ -387,7 +388,19 @@ function formatChange(change, percent = null) {
     }
     
     const changeStr = change > 0 ? `+${formatPrice(Math.abs(change))}` : `-${formatPrice(Math.abs(change))}`;
-    const percentStr = percent ? ` (${percent > 0 ? '+' : ''}${percent.toFixed(2)}%)` : '';
+    
+    // Fix cái percent.toFixed ở đây nè!
+    let percentStr = '';
+    if (percent !== null && percent !== undefined) {
+        // Convert percent to number nếu nó là string
+        const percentNum = typeof percent === 'string' ? parseFloat(percent) : percent;
+        
+        // Check xem có phải valid number không
+        if (!isNaN(percentNum) && isFinite(percentNum)) {
+            percentStr = ` (${percentNum > 0 ? '+' : ''}${percentNum.toFixed(2)}%)`;
+        }
+    }
+    
     return changeStr + percentStr;
 }
 

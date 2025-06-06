@@ -104,7 +104,7 @@ function updateVN30Display(data) {
     }
 }
 
-// Load all stocks
+// Load all stocksrenderWatchlist(response.data.stocks)
 async function loadAllStocks() {
     showLoading('stocksLoading');
     

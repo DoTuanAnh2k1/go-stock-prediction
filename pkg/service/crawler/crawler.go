@@ -56,7 +56,7 @@ func (vc *VietStockCrawler) crawlVN30Data(ctx context.Context) (*CrawlResult, er
 		vc.mutex.Unlock()
 	}()
 
-	logger.Logger.Info("🚀 Bắt đầu crawl VN30 data từ VietStock...")
+	logger.Logger.Info("🚀 Start crawl VN30 data from VietStock...")
 	startTime := time.Now()
 
 	// Tạo collector mới cho mỗi lần crawl

@@ -108,6 +108,7 @@ func processingSingleStock(store repository.DatabaseStore, stockData modelssvc.V
 		Change:        decimal.NewFromFloat(stockData.Change),
 		ChangePercent: decimal.NewFromFloat(stockData.ChangePercent),
 	}
+	logger.Logger.Debugf("stockPrice: %v", stockPrice)
 
 	// 3. Upsert stock price (update if exists, create if not)
 	err = store.UpsertStockPrice(stockPrice)
