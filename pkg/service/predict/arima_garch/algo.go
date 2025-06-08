@@ -65,11 +65,12 @@ func (a *ARIMAGARCHPredictor) Predict(ctx context.Context, data *modelssvc.Stock
 	prediction := a.forecast(arimaModel, garchModel)
 
 	// Lấy giá cuối cùng
-	lastPrice := prices[len(prices)-1]
-	predictedPrice := a.returnToPrice(lastPrice, prediction.mean)
+	currentPrice := prices[len(prices)-1]
+	predictedPrice := a.returnToPrice(currentPrice, prediction.mean)
 
 	return &modelssvc.Prediction{
 		PredictedPrice: predictedPrice,
+		CurrentPrice:   currentPrice, // <- Thêm này!
 	}, nil
 }
 

@@ -58,6 +58,7 @@ func (m *MovingAveragePredictor) Predict(ctx context.Context, data *modelssvc.St
 
 	return &modelssvc.Prediction{
 		PredictedPrice: predictedPrice,
+		CurrentPrice:   currentPrice, // <- Thêm field này!
 	}, nil
 }
 

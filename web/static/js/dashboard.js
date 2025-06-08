@@ -240,10 +240,11 @@ async function loadPredictions(showSpinner = true) {
         }
         
         const data = await response.json();
-        
-        if (data.success && data.data && data.data.predictions) {
-            console.log(`✅ Loaded ${data.data.predictions.length} predictions`);
-            renderPredictions(data.data.predictions);
+        console.log("data algo: ", data)
+
+        if (data && data.predictions) {
+            console.log(`✅ Loaded ${data.predictions.length} predictions`);
+            renderPredictions(data.predictions);
         } else {
             console.warn('⚠️ API returned unexpected format, using sample data');
             renderPredictionsError();

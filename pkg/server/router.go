@@ -50,6 +50,7 @@ func addHandler() *http.ServeMux {
 
 	// Trigger Apis
 	mux.HandleFunc("/api/trigger/crawler", TriggerCrawlerHandler)
+	mux.HandleFunc("/api/trigger/predict", TriggerPredictHandler)
 
 	return mux
 }

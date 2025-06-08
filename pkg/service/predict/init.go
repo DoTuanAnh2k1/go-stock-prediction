@@ -134,7 +134,8 @@ func CronjobWeeklyTraining() error {
 	}()
 
 	startTime := time.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour) // 2 hours max
+	// ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour) // 2 hours max
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute) // 15 minutes max
 	defer cancel()
 
 	// Get all VN30 stocks for training
@@ -152,7 +153,7 @@ func CronjobWeeklyTraining() error {
 		result := trainSingleAlgorithm(ctx, algName, algorithm, stocks)
 		trainingResults = append(trainingResults, result)
 
-		logger.Logger.Infof("✅ %s training completed: %d/%d successful, accuracy: %.2f%%",
+		logger.Logger.Infof("✅ %s training completed: %d/%d successful, accuracy: %v",
 			algName, result.SuccessCount, result.TotalStocks, result.Accuracy)
 	}
 
@@ -210,7 +211,7 @@ func CronjobDailyPrediction() error {
 
 			successCount++
 			totalPredictions++
-			logger.Logger.Debugf("✅ Saved prediction for %s (%s): %.2f",
+			logger.Logger.Debugf("✅ Saved prediction for %s (%s): %v",
 				stock.Symbol, algName, prediction.PredictedPrice)
 		}
 	}
@@ -287,6 +288,7 @@ func generateStockPrediction(ctx context.Context, stock modelsdb.Stock, algName 
 	dbPrediction := &modelsdb.Prediction{
 		StockID:        stock.ID,
 		PredictedPrice: decimal.NewFromFloat(prediction.PredictedPrice),
+		CurrentPrice:   decimal.NewFromFloat(prediction.CurrentPrice), // <- Thêm này!
 		Confidence:     decimal.NewFromFloat(algorithm.GetAccuracy()),
 		AlgorithmName:  algName,
 		PredictionDate: time.Now(),

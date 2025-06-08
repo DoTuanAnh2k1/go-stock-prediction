@@ -62,6 +62,7 @@ func GetPredictions(w http.ResponseWriter, r *http.Request) {
 					Sector:      stock.Sector,
 				},
 				PredictedPrice: pred.PredictedPrice,
+				CurrentPrice:   pred.CurrentPrice,
 				ActualPrice:    pred.ActualPrice,
 				Confidence:     pred.Confidence,
 				AlgorithmName:  pred.AlgorithmName,

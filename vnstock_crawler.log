@@ -1,0 +1,680 @@
+2025-06-08 19:08:20,100 - INFO - 🚀 VNStock Crawler initialized successfully!
+2025-06-08 19:08:20,100 - INFO - 📊 Will crawl 30 VN30 stocks
+2025-06-08 19:08:20,100 - INFO - 🚀 Starting VN30 historical data crawling...
+2025-06-08 19:08:20,199 - INFO - package: mysql.connector.plugins
+2025-06-08 19:08:20,200 - INFO - plugin_name: mysql_native_password
+2025-06-08 19:08:20,202 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLNativePasswordAuthPlugin
+2025-06-08 19:08:20,208 - INFO - ✅ Connected to MySQL database successfully!
+2025-06-08 19:08:20,208 - INFO - 📊 Processing ACB (1/30)
+2025-06-08 19:08:20,208 - INFO - 📈 Fetching data for ACB from 2024-11-20 to 2025-06-08
+2025-06-08 19:08:21,284 - INFO - 🔍 DataFrame info for ACB:
+2025-06-08 19:08:21,284 - INFO -    - Shape: (133, 6)
+2025-06-08 19:08:21,284 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:08:21,285 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:08:21,285 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:08:21,286 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 20.22, 'high': 20.51, 'low': 20.18, 'close': 20.47, 'volume': 6242481}
+2025-06-08 19:08:21,286 - INFO - ✅ Successfully fetched 133 records for ACB
+2025-06-08 19:08:21,902 - INFO - ✅ ACB: Inserted 133 new records, Updated 0 records
+2025-06-08 19:08:21,903 - INFO - ✅ ACB completed successfully!
+2025-06-08 19:08:23,904 - INFO - 📊 Processing BCM (2/30)
+2025-06-08 19:08:23,904 - INFO - 📈 Fetching data for BCM from 2024-11-20 to 2025-06-08
+2025-06-08 19:08:25,878 - INFO - 🔍 DataFrame info for BCM:
+2025-06-08 19:08:25,879 - INFO -    - Shape: (133, 6)
+2025-06-08 19:08:25,879 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:08:25,879 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:08:25,879 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:08:25,880 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 64.0, 'high': 65.8, 'low': 63.1, 'close': 65.7, 'volume': 251900}
+2025-06-08 19:08:25,880 - INFO - ✅ Successfully fetched 133 records for BCM
+2025-06-08 19:08:26,531 - INFO - ✅ BCM: Inserted 133 new records, Updated 0 records
+2025-06-08 19:08:26,532 - INFO - ✅ BCM completed successfully!
+2025-06-08 19:08:28,532 - INFO - 📊 Processing BID (3/30)
+2025-06-08 19:08:28,533 - INFO - 📈 Fetching data for BID from 2024-11-20 to 2025-06-08
+2025-06-08 19:08:29,437 - INFO - 🔍 DataFrame info for BID:
+2025-06-08 19:08:29,438 - INFO -    - Shape: (133, 6)
+2025-06-08 19:08:29,438 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:08:29,438 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:08:29,438 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:08:29,439 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 36.94, 'high': 37.89, 'low': 36.77, 'close': 37.19, 'volume': 2190978}
+2025-06-08 19:08:29,439 - INFO - ✅ Successfully fetched 133 records for BID
+2025-06-08 19:08:30,023 - INFO - ✅ BID: Inserted 133 new records, Updated 0 records
+2025-06-08 19:08:30,023 - INFO - ✅ BID completed successfully!
+2025-06-08 19:08:32,024 - INFO - 📊 Processing BVH (4/30)
+2025-06-08 19:08:32,024 - INFO - 📈 Fetching data for BVH from 2024-11-20 to 2025-06-08
+2025-06-08 19:08:32,957 - INFO - 🔍 DataFrame info for BVH:
+2025-06-08 19:08:32,957 - INFO -    - Shape: (133, 6)
+2025-06-08 19:08:32,958 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:08:32,958 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:08:32,959 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:08:32,960 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 43.15, 'high': 43.7, 'low': 43.1, 'close': 43.6, 'volume': 196859}
+2025-06-08 19:08:32,960 - INFO - ✅ Successfully fetched 133 records for BVH
+2025-06-08 19:08:33,561 - INFO - ✅ BVH: Inserted 133 new records, Updated 0 records
+2025-06-08 19:08:33,561 - INFO - ✅ BVH completed successfully!
+2025-06-08 19:08:35,562 - INFO - 📊 Processing CTG (5/30)
+2025-06-08 19:08:35,562 - INFO - 📈 Fetching data for CTG from 2024-11-20 to 2025-06-08
+2025-06-08 19:08:36,581 - INFO - 🔍 DataFrame info for CTG:
+2025-06-08 19:08:36,581 - INFO -    - Shape: (133, 6)
+2025-06-08 19:08:36,581 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:08:36,582 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:08:36,582 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:08:36,582 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 33.05, 'high': 34.0, 'low': 33.05, 'close': 34.0, 'volume': 6494000}
+2025-06-08 19:08:36,582 - INFO - ✅ Successfully fetched 133 records for CTG
+2025-06-08 19:08:37,190 - INFO - ✅ CTG: Inserted 133 new records, Updated 0 records
+2025-06-08 19:08:37,190 - INFO - ✅ CTG completed successfully!
+2025-06-08 19:08:39,190 - INFO - 📊 Processing FPT (6/30)
+2025-06-08 19:08:39,191 - INFO - 📈 Fetching data for FPT from 2024-11-20 to 2025-06-08
+2025-06-08 19:08:40,883 - INFO - 🔍 DataFrame info for FPT:
+2025-06-08 19:08:40,884 - INFO -    - Shape: (133, 6)
+2025-06-08 19:08:40,884 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:08:40,884 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:08:40,885 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:08:40,885 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 129.1, 'high': 131.49, 'low': 125.83, 'close': 131.49, 'volume': 8474055}
+2025-06-08 19:08:40,885 - INFO - ✅ Successfully fetched 133 records for FPT
+2025-06-08 19:08:41,534 - INFO - ✅ FPT: Inserted 133 new records, Updated 0 records
+2025-06-08 19:08:41,534 - INFO - ✅ FPT completed successfully!
+2025-06-08 19:08:43,535 - INFO - 📊 Processing GAS (7/30)
+2025-06-08 19:08:43,535 - INFO - 📈 Fetching data for GAS from 2024-11-20 to 2025-06-08
+2025-06-08 19:08:44,623 - INFO - 🔍 DataFrame info for GAS:
+2025-06-08 19:08:44,623 - INFO -    - Shape: (133, 6)
+2025-06-08 19:08:44,624 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:08:44,624 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:08:44,624 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:08:44,624 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 67.9, 'high': 68.4, 'low': 67.5, 'close': 67.6, 'volume': 711800}
+2025-06-08 19:08:44,625 - INFO - ✅ Successfully fetched 133 records for GAS
+2025-06-08 19:08:45,204 - INFO - ✅ GAS: Inserted 133 new records, Updated 0 records
+2025-06-08 19:08:45,204 - INFO - ✅ GAS completed successfully!
+2025-06-08 19:08:47,205 - INFO - 📊 Processing GVR (8/30)
+2025-06-08 19:08:47,205 - INFO - 📈 Fetching data for GVR from 2024-11-20 to 2025-06-08
+2025-06-08 19:08:48,820 - INFO - 🔍 DataFrame info for GVR:
+2025-06-08 19:08:48,820 - INFO -    - Shape: (133, 6)
+2025-06-08 19:08:48,820 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:08:48,821 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:08:48,821 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:08:48,822 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 30.4, 'high': 31.3, 'low': 30.0, 'close': 30.8, 'volume': 2658083}
+2025-06-08 19:08:48,822 - INFO - ✅ Successfully fetched 133 records for GVR
+2025-06-08 19:08:49,407 - INFO - ✅ GVR: Inserted 133 new records, Updated 0 records
+2025-06-08 19:08:49,407 - INFO - ✅ GVR completed successfully!
+2025-06-08 19:08:51,425 - INFO - 📊 Processing HDB (9/30)
+2025-06-08 19:08:51,425 - INFO - 📈 Fetching data for HDB from 2024-11-20 to 2025-06-08
+2025-06-08 19:08:52,666 - INFO - 🔍 DataFrame info for HDB:
+2025-06-08 19:08:52,667 - INFO -    - Shape: (133, 6)
+2025-06-08 19:08:52,667 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:08:52,668 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:08:52,668 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:08:52,668 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 20.5, 'high': 20.71, 'low': 20.25, 'close': 20.54, 'volume': 9632732}
+2025-06-08 19:08:52,669 - INFO - ✅ Successfully fetched 133 records for HDB
+2025-06-08 19:08:53,268 - INFO - ✅ HDB: Inserted 133 new records, Updated 0 records
+2025-06-08 19:08:53,269 - INFO - ✅ HDB completed successfully!
+2025-06-08 19:08:55,277 - INFO - 📊 Processing HPG (10/30)
+2025-06-08 19:08:55,277 - INFO - 📈 Fetching data for HPG from 2024-11-20 to 2025-06-08
+2025-06-08 19:08:57,217 - INFO - 🔍 DataFrame info for HPG:
+2025-06-08 19:08:57,217 - INFO -    - Shape: (133, 6)
+2025-06-08 19:08:57,217 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:08:57,218 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:08:57,218 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:08:57,218 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 25.4, 'high': 26.0, 'low': 25.25, 'close': 25.6, 'volume': 22750500}
+2025-06-08 19:08:57,218 - INFO - ✅ Successfully fetched 133 records for HPG
+2025-06-08 19:08:57,798 - INFO - ✅ HPG: Inserted 133 new records, Updated 0 records
+2025-06-08 19:08:57,798 - INFO - ✅ HPG completed successfully!
+2025-06-08 19:08:59,799 - INFO - 📊 Processing MBB (11/30)
+2025-06-08 19:08:59,799 - INFO - 📈 Fetching data for MBB from 2024-11-20 to 2025-06-08
+2025-06-08 19:09:01,291 - INFO - 🔍 DataFrame info for MBB:
+2025-06-08 19:09:01,292 - INFO -    - Shape: (133, 6)
+2025-06-08 19:09:01,292 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:09:01,292 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:09:01,293 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:09:01,293 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 20.13, 'high': 20.61, 'low': 20.13, 'close': 20.48, 'volume': 9721576}
+2025-06-08 19:09:01,293 - INFO - ✅ Successfully fetched 133 records for MBB
+2025-06-08 19:09:01,939 - INFO - ✅ MBB: Inserted 133 new records, Updated 0 records
+2025-06-08 19:09:01,940 - INFO - ✅ MBB completed successfully!
+2025-06-08 19:09:03,941 - INFO - 📊 Processing MSN (12/30)
+2025-06-08 19:09:03,941 - INFO - 📈 Fetching data for MSN from 2024-11-20 to 2025-06-08
+2025-06-08 19:09:05,633 - INFO - 🔍 DataFrame info for MSN:
+2025-06-08 19:09:05,633 - INFO -    - Shape: (133, 6)
+2025-06-08 19:09:05,634 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:09:05,634 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:09:05,634 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:09:05,635 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 69.9, 'high': 70.9, 'low': 69.1, 'close': 70.3, 'volume': 3919900}
+2025-06-08 19:09:05,635 - INFO - ✅ Successfully fetched 133 records for MSN
+2025-06-08 19:09:06,298 - INFO - ✅ MSN: Inserted 133 new records, Updated 0 records
+2025-06-08 19:09:06,298 - INFO - ✅ MSN completed successfully!
+2025-06-08 19:09:08,299 - INFO - 📊 Processing MWG (13/30)
+2025-06-08 19:09:08,299 - INFO - 📈 Fetching data for MWG from 2024-11-20 to 2025-06-08
+2025-06-08 19:09:09,153 - INFO - 🔍 DataFrame info for MWG:
+2025-06-08 19:09:09,153 - INFO -    - Shape: (133, 6)
+2025-06-08 19:09:09,153 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:09:09,154 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:09:09,154 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:09:09,154 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 57.2, 'high': 58.1, 'low': 56.0, 'close': 56.8, 'volume': 9752900}
+2025-06-08 19:09:09,155 - INFO - ✅ Successfully fetched 133 records for MWG
+2025-06-08 19:09:09,752 - INFO - ✅ MWG: Inserted 133 new records, Updated 0 records
+2025-06-08 19:09:09,753 - INFO - ✅ MWG completed successfully!
+2025-06-08 19:09:11,753 - INFO - 📊 Processing PLX (14/30)
+2025-06-08 19:09:11,754 - INFO - 📈 Fetching data for PLX from 2024-11-20 to 2025-06-08
+2025-06-08 19:09:12,765 - INFO - 🔍 DataFrame info for PLX:
+2025-06-08 19:09:12,765 - INFO -    - Shape: (133, 6)
+2025-06-08 19:09:12,766 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:09:12,766 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:09:12,766 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:09:12,767 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 38.05, 'high': 38.8, 'low': 38.0, 'close': 38.6, 'volume': 443300}
+2025-06-08 19:09:12,767 - INFO - ✅ Successfully fetched 133 records for PLX
+2025-06-08 19:09:13,386 - INFO - ✅ PLX: Inserted 133 new records, Updated 0 records
+2025-06-08 19:09:13,386 - INFO - ✅ PLX completed successfully!
+2025-06-08 19:09:15,387 - INFO - 📊 Processing POW (15/30)
+2025-06-08 19:09:15,387 - INFO - 📈 Fetching data for POW from 2024-11-20 to 2025-06-08
+2025-06-08 19:09:17,571 - INFO - 🔍 DataFrame info for POW:
+2025-06-08 19:09:17,571 - INFO -    - Shape: (133, 6)
+2025-06-08 19:09:17,571 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:09:17,572 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:09:17,572 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:09:17,572 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 11.15, 'high': 11.5, 'low': 11.15, 'close': 11.35, 'volume': 4157400}
+2025-06-08 19:09:17,573 - INFO - ✅ Successfully fetched 133 records for POW
+2025-06-08 19:09:18,144 - INFO - ✅ POW: Inserted 133 new records, Updated 0 records
+2025-06-08 19:09:18,144 - INFO - ✅ POW completed successfully!
+2025-06-08 19:09:20,144 - INFO - 📊 Processing SAB (16/30)
+2025-06-08 19:09:20,145 - INFO - 📈 Fetching data for SAB from 2024-11-20 to 2025-06-08
+2025-06-08 19:09:21,953 - INFO - 🔍 DataFrame info for SAB:
+2025-06-08 19:09:21,954 - INFO -    - Shape: (133, 6)
+2025-06-08 19:09:21,954 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:09:21,954 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:09:21,954 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:09:21,955 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 52.8, 'high': 53.57, 'low': 52.8, 'close': 53.57, 'volume': 414956}
+2025-06-08 19:09:21,955 - INFO - ✅ Successfully fetched 133 records for SAB
+2025-06-08 19:09:22,623 - INFO - ✅ SAB: Inserted 133 new records, Updated 0 records
+2025-06-08 19:09:22,623 - INFO - ✅ SAB completed successfully!
+2025-06-08 19:09:24,624 - INFO - 📊 Processing SHB (17/30)
+2025-06-08 19:09:24,624 - INFO - 📈 Fetching data for SHB from 2024-11-20 to 2025-06-08
+2025-06-08 19:09:26,077 - INFO - 🔍 DataFrame info for SHB:
+2025-06-08 19:09:26,078 - INFO -    - Shape: (133, 6)
+2025-06-08 19:09:26,078 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:09:26,078 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:09:26,078 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:09:26,079 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 9.1, 'high': 9.28, 'low': 9.1, 'close': 9.19, 'volume': 9066739}
+2025-06-08 19:09:26,079 - INFO - ✅ Successfully fetched 133 records for SHB
+2025-06-08 19:09:26,746 - INFO - ✅ SHB: Inserted 133 new records, Updated 0 records
+2025-06-08 19:09:26,747 - INFO - ✅ SHB completed successfully!
+2025-06-08 19:09:28,747 - INFO - 📊 Processing SSB (18/30)
+2025-06-08 19:09:28,748 - INFO - 📈 Fetching data for SSB from 2024-11-20 to 2025-06-08
+2025-06-08 19:09:29,619 - INFO - 🔍 DataFrame info for SSB:
+2025-06-08 19:09:29,620 - INFO -    - Shape: (133, 6)
+2025-06-08 19:09:29,620 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:09:29,620 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:09:29,621 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:09:29,622 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 16.55, 'high': 16.9, 'low': 16.55, 'close': 16.9, 'volume': 1905200}
+2025-06-08 19:09:29,622 - INFO - ✅ Successfully fetched 133 records for SSB
+2025-06-08 19:09:30,285 - INFO - ✅ SSB: Inserted 133 new records, Updated 0 records
+2025-06-08 19:09:30,285 - INFO - ✅ SSB completed successfully!
+2025-06-08 19:09:32,286 - INFO - 📊 Processing SSI (19/30)
+2025-06-08 19:09:32,286 - INFO - 📈 Fetching data for SSI from 2024-11-20 to 2025-06-08
+2025-06-08 19:09:33,109 - INFO - 🔍 DataFrame info for SSI:
+2025-06-08 19:09:33,109 - INFO -    - Shape: (133, 6)
+2025-06-08 19:09:33,110 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:09:33,110 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:09:33,110 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:09:33,111 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 23.9, 'high': 24.7, 'low': 23.75, 'close': 24.3, 'volume': 17961700}
+2025-06-08 19:09:33,111 - INFO - ✅ Successfully fetched 133 records for SSI
+2025-06-08 19:09:33,690 - INFO - ✅ SSI: Inserted 133 new records, Updated 0 records
+2025-06-08 19:09:33,690 - INFO - ✅ SSI completed successfully!
+2025-06-08 19:09:35,691 - INFO - 📊 Processing STB (20/30)
+2025-06-08 19:09:35,692 - INFO - 📈 Fetching data for STB from 2024-11-20 to 2025-06-08
+2025-06-08 19:09:37,427 - INFO - 🔍 DataFrame info for STB:
+2025-06-08 19:09:37,428 - INFO -    - Shape: (133, 6)
+2025-06-08 19:09:37,428 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:09:37,428 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:09:37,429 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:09:37,429 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 31.7, 'high': 32.75, 'low': 31.3, 'close': 32.4, 'volume': 8575900}
+2025-06-08 19:09:37,429 - INFO - ✅ Successfully fetched 133 records for STB
+2025-06-08 19:09:38,062 - INFO - ✅ STB: Inserted 133 new records, Updated 0 records
+2025-06-08 19:09:38,062 - INFO - ✅ STB completed successfully!
+2025-06-08 19:09:40,063 - INFO - 📊 Processing TCB (21/30)
+2025-06-08 19:09:40,063 - INFO - 📈 Fetching data for TCB from 2024-11-20 to 2025-06-08
+2025-06-08 19:09:43,354 - INFO - 🔍 DataFrame info for TCB:
+2025-06-08 19:09:43,355 - INFO -    - Shape: (133, 6)
+2025-06-08 19:09:43,355 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:09:43,355 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:09:43,356 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:09:43,356 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 22.3, 'high': 22.85, 'low': 22.25, 'close': 22.85, 'volume': 10247500}
+2025-06-08 19:09:43,356 - INFO - ✅ Successfully fetched 133 records for TCB
+2025-06-08 19:09:43,979 - INFO - ✅ TCB: Inserted 133 new records, Updated 0 records
+2025-06-08 19:09:43,979 - INFO - ✅ TCB completed successfully!
+2025-06-08 19:09:45,980 - INFO - 📊 Processing TPB (22/30)
+2025-06-08 19:09:45,980 - INFO - 📈 Fetching data for TPB from 2024-11-20 to 2025-06-08
+2025-06-08 19:09:47,410 - INFO - 🔍 DataFrame info for TPB:
+2025-06-08 19:09:47,410 - INFO -    - Shape: (133, 6)
+2025-06-08 19:09:47,411 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:09:47,411 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:09:47,411 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:09:47,412 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 14.64, 'high': 15.24, 'low': 14.64, 'close': 14.96, 'volume': 11382625}
+2025-06-08 19:09:47,412 - INFO - ✅ Successfully fetched 133 records for TPB
+2025-06-08 19:09:47,991 - INFO - ✅ TPB: Inserted 133 new records, Updated 0 records
+2025-06-08 19:09:47,991 - INFO - ✅ TPB completed successfully!
+2025-06-08 19:09:49,993 - INFO - 📊 Processing VCB (23/30)
+2025-06-08 19:09:49,997 - INFO - 📈 Fetching data for VCB from 2024-11-20 to 2025-06-08
+2025-06-08 19:09:51,465 - INFO - 🔍 DataFrame info for VCB:
+2025-06-08 19:09:51,465 - INFO -    - Shape: (133, 6)
+2025-06-08 19:09:51,465 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:09:51,466 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:09:51,466 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:09:51,466 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 60.2, 'high': 61.0, 'low': 60.13, 'close': 60.4, 'volume': 1641687}
+2025-06-08 19:09:51,467 - INFO - ✅ Successfully fetched 133 records for VCB
+2025-06-08 19:09:52,112 - INFO - ✅ VCB: Inserted 133 new records, Updated 0 records
+2025-06-08 19:09:52,113 - INFO - ✅ VCB completed successfully!
+2025-06-08 19:09:54,113 - INFO - 📊 Processing VHM (24/30)
+2025-06-08 19:09:54,114 - INFO - 📈 Fetching data for VHM from 2024-11-20 to 2025-06-08
+2025-06-08 19:09:56,111 - INFO - 🔍 DataFrame info for VHM:
+2025-06-08 19:09:56,111 - INFO -    - Shape: (133, 6)
+2025-06-08 19:09:56,111 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:09:56,112 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:09:56,112 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:09:56,113 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 42.2, 'high': 43.4, 'low': 41.75, 'close': 43.3, 'volume': 28417400}
+2025-06-08 19:09:56,113 - INFO - ✅ Successfully fetched 133 records for VHM
+2025-06-08 19:09:56,687 - INFO - ✅ VHM: Inserted 133 new records, Updated 0 records
+2025-06-08 19:09:56,688 - INFO - ✅ VHM completed successfully!
+2025-06-08 19:09:58,688 - INFO - 📊 Processing VIC (25/30)
+2025-06-08 19:09:58,689 - INFO - 📈 Fetching data for VIC from 2024-11-20 to 2025-06-08
+2025-06-08 19:09:59,939 - INFO - 🔍 DataFrame info for VIC:
+2025-06-08 19:09:59,939 - INFO -    - Shape: (133, 6)
+2025-06-08 19:09:59,939 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:09:59,940 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:09:59,941 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:09:59,941 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 40.2, 'high': 40.65, 'low': 40.15, 'close': 40.35, 'volume': 1840800}
+2025-06-08 19:09:59,942 - INFO - ✅ Successfully fetched 133 records for VIC
+2025-06-08 19:10:00,565 - INFO - ✅ VIC: Inserted 133 new records, Updated 0 records
+2025-06-08 19:10:00,565 - INFO - ✅ VIC completed successfully!
+2025-06-08 19:10:02,566 - INFO - 📊 Processing VJC (26/30)
+2025-06-08 19:10:02,566 - INFO - 📈 Fetching data for VJC from 2024-11-20 to 2025-06-08
+2025-06-08 19:10:03,894 - INFO - 🔍 DataFrame info for VJC:
+2025-06-08 19:10:03,895 - INFO -    - Shape: (133, 6)
+2025-06-08 19:10:03,895 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:10:03,895 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:10:03,896 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:10:03,896 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 101.3, 'high': 102.3, 'low': 100.1, 'close': 102.0, 'volume': 729300}
+2025-06-08 19:10:03,896 - INFO - ✅ Successfully fetched 133 records for VJC
+2025-06-08 19:10:04,486 - INFO - ✅ VJC: Inserted 133 new records, Updated 0 records
+2025-06-08 19:10:04,486 - INFO - ✅ VJC completed successfully!
+2025-06-08 19:10:06,487 - INFO - 📊 Processing VNM (27/30)
+2025-06-08 19:10:06,487 - INFO - 📈 Fetching data for VNM from 2024-11-20 to 2025-06-08
+2025-06-08 19:10:08,416 - INFO - 🔍 DataFrame info for VNM:
+2025-06-08 19:10:08,416 - INFO -    - Shape: (133, 6)
+2025-06-08 19:10:08,417 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:10:08,417 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:10:08,417 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:10:08,418 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 60.37, 'high': 61.14, 'low': 60.27, 'close': 60.95, 'volume': 2820172}
+2025-06-08 19:10:08,418 - INFO - ✅ Successfully fetched 133 records for VNM
+2025-06-08 19:10:08,992 - INFO - ✅ VNM: Inserted 133 new records, Updated 0 records
+2025-06-08 19:10:08,992 - INFO - ✅ VNM completed successfully!
+2025-06-08 19:10:10,993 - INFO - 📊 Processing VPB (28/30)
+2025-06-08 19:10:10,993 - INFO - 📈 Fetching data for VPB from 2024-11-20 to 2025-06-08
+2025-06-08 19:10:12,327 - INFO - 🔍 DataFrame info for VPB:
+2025-06-08 19:10:12,328 - INFO -    - Shape: (133, 6)
+2025-06-08 19:10:12,328 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:10:12,328 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:10:12,328 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:10:12,329 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 17.91, 'high': 18.4, 'low': 17.91, 'close': 18.2, 'volume': 17684832}
+2025-06-08 19:10:12,329 - INFO - ✅ Successfully fetched 133 records for VPB
+2025-06-08 19:10:12,923 - INFO - ✅ VPB: Inserted 133 new records, Updated 0 records
+2025-06-08 19:10:12,924 - INFO - ✅ VPB completed successfully!
+2025-06-08 19:10:14,924 - INFO - 📊 Processing VRE (29/30)
+2025-06-08 19:10:14,925 - INFO - 📈 Fetching data for VRE from 2024-11-20 to 2025-06-08
+2025-06-08 19:10:16,987 - INFO - 🔍 DataFrame info for VRE:
+2025-06-08 19:10:16,988 - INFO -    - Shape: (133, 6)
+2025-06-08 19:10:16,988 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:10:16,988 - INFO -    - Index: RangeIndex(start=0, stop=133, step=1)
+2025-06-08 19:10:16,988 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:10:16,989 - INFO -    - First row: {'time': Timestamp('2024-11-20 00:00:00'), 'open': 17.9, 'high': 18.15, 'low': 17.75, 'close': 17.9, 'volume': 9344600}
+2025-06-08 19:10:16,989 - INFO - ✅ Successfully fetched 133 records for VRE
+2025-06-08 19:10:17,644 - INFO - ✅ VRE: Inserted 133 new records, Updated 0 records
+2025-06-08 19:10:17,645 - INFO - ✅ VRE completed successfully!
+2025-06-08 19:10:19,645 - INFO - 📊 Processing VTI (30/30)
+2025-06-08 19:10:19,646 - INFO - 📈 Fetching data for VTI from 2024-11-20 to 2025-06-08
+2025-06-08 19:10:22,255 - INFO - 🔍 DataFrame info for VTI:
+2025-06-08 19:10:22,256 - INFO -    - Shape: (5, 6)
+2025-06-08 19:10:22,256 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:10:22,257 - INFO -    - Index: RangeIndex(start=0, stop=5, step=1)
+2025-06-08 19:10:22,257 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:10:22,257 - INFO -    - First row: {'time': Timestamp('2024-12-06 00:00:00'), 'open': 5.6, 'high': 5.6, 'low': 5.6, 'close': 5.6, 'volume': 100}
+2025-06-08 19:10:22,257 - INFO - ✅ Successfully fetched 5 records for VTI
+2025-06-08 19:10:22,302 - INFO - ✅ VTI: Inserted 5 new records, Updated 0 records
+2025-06-08 19:10:22,303 - INFO - ✅ VTI completed successfully!
+2025-06-08 19:10:22,303 - INFO - 🎉 VN30 crawling completed!
+2025-06-08 19:10:22,303 - INFO - 📊 Summary: 30 successful, 0 errors
+2025-06-08 19:10:22,306 - INFO - 🔒 Database connection closed
+2025-06-08 19:19:51,741 - INFO - 🚀 VNStock Crawler initialized successfully!
+2025-06-08 19:19:51,741 - INFO - 📊 Will crawl 30 VN30 stocks
+2025-06-08 19:19:51,742 - INFO - 🚀 Starting VN30 historical data crawling...
+2025-06-08 19:19:51,830 - INFO - package: mysql.connector.plugins
+2025-06-08 19:19:51,831 - INFO - plugin_name: mysql_native_password
+2025-06-08 19:19:51,832 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLNativePasswordAuthPlugin
+2025-06-08 19:19:51,838 - INFO - ✅ Connected to MySQL database successfully!
+2025-06-08 19:19:51,838 - INFO - 📊 Processing ACB (1/30)
+2025-06-08 19:19:51,839 - INFO - 📈 Fetching data for ACB from 2024-01-25 to 2025-06-08
+2025-06-08 19:19:53,012 - INFO - 🔍 DataFrame info for ACB:
+2025-06-08 19:19:53,012 - INFO -    - Shape: (336, 6)
+2025-06-08 19:19:53,013 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:19:53,013 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:19:53,013 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:19:53,013 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 18.14, 'high': 18.18, 'low': 17.97, 'close': 18.11, 'volume': 5090360}
+2025-06-08 19:19:53,014 - INFO - ✅ Successfully fetched 336 records for ACB
+2025-06-08 19:19:54,641 - INFO - ✅ ACB: Inserted 336 new records, Updated 0 records
+2025-06-08 19:19:54,641 - INFO - ✅ ACB completed successfully!
+2025-06-08 19:19:56,642 - INFO - 📊 Processing BCM (2/30)
+2025-06-08 19:19:56,643 - INFO - 📈 Fetching data for BCM from 2024-01-25 to 2025-06-08
+2025-06-08 19:19:58,232 - INFO - 🔍 DataFrame info for BCM:
+2025-06-08 19:19:58,233 - INFO -    - Shape: (336, 6)
+2025-06-08 19:19:58,233 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:19:58,233 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:19:58,234 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:19:58,234 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 60.68, 'high': 60.77, 'low': 59.89, 'close': 60.68, 'volume': 567544}
+2025-06-08 19:19:58,235 - INFO - ✅ Successfully fetched 336 records for BCM
+2025-06-08 19:19:59,712 - INFO - ✅ BCM: Inserted 336 new records, Updated 0 records
+2025-06-08 19:19:59,713 - INFO - ✅ BCM completed successfully!
+2025-06-08 19:20:01,714 - INFO - 📊 Processing BID (3/30)
+2025-06-08 19:20:01,714 - INFO - 📈 Fetching data for BID from 2024-01-25 to 2025-06-08
+2025-06-08 19:20:03,023 - INFO - 🔍 DataFrame info for BID:
+2025-06-08 19:20:03,023 - INFO -    - Shape: (336, 6)
+2025-06-08 19:20:03,023 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:20:03,024 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:20:03,024 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:20:03,024 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 40.41, 'high': 41.11, 'low': 40.0, 'close': 40.0, 'volume': 1353235}
+2025-06-08 19:20:03,024 - INFO - ✅ Successfully fetched 336 records for BID
+2025-06-08 19:20:04,650 - INFO - ✅ BID: Inserted 336 new records, Updated 0 records
+2025-06-08 19:20:04,650 - INFO - ✅ BID completed successfully!
+2025-06-08 19:20:06,651 - INFO - 📊 Processing BVH (4/30)
+2025-06-08 19:20:06,651 - INFO - 📈 Fetching data for BVH from 2024-01-25 to 2025-06-08
+2025-06-08 19:20:07,753 - INFO - 🔍 DataFrame info for BVH:
+2025-06-08 19:20:07,753 - INFO -    - Shape: (336, 6)
+2025-06-08 19:20:07,753 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:20:07,753 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:20:07,754 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:20:07,754 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 39.91, 'high': 39.91, 'low': 39.67, 'close': 39.77, 'volume': 158137}
+2025-06-08 19:20:07,754 - INFO - ✅ Successfully fetched 336 records for BVH
+2025-06-08 19:20:09,257 - INFO - ✅ BVH: Inserted 336 new records, Updated 0 records
+2025-06-08 19:20:09,257 - INFO - ✅ BVH completed successfully!
+2025-06-08 19:20:11,258 - INFO - 📊 Processing CTG (5/30)
+2025-06-08 19:20:11,258 - INFO - 📈 Fetching data for CTG from 2024-01-25 to 2025-06-08
+2025-06-08 19:20:12,072 - INFO - 🔍 DataFrame info for CTG:
+2025-06-08 19:20:12,072 - INFO -    - Shape: (336, 6)
+2025-06-08 19:20:12,072 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:20:12,072 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:20:12,072 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:20:12,073 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 32.0, 'high': 32.1, 'low': 31.6, 'close': 32.05, 'volume': 5171934}
+2025-06-08 19:20:12,073 - INFO - ✅ Successfully fetched 336 records for CTG
+2025-06-08 19:20:13,708 - INFO - ✅ CTG: Inserted 336 new records, Updated 0 records
+2025-06-08 19:20:13,709 - INFO - ✅ CTG completed successfully!
+2025-06-08 19:20:15,710 - INFO - 📊 Processing FPT (6/30)
+2025-06-08 19:20:15,711 - INFO - 📈 Fetching data for FPT from 2024-01-25 to 2025-06-08
+2025-06-08 19:20:23,707 - INFO - 🔍 DataFrame info for FPT:
+2025-06-08 19:20:23,707 - INFO -    - Shape: (336, 6)
+2025-06-08 19:20:23,707 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:20:23,708 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:20:23,708 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:20:23,708 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 81.56, 'high': 82.08, 'low': 81.3, 'close': 81.56, 'volume': 847088}
+2025-06-08 19:20:23,708 - INFO - ✅ Successfully fetched 336 records for FPT
+2025-06-08 19:20:25,192 - INFO - ✅ FPT: Inserted 336 new records, Updated 0 records
+2025-06-08 19:20:25,192 - INFO - ✅ FPT completed successfully!
+2025-06-08 19:20:27,193 - INFO - 📊 Processing GAS (7/30)
+2025-06-08 19:20:27,193 - INFO - 📈 Fetching data for GAS from 2024-01-25 to 2025-06-08
+2025-06-08 19:20:28,565 - INFO - 🔍 DataFrame info for GAS:
+2025-06-08 19:20:28,565 - INFO -    - Shape: (336, 6)
+2025-06-08 19:20:28,565 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:20:28,565 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:20:28,566 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:20:28,566 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 68.98, 'high': 69.25, 'low': 68.61, 'close': 68.61, 'volume': 548469}
+2025-06-08 19:20:28,566 - INFO - ✅ Successfully fetched 336 records for GAS
+2025-06-08 19:20:30,109 - INFO - ✅ GAS: Inserted 336 new records, Updated 0 records
+2025-06-08 19:20:30,110 - INFO - ✅ GAS completed successfully!
+2025-06-08 19:20:32,110 - INFO - 📊 Processing GVR (8/30)
+2025-06-08 19:20:32,111 - INFO - 📈 Fetching data for GVR from 2024-01-25 to 2025-06-08
+2025-06-08 19:20:33,290 - INFO - 🔍 DataFrame info for GVR:
+2025-06-08 19:20:33,290 - INFO -    - Shape: (336, 6)
+2025-06-08 19:20:33,290 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:20:33,291 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:20:33,291 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:20:33,292 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 20.71, 'high': 20.81, 'low': 20.61, 'close': 20.71, 'volume': 664267}
+2025-06-08 19:20:33,292 - INFO - ✅ Successfully fetched 336 records for GVR
+2025-06-08 19:20:34,745 - INFO - ✅ GVR: Inserted 336 new records, Updated 0 records
+2025-06-08 19:20:34,745 - INFO - ✅ GVR completed successfully!
+2025-06-08 19:20:36,746 - INFO - 📊 Processing HDB (9/30)
+2025-06-08 19:20:36,746 - INFO - 📈 Fetching data for HDB from 2024-01-25 to 2025-06-08
+2025-06-08 19:20:38,499 - INFO - 🔍 DataFrame info for HDB:
+2025-06-08 19:20:38,499 - INFO -    - Shape: (336, 6)
+2025-06-08 19:20:38,499 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:20:38,500 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:20:38,500 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:20:38,500 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 16.93, 'high': 16.93, 'low': 16.73, 'close': 16.85, 'volume': 5421583}
+2025-06-08 19:20:38,501 - INFO - ✅ Successfully fetched 336 records for HDB
+2025-06-08 19:20:39,968 - INFO - ✅ HDB: Inserted 336 new records, Updated 0 records
+2025-06-08 19:20:39,968 - INFO - ✅ HDB completed successfully!
+2025-06-08 19:20:41,969 - INFO - 📊 Processing HPG (10/30)
+2025-06-08 19:20:41,970 - INFO - 📈 Fetching data for HPG from 2024-01-25 to 2025-06-08
+2025-06-08 19:20:43,772 - INFO - 🔍 DataFrame info for HPG:
+2025-06-08 19:20:43,773 - INFO -    - Shape: (336, 6)
+2025-06-08 19:20:43,773 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:20:43,774 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:20:43,774 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:20:43,775 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 25.68, 'high': 25.82, 'low': 25.45, 'close': 25.68, 'volume': 15234746}
+2025-06-08 19:20:43,775 - INFO - ✅ Successfully fetched 336 records for HPG
+2025-06-08 19:20:45,301 - INFO - ✅ HPG: Inserted 336 new records, Updated 0 records
+2025-06-08 19:20:45,302 - INFO - ✅ HPG completed successfully!
+2025-06-08 19:20:47,302 - INFO - 📊 Processing MBB (11/30)
+2025-06-08 19:20:47,303 - INFO - 📈 Fetching data for MBB from 2024-01-25 to 2025-06-08
+2025-06-08 19:20:48,621 - INFO - 🔍 DataFrame info for MBB:
+2025-06-08 19:20:48,621 - INFO -    - Shape: (336, 6)
+2025-06-08 19:20:48,621 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:20:48,622 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:20:48,622 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:20:48,623 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 18.68, 'high': 18.68, 'low': 18.46, 'close': 18.63, 'volume': 14706039}
+2025-06-08 19:20:48,623 - INFO - ✅ Successfully fetched 336 records for MBB
+2025-06-08 19:20:50,114 - INFO - ✅ MBB: Inserted 336 new records, Updated 0 records
+2025-06-08 19:20:50,114 - INFO - ✅ MBB completed successfully!
+2025-06-08 19:20:52,115 - INFO - 📊 Processing MSN (12/30)
+2025-06-08 19:20:52,115 - INFO - 📈 Fetching data for MSN from 2024-01-25 to 2025-06-08
+2025-06-08 19:20:53,542 - INFO - 🔍 DataFrame info for MSN:
+2025-06-08 19:20:53,542 - INFO -    - Shape: (336, 6)
+2025-06-08 19:20:53,542 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:20:53,542 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:20:53,543 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:20:53,543 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 66.4, 'high': 66.8, 'low': 66.1, 'close': 66.8, 'volume': 1161850}
+2025-06-08 19:20:53,544 - INFO - ✅ Successfully fetched 336 records for MSN
+2025-06-08 19:20:54,975 - INFO - ✅ MSN: Inserted 336 new records, Updated 0 records
+2025-06-08 19:20:54,975 - INFO - ✅ MSN completed successfully!
+2025-06-08 19:20:56,976 - INFO - 📊 Processing MWG (13/30)
+2025-06-08 19:20:56,977 - INFO - 📈 Fetching data for MWG from 2024-01-25 to 2025-06-08
+2025-06-08 19:20:58,739 - INFO - 🔍 DataFrame info for MWG:
+2025-06-08 19:20:58,739 - INFO -    - Shape: (336, 6)
+2025-06-08 19:20:58,739 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:20:58,740 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:20:58,740 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:20:58,741 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 43.9, 'high': 44.84, 'low': 43.75, 'close': 44.84, 'volume': 7539783}
+2025-06-08 19:20:58,741 - INFO - ✅ Successfully fetched 336 records for MWG
+2025-06-08 19:21:00,282 - INFO - ✅ MWG: Inserted 336 new records, Updated 0 records
+2025-06-08 19:21:00,282 - INFO - ✅ MWG completed successfully!
+2025-06-08 19:21:02,283 - INFO - 📊 Processing PLX (14/30)
+2025-06-08 19:21:02,283 - INFO - 📈 Fetching data for PLX from 2024-01-25 to 2025-06-08
+2025-06-08 19:21:03,993 - INFO - 🔍 DataFrame info for PLX:
+2025-06-08 19:21:03,993 - INFO -    - Shape: (336, 6)
+2025-06-08 19:21:03,994 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:21:03,994 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:21:03,994 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:21:03,995 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 33.44, 'high': 33.49, 'low': 33.2, 'close': 33.2, 'volume': 275454}
+2025-06-08 19:21:03,995 - INFO - ✅ Successfully fetched 336 records for PLX
+2025-06-08 19:21:05,482 - INFO - ✅ PLX: Inserted 336 new records, Updated 0 records
+2025-06-08 19:21:05,483 - INFO - ✅ PLX completed successfully!
+2025-06-08 19:21:07,483 - INFO - 📊 Processing POW (15/30)
+2025-06-08 19:21:07,484 - INFO - 📈 Fetching data for POW from 2024-01-25 to 2025-06-08
+2025-06-08 19:21:08,343 - INFO - 🔍 DataFrame info for POW:
+2025-06-08 19:21:08,344 - INFO -    - Shape: (336, 6)
+2025-06-08 19:21:08,344 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:21:08,344 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:21:08,344 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:21:08,345 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 11.4, 'high': 11.45, 'low': 11.35, 'close': 11.45, 'volume': 1764191}
+2025-06-08 19:21:08,345 - INFO - ✅ Successfully fetched 336 records for POW
+2025-06-08 19:21:09,763 - INFO - ✅ POW: Inserted 336 new records, Updated 0 records
+2025-06-08 19:21:09,763 - INFO - ✅ POW completed successfully!
+2025-06-08 19:21:11,763 - INFO - 📊 Processing SAB (16/30)
+2025-06-08 19:21:11,764 - INFO - 📈 Fetching data for SAB from 2024-01-25 to 2025-06-08
+2025-06-08 19:21:13,237 - INFO - 🔍 DataFrame info for SAB:
+2025-06-08 19:21:13,237 - INFO -    - Shape: (336, 6)
+2025-06-08 19:21:13,237 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:21:13,238 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:21:13,238 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:21:13,239 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 56.29, 'high': 56.39, 'low': 54.89, 'close': 54.89, 'volume': 1395775}
+2025-06-08 19:21:13,239 - INFO - ✅ Successfully fetched 336 records for SAB
+2025-06-08 19:21:14,827 - INFO - ✅ SAB: Inserted 336 new records, Updated 0 records
+2025-06-08 19:21:14,828 - INFO - ✅ SAB completed successfully!
+2025-06-08 19:21:16,828 - INFO - 📊 Processing SHB (17/30)
+2025-06-08 19:21:16,829 - INFO - 📈 Fetching data for SHB from 2024-01-25 to 2025-06-08
+2025-06-08 19:21:19,117 - INFO - 🔍 DataFrame info for SHB:
+2025-06-08 19:21:19,117 - INFO -    - Shape: (336, 6)
+2025-06-08 19:21:19,118 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:21:19,118 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:21:19,118 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:21:19,119 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 10.57, 'high': 10.66, 'low': 10.53, 'close': 10.57, 'volume': 27270594}
+2025-06-08 19:21:19,119 - INFO - ✅ Successfully fetched 336 records for SHB
+2025-06-08 19:21:20,619 - INFO - ✅ SHB: Inserted 336 new records, Updated 0 records
+2025-06-08 19:21:20,620 - INFO - ✅ SHB completed successfully!
+2025-06-08 19:21:22,620 - INFO - 📊 Processing SSB (18/30)
+2025-06-08 19:21:22,620 - INFO - 📈 Fetching data for SSB from 2024-01-25 to 2025-06-08
+2025-06-08 19:21:25,596 - INFO - 🔍 DataFrame info for SSB:
+2025-06-08 19:21:25,596 - INFO -    - Shape: (336, 6)
+2025-06-08 19:21:25,596 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:21:25,596 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:21:25,596 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:21:25,597 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 20.38, 'high': 20.38, 'low': 20.11, 'close': 20.33, 'volume': 1371296}
+2025-06-08 19:21:25,597 - INFO - ✅ Successfully fetched 336 records for SSB
+2025-06-08 19:21:27,056 - INFO - ✅ SSB: Inserted 336 new records, Updated 0 records
+2025-06-08 19:21:27,057 - INFO - ✅ SSB completed successfully!
+2025-06-08 19:21:29,057 - INFO - 📊 Processing SSI (19/30)
+2025-06-08 19:21:29,058 - INFO - 📈 Fetching data for SSI from 2024-01-25 to 2025-06-08
+2025-06-08 19:21:31,032 - INFO - 🔍 DataFrame info for SSI:
+2025-06-08 19:21:31,032 - INFO -    - Shape: (336, 6)
+2025-06-08 19:21:31,033 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:21:31,033 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:21:31,033 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:21:31,034 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 26.58, 'high': 26.7, 'low': 26.43, 'close': 26.5, 'volume': 10944446}
+2025-06-08 19:21:31,034 - INFO - ✅ Successfully fetched 336 records for SSI
+2025-06-08 19:21:32,427 - INFO - ✅ SSI: Inserted 336 new records, Updated 0 records
+2025-06-08 19:21:32,428 - INFO - ✅ SSI completed successfully!
+2025-06-08 19:21:34,428 - INFO - 📊 Processing STB (20/30)
+2025-06-08 19:21:34,429 - INFO - 📈 Fetching data for STB from 2024-01-25 to 2025-06-08
+2025-06-08 19:21:35,690 - INFO - 🔍 DataFrame info for STB:
+2025-06-08 19:21:35,690 - INFO -    - Shape: (336, 6)
+2025-06-08 19:21:35,690 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:21:35,690 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:21:35,691 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:21:35,691 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 31.0, 'high': 31.0, 'low': 30.3, 'close': 30.5, 'volume': 17448413}
+2025-06-08 19:21:35,691 - INFO - ✅ Successfully fetched 336 records for STB
+2025-06-08 19:21:37,123 - INFO - ✅ STB: Inserted 336 new records, Updated 0 records
+2025-06-08 19:21:37,123 - INFO - ✅ STB completed successfully!
+2025-06-08 19:21:39,124 - INFO - 📊 Processing TCB (21/30)
+2025-06-08 19:21:39,125 - INFO - 📈 Fetching data for TCB from 2024-01-25 to 2025-06-08
+2025-06-08 19:21:41,929 - INFO - 🔍 DataFrame info for TCB:
+2025-06-08 19:21:41,929 - INFO -    - Shape: (336, 6)
+2025-06-08 19:21:41,929 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:21:41,930 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:21:41,930 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:21:41,931 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 17.09, 'high': 17.09, 'low': 16.92, 'close': 16.97, 'volume': 4272604}
+2025-06-08 19:21:41,931 - INFO - ✅ Successfully fetched 336 records for TCB
+2025-06-08 19:21:43,454 - INFO - ✅ TCB: Inserted 336 new records, Updated 0 records
+2025-06-08 19:21:43,454 - INFO - ✅ TCB completed successfully!
+2025-06-08 19:21:45,455 - INFO - 📊 Processing TPB (22/30)
+2025-06-08 19:21:45,456 - INFO - 📈 Fetching data for TPB from 2024-01-25 to 2025-06-08
+2025-06-08 19:21:46,399 - INFO - 🔍 DataFrame info for TPB:
+2025-06-08 19:21:46,399 - INFO -    - Shape: (336, 6)
+2025-06-08 19:21:46,399 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:21:46,400 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:21:46,400 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:21:46,401 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 13.83, 'high': 13.83, 'low': 13.72, 'close': 13.72, 'volume': 5631807}
+2025-06-08 19:21:46,401 - INFO - ✅ Successfully fetched 336 records for TPB
+2025-06-08 19:21:47,815 - INFO - ✅ TPB: Inserted 336 new records, Updated 0 records
+2025-06-08 19:21:47,815 - INFO - ✅ TPB completed successfully!
+2025-06-08 19:21:49,815 - INFO - 📊 Processing VCB (23/30)
+2025-06-08 19:21:49,816 - INFO - 📈 Fetching data for VCB from 2024-01-25 to 2025-06-08
+2025-06-08 19:21:53,022 - INFO - 🔍 DataFrame info for VCB:
+2025-06-08 19:21:53,022 - INFO -    - Shape: (336, 6)
+2025-06-08 19:21:53,022 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:21:53,022 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:21:53,023 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:21:53,023 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 60.94, 'high': 61.27, 'low': 60.67, 'close': 60.87, 'volume': 505031}
+2025-06-08 19:21:53,023 - INFO - ✅ Successfully fetched 336 records for VCB
+2025-06-08 19:21:54,541 - INFO - ✅ VCB: Inserted 336 new records, Updated 0 records
+2025-06-08 19:21:54,542 - INFO - ✅ VCB completed successfully!
+2025-06-08 19:21:56,542 - INFO - 📊 Processing VHM (24/30)
+2025-06-08 19:21:56,543 - INFO - 📈 Fetching data for VHM from 2024-01-25 to 2025-06-08
+2025-06-08 19:21:58,597 - INFO - 🔍 DataFrame info for VHM:
+2025-06-08 19:21:58,597 - INFO -    - Shape: (336, 6)
+2025-06-08 19:21:58,598 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:21:58,598 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:21:58,599 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:21:58,599 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 42.5, 'high': 42.5, 'low': 42.05, 'close': 42.1, 'volume': 2297052}
+2025-06-08 19:21:58,600 - INFO - ✅ Successfully fetched 336 records for VHM
+2025-06-08 19:22:00,085 - INFO - ✅ VHM: Inserted 336 new records, Updated 0 records
+2025-06-08 19:22:00,085 - INFO - ✅ VHM completed successfully!
+2025-06-08 19:22:02,086 - INFO - 📊 Processing VIC (25/30)
+2025-06-08 19:22:02,087 - INFO - 📈 Fetching data for VIC from 2024-01-25 to 2025-06-08
+2025-06-08 19:22:04,146 - INFO - 🔍 DataFrame info for VIC:
+2025-06-08 19:22:04,146 - INFO -    - Shape: (336, 6)
+2025-06-08 19:22:04,147 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:22:04,147 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:22:04,148 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:22:04,148 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 43.1, 'high': 43.1, 'low': 42.8, 'close': 42.8, 'volume': 1156705}
+2025-06-08 19:22:04,149 - INFO - ✅ Successfully fetched 336 records for VIC
+2025-06-08 19:22:05,612 - INFO - ✅ VIC: Inserted 336 new records, Updated 0 records
+2025-06-08 19:22:05,612 - INFO - ✅ VIC completed successfully!
+2025-06-08 19:22:07,613 - INFO - 📊 Processing VJC (26/30)
+2025-06-08 19:22:07,613 - INFO - 📈 Fetching data for VJC from 2024-01-25 to 2025-06-08
+2025-06-08 19:22:10,282 - INFO - 🔍 DataFrame info for VJC:
+2025-06-08 19:22:10,282 - INFO -    - Shape: (336, 6)
+2025-06-08 19:22:10,283 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:22:10,283 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:22:10,283 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:22:10,284 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 104.8, 'high': 105.0, 'low': 104.5, 'close': 104.9, 'volume': 615310}
+2025-06-08 19:22:10,284 - INFO - ✅ Successfully fetched 336 records for VJC
+2025-06-08 19:22:11,727 - INFO - ✅ VJC: Inserted 336 new records, Updated 0 records
+2025-06-08 19:22:11,728 - INFO - ✅ VJC completed successfully!
+2025-06-08 19:22:13,729 - INFO - 📊 Processing VNM (27/30)
+2025-06-08 19:22:13,729 - INFO - 📈 Fetching data for VNM from 2024-01-25 to 2025-06-08
+2025-06-08 19:22:18,253 - INFO - 🔍 DataFrame info for VNM:
+2025-06-08 19:22:18,253 - INFO -    - Shape: (336, 6)
+2025-06-08 19:22:18,254 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:22:18,254 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:22:18,254 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:22:18,255 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 61.62, 'high': 61.71, 'low': 61.16, 'close': 61.16, 'volume': 2662473}
+2025-06-08 19:22:18,255 - INFO - ✅ Successfully fetched 336 records for VNM
+2025-06-08 19:22:19,701 - INFO - ✅ VNM: Inserted 336 new records, Updated 0 records
+2025-06-08 19:22:19,702 - INFO - ✅ VNM completed successfully!
+2025-06-08 19:22:21,702 - INFO - 📊 Processing VPB (28/30)
+2025-06-08 19:22:21,703 - INFO - 📈 Fetching data for VPB from 2024-01-25 to 2025-06-08
+2025-06-08 19:22:24,196 - INFO - 🔍 DataFrame info for VPB:
+2025-06-08 19:22:24,197 - INFO -    - Shape: (336, 6)
+2025-06-08 19:22:24,197 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:22:24,197 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:22:24,197 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:22:24,198 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 18.16, 'high': 18.21, 'low': 18.07, 'close': 18.16, 'volume': 5003106}
+2025-06-08 19:22:24,198 - INFO - ✅ Successfully fetched 336 records for VPB
+2025-06-08 19:22:25,606 - INFO - ✅ VPB: Inserted 336 new records, Updated 0 records
+2025-06-08 19:22:25,606 - INFO - ✅ VPB completed successfully!
+2025-06-08 19:22:27,607 - INFO - 📊 Processing VRE (29/30)
+2025-06-08 19:22:27,607 - INFO - 📈 Fetching data for VRE from 2024-01-25 to 2025-06-08
+2025-06-08 19:22:30,448 - INFO - 🔍 DataFrame info for VRE:
+2025-06-08 19:22:30,449 - INFO -    - Shape: (336, 6)
+2025-06-08 19:22:30,449 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:22:30,450 - INFO -    - Index: RangeIndex(start=0, stop=336, step=1)
+2025-06-08 19:22:30,450 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:22:30,451 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 23.95, 'high': 24.0, 'low': 23.75, 'close': 23.8, 'volume': 3440889}
+2025-06-08 19:22:30,451 - INFO - ✅ Successfully fetched 336 records for VRE
+2025-06-08 19:22:31,836 - INFO - ✅ VRE: Inserted 336 new records, Updated 0 records
+2025-06-08 19:22:31,836 - INFO - ✅ VRE completed successfully!
+2025-06-08 19:22:33,836 - INFO - 📊 Processing VTI (30/30)
+2025-06-08 19:22:33,837 - INFO - 📈 Fetching data for VTI from 2024-01-25 to 2025-06-08
+2025-06-08 19:22:35,188 - INFO - 🔍 DataFrame info for VTI:
+2025-06-08 19:22:35,188 - INFO -    - Shape: (127, 6)
+2025-06-08 19:22:35,188 - INFO -    - Index type: <class 'pandas.core.indexes.range.RangeIndex'>
+2025-06-08 19:22:35,189 - INFO -    - Index: RangeIndex(start=0, stop=127, step=1)
+2025-06-08 19:22:35,189 - INFO -    - Columns: ['time', 'open', 'high', 'low', 'close', 'volume']
+2025-06-08 19:22:35,190 - INFO -    - First row: {'time': Timestamp('2024-01-25 00:00:00'), 'open': 5.4, 'high': 5.4, 'low': 5.4, 'close': 5.4, 'volume': 0}
+2025-06-08 19:22:35,190 - INFO - ✅ Successfully fetched 127 records for VTI
+2025-06-08 19:22:35,754 - INFO - ✅ VTI: Inserted 127 new records, Updated 0 records
+2025-06-08 19:22:35,755 - INFO - ✅ VTI completed successfully!
+2025-06-08 19:22:35,755 - INFO - 🎉 VN30 crawling completed!
+2025-06-08 19:22:35,755 - INFO - 📊 Summary: 30 successful, 0 errors
+2025-06-08 19:22:35,758 - INFO - 🔒 Database connection closed
