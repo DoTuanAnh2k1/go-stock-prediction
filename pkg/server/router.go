@@ -40,6 +40,7 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("/api/training/history", GetTrainingHistory)
 	mux.HandleFunc("/api/predictions", GetPredictions)
 	mux.HandleFunc("/api/algorithms/comparison", GetAlgorithmComparison)
+	mux.HandleFunc("/api/algorithms/backtest", GetAlgorithmBacktest)
 
 	// Stock data APIs
 	mux.HandleFunc("/api/stocks/{symbol}/chart", GetChartData)
@@ -49,8 +50,8 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("/api/market/overview", GetMarketOverview)
 
 	// Trigger Apis
-	mux.HandleFunc("/api/trigger/crawler", TriggerCrawlerHandler)
-	mux.HandleFunc("/api/trigger/predict", TriggerPredictHandler)
+	mux.HandleFunc("POST /api/trigger/crawler", APIKeyMiddleware(TriggerCrawlerHandler))
+	mux.HandleFunc("POST /api/trigger/predict", APIKeyMiddleware(TriggerPredictHandler))
 
 	return mux
 }
@@ -86,9 +87,12 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  GET  /api/training/history          → Training History")
 	logger.Logger.Info("  GET  /api/predictions               → Predictions List")
 	logger.Logger.Info("  GET  /api/algorithms/comparison     → Algorithm Comparison")
+	logger.Logger.Info("  GET  /api/algorithms/backtest       → Algorithm Backtest")
 	logger.Logger.Info("  GET  /api/stocks/{symbol}/current   → Current Stock Price")
 	logger.Logger.Info("  GET  /api/stocks/{symbol}/history   → Stock Price History")
 	logger.Logger.Info("  GET  /api/stocks/{symbol}/chart     → Chart Data")
 	logger.Logger.Info("  GET  /api/stocks/watchlist          → Watchlist")
 	logger.Logger.Info("  GET  /api/market/overview           → Market Overview")
+	logger.Logger.Info("  POST /api/trigger/crawler           → Trigger Crawler")
+	logger.Logger.Info("  POST /api/trigger/predict           → Trigger Predict")
 }

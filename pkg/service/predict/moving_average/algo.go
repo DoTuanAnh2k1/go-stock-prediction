@@ -5,15 +5,37 @@ import (
 	"fmt"
 	modelssvc "go-stock-prediction/pkg/models/models_svc"
 	"math"
+	"math/rand"
 	"strconv"
 	"strings"
 	"time"
 )
 
+// parseVolumes parses volume strings into float64 slice.
+// Returns empty slice on any error rather than failing hard.
+func (m *MovingAveragePredictor) parseVolumes(volumeStrs []string) []float64 {
+	if len(volumeStrs) == 0 {
+		return nil
+	}
+	volumes := make([]float64, len(volumeStrs))
+	for i, volStr := range volumeStrs {
+		cleanStr := strings.ReplaceAll(volStr, ",", "")
+		cleanStr = strings.ReplaceAll(cleanStr, " ", "")
+		vol, err := strconv.ParseFloat(cleanStr, 64)
+		if err != nil {
+			return nil
+		}
+		volumes[i] = vol
+	}
+	return volumes
+}
+
 type MovingAveragePredictor struct {
-	shortPeriod  int  // 5 ngày cho pattern tuần của VN
-	longPeriod   int  // 20 ngày cho pattern tháng
-	volumeWeight bool // Cực kỳ quan trọng cho thị trường VN
+	shortPeriod      int        // 5 ngày cho pattern tuần của VN
+	longPeriod       int        // 20 ngày cho pattern tháng
+	volumeWeight     bool       // Cực kỳ quan trọng cho thị trường VN
+	rng              *rand.Rand
+	backtestAccuracy float64
 }
 
 type Signal struct {
@@ -26,6 +48,7 @@ func NewMovingAveragePredictor() *MovingAveragePredictor {
 		shortPeriod:  5,  // 1 tuần giao dịch
 		longPeriod:   20, // 1 tháng giao dịch
 		volumeWeight: true,
+		rng:          rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -40,9 +63,12 @@ func (m *MovingAveragePredictor) Predict(ctx context.Context, data *modelssvc.St
 		return nil, fmt.Errorf("cần ít nhất %d ngày data", m.longPeriod)
 	}
 
+	// Parse volume data (may be empty if not provided)
+	volumes := m.parseVolumes(data.Volume)
+
 	// Tính MA có trọng số volume
-	shortMA := m.calculateVWMA(prices, m.shortPeriod)
-	longMA := m.calculateVWMA(prices, m.longPeriod)
+	shortMA := m.calculateVWMA(prices, volumes, m.shortPeriod)
+	longMA := m.calculateVWMA(prices, volumes, m.longPeriod)
 
 	// Get current price
 	currentPrice := prices[len(prices)-1]
@@ -81,33 +107,26 @@ func (m *MovingAveragePredictor) parseHistoricalData(historical []string) ([]flo
 }
 
 // Volume-Weighted Moving Average phù hợp với VN
-func (m *MovingAveragePredictor) calculateVWMA(prices []float64, period int) float64 {
+// Falls back to SMA if volumes are empty or unavailable.
+func (m *MovingAveragePredictor) calculateVWMA(prices, volumes []float64, period int) float64 {
 	if len(prices) < period {
-		return 0
-	}
-
-	// Lấy dữ liệu gần nhất
-	startIdx := len(prices) - period
-	var totalValue float64
-	var totalVolume float64
-
-	for i := startIdx; i < len(prices); i++ {
-		price := prices[i]
-
-		// Simplified volume calculation based on price volatility
-		// Trong thực tế sẽ có data volume riêng
-		volume := m.calculateVolumeProxy(prices, i)
-
-		totalValue += price * volume
-		totalVolume += volume
-	}
-
-	if totalVolume == 0 {
-		// Fallback to simple moving average
 		return m.calculateSMA(prices, period)
 	}
-
-	return totalValue / totalVolume
+	start := len(prices) - period
+	totalWeightedPrice := 0.0
+	totalVolume := 0.0
+	for i := start; i < len(prices); i++ {
+		vol := 1.0
+		if i < len(volumes) && volumes[i] > 0 {
+			vol = volumes[i]
+		}
+		totalWeightedPrice += prices[i] * vol
+		totalVolume += vol
+	}
+	if totalVolume == 0 {
+		return m.calculateSMA(prices, period)
+	}
+	return totalWeightedPrice / totalVolume
 }
 
 func (m *MovingAveragePredictor) calculateSMA(prices []float64, period int) float64 {
@@ -125,26 +144,6 @@ func (m *MovingAveragePredictor) calculateSMA(prices []float64, period int) floa
 	return sum / float64(period)
 }
 
-// Calculate volume proxy based on price movements
-func (m *MovingAveragePredictor) calculateVolumeProxy(prices []float64, index int) float64 {
-	if index == 0 {
-		return 1.0 // Default volume
-	}
-
-	// Use price change magnitude as volume proxy
-	priceChange := math.Abs(prices[index] - prices[index-1])
-	percentChange := priceChange / prices[index-1]
-
-	// Higher volatility = higher volume proxy
-	// Scale to reasonable range [0.5, 2.0]
-	volumeProxy := 0.5 + (percentChange * 15) // 15x multiplier for scaling
-
-	if volumeProxy > 2.0 {
-		volumeProxy = 2.0
-	}
-
-	return volumeProxy
-}
 
 func (m *MovingAveragePredictor) generateSignal(shortMA, longMA, currentPrice float64) Signal {
 	signal := Signal{
@@ -274,10 +273,9 @@ func (m *MovingAveragePredictor) calculatePredictedPrice(currentPrice float64, s
 	return predictedPrice
 }
 
-// Simple random number generator (replace with proper random in production)
+// Simple random number generator
 func (m *MovingAveragePredictor) random() float64 {
-	// Simplified random using time
-	return float64(time.Now().UnixNano()%1000) / 1000.0
+	return m.rng.Float64()
 }
 
 // Calculate additional technical indicators for enhanced prediction
@@ -429,5 +427,8 @@ func (m *MovingAveragePredictor) GetName() string {
 }
 
 func (m *MovingAveragePredictor) GetAccuracy() float64 {
-	return 0.75 // 75% accuracy cho MA strategies
+	if m.backtestAccuracy > 0 {
+		return m.backtestAccuracy
+	}
+	return 0.0
 }

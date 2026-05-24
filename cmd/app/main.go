@@ -11,11 +11,19 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func main() {
 	// Initialize the configuration
 	config.InitConfig()
+
+	// Set timezone to Asia/Ho_Chi_Minh
+	loc, err := time.LoadLocation("Asia/Ho_Chi_Minh")
+	if err != nil {
+		panic(fmt.Sprintf("Failed to load timezone: %v", err))
+	}
+	time.Local = loc
 
 	// Initialize the logger
 	logger.Init()
@@ -26,6 +34,15 @@ func main() {
 	go server.StartHTTPServer()
 
 	go crawler.Init()
+
+	go func() {
+		// Wait for DB and services to be ready
+		time.Sleep(5 * time.Second)
+		logger.Logger.Info("Triggering startup data sync...")
+		if err := crawler.CronjobCrawler(); err != nil {
+			logger.Logger.Errorf("Startup crawler failed: %v", err)
+		}
+	}()
 
 	go predict.Init()
 

@@ -2,394 +2,253 @@ package lstmnn
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	modelssvc "go-stock-prediction/pkg/models/models_svc"
 	"math"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type LSTMPredictor struct {
-	hiddenSize  int
-	layers      int
-	sequenceLen int // 60 ngày (~3 tháng tối ưu cho thị trường VN)
-	features    int
-	trained     bool
-	model       *LSTMModel
-	scaler      *MinMaxScaler
-}
-
-type LSTMModel struct {
-	weights [][]float64 // Simplified weight representation
-	biases  []float64
-}
-
-type MinMaxScaler struct {
-	min float64
-	max float64
-}
-
-type Matrix struct {
-	rows, cols int
-	data       []float64
+	weights          []float64
+	bias             float64
+	lambda           float64
+	numFeatures      int
+	sequenceLen      int
+	trained          bool
+	lastTrained      time.Time
+	backtestAccuracy float64
 }
 
 func NewLSTMPredictor() *LSTMPredictor {
-	return &LSTMPredictor{
-		hiddenSize:  50,
-		layers:      2,
-		sequenceLen: 60,   // 3 tháng data
-		features:    8,    // Price, volume, indicators, market data
-		trained:     true, // Giả sử đã trained cho demo
-		scaler: &MinMaxScaler{
-			min: 0,
-			max: 1,
-		},
+	p := &LSTMPredictor{
+		lambda:      0.01,
+		numFeatures: 6,
+		sequenceLen: 60,
 	}
+	return p
 }
 
 func (l *LSTMPredictor) Predict(ctx context.Context, data *modelssvc.StockData) (*modelssvc.Prediction, error) {
-	if !l.trained {
-		return nil, errors.New("LSTM model chưa được train")
-	}
-
-	// Parse historical data
 	prices, err := l.parseHistoricalData(data.Historical)
 	if err != nil {
 		return nil, fmt.Errorf("lỗi parse data: %v", err)
 	}
-
 	if len(prices) < l.sequenceLen {
 		return nil, fmt.Errorf("cần ít nhất %d ngày data", l.sequenceLen)
 	}
 
+	// Build training set: each sample uses prices[i-seq:i] to predict prices[i]
+	X, Y := l.buildDataset(prices)
+	if len(X) < 10 {
+		return nil, fmt.Errorf("không đủ data để train")
+	}
+
+	// Train on all available data
+	l.train(X, Y)
+
+	// Predict next price using features at last index
+	features := l.extractFeatures(prices, len(prices)-1)
 	currentPrice := prices[len(prices)-1]
+	predictedPrice := l.predict(features)
 
-	// Chuẩn bị features đặc trưng cho thị trường Việt Nam
-	features := l.prepareVietnameseFeatures(prices)
+	// Clip to ±7% daily limit
+	maxChange := currentPrice * 0.07
+	if predictedPrice > currentPrice+maxChange {
+		predictedPrice = currentPrice + maxChange
+	}
+	if predictedPrice < currentPrice-maxChange {
+		predictedPrice = currentPrice - maxChange
+	}
 
-	// Forward pass
-	prediction := l.forward(features)
-
-	// Denormalize về giá thực
-	scaledPrice := l.denormalize(prediction, prices)
+	confidence := l.GetAccuracy()
 
 	return &modelssvc.Prediction{
-		PredictedPrice: scaledPrice,
-		CurrentPrice:   currentPrice, // <- Thêm cái này!
-		Confidence:     0.93,         // LSTM confidence
+		PredictedPrice: predictedPrice,
+		CurrentPrice:   currentPrice,
+		Confidence:     confidence,
 	}, nil
 }
 
 func (l *LSTMPredictor) parseHistoricalData(historical []string) ([]float64, error) {
 	prices := make([]float64, len(historical))
-
 	for i, priceStr := range historical {
-		// Clean Vietnamese number format
 		cleanStr := strings.ReplaceAll(priceStr, ",", "")
 		cleanStr = strings.ReplaceAll(cleanStr, " ", "")
-
 		price, err := strconv.ParseFloat(cleanStr, 64)
 		if err != nil {
 			return nil, fmt.Errorf("không thể parse giá tại index %d: %v", i, err)
 		}
 		prices[i] = price
 	}
-
 	return prices, nil
 }
 
-func (l *LSTMPredictor) prepareVietnameseFeatures(prices []float64) *Matrix {
-	// Lấy sequence cuối cùng để predict
-	startIdx := len(prices) - l.sequenceLen
-	if startIdx < 0 {
-		startIdx = 0
+// buildDataset creates (X, Y) pairs where Y[i] = next day price, X[i] = features at i
+func (l *LSTMPredictor) buildDataset(prices []float64) ([][]float64, []float64) {
+	minRequired := l.sequenceLen + 1
+	if len(prices) < minRequired {
+		return nil, nil
+	}
+	var X [][]float64
+	var Y []float64
+	for i := l.sequenceLen; i < len(prices)-1; i++ {
+		features := l.extractFeatures(prices, i)
+		X = append(X, features)
+		Y = append(Y, prices[i+1])
+	}
+	return X, Y
+}
+
+// extractFeatures builds feature vector for price at index i
+func (l *LSTMPredictor) extractFeatures(prices []float64, i int) []float64 {
+	f := make([]float64, l.numFeatures)
+	p := prices[i]
+	base := prices[l.sequenceLen-1] // normalize relative to start of window
+	if base == 0 {
+		base = 1
 	}
 
-	sequencePrices := prices[startIdx:]
-	features := make([]float64, l.sequenceLen*l.features)
+	// Feature 0: normalized price
+	f[0] = p / base
 
-	for i := 0; i < len(sequencePrices) && i < l.sequenceLen; i++ {
-		// Price feature (normalized)
-		features[i*l.features] = l.normalize(sequencePrices[i])
+	// Feature 1: 5-day return
+	if i >= 5 && prices[i-5] > 0 {
+		f[1] = (p - prices[i-5]) / prices[i-5]
+	}
 
-		// Volume feature (simplified - using price variations as proxy)
-		if i > 0 {
-			volumeProxy := math.Abs(sequencePrices[i] - sequencePrices[i-1])
-			features[i*l.features+1] = l.normalize(volumeProxy)
-		} else {
-			features[i*l.features+1] = 0.5 // Neutral value
+	// Feature 2: 20-day return
+	if i >= 20 && prices[i-20] > 0 {
+		f[2] = (p - prices[i-20]) / prices[i-20]
+	}
+
+	// Feature 3: RSI(14) normalized to [0,1]
+	f[3] = l.calculateRSI(prices, i, 14) / 100.0
+
+	// Feature 4: price / SMA20 ratio
+	sma20 := l.calculateSMA(prices, i, 20)
+	if sma20 > 0 {
+		f[4] = p / sma20
+	} else {
+		f[4] = 1.0
+	}
+
+	// Feature 5: volatility (std of 10-day log returns)
+	f[5] = l.calculateVolatility(prices, i, 10)
+
+	return f
+}
+
+func (l *LSTMPredictor) train(X [][]float64, Y []float64) {
+	n := len(X)
+	if n == 0 {
+		return
+	}
+	l.numFeatures = len(X[0])
+	l.weights = make([]float64, l.numFeatures)
+	l.bias = 0
+	// Initialize bias as mean of Y
+	for _, y := range Y {
+		l.bias += y
+	}
+	l.bias /= float64(n)
+
+	lr := 0.0001
+	epochs := 500
+
+	for epoch := 0; epoch < epochs; epoch++ {
+		wGrad := make([]float64, l.numFeatures)
+		bGrad := 0.0
+		for i := 0; i < n; i++ {
+			pred := l.bias
+			for j := 0; j < l.numFeatures; j++ {
+				pred += l.weights[j] * X[i][j]
+			}
+			err := pred - Y[i]
+			bGrad += err
+			for j := 0; j < l.numFeatures; j++ {
+				wGrad[j] += err * X[i][j]
+			}
 		}
-
-		// Technical indicators (simplified calculations)
-		features[i*l.features+2] = l.calculateRSI(sequencePrices, i)
-		features[i*l.features+3] = l.calculateMACD(sequencePrices, i)
-
-		// Market context features (simplified)
-		features[i*l.features+4] = l.normalize(sequencePrices[i]) // VN30 proxy
-		features[i*l.features+5] = 0.5                            // Foreign flow placeholder
-
-		// Volatility measures
-		features[i*l.features+6] = l.calculateVolatility(sequencePrices, i)
-		features[i*l.features+7] = l.calculateRelativeVolume(sequencePrices, i)
+		l.bias -= lr * bGrad / float64(n)
+		for j := 0; j < l.numFeatures; j++ {
+			l.weights[j] -= lr * (wGrad[j]/float64(n) + l.lambda*l.weights[j])
+		}
+		_ = epoch
 	}
-
-	return &Matrix{
-		rows: l.sequenceLen,
-		cols: l.features,
-		data: features,
-	}
+	l.trained = true
+	l.lastTrained = time.Now()
 }
 
-func (l *LSTMPredictor) forward(features *Matrix) float64 {
-	// Simplified LSTM forward pass
-	// Trong thực tế cần implement full LSTM cells
-
-	// Calculate weighted sum of features
-	sum := 0.0
-	count := 0
-
-	for i := 0; i < len(features.data); i++ {
-		sum += features.data[i]
-		count++
-	}
-
-	if count == 0 {
-		return 0.5 // Default prediction
-	}
-
-	// Apply activation function (simplified)
-	avgFeature := sum / float64(count)
-	prediction := l.sigmoid(avgFeature)
-
-	return prediction
-}
-
-func (l *LSTMPredictor) denormalize(prediction float64, prices []float64) float64 {
-	if len(prices) == 0 {
+func (l *LSTMPredictor) predict(features []float64) float64 {
+	if !l.trained || len(l.weights) == 0 {
 		return 0
 	}
-
-	// Get price range
-	minPrice, maxPrice := l.getPriceRange(prices)
-
-	// Denormalize prediction
-	predictedPrice := minPrice + prediction*(maxPrice-minPrice)
-
-	// Apply trend adjustment based on recent price movement
-	lastPrice := prices[len(prices)-1]
-	trend := l.calculateTrend(prices)
-
-	// Adjust prediction with trend
-	adjustedPrice := predictedPrice + (lastPrice * trend * 0.01) // 1% trend influence
-
-	return adjustedPrice
+	result := l.bias
+	for j := 0; j < len(l.weights) && j < len(features); j++ {
+		result += l.weights[j] * features[j]
+	}
+	return result
 }
 
-func (l *LSTMPredictor) normalize(value float64) float64 {
-	// Simple min-max normalization to [0,1]
-	if l.scaler.max == l.scaler.min {
-		return 0.5
+func (l *LSTMPredictor) calculateRSI(prices []float64, index, period int) float64 {
+	if index < period {
+		return 50
 	}
-	return (value - l.scaler.min) / (l.scaler.max - l.scaler.min)
-}
-
-// Technical indicator calculations (simplified)
-func (l *LSTMPredictor) calculateRSI(prices []float64, index int) float64 {
-	// Simplified RSI calculation
-	if index < 14 || len(prices) < 15 {
-		return 0.5 // Neutral RSI
-	}
-
-	period := 14
-	startIdx := index - period + 1
-	if startIdx < 0 {
-		startIdx = 0
-	}
-
-	gains := 0.0
-	losses := 0.0
-	count := 0
-
-	for i := startIdx + 1; i <= index; i++ {
+	gains, losses := 0.0, 0.0
+	for i := index - period + 1; i <= index; i++ {
+		if i == 0 {
+			continue
+		}
 		change := prices[i] - prices[i-1]
 		if change > 0 {
 			gains += change
 		} else {
 			losses += math.Abs(change)
 		}
-		count++
 	}
-
-	if count == 0 || losses == 0 {
-		return 0.5
+	if losses == 0 {
+		return 100
 	}
-
-	avgGain := gains / float64(count)
-	avgLoss := losses / float64(count)
-	rs := avgGain / avgLoss
-	rsi := 100 - (100 / (1 + rs))
-
-	return rsi / 100.0 // Normalize to [0,1]
+	rs := (gains / float64(period)) / (losses / float64(period))
+	return 100 - (100 / (1 + rs))
 }
 
-func (l *LSTMPredictor) calculateMACD(prices []float64, index int) float64 {
-	// Simplified MACD calculation
-	if index < 26 {
-		return 0.5 // Neutral MACD
-	}
-
-	// Calculate 12-period and 26-period EMAs (simplified as SMAs)
-	ema12 := l.calculateSMA(prices, index, 12)
-	ema26 := l.calculateSMA(prices, index, 26)
-
-	macd := ema12 - ema26
-
-	// Normalize MACD value
-	return l.sigmoid(macd / prices[index])
-}
-
-func (l *LSTMPredictor) calculateSMA(prices []float64, index int, period int) float64 {
+func (l *LSTMPredictor) calculateSMA(prices []float64, index, period int) float64 {
 	if index < period-1 {
 		return prices[index]
 	}
-
 	sum := 0.0
 	for i := index - period + 1; i <= index; i++ {
 		sum += prices[i]
 	}
-
 	return sum / float64(period)
 }
 
-func (l *LSTMPredictor) calculateVolatility(prices []float64, index int) float64 {
-	if index < 10 {
-		return 0.5
-	}
-
-	period := 10
-	startIdx := index - period + 1
-	if startIdx < 0 {
-		startIdx = 0
-	}
-
-	returns := make([]float64, 0)
-	for i := startIdx + 1; i <= index; i++ {
-		if prices[i-1] > 0 {
-			ret := math.Log(prices[i] / prices[i-1])
-			returns = append(returns, ret)
-		}
-	}
-
-	if len(returns) == 0 {
-		return 0.5
-	}
-
-	// Calculate standard deviation
-	mean := 0.0
-	for _, ret := range returns {
-		mean += ret
-	}
-	mean /= float64(len(returns))
-
-	variance := 0.0
-	for _, ret := range returns {
-		variance += math.Pow(ret-mean, 2)
-	}
-	variance /= float64(len(returns))
-
-	volatility := math.Sqrt(variance)
-
-	// Normalize volatility
-	return l.sigmoid(volatility * 100)
-}
-
-func (l *LSTMPredictor) calculateRelativeVolume(prices []float64, index int) float64 {
-	// Simplified relative volume using price changes
-	if index < 1 {
-		return 0.5
-	}
-
-	currentChange := math.Abs(prices[index] - prices[index-1])
-
-	// Calculate average change over past 10 periods
-	period := 10
+func (l *LSTMPredictor) calculateVolatility(prices []float64, index, period int) float64 {
 	if index < period {
-		period = index
-	}
-
-	avgChange := 0.0
-	for i := index - period + 1; i <= index; i++ {
-		if i > 0 {
-			avgChange += math.Abs(prices[i] - prices[i-1])
-		}
-	}
-	avgChange /= float64(period)
-
-	if avgChange == 0 {
-		return 0.5
-	}
-
-	relativeVolume := currentChange / avgChange
-	return l.sigmoid(relativeVolume - 1) // Center around 1
-}
-
-func (l *LSTMPredictor) getPriceRange(prices []float64) (float64, float64) {
-	if len(prices) == 0 {
-		return 0, 1
-	}
-
-	min := prices[0]
-	max := prices[0]
-
-	for _, price := range prices {
-		if price < min {
-			min = price
-		}
-		if price > max {
-			max = price
-		}
-	}
-
-	return min, max
-}
-
-func (l *LSTMPredictor) calculateTrend(prices []float64) float64 {
-	if len(prices) < 2 {
 		return 0
 	}
-
-	// Simple trend calculation using linear regression slope
-	n := len(prices)
-	if n > 20 {
-		n = 20 // Use last 20 periods
+	returns := make([]float64, 0, period)
+	for i := index - period + 1; i <= index; i++ {
+		if i > 0 && prices[i-1] > 0 {
+			returns = append(returns, math.Log(prices[i]/prices[i-1]))
+		}
 	}
-
-	startIdx := len(prices) - n
-	sumX := 0.0
-	sumY := 0.0
-	sumXY := 0.0
-	sumX2 := 0.0
-
-	for i := 0; i < n; i++ {
-		x := float64(i)
-		y := prices[startIdx+i]
-
-		sumX += x
-		sumY += y
-		sumXY += x * y
-		sumX2 += x * x
+	if len(returns) == 0 {
+		return 0
 	}
-
-	// Calculate slope
-	slope := (float64(n)*sumXY - sumX*sumY) / (float64(n)*sumX2 - sumX*sumX)
-
-	return slope
-}
-
-func (l *LSTMPredictor) sigmoid(x float64) float64 {
-	return 1.0 / (1.0 + math.Exp(-x))
+	mean := 0.0
+	for _, r := range returns {
+		mean += r
+	}
+	mean /= float64(len(returns))
+	variance := 0.0
+	for _, r := range returns {
+		variance += (r - mean) * (r - mean)
+	}
+	return math.Sqrt(variance / float64(len(returns)))
 }
 
 func (l *LSTMPredictor) GetName() string {
@@ -397,5 +256,8 @@ func (l *LSTMPredictor) GetName() string {
 }
 
 func (l *LSTMPredictor) GetAccuracy() float64 {
-	return 0.93 // 93% accuracy cho trained model
+	if l.backtestAccuracy > 0 {
+		return l.backtestAccuracy
+	}
+	return 0.0
 }

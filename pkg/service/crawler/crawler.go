@@ -56,7 +56,7 @@ func (vc *VietStockCrawler) crawlVN30Data(ctx context.Context) (*CrawlResult, er
 		vc.mutex.Unlock()
 	}()
 
-	logger.Logger.Info("🚀 Start crawl VN30 data from VietStock...")
+	logger.Logger.Info("[crawler] Starting VN30 crawl from VietStock")
 	startTime := time.Now()
 
 	// Tạo collector mới cho mỗi lần crawl
@@ -76,7 +76,7 @@ func (vc *VietStockCrawler) crawlVN30Data(ctx context.Context) (*CrawlResult, er
 	c.OnHTML("table", func(e *colly.HTMLElement) {
 		// Tìm table chứa data VN30
 		if vc.isVN30Table(e) {
-			logger.Logger.Info("✅ Tìm thấy VN30 table, đang parse...")
+			logger.Logger.Info("[crawler] Found VN30 table, parsing...")
 
 			stocksFromTable := vc.parseVN30Table(e)
 
@@ -84,7 +84,7 @@ func (vc *VietStockCrawler) crawlVN30Data(ctx context.Context) (*CrawlResult, er
 			stocks = append(stocks, stocksFromTable...)
 			mutex.Unlock()
 
-			logger.Logger.Infof("📊 Parse được %d mã từ table", len(stocksFromTable))
+			logger.Logger.Infof("[crawler] Parsed %d stocks from table", len(stocksFromTable))
 		}
 	})
 
@@ -92,7 +92,7 @@ func (vc *VietStockCrawler) crawlVN30Data(ctx context.Context) (*CrawlResult, er
 	c.OnResponse(func(r *colly.Response) {
 		contentType := r.Headers.Get("Content-Type")
 		if strings.Contains(contentType, "application/json") {
-			logger.Logger.Info("📦 Nhận được JSON response, đang parse...")
+			logger.Logger.Info("[crawler] Received JSON response, parsing...")
 
 			stocksFromJSON, err := vc.parseJSONResponse(r.Body)
 			if err != nil {
@@ -106,7 +106,7 @@ func (vc *VietStockCrawler) crawlVN30Data(ctx context.Context) (*CrawlResult, er
 			stocks = append(stocks, stocksFromJSON...)
 			mutex.Unlock()
 
-			logger.Logger.Infof("📊 Parse được %d mã từ JSON", len(stocksFromJSON))
+			logger.Logger.Infof("[crawler] Parsed %d stocks from JSON", len(stocksFromJSON))
 		}
 	})
 
@@ -115,7 +115,7 @@ func (vc *VietStockCrawler) crawlVN30Data(ctx context.Context) (*CrawlResult, er
 		mutex.Lock()
 		crawlErrors = append(crawlErrors, fmt.Errorf("crawl error cho URL %s: %v", r.Request.URL, err))
 		mutex.Unlock()
-		logger.Logger.Errorf("❌ Crawl lỗi: %v", err)
+		logger.Logger.Errorf("[crawler] Crawl error: %v", err)
 	})
 
 	// Rate limiting
@@ -140,7 +140,7 @@ func (vc *VietStockCrawler) crawlVN30Data(ctx context.Context) (*CrawlResult, er
 		default:
 		}
 
-		logger.Logger.Infof("🔍 Đang crawl: %s", url)
+		logger.Logger.Infof("[crawler] Crawling: %s", url)
 
 		// Rate limiting
 		if err := vc.rateLimiter.Wait(ctx); err != nil {
@@ -153,7 +153,7 @@ func (vc *VietStockCrawler) crawlVN30Data(ctx context.Context) (*CrawlResult, er
 
 		err := c.Visit(url)
 		if err != nil {
-			logger.Logger.Errorf("❌ Lỗi visit %s: %v", url, err)
+			logger.Logger.Errorf("[crawler] Failed to visit %s: %v", url, err)
 			crawlErrors = append(crawlErrors, err)
 			continue
 		}
@@ -166,7 +166,7 @@ func (vc *VietStockCrawler) crawlVN30Data(ctx context.Context) (*CrawlResult, er
 	c.Wait()
 
 	duration := time.Since(startTime)
-	logger.Logger.Infof("⏱️ Crawl hoàn thành trong %v", duration)
+	logger.Logger.Infof("[crawler] Crawl completed in %v", duration)
 
 	// Tạo result
 	result := &CrawlResult{
@@ -179,13 +179,13 @@ func (vc *VietStockCrawler) crawlVN30Data(ctx context.Context) (*CrawlResult, er
 		result.Error = fmt.Errorf("có %d lỗi trong quá trình crawl: %v", len(crawlErrors), crawlErrors[0])
 	}
 
-	logger.Logger.Infof("🎉 Crawl thành công %d mã VN30", result.Count)
+	logger.Logger.Infof("[crawler] Crawled %d VN30 stocks successfully", result.Count)
 	return result, nil
 }
 
 // crawlSingleStock - Crawl data của 1 mã cụ thể
 func (vc *VietStockCrawler) crawlSingleStock(ctx context.Context, symbol string) (*modelssvc.VN30Stock, error) {
-	logger.Logger.Infof("🔍 Đang crawl data cho mã %s...", symbol)
+	logger.Logger.Infof("[crawler] Crawling single stock: %s", symbol)
 
 	if err := vc.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("rate limiter error: %v", err)
@@ -222,7 +222,7 @@ func (vc *VietStockCrawler) crawlSingleStock(ctx context.Context, symbol string)
 		vc.rotateHeaders(c)
 		err := c.Visit(url)
 		if err != nil {
-			logger.Logger.Warnf("⚠️ Không crawl được từ %s: %v", url, err)
+			logger.Logger.Warnf("[crawler] Cannot crawl from %s: %v", url, err)
 			continue
 		}
 
@@ -243,8 +243,33 @@ func (vc *VietStockCrawler) crawlSingleStock(ctx context.Context, symbol string)
 		return nil, fmt.Errorf("không tìm thấy data cho mã %s", symbol)
 	}
 
-	logger.Logger.Infof("✅ Crawl thành công mã %s: giá %.0f", symbol, stock.Price)
+	logger.Logger.Infof("[crawler] Crawled %s: price=%.0f", symbol, stock.Price)
 	return stock, nil
+}
+
+// crawlWithRetry wraps crawlSingleStock with exponential backoff retry logic
+func (vc *VietStockCrawler) crawlWithRetry(ctx context.Context, symbol string, maxRetries int) (*modelssvc.VN30Stock, error) {
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(attempt*attempt) * time.Second
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+			}
+			logger.Logger.Warnf("[crawler] Retrying %s (attempt %d/%d)", symbol, attempt+1, maxRetries)
+		}
+
+		stock, err := vc.crawlSingleStock(ctx, symbol)
+		if err != nil {
+			lastErr = err
+			logger.Logger.Warnf("[crawler] Crawl attempt %d failed for %s: %v", attempt+1, symbol, err)
+			continue
+		}
+		return stock, nil
+	}
+	return nil, fmt.Errorf("failed after %d attempts: %w", maxRetries, lastErr)
 }
 
 // Setup anti-detection measures

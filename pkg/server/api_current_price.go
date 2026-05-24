@@ -18,6 +18,11 @@ func GetCurrentPrice(w http.ResponseWriter, r *http.Request) {
 	}
 	symbol := strings.ToUpper(pathParts[3])
 
+	if err := validateSymbol(symbol); err != nil {
+		ResponseError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	logger.Logger.Infof("📈 Getting current price for %s...", symbol)
 
 	store := repository.GetSingleton()

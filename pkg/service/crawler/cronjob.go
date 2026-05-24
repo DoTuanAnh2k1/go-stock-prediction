@@ -13,7 +13,7 @@ import (
 )
 
 func CronjobCrawler() error {
-	logger.Logger.Info("🚀 Starting VN30 stocks crawler cronjob...")
+	logger.Logger.Info("[cronjob] Starting VN30 stocks crawler")
 	startTime := time.Now()
 
 	// Initialize context with timeout
@@ -23,35 +23,35 @@ func CronjobCrawler() error {
 	// Get database store instance
 	store := repository.GetSingleton()
 	if store == nil {
-		logger.Logger.Error("❌ Failed to connect to database store")
+		logger.Logger.Error("[cronjob] Failed to connect to database store")
 		return fmt.Errorf("database store not available")
 	}
 
 	// Start crawling VN30 data
 	result, err := crawler.crawlVN30Data(ctx)
 	if err != nil {
-		logger.Logger.Errorf("❌ Failed to crawl VN30 data: %v", err)
+		logger.Logger.Errorf("[cronjob] Failed to crawl VN30 data: %v", err)
 		// Log error to sync_log
 		logSyncError(store, err, startTime)
 		return err
 	}
 
 	if result == nil || len(result.Stocks) == 0 {
-		logger.Logger.Warn("⚠️ No data crawled from source")
+		logger.Logger.Warn("[cronjob] No data crawled from source")
 		logSyncError(store, fmt.Errorf("no data available"), startTime)
 		return fmt.Errorf("no data crawled")
 	}
 
-	logger.Logger.Infof("📊 Successfully crawled %d VN30 stocks", len(result.Stocks))
+	logger.Logger.Infof("[cronjob] Successfully crawled %d VN30 stocks", len(result.Stocks))
 
 	// Process and save data to database
-	successCount, errorCount := processAndSaveStockData(store, result.Stocks)
+	successCount, errorCount := processAndSaveStockData(ctx, store, result.Stocks)
 
 	// Log sync results
 	duration := time.Since(startTime)
 	err = logSyncResult(store, successCount, errorCount, duration, result.Source)
 	if err != nil {
-		logger.Logger.Errorf("❌ Failed to log sync result: %v", err)
+		logger.Logger.Errorf("[cronjob] Failed to log sync result: %v", err)
 	}
 
 	logger.Logger.Infof("✅ Crawler cronjob completed: %d successful, %d errors in %v",
@@ -61,27 +61,34 @@ func CronjobCrawler() error {
 }
 
 // processAndSaveStockData processes and saves stock data to database
-func processAndSaveStockData(store repository.DatabaseStore, stocks []modelssvc.VN30Stock) (int, int) {
+func processAndSaveStockData(ctx context.Context, store repository.DatabaseStore, stocks []modelssvc.VN30Stock) (int, int) {
 	successCount := 0
 	errorCount := 0
 
 	// Get or create HOSE exchange (default for VN30)
 	exchange, err := getOrCreateHOSEExchange(store)
 	if err != nil {
-		logger.Logger.Errorf("❌ Failed to get/create HOSE exchange: %v", err)
+		logger.Logger.Errorf("[cronjob] Failed to get/create HOSE exchange: %v", err)
 		return 0, len(stocks)
 	}
 
 	for _, stockData := range stocks {
+		select {
+		case <-ctx.Done():
+			logger.Logger.Info("[cronjob] Context cancelled, stopping stock processing")
+			return successCount, errorCount + len(stocks) - successCount - errorCount
+		default:
+		}
+
 		err := processingSingleStock(store, stockData, exchange.ID)
 		if err != nil {
-			logger.Logger.Errorf("❌ Failed to process stock %s: %v", stockData.Symbol, err)
+			logger.Logger.Errorf("[cronjob] Failed to process stock %s: %v", stockData.Symbol, err)
 			errorCount++
 			continue
 		}
 
 		successCount++
-		logger.Logger.Debugf("✅ Successfully saved stock %s: price %.0f", stockData.Symbol, stockData.Price)
+		logger.Logger.Debugf("[cronjob] Saved stock %s: price=%.0f", stockData.Symbol, stockData.Price)
 	}
 
 	return successCount, errorCount
@@ -148,7 +155,7 @@ func getOrCreateStock(store repository.DatabaseStore, stockData modelssvc.VN30St
 		return nil, fmt.Errorf("failed to create stock: %v", err)
 	}
 
-	logger.Logger.Infof("📝 Created new stock: %s - %s", newStock.Symbol, newStock.CompanyName)
+	logger.Logger.Infof("[cronjob] Created new stock: %s - %s", newStock.Symbol, newStock.CompanyName)
 	return newStock, nil
 }
 
@@ -172,7 +179,7 @@ func getOrCreateHOSEExchange(store repository.DatabaseStore) (*modelsdb.Exchange
 		return nil, fmt.Errorf("failed to create HOSE exchange: %v", err)
 	}
 
-	logger.Logger.Info("📝 Created new HOSE exchange")
+	logger.Logger.Info("[cronjob] Created new HOSE exchange")
 	return newExchange, nil
 }
 
@@ -247,6 +254,6 @@ func logSyncError(store repository.DatabaseStore, err error, startTime time.Time
 
 	logErr := store.CreateSyncLog(syncLog)
 	if logErr != nil {
-		logger.Logger.Errorf("❌ Failed to log sync error: %v", logErr)
+		logger.Logger.Errorf("[cronjob] Failed to log sync error: %v", logErr)
 	}
 }

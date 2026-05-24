@@ -10,9 +10,16 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const marketOverviewCacheKey = "market_overview"
+
 // GetMarketOverview - GET /api/market/overview
 func GetMarketOverview(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Info("🏢 Getting market overview...")
+	if cached, ok := globalCache.Get(marketOverviewCacheKey); ok {
+		ResponseSuccess(w, http.StatusOK, cached)
+		return
+	}
+
+	logger.Logger.Info("Getting market overview...")
 
 	store := repository.GetSingleton()
 
@@ -97,5 +104,6 @@ func GetMarketOverview(w http.ResponseWriter, r *http.Request) {
 		LastUpdated:  time.Now(),
 	}
 
+	globalCache.Set(marketOverviewCacheKey, overview, 60*time.Second)
 	ResponseSuccess(w, http.StatusOK, overview)
 }

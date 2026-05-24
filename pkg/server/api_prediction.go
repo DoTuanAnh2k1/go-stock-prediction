@@ -5,7 +5,6 @@ import (
 	modelsapi "go-stock-prediction/pkg/models/models_api"
 	"go-stock-prediction/pkg/store/repository"
 	"net/http"
-	"strconv"
 	"time"
 )
 
@@ -17,11 +16,22 @@ func GetPredictions(w http.ResponseWriter, r *http.Request) {
 	algorithm := r.URL.Query().Get("algorithm")
 	limitStr := r.URL.Query().Get("limit")
 
-	limit := 20
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
+	if symbol != "" {
+		if err := validateSymbol(symbol); err != nil {
+			ResponseError(w, http.StatusBadRequest, err.Error())
+			return
 		}
+	}
+
+	if err := validateAlgorithm(algorithm); err != nil {
+		ResponseError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	limit, err := validateLimit(limitStr, 20, 100)
+	if err != nil {
+		ResponseError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	store := repository.GetSingleton()

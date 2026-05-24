@@ -2,13 +2,16 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"go-stock-prediction/pkg/logger"
 	modelsapi "go-stock-prediction/pkg/models/models_api"
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 	"math"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
+	"unicode"
 
 	"github.com/shopspring/decimal"
 )
@@ -219,4 +222,61 @@ func getTopByVolume(stocks []modelsapi.StockCurrentPriceDTO, limit int) []models
 		return stocks[:limit]
 	}
 	return stocks
+}
+
+var validAlgorithms = map[string]bool{
+	"moving_average": true,
+	"lstm_nn":        true,
+	"arima_garch":    true,
+}
+
+var validPeriods = map[string]bool{
+	"1D": true, "1W": true, "1M": true,
+	"3M": true, "6M": true, "1Y": true,
+}
+
+func validateSymbol(symbol string) error {
+	if symbol == "" {
+		return fmt.Errorf("symbol is required")
+	}
+	if len(symbol) < 2 || len(symbol) > 5 {
+		return fmt.Errorf("invalid symbol format")
+	}
+	for _, c := range symbol {
+		if !unicode.IsLetter(c) && !unicode.IsDigit(c) {
+			return fmt.Errorf("symbol contains invalid characters")
+		}
+	}
+	return nil
+}
+
+func validateLimit(limitStr string, defaultLimit, maxLimit int) (int, error) {
+	if limitStr == "" {
+		return defaultLimit, nil
+	}
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 1 || limit > maxLimit {
+		return 0, fmt.Errorf("limit must be between 1 and %d", maxLimit)
+	}
+	return limit, nil
+}
+
+func validateAlgorithm(algorithm string) error {
+	if algorithm == "" {
+		return nil
+	}
+	if !validAlgorithms[algorithm] {
+		return fmt.Errorf("unknown algorithm: %s", algorithm)
+	}
+	return nil
+}
+
+func validatePeriod(period string) error {
+	if period == "" {
+		return nil
+	}
+	if !validPeriods[period] {
+		return fmt.Errorf("unknown period: %s (valid: 1D, 1W, 1M, 3M, 6M, 1Y)", period)
+	}
+	return nil
 }

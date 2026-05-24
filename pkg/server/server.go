@@ -14,10 +14,12 @@ func StartHTTPServer() {
 	// Get server config
 	serverAddr := config.GetServerConfig().Host + ":" + config.GetServerConfig().Port
 
+	handler := CORSMiddleware(RateLimitMiddleware(mux))
+
 	// Create HTTP server với proper configuration
 	server := &http.Server{
 		Addr:    serverAddr,
-		Handler: mux,
+		Handler: handler,
 		// Timeout configurations for production
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,

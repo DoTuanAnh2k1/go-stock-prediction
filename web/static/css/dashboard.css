@@ -1160,6 +1160,182 @@ body {
     }
 }
 
+/* ============================================================
+   Info Banner (startup sync notification)
+   ============================================================ */
+.info-banner {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-left: 4px solid #2563eb;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+    animation: bannerSlideIn 0.3s ease;
+}
+
+.info-banner--visible {
+    display: flex;
+}
+
+.info-banner--hiding {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+@keyframes bannerSlideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.info-banner__icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #2563eb;
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.info-banner__text {
+    flex: 1;
+    color: #1e40af;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.info-banner__dismiss {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: #3b82f6;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    line-height: 1;
+    transition: background 0.2s;
+}
+
+.info-banner__dismiss:hover {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+/* ============================================================
+   Skeleton Loader
+   ============================================================ */
+@keyframes skeletonShimmer {
+    0%   { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+}
+
+.skeleton-loader {
+    background: linear-gradient(90deg, #e2e8f0 25%, #f0f4f8 50%, #e2e8f0 75%);
+    background-size: 800px 100%;
+    animation: skeletonShimmer 1.4s infinite linear;
+    border-radius: 6px;
+    display: block;
+}
+
+/* Block skeleton variants used inside watchlist skeleton rows */
+.skeleton-loader--title {
+    height: 16px;
+    width: 70px;
+    margin-bottom: 6px;
+}
+
+.skeleton-loader--subtitle {
+    height: 12px;
+    width: 120px;
+}
+
+.skeleton-loader--price {
+    height: 18px;
+    width: 80px;
+    margin-bottom: 6px;
+    margin-left: auto;
+}
+
+.skeleton-loader--change {
+    height: 12px;
+    width: 60px;
+    margin-left: auto;
+}
+
+.skeleton-loader--badge {
+    height: 26px;
+    width: 60px;
+    border-radius: 13px;
+}
+
+/* Inline skeleton used inside stat text elements (VN30 overview) */
+.skeleton-loader--inline {
+    display: inline-block;
+    height: 1em;
+    width: 80px;
+    vertical-align: middle;
+}
+
+/* Skeleton item row — subdues cursor and hover effect */
+.stock-item.skeleton-item {
+    pointer-events: none;
+    border-left-color: #e2e8f0;
+}
+
+.stock-item.skeleton-item:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+/* ============================================================
+   No-data / Empty state
+   ============================================================ */
+.no-data-state {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 24px 16px;
+    color: #718096;
+    font-size: 0.9rem;
+}
+
+.no-data-state--row {
+    /* Used as table cell — flex inside td */
+    display: flex;
+    justify-content: center;
+    text-align: center;
+}
+
+.no-data-state__icon {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: #4a5568;
+    font-size: 0.9rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.no-data-state__text {
+    margin: 0;
+    line-height: 1.5;
+}
+
 /* Dark mode support (optional) */
 @media (prefers-color-scheme: dark) {
     .panel {

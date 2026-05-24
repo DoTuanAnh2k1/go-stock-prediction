@@ -10,6 +10,7 @@ type ServerConfig struct {
 	ServerName string
 	Host       string
 	Port       string
+	APIKey     string
 }
 
 type LogConfig struct {

@@ -5,7 +5,6 @@ import (
 	modelsapi "go-stock-prediction/pkg/models/models_api"
 	"go-stock-prediction/pkg/store/repository"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
@@ -19,18 +18,27 @@ func GetHistoricalData(w http.ResponseWriter, r *http.Request) {
 	}
 	symbol := strings.ToUpper(pathParts[3])
 
+	if err := validateSymbol(symbol); err != nil {
+		ResponseError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	// Parse query params
 	period := r.URL.Query().Get("period")
 	if period == "" {
 		period = "1M"
 	}
 
+	if err := validatePeriod(period); err != nil {
+		ResponseError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	limitStr := r.URL.Query().Get("limit")
-	limit := 50
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
+	limit, err := validateLimit(limitStr, 50, 500)
+	if err != nil {
+		ResponseError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	logger.Logger.Infof("📊 Getting historical data for %s, period: %s", symbol, period)

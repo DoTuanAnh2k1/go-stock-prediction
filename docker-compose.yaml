@@ -8,16 +8,49 @@ services:
     container_name: mysql_db
     volumes:
       - db_data:/var/lib/mysql
+      - ./database.sql:/docker-entrypoint-initdb.d/init.sql:ro
     restart: always
     ports:
       - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: 123
-      MYSQL_DATABASE: weather_alerts_db
-      MYSQL_USER: dbuser          # Thêm user này để phpMyAdmin dễ connect
+      MYSQL_DATABASE: go_stock_prediction
+      MYSQL_USER: dbuser
       MYSQL_PASSWORD: password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
-      - mysql-phpmyadmin
+      - app-network
+
+  # Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: go_stock_prediction_app
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+    ports:
+      - "31300:31300"
+    environment:
+      SERVER_PORT: 31300
+      DB_DRIVER: mysql
+      MYSQL_HOST: db
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: 123
+      MYSQL_DB_NAME: go_stock_prediction
+      MYSQL_DEBUG: "false"
+      LOG_LEVEL: INFO
+      DB_LOG_LEVEL: INFO
+    networks:
+      - app-network
 
   # phpMyAdmin
   phpmyadmin:
@@ -27,19 +60,19 @@ services:
     container_name: phpmyadmin_app
     restart: always
     ports:
-      - "8090:80"
+      - "8080:80"
     environment:
       PMA_HOST: db
       PMA_PORT: 3306
-      PMA_USER: root              # Thêm này để auto login
-      PMA_PASSWORD: 123      # Thêm này để auto login
+      PMA_USER: root
+      PMA_PASSWORD: 123
       MYSQL_ROOT_PASSWORD: 123
-      UPLOAD_LIMIT: 100M          # Tăng limit upload file
+      UPLOAD_LIMIT: 100M
     networks:
-      - mysql-phpmyadmin
+      - app-network
 
 networks:
-  mysql-phpmyadmin:
+  app-network:
     driver: bridge
 
 volumes:

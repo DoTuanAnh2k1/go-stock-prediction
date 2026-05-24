@@ -9,5 +9,6 @@ import (
 func TriggerCrawlerHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("Trigger crawler handler")
 	crawler.CronjobCrawler()
+	globalCache.Delete(marketOverviewCacheKey)
 	w.WriteHeader(http.StatusAccepted)
 }

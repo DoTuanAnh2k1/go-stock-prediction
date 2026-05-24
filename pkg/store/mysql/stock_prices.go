@@ -64,12 +64,16 @@ func (c *Client) GetStockPriceByStockIDAndDate(stockID uint, tradingDate time.Ti
 // GetLatestStockPricesForVN30 - lấy giá mới nhất của tất cả VN30
 func (c *Client) GetLatestStockPricesForVN30() ([]modelsdb.StockPrice, error) {
 	var stockPrices []modelsdb.StockPrice
-	err := c.Db.Table("stock_prices").
-		Select("DISTINCT ON (stock_id) stock_prices.*").
-		Joins("INNER JOIN stocks ON stocks.id = stock_prices.stock_id").
-		Where("stocks.is_vn30 = ?", true).
-		Order("stock_id, trading_date DESC").
+	subQuery := c.Db.Model(&modelsdb.StockPrice{}).
+		Select("stock_id, MAX(trading_date) as max_date").
+		Group("stock_id")
+
+	err := c.Db.
+		Joins("JOIN stocks ON stocks.id = stock_prices.stock_id").
+		Joins("JOIN (?) as latest ON latest.stock_id = stock_prices.stock_id AND latest.max_date = stock_prices.trading_date", subQuery).
+		Where("stocks.is_vn30 = ? AND stocks.deleted_at IS NULL", true).
 		Find(&stockPrices).Error
+
 	return stockPrices, err
 }
 

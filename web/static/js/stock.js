@@ -53,25 +53,62 @@ function setupStocksEventListeners() {
     }
 }
 
-// Load VN30 overview
+// Show skeleton placeholders in the VN30 overview stat elements
+function showVN30Skeleton() {
+    var ids = ['vn30Index', 'vn30Change', 'totalVolume', 'totalValue'];
+    for (var i = 0; i < ids.length; i++) {
+        var el = document.getElementById(ids[i]);
+        if (!el) continue;
+        el.textContent = '';
+        el.className = (el.className || '') + ' skeleton-loader skeleton-loader--inline';
+    }
+}
+
+// Remove skeleton classes from VN30 stat elements
+function clearVN30Skeleton() {
+    var ids = ['vn30Index', 'vn30Change', 'totalVolume', 'totalValue'];
+    for (var i = 0; i < ids.length; i++) {
+        var el = document.getElementById(ids[i]);
+        if (!el) continue;
+        el.classList.remove('skeleton-loader', 'skeleton-loader--inline');
+    }
+}
+
+// Load VN30 overview from real API
 async function loadVN30Overview() {
+    showVN30Skeleton();
     try {
-        console.log('📈 Loading VN30 overview...');
-        
-        // Mock data since API might not be ready
-        const mockData = {
-            index: 1234.56,
-            change: 12.34,
-            changePercent: 1.02,
-            volume: 125600000,
-            value: 3200000000000
+        console.log('Loading VN30 overview...');
+        var response = await fetch('/api/market/overview', {
+            headers: { 'Accept': 'application/json', 'Cache-Control': 'no-cache' }
+        });
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
+        }
+        var data = await response.json();
+        // data is MarketOverviewDTO — fields: vn30_index, index_change, index_percent,
+        // total_volume, total_value (all may be strings from shopspring/decimal JSON)
+        var mapped = {
+            index: parseFloat(data.vn30_index) || 0,
+            change: parseFloat(data.index_change) || 0,
+            changePercent: parseFloat(data.index_percent) || 0,
+            volume: typeof data.total_volume === 'number' ? data.total_volume : parseInt(data.total_volume) || 0,
+            value: parseFloat(data.total_value) || 0
         };
-        
-        updateVN30Display(mockData);
-        
+        clearVN30Skeleton();
+        updateVN30Display(mapped);
     } catch (error) {
-        console.error('❌ Error loading VN30 overview:', error);
-        showNotification('Failed to load VN30 overview', 'error');
+        console.error('Error loading VN30 overview:', error);
+        clearVN30Skeleton();
+        // Show dashes so user knows data is unavailable, not hardcoded
+        var elIndex = document.getElementById('vn30Index');
+        var elChange = document.getElementById('vn30Change');
+        var elVolume = document.getElementById('totalVolume');
+        var elValue = document.getElementById('totalValue');
+        if (elIndex) elIndex.textContent = '--';
+        if (elChange) { elChange.textContent = 'N/A'; elChange.className = 'change neutral'; }
+        if (elVolume) elVolume.textContent = '--';
+        if (elValue) elValue.textContent = '--';
     }
 }
 

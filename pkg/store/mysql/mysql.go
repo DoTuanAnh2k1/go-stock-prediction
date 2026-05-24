@@ -35,7 +35,7 @@ func (c *Client) Init(cfg models_config.DatabaseConfig) error {
 	)
 	gormLogger := logger.NewGormLogger(cfg.Mysql.Debug)
 	gormLogger.LogMode(1)
-	dsn := DbUsername + ":" + DbPassword + "@tcp" + "(" + DbHost + ":" + DbPort + ")/" + DbName + "?" + "parseTime=true&loc=Local"
+	dsn := DbUsername + ":" + DbPassword + "@tcp" + "(" + DbHost + ":" + DbPort + ")/" + DbName + "?" + "parseTime=true&loc=Asia%2FHo_Chi_Minh"
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger: gormLogger,
 	})

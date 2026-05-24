@@ -8,22 +8,49 @@ let refreshInterval;
 
 // Initialize dashboard when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('📊 Initializing dashboard...');
-    
+    console.log('Dashboard initializing...');
+
+    // Wire up the dismissable sync banner
+    setupSyncBanner();
+
     // Initial load
     updateMarketStatus();
     loadWatchlist();
     loadPredictions();
     updateStats();
-    
+
     // Setup auto-refresh
     setupAutoRefresh();
-    
+
     // Setup event listeners
     setupEventListeners();
-    
-    console.log('✅ Dashboard initialized successfully!');
+
+    console.log('Dashboard initialized.');
 });
+
+// Show / dismiss startup sync info banner
+function setupSyncBanner() {
+    var banner = document.getElementById('syncInfoBanner');
+    var dismissBtn = document.getElementById('syncBannerDismiss');
+    if (!banner || !dismissBtn) return;
+
+    // Check session storage so it only shows once per browser session
+    if (sessionStorage.getItem('syncBannerDismissed') === '1') {
+        banner.style.display = 'none';
+        return;
+    }
+
+    banner.classList.add('info-banner--visible');
+
+    dismissBtn.addEventListener('click', function() {
+        banner.classList.remove('info-banner--visible');
+        banner.classList.add('info-banner--hiding');
+        setTimeout(function() {
+            banner.style.display = 'none';
+        }, 300);
+        sessionStorage.setItem('syncBannerDismissed', '1');
+    });
+}
 
 // Setup auto-refresh intervals
 function setupAutoRefresh() {
@@ -107,40 +134,78 @@ function updateMarketStatus() {
     }
 }
 
+// Render skeleton placeholder rows for watchlist while loading
+function renderWatchlistSkeleton() {
+    var grid = document.getElementById('watchlistGrid');
+    if (!grid) return;
+    var rows = '';
+    for (var i = 0; i < 5; i++) {
+        rows += '<div class="stock-item skeleton-item">' +
+            '<div class="stock-info">' +
+            '<div class="skeleton-loader skeleton-loader--title"></div>' +
+            '<div class="skeleton-loader skeleton-loader--subtitle"></div>' +
+            '</div>' +
+            '<div class="stock-price">' +
+            '<div class="skeleton-loader skeleton-loader--price"></div>' +
+            '<div class="skeleton-loader skeleton-loader--change"></div>' +
+            '</div>' +
+            '<div class="skeleton-loader skeleton-loader--badge"></div>' +
+            '</div>';
+    }
+    grid.innerHTML = rows;
+}
+
 // Load watchlist data
 async function loadWatchlist(showSpinner = true) {
-    const symbols = 'VCB,VIC,FPT,VNM,HPG,MBB,GAS,TCB,BID,VRE';
-    
     if (showSpinner) {
         showLoading('watchlistLoading');
+        renderWatchlistSkeleton();
     }
-    
+
     try {
-        console.log('📈 Loading watchlist data...');
-        const response = await fetch(`${API_BASE}/stocks/watchlist?symbols=${symbols}`, {
+        console.log('Loading watchlist data...');
+        const response = await fetch(API_BASE + '/market/overview', {
             headers: {
                 'Accept': 'application/json',
                 'Cache-Control': 'no-cache'
             }
         });
-        
+
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            throw new Error('HTTP ' + response.status + ': ' + response.statusText);
         }
-        
+
         const data = await response.json();
-        console.log("data:", data)
-        // if (data.success && data.data && data.data.stocks) {
-        if (data && data.stocks) {
-            console.log(`✅ Loaded ${data.stocks.length} stocks`);
-            renderWatchlist(data.stocks);
+
+        // Overview returns an array under no wrapper — data is the DTO directly
+        // Stocks are distributed across top_gainers/top_losers/most_active;
+        // we prefer a flat unique list from all three for the watchlist.
+        var seen = {};
+        var stocks = [];
+        var lists = [data.top_gainers, data.top_losers, data.most_active];
+        for (var li = 0; li < lists.length; li++) {
+            var list = lists[li];
+            if (!Array.isArray(list)) continue;
+            for (var si = 0; si < list.length; si++) {
+                var entry = list[si];
+                var sym = entry && entry.stock && entry.stock.symbol;
+                if (sym && !seen[sym]) {
+                    seen[sym] = true;
+                    stocks.push(entry);
+                }
+            }
+        }
+
+        if (stocks.length > 0) {
+            console.log('Loaded ' + stocks.length + ' stocks for watchlist');
+            renderWatchlist(stocks);
         } else {
-            console.warn('⚠️ API returned unexpected format, using sample data');
-            renderWatchlistError();
+            console.warn('No stock data in market overview response');
+            renderWatchlistEmpty();
         }
     } catch (error) {
-        console.error('❌ Error loading watchlist:', error);
-        renderWatchlistError();
+        console.error('Error loading watchlist:', error);
+        renderWatchlistEmpty(true);
     } finally {
         if (showSpinner) {
             hideLoading('watchlistLoading');
@@ -153,7 +218,7 @@ function renderWatchlist(stocks) {
     const grid = document.getElementById('watchlistGrid');
     
     if (!stocks || stocks.length === 0) {
-        grid.innerHTML = '<div class="no-data">📊 No stock data available</div>';
+        renderWatchlistEmpty(false);
         return;
     }
     
@@ -182,42 +247,25 @@ function renderWatchlist(stocks) {
     });
 }
 
-// Render watchlist error with sample data
-function renderWatchlistError() {
-    const grid = document.getElementById('watchlistGrid');
-    grid.innerHTML = `
-        <div class="error-message">
-            <p style="color: #e53e3e; margin-bottom: 15px;">📡 API not connected - Using sample data</p>
-            ${renderSampleWatchlist()}
-        </div>
-    `;
-}
-
-// Render sample watchlist data
-function renderSampleWatchlist() {
-    const sampleStocks = [
-        { symbol: 'VCB', name: 'Vietcombank', price: 87500, change: 1250, changePercent: 1.45 },
-        { symbol: 'VIC', name: 'Vingroup', price: 58900, change: -800, changePercent: -1.34 },
-        { symbol: 'FPT', name: 'FPT Corporation', price: 125000, change: 2500, changePercent: 2.04 },
-        { symbol: 'VNM', name: 'Vinamilk', price: 56200, change: 300, changePercent: 0.54 },
-        { symbol: 'HPG', name: 'Hoa Phat Group', price: 23450, change: -150, changePercent: -0.64 }
-    ];
-    
-    return sampleStocks.map(stock => `
-        <div class="stock-item" data-symbol="${stock.symbol}">
-            <div class="stock-info">
-                <h3>${stock.symbol}</h3>
-                <p>${stock.name}</p>
-            </div>
-            <div class="stock-price">
-                <div class="price">${formatPrice(stock.price)}</div>
-                <div class="change ${getChangeClass(stock.change)}">
-                    ${formatChange(stock.change, stock.changePercent)}
-                </div>
-            </div>
-            <div class="status completed">Sample</div>
-        </div>
-    `).join('');
+// Render watchlist empty / error state — no fake sample data
+function renderWatchlistEmpty(isError) {
+    var grid = document.getElementById('watchlistGrid');
+    if (!grid) return;
+    var msg = isError
+        ? 'Không thể tải dữ liệu. Vui lòng thử lại sau.'
+        : 'Chưa có dữ liệu cổ phiếu. Hệ thống đang đồng bộ, vui lòng chờ 1-2 phút rồi nhấn Refresh.';
+    var wrapper = document.createElement('div');
+    wrapper.className = 'no-data-state';
+    var icon = document.createElement('div');
+    icon.className = 'no-data-state__icon';
+    icon.textContent = isError ? '!' : 'i';
+    var text = document.createElement('p');
+    text.className = 'no-data-state__text';
+    text.textContent = msg;
+    wrapper.appendChild(icon);
+    wrapper.appendChild(text);
+    grid.innerHTML = '';
+    grid.appendChild(wrapper);
 }
 
 // Load predictions data
@@ -243,15 +291,15 @@ async function loadPredictions(showSpinner = true) {
         console.log("data algo: ", data)
 
         if (data && data.predictions) {
-            console.log(`✅ Loaded ${data.predictions.length} predictions`);
+            console.log('Loaded ' + data.predictions.length + ' predictions');
             renderPredictions(data.predictions);
         } else {
-            console.warn('⚠️ API returned unexpected format, using sample data');
-            renderPredictionsError();
+            console.warn('No predictions in API response');
+            renderPredictionsError(false);
         }
     } catch (error) {
-        console.error('❌ Error loading predictions:', error);
-        renderPredictionsError();
+        console.error('Error loading predictions:', error);
+        renderPredictionsError(true);
     } finally {
         if (showSpinner) {
             hideLoading('predictionsLoading');
@@ -264,7 +312,7 @@ function renderPredictions(predictions) {
     const tbody = document.getElementById('predictionsTableBody');
     
     if (!predictions || predictions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="no-data">🔮 No predictions available</td></tr>';
+        renderPredictionsError(false);
         return;
     }
     
@@ -292,40 +340,21 @@ function renderPredictions(predictions) {
     });
 }
 
-// Render predictions error with sample data
-function renderPredictionsError() {
-    const tbody = document.getElementById('predictionsTableBody');
-    tbody.innerHTML = `
-        <tr><td colspan="7" class="error-message" style="text-align: center; color: #e53e3e;">
-            📡 API not connected - Using sample data
-        </td></tr>
-        ${renderSamplePredictions()}
-    `;
-}
-
-// Render sample predictions
-function renderSamplePredictions() {
-    const samplePredictions = [
-        { symbol: 'VCB', current: 87500, predicted: 89200, algorithm: 'lstm_nn', confidence: 93 },
-        { symbol: 'VIC', current: 58900, predicted: 57800, algorithm: 'arima_garch', confidence: 81 },
-        { symbol: 'FPT', current: 125000, predicted: 128500, algorithm: 'moving_average', confidence: 76 },
-        { symbol: 'VNM', current: 56200, predicted: 57100, algorithm: 'lstm_nn', confidence: 88 },
-        { symbol: 'HPG', current: 23450, predicted: 24200, algorithm: 'arima_garch', confidence: 79 }
-    ];
-    
-    return samplePredictions.map(pred => `
-        <tr data-symbol="${pred.symbol}">
-            <td><strong>${pred.symbol}</strong></td>
-            <td>${formatPrice(pred.current)}</td>
-            <td>${formatPrice(pred.predicted)}</td>
-            <td class="change ${getChangeClass(pred.predicted - pred.current)}">
-                ${formatChange(pred.predicted - pred.current)}
-            </td>
-            <td><span class="algorithm-tag ${pred.algorithm}">${formatAlgorithmName(pred.algorithm)}</span></td>
-            <td>${pred.confidence}%</td>
-            <td>Tomorrow</td>
-        </tr>
-    `).join('');
+// Render predictions empty / error state
+function renderPredictionsError(isError) {
+    var tbody = document.getElementById('predictionsTableBody');
+    if (!tbody) return;
+    var msg = isError
+        ? 'Không thể tải dữ liệu dự đoán. Vui lòng thử lại sau.'
+        : 'Chưa có dữ liệu dự đoán. Hệ thống sẽ chạy dự đoán sau khi đồng bộ dữ liệu xong.';
+    var td = document.createElement('td');
+    td.setAttribute('colspan', '7');
+    td.className = 'no-data-state no-data-state--row';
+    td.textContent = msg;
+    var tr = document.createElement('tr');
+    tr.appendChild(td);
+    tbody.innerHTML = '';
+    tbody.appendChild(tr);
 }
 
 // Update dashboard statistics
