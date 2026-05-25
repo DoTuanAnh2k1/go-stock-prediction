@@ -139,7 +139,8 @@ func (cm *CronManager) AddJob(id, schedule string, jobFunc JobFunc) error {
 		return fmt.Errorf("job with ID '%s' already exists", id)
 	}
 
-	if _, err := cron.ParseStandard(schedule); err != nil {
+	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.DowOptional)
+	if _, err := parser.Parse(schedule); err != nil {
 		return fmt.Errorf("invalid schedule '%s': %v", schedule, err)
 	}
 

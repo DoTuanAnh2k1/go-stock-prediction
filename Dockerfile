@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 RUN apk add --no-cache git make
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -9,7 +9,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o go-stock-prediction ./cmd/app
 
 # Run stage
 FROM alpine:latest
-RUN apk add --no-cache ca-certificates wget
+RUN apk add --no-cache ca-certificates wget tzdata
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 WORKDIR /app
 COPY --from=builder /app/go-stock-prediction .

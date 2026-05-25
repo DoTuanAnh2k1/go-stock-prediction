@@ -8,10 +8,8 @@ import (
 )
 
 func InitConfig(filenames ...string) {
-	err := godotenv.Load(filenames...)
-	if err != nil {
-		panic(err)
-	}
+	// Load .env file if present; in Docker, env vars are injected directly so missing .env is fine
+	_ = godotenv.Load(filenames...)
 
 	cfg := &models_config.Config{
 		Svr: models_config.ServerConfig{

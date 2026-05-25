@@ -49,6 +49,7 @@ services:
       MYSQL_DEBUG: "false"
       LOG_LEVEL: INFO
       DB_LOG_LEVEL: INFO
+      API_KEY: ""
     networks:
       - app-network
 
@@ -60,7 +61,7 @@ services:
     container_name: phpmyadmin_app
     restart: always
     ports:
-      - "8080:80"
+      - "8081:80"
     environment:
       PMA_HOST: db
       PMA_PORT: 3306

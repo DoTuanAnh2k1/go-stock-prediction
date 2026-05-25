@@ -324,10 +324,10 @@ func getStockTrainingData(stockID uint) (*modelssvc.StockData, error) {
 	}, nil
 }
 
-// getStockPredictionData gets recent data for prediction (last 3 months)
+// getStockPredictionData gets recent data for prediction (last 9 months)
 func getStockPredictionData(stockID uint) (*modelssvc.StockData, error) {
-	// Get last 3 months of data for prediction
-	fromDate := time.Now().AddDate(0, -3, 0)
+	// Get last 9 months of data for prediction (~180 trading days, enough for LSTM seq=60 and ARIMA min=100)
+	fromDate := time.Now().AddDate(0, -9, 0)
 	toDate := time.Now()
 
 	prices, err := predictor.store.GetStockPricesByStockIDAndDateRange(stockID, fromDate, toDate)

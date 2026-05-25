@@ -78,6 +78,25 @@ class VNStockCrawler:
             self.connection.close()
             logger.info("🔒 Database connection closed")
 
+    def get_stock_price_count(self, symbol):
+        """
+        Lấy số lượng records đã có trong DB cho stock này
+        """
+        try:
+            cursor = self.connection.cursor()
+            query = """
+                SELECT COUNT(*) FROM stock_prices sp
+                JOIN stocks s ON sp.stock_id = s.id
+                WHERE s.symbol = %s
+            """
+            cursor.execute(query, (symbol,))
+            result = cursor.fetchone()
+            cursor.close()
+            return result[0] if result else 0
+        except Exception as e:
+            logger.error(f"❌ Error getting price count for {symbol}: {e}")
+            return 0
+
     def get_stock_id_by_symbol(self, symbol):
         """
         Lấy stock_id từ symbol - chuẩn bị insert data
@@ -256,8 +275,15 @@ class VNStockCrawler:
         try:
             for i, symbol in enumerate(self.vn30_symbols, 1):
                 logger.info(f"📊 Processing {symbol} ({i}/{len(self.vn30_symbols)})")
-                
+
                 try:
+                    # Skip nếu đã có đủ data (> 1500 records = ~6 năm)
+                    existing = self.get_stock_price_count(symbol)
+                    if existing > 1500:
+                        logger.info(f"⏭️ Skipping {symbol}: already has {existing} records")
+                        success_count += 1
+                        continue
+
                     # Fetch data từ vnstock
                     df = self.fetch_historical_data(symbol, days_back)
                     
@@ -304,7 +330,7 @@ def main():
         'port': 3306,
         'user': 'root',
         'password': '123',  # Thay password của mày vào đây!
-        'database': 'stock',  # Tên database của mày
+        'database': 'go_stock_prediction',  # Tên database của mày
         'charset': 'utf8mb4',
         'autocommit': False
     }
@@ -314,7 +340,7 @@ def main():
         crawler = VNStockCrawler(db_config)
         
         # Crawl VN30 data - 120 ngày gần nhất (4 tháng đầy đủ!)
-        success = crawler.crawl_all_vn30(days_back=500)
+        success = crawler.crawl_all_vn30(days_back=2500)
         
         if success:
             print("🎉 Crawling completed successfully!")

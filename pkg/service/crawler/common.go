@@ -4,16 +4,12 @@ import (
 	modelssvc "go-stock-prediction/pkg/models/models_svc"
 	"net/http"
 	"sync"
-
-	"golang.org/x/time/rate"
 )
 
 type VietStockCrawler struct {
-	scraper     *modelssvc.VietStockScraper
-	rateLimiter *rate.Limiter
-	client      *http.Client
-	mutex       sync.RWMutex
-	isRunning   bool
+	client    *http.Client
+	mutex     sync.RWMutex
+	isRunning bool
 }
 
 type CrawlResult struct {
