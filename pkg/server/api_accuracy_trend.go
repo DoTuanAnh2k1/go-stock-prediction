@@ -101,6 +101,7 @@ func GetAccuracyTrend(w http.ResponseWriter, r *http.Request) {
 			LstmNN:        accRate(d, "lstm_nn"),
 			ArimaGarch:    accRate(d, "arima_garch"),
 			MovingAverage: accRate(d, "moving_average"),
+			Ema:           accRate(d, "ema"),
 		})
 	}
 

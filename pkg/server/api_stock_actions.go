@@ -1,14 +1,11 @@
 package server
 
 import (
-	"context"
 	"go-stock-prediction/pkg/logger"
-	"go-stock-prediction/pkg/service/crawler"
-	"go-stock-prediction/pkg/service/predict"
+	pb "go-stock-prediction/proto/prediction"
 	"go-stock-prediction/pkg/store/repository"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // TriggerStockCrawl crawls latest data for a single stock
@@ -36,10 +33,11 @@ func TriggerStockCrawl(w http.ResponseWriter, r *http.Request) {
 
 	logger.Logger.Infof("Triggering crawl for stock: %s", symbol)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	stockData, err := crawler.CrawlAndSaveSingleStock(ctx, symbol)
+	client := requireGRPCClient(w)
+	if client == nil {
+		return
+	}
+	resp, err := client.TriggerStockCrawl(r.Context(), &pb.StockRequest{Symbol: symbol})
 	if err != nil {
 		logger.Logger.Errorf("Failed to crawl %s: %v", symbol, err)
 		ResponseError(w, http.StatusInternalServerError, "Thu thập dữ liệu thất bại: "+err.Error())
@@ -50,9 +48,8 @@ func TriggerStockCrawl(w http.ResponseWriter, r *http.Request) {
 	globalCache.Delete("stock_detail:" + symbol)
 
 	ResponseSuccess(w, http.StatusOK, map[string]interface{}{
-		"symbol":  symbol,
-		"message": "Thu thập dữ liệu thành công",
-		"data":    stockData,
+		"symbol":  resp.GetSymbol(),
+		"message": resp.GetMessage(),
 	})
 }
 
@@ -71,9 +68,21 @@ func TriggerStockPredict(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify stock exists in DB
+	store := repository.GetSingleton()
+	_, err := store.GetStockBySymbol(symbol)
+	if err != nil {
+		ResponseError(w, http.StatusNotFound, "Không tìm thấy cổ phiếu: "+symbol)
+		return
+	}
+
 	logger.Logger.Infof("Triggering prediction for stock: %s", symbol)
 
-	count, err := predict.PredictSingleStock(symbol)
+	client := requireGRPCClient(w)
+	if client == nil {
+		return
+	}
+	resp, err := client.TriggerStockPredict(r.Context(), &pb.StockRequest{Symbol: symbol})
 	if err != nil {
 		logger.Logger.Errorf("Failed to predict %s: %v", symbol, err)
 		ResponseError(w, http.StatusInternalServerError, "Dự đoán thất bại: "+err.Error())
@@ -84,8 +93,8 @@ func TriggerStockPredict(w http.ResponseWriter, r *http.Request) {
 	globalCache.Delete("stock_detail:" + symbol)
 
 	ResponseSuccess(w, http.StatusOK, map[string]interface{}{
-		"symbol":            symbol,
-		"message":           "Dự đoán thành công",
-		"predictions_count": count,
+		"symbol":            resp.GetSymbol(),
+		"message":           resp.GetMessage(),
+		"predictions_count": resp.GetPredictionsCount(),
 	})
 }

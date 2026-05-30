@@ -15,8 +15,12 @@ func InitConfig(filenames ...string) {
 		Svr: models_config.ServerConfig{
 			ServerName: env.GetEnv("SERVER_NAME", "go-stock-prediction"),
 			Host:       env.GetEnv("SERVER_HOST", "0.0.0.0"),
-			Port:       env.GetEnv("SERVER_PORT", "31300"),
+			Port:       env.GetEnv("SERVER_PORT", "8118"),
 			APIKey:     env.GetEnv("API_KEY", ""),
+		},
+		GRPC: models_config.GRPCConfig{
+			ServerPort:   env.GetEnv("GRPC_SERVER_PORT", "8119"),
+			ClientTarget: env.GetEnv("GRPC_TARGET", "localhost:8119"),
 		},
 		Db: models_config.DatabaseConfig{
 			DbType: env.GetEnv("DB_DRIVER", "mysql"),

@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"go-stock-prediction/pkg/logger"
-	"go-stock-prediction/pkg/service/predict"
+	pb "go-stock-prediction/proto/prediction"
 	"net/http"
 	"time"
 )
@@ -16,7 +16,11 @@ func TriggerReconcileHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
 
-	if err := predict.ReconcilePredictions(ctx); err != nil {
+	client := requireGRPCClient(w)
+	if client == nil {
+		return
+	}
+	if _, err := client.TriggerReconcile(ctx, &pb.Empty{}); err != nil {
 		logger.Logger.Errorf("TriggerReconcileHandler: reconcile failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return

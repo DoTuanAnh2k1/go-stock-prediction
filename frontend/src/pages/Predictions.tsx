@@ -63,8 +63,9 @@ export default function Predictions() {
         const raw: any[] = Array.isArray(res.data) ? res.data : [];
         const pts = raw.slice(0, 500).map(function(it: any) {
           const algoCls = it.algorithm === 'lstm_nn' || it.algorithm === 'lstm' ? 'lstm'
-            : it.algorithm === 'arima_garch' || it.algorithm === 'arima' ? 'arima' : 'ma';
-          const color = algoCls === 'lstm' ? 'oklch(0.74 0.13 200)' : algoCls === 'arima' ? 'var(--gold)' : 'var(--up)';
+            : it.algorithm === 'arima_garch' || it.algorithm === 'arima' ? 'arima'
+            : it.algorithm === 'ema' ? 'ema' : 'ma';
+          const color = algoCls === 'lstm' ? 'oklch(0.74 0.13 200)' : algoCls === 'arima' ? 'var(--gold)' : algoCls === 'ema' ? 'oklch(0.72 0.18 150)' : 'var(--up)';
           const predChg = parseFloat(it.predicted_change_pct) || 0;
           const actChg  = parseFloat(it.actual_change_pct) || 0;
           return {
@@ -119,7 +120,7 @@ export default function Predictions() {
             : <>
                 <HBars items={D.algos.map((a) => ({
                   label: a.name, value: a.acc,
-                  color: a.cls === 'ens' ? 'oklch(0.72 0.14 300)' : a.cls === 'lstm' ? 'oklch(0.74 0.13 200)' : a.cls === 'arima' ? 'var(--gold)' : 'var(--up)',
+                  color: a.cls === 'ens' ? 'oklch(0.72 0.14 300)' : a.cls === 'lstm' ? 'oklch(0.74 0.13 200)' : a.cls === 'arima' ? 'var(--gold)' : a.cls === 'ema' ? 'oklch(0.72 0.18 150)' : 'var(--up)',
                 }))} />
                 <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 1, background: 'var(--border)', border: '1px solid var(--border)' }}>
                   {D.algos.map((a) => (
@@ -144,10 +145,11 @@ export default function Predictions() {
                     { name: 'LSTM', data: D.accTrend.lstm, color: 'oklch(0.74 0.13 200)' },
                     { name: 'ARIMA-GARCH', data: D.accTrend.arima, color: 'var(--gold)' },
                     { name: 'Moving Average', data: D.accTrend.ma, color: 'var(--up)' },
+                    { name: 'EMA', data: D.accTrend.ema, color: 'oklch(0.72 0.18 150)' },
                   ]}
                   labels={D.accTrend.labels} height={236} yFmt={(v) => v.toFixed(0) + '%'} valueFmt={(v) => v.toFixed(1) + '%'}
                 />
-                <Legend items={[['LSTM', 'oklch(0.74 0.13 200)'], ['ARIMA-GARCH', 'var(--gold)'], ['Moving Average', 'var(--up)']]} />
+                <Legend items={[['LSTM', 'oklch(0.74 0.13 200)'], ['ARIMA-GARCH', 'var(--gold)'], ['Moving Average', 'var(--up)'], ['EMA', 'oklch(0.72 0.18 150)']]} />
               </>
           }
         </Panel>
@@ -195,7 +197,7 @@ export default function Predictions() {
         <Panel title="Dự đoán vs Thực tế" dot={effectiveSym || '—'}
           tools={D.stocks.length > 0 &&
             <select className="sel" value={effectiveSym} onChange={(e) => setCompareSym(e.target.value)}>
-              {D.stocks.slice(0, 12).map((s) => <option key={s.sym}>{s.sym}</option>)}
+              {D.stocks.map((s) => <option key={s.sym}>{s.sym}</option>)}
             </select>
           }>
           {compareLoading
@@ -229,7 +231,7 @@ export default function Predictions() {
               </div>
             : <>
                 <Scatter points={scatterPts} height={220} xLabel="Độ tin cậy (%)" />
-                <Legend items={[['LSTM', 'oklch(0.74 0.13 200)'], ['ARIMA', 'var(--gold)'], ['MA', 'var(--up)']]} />
+                <Legend items={[['LSTM', 'oklch(0.74 0.13 200)'], ['ARIMA', 'var(--gold)'], ['MA', 'var(--up)'], ['EMA', 'oklch(0.72 0.18 150)']]} />
               </>
           }
         </Panel>

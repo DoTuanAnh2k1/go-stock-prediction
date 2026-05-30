@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package prediction;
+
+option go_package = "go-stock-prediction/proto/prediction";
+
+// PredictionService is the gRPC service exposed by the prediction microservice.
+// The API backend calls these RPCs to trigger crawling, training, and prediction.
+service PredictionService {
+  // Trigger stock price crawl for all VN30 stocks
+  rpc TriggerCrawler(Empty) returns (TriggerResponse);
+
+  // Trigger gold price crawl (SJC + XAU)
+  rpc TriggerGoldCrawler(Empty) returns (TriggerResponse);
+
+  // Trigger daily prediction for all stocks
+  rpc TriggerPredict(Empty) returns (TriggerResponse);
+
+  // Trigger model training (optionally for a single algorithm)
+  rpc TriggerTrain(TriggerTrainRequest) returns (TriggerTrainResponse);
+
+  // Trigger prediction reconciliation (fill actual_price, accuracy, status)
+  rpc TriggerReconcile(Empty) returns (TriggerResponse);
+
+  // Trigger historical stock price crawl
+  rpc TriggerStockHistory(StockHistoryRequest) returns (TriggerResponse);
+
+  // Trigger gold history import (XAU backfill)
+  rpc TriggerGoldHistory(Empty) returns (TriggerResponse);
+
+  // Trigger gold prediction
+  rpc TriggerGoldPredict(Empty) returns (TriggerResponse);
+
+  // Trigger historical walk-forward backtest
+  rpc TriggerHistoricalBacktest(BacktestRequest) returns (TriggerResponse);
+
+  // Crawl a single stock by symbol
+  rpc TriggerStockCrawl(StockRequest) returns (StockCrawlResponse);
+
+  // Predict a single stock by symbol
+  rpc TriggerStockPredict(StockRequest) returns (StockPredictResponse);
+
+  // Get current training status
+  rpc GetTrainingStatus(Empty) returns (TrainingStatusResponse);
+}
+
+message Empty {}
+
+message TriggerResponse {
+  bool success = 1;
+  string message = 2;
+  string error = 3;
+}
+
+message TriggerTrainRequest {
+  string algorithm = 1; // empty = train all algorithms
+}
+
+message TriggerTrainResponse {
+  bool success = 1;
+  string session_id = 2;
+  string message = 3;
+  string error = 4;
+}
+
+message StockHistoryRequest {
+  int32 days = 1;
+}
+
+message BacktestRequest {
+  int32 train_window = 1;
+  int32 step_size = 2;
+}
+
+message StockRequest {
+  string symbol = 1;
+}
+
+message StockCrawlResponse {
+  bool success = 1;
+  string symbol = 2;
+  string message = 3;
+  string error = 4;
+}
+
+message StockPredictResponse {
+  bool success = 1;
+  string symbol = 2;
+  int32 predictions_count = 3;
+  string message = 4;
+  string error = 5;
+}
+
+message TrainingStatusResponse {
+  bool is_training = 1;
+  string last_trained = 2; // RFC3339 timestamp, empty if never trained
+  double progress = 3;     // 0-100
+  string current_phase = 4;
+  int32 total_algorithms = 5;
+  int32 done_algorithms = 6;
+}

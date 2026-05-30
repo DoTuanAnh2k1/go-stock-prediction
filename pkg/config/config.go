@@ -29,3 +29,13 @@ func GetLogConfig() models_config.LogConfig {
 	}
 	return config.Log
 }
+
+func GetGRPCConfig() models_config.GRPCConfig {
+	if config == nil {
+		return models_config.GRPCConfig{
+			ServerPort:   "8119",
+			ClientTarget: "localhost:8119",
+		}
+	}
+	return config.GRPC
+}

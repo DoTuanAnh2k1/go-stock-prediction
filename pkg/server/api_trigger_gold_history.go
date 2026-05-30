@@ -4,13 +4,22 @@ import (
 	"net/http"
 
 	"go-stock-prediction/pkg/logger"
-	"go-stock-prediction/pkg/service/crawler"
+	pb "go-stock-prediction/proto/prediction"
 )
 
 // TriggerGoldHistoryHandler handles POST /api/trigger/gold-history.
-// It runs ImportXAUHistory in a background goroutine and immediately returns 202 Accepted.
+// It delegates to the prediction microservice via gRPC and immediately returns 202 Accepted.
 func TriggerGoldHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("[trigger] gold-history import requested")
-	go crawler.ImportXAUHistory()
+	client := requireGRPCClient(w)
+	if client == nil {
+		return
+	}
+	_, err := client.TriggerGoldHistory(r.Context(), &pb.Empty{})
+	if err != nil {
+		logger.Logger.Errorf("[trigger] gold-history failed: %v", err)
+		ResponseError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	w.WriteHeader(http.StatusAccepted)
 }

@@ -3,8 +3,11 @@ package server
 import (
 	"encoding/json"
 	"go-stock-prediction/pkg/logger"
-	"go-stock-prediction/pkg/service/predict"
+	pb "go-stock-prediction/proto/prediction"
 	"net/http"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type TriggerTrainRequest struct {
@@ -24,34 +27,37 @@ func TriggerTrainHandler(w http.ResponseWriter, r *http.Request) {
 
 	logger.Logger.Infof("Trigger train request: algorithm=%q", req.Algorithm)
 
-	if predict.IsTraining() {
-		ResponseError(w, http.StatusConflict, "Training already in progress")
-		return
-	}
-
-	var sessionID string
-	var err error
-
 	if req.Algorithm != "" {
-		if err = validateAlgorithm(req.Algorithm); err != nil {
+		if err := validateAlgorithm(req.Algorithm); err != nil {
 			ResponseError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		// Train single algorithm synchronously (fast path)
-		sessionID, err = predict.TrainSingleAlgorithmByName(req.Algorithm)
-	} else {
-		// Train all algorithms in background goroutine
-		sessionID, err = predict.TrainAllAlgorithms()
 	}
 
+	client := requireGRPCClient(w)
+	if client == nil {
+		return
+	}
+	resp, err := client.TriggerTrain(r.Context(), &pb.TriggerTrainRequest{Algorithm: req.Algorithm})
 	if err != nil {
+		st, ok := status.FromError(err)
+		if ok {
+			switch st.Code() {
+			case codes.Aborted:
+				ResponseError(w, http.StatusConflict, st.Message())
+				return
+			case codes.InvalidArgument:
+				ResponseError(w, http.StatusBadRequest, st.Message())
+				return
+			}
+		}
 		logger.Logger.Errorf("Failed to start training: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to start training: "+err.Error())
 		return
 	}
 
 	ResponseSuccess(w, http.StatusAccepted, TriggerTrainResponse{
-		SessionID: sessionID,
-		Message:   "Training started",
+		SessionID: resp.GetSessionId(),
+		Message:   resp.GetMessage(),
 	})
 }

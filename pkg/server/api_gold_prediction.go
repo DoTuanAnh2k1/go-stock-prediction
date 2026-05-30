@@ -2,7 +2,7 @@ package server
 
 import (
 	"go-stock-prediction/pkg/logger"
-	goldpredict "go-stock-prediction/pkg/service/predict/gold"
+	pb "go-stock-prediction/proto/prediction"
 	"go-stock-prediction/pkg/store/repository"
 	"net/http"
 	"strconv"
@@ -174,13 +174,15 @@ func GetGoldPredictionChart(w http.ResponseWriter, r *http.Request) {
 
 // TriggerGoldPredictHandler handles POST /api/trigger/gold-predict
 func TriggerGoldPredictHandler(w http.ResponseWriter, r *http.Request) {
-	go func() {
-		count, err := goldpredict.RunNow()
-		if err != nil {
-			logger.Logger.Errorf("Manual gold prediction failed: %v", err)
-			return
-		}
-		logger.Logger.Infof("Manual gold prediction done: %d predictions saved", count)
-	}()
+	client := requireGRPCClient(w)
+	if client == nil {
+		return
+	}
+	_, err := client.TriggerGoldPredict(r.Context(), &pb.Empty{})
+	if err != nil {
+		logger.Logger.Errorf("Manual gold prediction failed: %v", err)
+		ResponseError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	ResponseSuccess(w, http.StatusOK, map[string]string{"message": "Gold prediction triggered"})
 }

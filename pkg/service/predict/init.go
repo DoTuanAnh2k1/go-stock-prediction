@@ -9,6 +9,7 @@ import (
 	modelssvc "go-stock-prediction/pkg/models/models_svc"
 	arimagarch "go-stock-prediction/pkg/service/predict/arima_garch"
 	"go-stock-prediction/pkg/service/predict/ensemble"
+	ema "go-stock-prediction/pkg/service/predict/ema"
 	lstmnn "go-stock-prediction/pkg/service/predict/lstm_nn"
 	movingaverage "go-stock-prediction/pkg/service/predict/moving_average"
 	"go-stock-prediction/pkg/store/repository"
@@ -121,8 +122,13 @@ func registerAlgorithms() {
 	predictor.algorithms["arima_garch"] = arimaPredictor
 	logger.Logger.Infof("✅ Registered: %s", arimaPredictor.GetName())
 
-	// Register Ensemble predictor (stacks the 3 base algorithms)
-	ensemblePredictor := ensemble.New([]PredictionAlgorithm{maPredictor, lstmPredictor, arimaPredictor})
+	// Register EMA predictor
+	emaPredictor := ema.NewEMAPredictor()
+	predictor.algorithms["ema"] = emaPredictor
+	logger.Logger.Infof("✅ Registered: %s", emaPredictor.GetName())
+
+	// Register Ensemble predictor (stacks the 4 base algorithms)
+	ensemblePredictor := ensemble.New([]PredictionAlgorithm{maPredictor, lstmPredictor, arimaPredictor, emaPredictor})
 	predictor.algorithms["ensemble"] = ensemblePredictor
 	logger.Logger.Infof("✅ Registered: %s", ensemblePredictor.GetName())
 
@@ -377,10 +383,11 @@ func getStockTrainingData(stockID uint) (*modelssvc.StockData, error) {
 		return nil, fmt.Errorf("insufficient data: only %d records", len(prices))
 	}
 
-	// Convert to string array (as expected by algorithms)
+	// DB returns DESC (newest first); reverse to ASC (oldest→newest) so
+	// algorithms correctly treat prices[len-1] as the current (most recent) price.
 	historical := make([]string, len(prices))
 	for i, price := range prices {
-		historical[i] = price.ClosePrice.String()
+		historical[len(prices)-1-i] = price.ClosePrice.String()
 	}
 
 	return &modelssvc.StockData{
@@ -403,10 +410,11 @@ func getStockPredictionData(stockID uint) (*modelssvc.StockData, error) {
 		return nil, fmt.Errorf("insufficient data: only %d records", len(prices))
 	}
 
-	// Convert to string array
+	// DB returns DESC (newest first); reverse to ASC (oldest→newest) so
+	// algorithms correctly treat prices[len-1] as the current (most recent) price.
 	historical := make([]string, len(prices))
 	for i, price := range prices {
-		historical[i] = price.ClosePrice.String()
+		historical[len(prices)-1-i] = price.ClosePrice.String()
 	}
 
 	return &modelssvc.StockData{
@@ -622,4 +630,13 @@ func GetLastTrainedTime() time.Time {
 	predictor.mutex.RLock()
 	defer predictor.mutex.RUnlock()
 	return predictor.lastTrained
+}
+
+// TrainingProgress returns a snapshot of the current training progress fields.
+// It returns (progress 0–100, phase string, totalAlgos, doneAlgos).
+// Safe for concurrent reads; protected by the internal RWMutex.
+func (ps *PredictionService) TrainingProgress() (float64, string, int, int) {
+	ps.mutex.RLock()
+	defer ps.mutex.RUnlock()
+	return ps.trainingProgress, ps.trainingPhase, ps.trainingTotalAlgos, ps.trainingDoneAlgos
 }

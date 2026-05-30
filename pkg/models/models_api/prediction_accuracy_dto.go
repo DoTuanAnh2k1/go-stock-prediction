@@ -18,4 +18,5 @@ type AccuracyTrendPointDTO struct {
 	LstmNN        float64 `json:"lstm_nn"`
 	ArimaGarch    float64 `json:"arima_garch"`
 	MovingAverage float64 `json:"moving_average"`
+	Ema           float64 `json:"ema"`
 }

@@ -2,15 +2,20 @@ package server
 
 import (
 	"go-stock-prediction/pkg/logger"
-	"go-stock-prediction/pkg/service/crawler"
+	pb "go-stock-prediction/proto/prediction"
 	"net/http"
 )
 
 func TriggerGoldCrawlerHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("Trigger gold crawler handler")
-	if err := crawler.CronjobGoldCrawler(); err != nil {
+	client := requireGRPCClient(w)
+	if client == nil {
+		return
+	}
+	_, err := client.TriggerGoldCrawler(r.Context(), &pb.Empty{})
+	if err != nil {
 		logger.Logger.Errorf("Gold crawler failed: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
+		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)

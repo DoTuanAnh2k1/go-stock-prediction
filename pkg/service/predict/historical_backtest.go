@@ -147,10 +147,10 @@ func walkForwardStock(
 		}
 		histStart := windowEnd - histLen
 
-		// DESC order (newest first) matching production format
+		// ASC order (oldest first, newest last) — algorithms use prices[len-1] as current price
 		historical := make([]string, histLen)
 		for i := 0; i < histLen; i++ {
-			historical[i] = asc[histStart+histLen-1-i].ClosePrice.String()
+			historical[i] = asc[histStart+i].ClosePrice.String()
 		}
 
 		// Predict all days in this fold using the SAME context

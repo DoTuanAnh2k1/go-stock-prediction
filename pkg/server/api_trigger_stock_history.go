@@ -1,13 +1,11 @@
 package server
 
 import (
-	"context"
 	"net/http"
 	"strconv"
-	"time"
 
 	"go-stock-prediction/pkg/logger"
-	"go-stock-prediction/pkg/service/crawler"
+	pb "go-stock-prediction/proto/prediction"
 )
 
 const (
@@ -16,9 +14,8 @@ const (
 )
 
 // TriggerStockHistoryHandler handles POST /api/trigger/stock-history.
-// It accepts an optional query param ?days=N (default 365, max 1000) and starts
-// a background goroutine that fetches N days of price history for every VN30 stock,
-// upserting the results into the database.
+// It accepts an optional query param ?days=N (default 365, max 1000) and delegates
+// to the prediction microservice via gRPC, which runs the crawl in background.
 func TriggerStockHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	days := defaultHistoricalDays
 
@@ -36,17 +33,16 @@ func TriggerStockHistoryHandler(w http.ResponseWriter, r *http.Request) {
 
 	logger.Logger.Infof("[trigger] stock-history requested: days=%d", days)
 
-	go func(d int) {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-		defer cancel()
-
-		saved, skipped, err := crawler.CrawlHistoricalAll(ctx, d)
-		if err != nil {
-			logger.Logger.Errorf("[trigger] stock-history failed: %v", err)
-			return
-		}
-		logger.Logger.Infof("[trigger] stock-history completed: saved=%d skipped=%d", saved, skipped)
-	}(days)
+	client := requireGRPCClient(w)
+	if client == nil {
+		return
+	}
+	_, err := client.TriggerStockHistory(r.Context(), &pb.StockHistoryRequest{Days: int32(days)})
+	if err != nil {
+		logger.Logger.Errorf("[trigger] stock-history failed: %v", err)
+		ResponseError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	ResponseSuccess(w, http.StatusAccepted, map[string]interface{}{
 		"status":  "started",

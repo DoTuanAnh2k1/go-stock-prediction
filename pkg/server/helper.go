@@ -3,9 +3,11 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	grpcclient "go-stock-prediction/pkg/grpc/client"
 	"go-stock-prediction/pkg/logger"
 	modelsapi "go-stock-prediction/pkg/models/models_api"
 	modelsdb "go-stock-prediction/pkg/models/models_db"
+	pb "go-stock-prediction/proto/prediction"
 	"math"
 	"net/http"
 	"sort"
@@ -19,6 +21,17 @@ import (
 type ResponseFailure struct {
 	StatusCode int    `json:"status_code"`
 	Message    string `json:"message"`
+}
+
+// requireGRPCClient returns the prediction gRPC client, or writes a 503 error
+// and returns nil if the client is not initialised (e.g. in unit tests).
+func requireGRPCClient(w http.ResponseWriter) pb.PredictionServiceClient {
+	c := grpcclient.GetClient()
+	if c == nil {
+		ResponseError(w, http.StatusServiceUnavailable, "prediction service not available")
+		return nil
+	}
+	return c
 }
 
 func ResponseError(w http.ResponseWriter, status int, message string) {

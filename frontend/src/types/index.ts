@@ -151,7 +151,7 @@ export interface AppData {
   goldDetail: GoldDetailItem[];
   stats: { total: number; acc: number };
   indices: { vnindex: IndexData; vn30: IndexData };
-  accTrend: { labels: string[]; lstm: (number | null)[]; arima: (number | null)[]; ma: (number | null)[] };
+  accTrend: { labels: string[]; lstm: (number | null)[]; arima: (number | null)[]; ma: (number | null)[]; ema: (number | null)[] };
   dailyCounts: { labels: string[]; values: number[] };
   trainLogs: [string, string, string][];
   trainJobs: TrainJob[];

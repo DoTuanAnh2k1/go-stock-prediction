@@ -52,6 +52,7 @@ const ALGO: Record<string, { short: string; cls: string; name: string }> = {
   ma:            { short: 'MA',    cls: 'ma',    name: 'Moving Average' },
   ensemble:      { short: 'ENS',   cls: 'ens',   name: 'Ensemble' },
   ens:           { short: 'ENS',   cls: 'ens',   name: 'Ensemble' },
+  ema:           { short: 'EMA',   cls: 'ema',   name: 'Exponential Moving Average' },
 };
 function algoMeta(n: string) {
   return ALGO[(n || '').toLowerCase()] || {
@@ -78,7 +79,7 @@ export function buildEmpty(): AppData {
       vnindex: { val: 0, chg: 0, chgPct: 0, vol: 0, series: [] },
       vn30:    { val: 0, chg: 0, chgPct: 0, vol: 0, series: [] },
     },
-    accTrend: { labels: [], lstm: [], arima: [], ma: [] },
+    accTrend: { labels: [], lstm: [], arima: [], ma: [], ema: [] },
     dailyCounts: { labels: [], values: [] },
     trainLogs: [], trainJobs: [],
     __live: false, __sources: {},
@@ -215,6 +216,7 @@ function buildTrend(t: any): AppData['accTrend'] | null {
       lstm:  ws.map((w) => by[w].lstm_nn || null),
       arima: ws.map((w) => by[w].arima_garch || null),
       ma:    ws.map((w) => by[w].moving_average || null),
+      ema:   ws.map((w) => by[w].ema || null),
     };
   }
   if (t && t.weeks) {
@@ -223,6 +225,7 @@ function buildTrend(t: any): AppData['accTrend'] | null {
       lstm:   arr<number>(t.lstm_nn).map(num),
       arima:  arr<number>(t.arima_garch).map(num),
       ma:     arr<number>(t.moving_average).map(num),
+      ema:    arr<number>(t.ema).map(num),
     };
   }
   return null;
