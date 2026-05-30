@@ -1,0 +1,47 @@
+[
+  {
+    "stock_id": 1,
+    "predicted_price": "98000",
+    "current_price": "97500",
+    "confidence": "0.7500",
+    "algorithm_name": "moving_average",
+    "prediction_date": "2026-05-28",
+    "target_date": "2026-06-04"
+  },
+  {
+    "stock_id": 1,
+    "predicted_price": "99500",
+    "current_price": "97500",
+    "confidence": "0.6800",
+    "algorithm_name": "lstm",
+    "prediction_date": "2026-05-28",
+    "target_date": "2026-06-04"
+  },
+  {
+    "stock_id": 1,
+    "predicted_price": "97000",
+    "current_price": "97500",
+    "confidence": "0.7200",
+    "algorithm_name": "arima_garch",
+    "prediction_date": "2026-05-28",
+    "target_date": "2026-06-04"
+  },
+  {
+    "stock_id": 2,
+    "predicted_price": "131000",
+    "current_price": "129500",
+    "confidence": "0.7100",
+    "algorithm_name": "moving_average",
+    "prediction_date": "2026-05-28",
+    "target_date": "2026-06-04"
+  },
+  {
+    "stock_id": 2,
+    "predicted_price": "133000",
+    "current_price": "129500",
+    "confidence": "0.6500",
+    "algorithm_name": "lstm",
+    "prediction_date": "2026-05-28",
+    "target_date": "2026-06-04"
+  }
+]

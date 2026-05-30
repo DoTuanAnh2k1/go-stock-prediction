@@ -7,4 +7,8 @@ var AllModels = []interface{}{
 	&StockPrice{},
 	&Prediction{},
 	&SyncLog{},
+	&GoldPrice{},
+	&GoldPrediction{},
+	&MacroIndicator{},
+	&TrainingLog{},
 }

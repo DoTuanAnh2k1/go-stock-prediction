@@ -8,7 +8,7 @@ import (
 
 // Exchange - Bảng exchanges
 type Exchange struct {
-	ID        uint           `gorm:"primaryKey;autoIncrement" json:"id"`
+	ID        uint           `gorm:"type:int unsigned;primaryKey;autoIncrement" json:"id"`
 	Code      string         `gorm:"uniqueIndex;size:10;not null" json:"code"` // HOSE, HNX, UPCOM
 	Name      string         `gorm:"size:100;not null" json:"name"`
 	Timezone  string         `gorm:"size:50;default:'Asia/Ho_Chi_Minh'" json:"timezone"`

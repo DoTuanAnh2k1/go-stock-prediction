@@ -3,6 +3,8 @@ package mysql
 import (
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // ===============================
@@ -84,6 +86,41 @@ func (c *Client) BulkCreatePredictions(predictions []modelsdb.Prediction) error 
 	return c.Db.Create(&predictions).Error
 }
 
+// GetPredictionsFiltered - lấy predictions với bộ lọc tùy chọn và phân trang
+func (c *Client) GetPredictionsFiltered(stockID *uint, algorithm string, fromDate, toDate time.Time, offset, limit int) ([]modelsdb.Prediction, int64, error) {
+	var predictions []modelsdb.Prediction
+	var total int64
+
+	query := c.Db.Model(&modelsdb.Prediction{})
+
+	if stockID != nil {
+		query = query.Where("stock_id = ?", *stockID)
+	}
+	if algorithm != "" {
+		query = query.Where("algorithm_name = ?", algorithm)
+	}
+	if !fromDate.IsZero() {
+		query = query.Where("prediction_date >= ?", fromDate)
+	}
+	if !toDate.IsZero() {
+		query = query.Where("prediction_date <= ?", toDate)
+	}
+
+	// Count total before pagination
+	err := query.Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Apply pagination and fetch
+	err = query.Order("prediction_date DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&predictions).Error
+
+	return predictions, total, err
+}
+
 // CountPredictions - đếm số lượng predictions
 func (c *Client) CountPredictions() (int64, error) {
 	var count int64
@@ -93,4 +130,121 @@ func (c *Client) CountPredictions() (int64, error) {
 
 func (c *Client) TruncatePredictions() error {
 	return c.Db.Exec("TRUNCATE TABLE predictions").Error
+}
+
+// GetConfirmedPredictionsPage - lấy predictions có actual_price với phân trang
+func (c *Client) GetConfirmedPredictionsPage(stockID *uint, algorithm string, fromDate, toDate time.Time, offset, limit int) ([]modelsdb.Prediction, int64, error) {
+	var predictions []modelsdb.Prediction
+	var total int64
+
+	query := c.Db.Model(&modelsdb.Prediction{}).Where("actual_price IS NOT NULL")
+
+	if stockID != nil {
+		query = query.Where("stock_id = ?", *stockID)
+	}
+	if algorithm != "" {
+		query = query.Where("algorithm_name = ?", algorithm)
+	}
+	if !fromDate.IsZero() {
+		query = query.Where("target_date >= ?", fromDate)
+	}
+	if !toDate.IsZero() {
+		query = query.Where("target_date <= ?", toDate)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := query.Order("target_date DESC").Offset(offset).Limit(limit).Find(&predictions).Error
+	return predictions, total, err
+}
+
+// GetPredictionsWithActual - lấy predictions có actual_price, lọc theo stock/algorithm và số ngày gần đây
+func (c *Client) GetPredictionsWithActual(stockID *uint, algorithm string, days int) ([]modelsdb.Prediction, error) {
+	var predictions []modelsdb.Prediction
+
+	query := c.Db.Model(&modelsdb.Prediction{}).Where("actual_price IS NOT NULL")
+
+	if stockID != nil {
+		query = query.Where("stock_id = ?", *stockID)
+	}
+	if algorithm != "" {
+		query = query.Where("algorithm_name = ?", algorithm)
+	}
+	if days > 0 {
+		fromDate := time.Now().AddDate(0, 0, -days)
+		query = query.Where("target_date >= ?", fromDate)
+	}
+
+	err := query.Order("target_date DESC").Find(&predictions).Error
+	return predictions, err
+}
+
+// GetPredictionCountByAlgorithm - đếm số prediction theo algorithm_name
+func (c *Client) GetPredictionCountByAlgorithm() (map[string]int64, error) {
+	type result struct {
+		AlgorithmName string
+		Count         int64
+	}
+	var rows []result
+	err := c.Db.Model(&modelsdb.Prediction{}).
+		Select("algorithm_name, COUNT(*) as count").
+		Group("algorithm_name").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]int64, len(rows))
+	for _, r := range rows {
+		m[r.AlgorithmName] = r.Count
+	}
+	return m, nil
+}
+
+// GetSuccessfulPredictionCountByAlgorithm - đếm predictions có accuracy >= threshold theo algorithm_name
+func (c *Client) GetSuccessfulPredictionCountByAlgorithm(accuracyThreshold float64) (map[string]int64, error) {
+	type result struct {
+		AlgorithmName string
+		Count         int64
+	}
+	var rows []result
+	err := c.Db.Model(&modelsdb.Prediction{}).
+		Select("algorithm_name, COUNT(*) as count").
+		Where("accuracy IS NOT NULL AND accuracy >= ?", accuracyThreshold).
+		Group("algorithm_name").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]int64, len(rows))
+	for _, r := range rows {
+		m[r.AlgorithmName] = r.Count
+	}
+	return m, nil
+}
+
+// DeletePredictionsBeforeDate - xóa tất cả predictions có target_date < date
+func (c *Client) DeletePredictionsBeforeDate(date time.Time) error {
+	return c.Db.Where("target_date < ?", date).Delete(&modelsdb.Prediction{}).Error
+}
+
+// GetPendingPredictions - lấy predictions chưa có actual_price và target_date <= cutoff
+func (c *Client) GetPendingPredictions(cutoff time.Time) ([]modelsdb.Prediction, error) {
+	var predictions []modelsdb.Prediction
+	err := c.Db.Where("actual_price IS NULL AND target_date <= ?", cutoff).
+		Order("target_date ASC").
+		Find(&predictions).Error
+	return predictions, err
+}
+
+// UpdatePredictionActual - cập nhật actual_price, accuracy và status cho một prediction
+func (c *Client) UpdatePredictionActual(id uint, actualPrice, accuracy *decimal.Decimal, status string) error {
+	return c.Db.Model(&modelsdb.Prediction{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"actual_price": actualPrice,
+			"accuracy":     accuracy,
+			"status":       status,
+		}).Error
 }

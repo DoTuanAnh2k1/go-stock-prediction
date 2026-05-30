@@ -8,91 +8,116 @@ import (
 func addHandler() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	// Initialize web handler cho dashboard
-	webHandler := NewWebHandler()
-
-	// ===========================================
-	// WEB ROUTES (Serve HTML pages)
-	// ===========================================
-
-	// Static files (CSS, JS, images)
-	fs := http.FileServer(http.Dir("web/static/"))
-	mux.Handle("/static/", http.StripPrefix("/static/", fs))
-
-	// Main web pages
-	mux.HandleFunc("/", webHandler.DashboardHandler)              // Dashboard chính
-	mux.HandleFunc("/dashboard", webHandler.DashboardHandler)     // Dashboard alias
-	mux.HandleFunc("/stocks", webHandler.StocksHandler)           // Stocks page
-	mux.HandleFunc("/predictions", webHandler.PredictionsHandler) // Predictions page
-	mux.HandleFunc("/training", webHandler.TrainingHandler)       // Training page
-
 	// Health check endpoints
-	mux.HandleFunc("/health", webHandler.HealthCheckHandler) // Detailed health
-	mux.HandleFunc("/health/simple", SimpleHealthHandler)    // Simple health for LB
-	mux.HandleFunc("/health/ready", ReadyHandler)            // Kubernetes readiness
+	mux.HandleFunc("/health", HealthCheckHandler)
+	mux.HandleFunc("/health/simple", SimpleHealthHandler)
+	mux.HandleFunc("/health/ready", ReadyHandler)
 
 	// ===========================================
 	// API ROUTES (JSON responses)
 	// ===========================================
 
+	// Dashboard APIs
+	mux.HandleFunc("/api/dashboard/stats", GetDashboardStats)
+
 	// Training & Prediction APIs
 	mux.HandleFunc("/api/training/status", GetTrainingStatus)
 	mux.HandleFunc("/api/training/history", GetTrainingHistory)
+	mux.HandleFunc("/api/training/algorithms", GetTrainingAlgorithms)
+	mux.HandleFunc("/api/training/metrics", GetTrainingMetrics)
+	mux.HandleFunc("/api/training/", GetTrainingDetail) // /api/training/{id} — must be after specific paths
 	mux.HandleFunc("/api/predictions", GetPredictions)
+	mux.HandleFunc("/api/predictions/accuracy", GetPredictionAccuracy)
+	mux.HandleFunc("/api/predictions/accuracy-trend", GetAccuracyTrend)
+	mux.HandleFunc("/api/predictions/compare/{symbol}", GetPredictionCompare)
+	mux.HandleFunc("/api/predictions/error-distribution", GetErrorDistribution)
+	mux.HandleFunc("/api/predictions/", GetPredictionDetail)
 	mux.HandleFunc("/api/algorithms/comparison", GetAlgorithmComparison)
 	mux.HandleFunc("/api/algorithms/backtest", GetAlgorithmBacktest)
 
 	// Stock data APIs
 	mux.HandleFunc("/api/stocks/{symbol}/chart", GetChartData)
 	mux.HandleFunc("/api/stocks/{symbol}/current", GetCurrentPrice)
-	mux.HandleFunc("/api/stocks/{symbol}/history", GetHistoricalData) // Fix: removed space before /api
+	mux.HandleFunc("/api/stocks/{symbol}/history", GetHistoricalData)
+	mux.HandleFunc("/api/stocks/{symbol}/detail", GetStockDetail)
 	mux.HandleFunc("/api/stocks/watchlist", GetStockWatchlist)
 	mux.HandleFunc("/api/market/overview", GetMarketOverview)
 
-	// Trigger Apis
+	// Gold price APIs
+	mux.HandleFunc("/api/gold/latest", GetGoldLatest)
+	mux.HandleFunc("/api/gold/prices", GetGoldPrices)
+	mux.HandleFunc("/api/gold/chart", GetGoldChart)
+
+	// Gold prediction APIs
+	mux.HandleFunc("/api/gold/predictions/latest", GetLatestGoldPredictions)
+	mux.HandleFunc("/api/gold/predictions/chart", GetGoldPredictionChart)
+	mux.HandleFunc("/api/gold/predictions", GetGoldPredictions)
+
+	// Per-stock crawl and predict APIs
+	mux.HandleFunc("POST /api/stocks/{symbol}/crawl", TriggerStockCrawl)
+	mux.HandleFunc("POST /api/stocks/{symbol}/predict", TriggerStockPredict)
+
+	// Trigger APIs
 	mux.HandleFunc("POST /api/trigger/crawler", APIKeyMiddleware(TriggerCrawlerHandler))
 	mux.HandleFunc("POST /api/trigger/predict", APIKeyMiddleware(TriggerPredictHandler))
+	mux.HandleFunc("POST /api/trigger/gold-crawler", TriggerGoldCrawlerHandler)
+	mux.HandleFunc("POST /api/trigger/gold-history", TriggerGoldHistoryHandler)
+	mux.HandleFunc("POST /api/trigger/gold-predict", TriggerGoldPredictHandler)
+	mux.HandleFunc("POST /api/trigger/train", TriggerTrainHandler)
+	mux.HandleFunc("POST /api/trigger/reconcile", TriggerReconcileHandler)
+	mux.HandleFunc("POST /api/trigger/stock-history", TriggerStockHistoryHandler)
+	mux.HandleFunc("POST /api/trigger/historical-backtest", TriggerHistoricalBacktestHandler)
 
 	return mux
 }
 
-// Helper function để setup all routes với logging
 func SetupAllRoutes() *http.ServeMux {
 	mux := addHandler()
-
-	// Log all registered routes (for debugging)
 	logRegisteredRoutes()
-
 	return mux
 }
 
-// Function để log ra tất cả routes đã đăng ký
 func logRegisteredRoutes() {
-	logger.Logger.Info("🛣️ Registered Routes:")
-	logger.Logger.Info("📄 Web Routes:")
-	logger.Logger.Info("  GET  /                    → Dashboard")
-	logger.Logger.Info("  GET  /dashboard           → Dashboard")
-	logger.Logger.Info("  GET  /stocks              → Stocks Page")
-	logger.Logger.Info("  GET  /predictions         → Predictions Page")
-	logger.Logger.Info("  GET  /training            → Training Page")
-	logger.Logger.Info("  GET  /static/*            → Static Files")
-
-	logger.Logger.Info("❤️ Health Routes:")
-	logger.Logger.Info("  GET  /health              → Detailed Health Check")
-	logger.Logger.Info("  GET  /health/simple       → Simple Health Check")
-	logger.Logger.Info("  GET  /health/ready        → Readiness Check")
-
-	logger.Logger.Info("🔌 API Routes:")
-	logger.Logger.Info("  GET  /api/training/status           → Training Status")
-	logger.Logger.Info("  GET  /api/training/history          → Training History")
-	logger.Logger.Info("  GET  /api/predictions               → Predictions List")
-	logger.Logger.Info("  GET  /api/algorithms/comparison     → Algorithm Comparison")
-	logger.Logger.Info("  GET  /api/algorithms/backtest       → Algorithm Backtest")
-	logger.Logger.Info("  GET  /api/stocks/{symbol}/current   → Current Stock Price")
-	logger.Logger.Info("  GET  /api/stocks/{symbol}/history   → Stock Price History")
-	logger.Logger.Info("  GET  /api/stocks/{symbol}/chart     → Chart Data")
-	logger.Logger.Info("  GET  /api/stocks/watchlist          → Watchlist")
-	logger.Logger.Info("  GET  /api/market/overview           → Market Overview")
-	logger.Logger.Info("  POST /api/trigger/crawler           → Trigger Crawler")
-	logger.Logger.Info("  POST /api/trigger/predict           → Trigger Predict")
+	logger.Logger.Info("Registered Routes:")
+	logger.Logger.Info("Health Routes:")
+	logger.Logger.Info("  GET  /health              -> Detailed Health Check")
+	logger.Logger.Info("  GET  /health/simple       -> Simple Health Check")
+	logger.Logger.Info("  GET  /health/ready        -> Readiness Check")
+	logger.Logger.Info("API Routes:")
+	logger.Logger.Info("  GET  /api/dashboard/stats")
+	logger.Logger.Info("  GET  /api/training/status")
+	logger.Logger.Info("  GET  /api/training/history")
+	logger.Logger.Info("  GET  /api/training/algorithms")
+	logger.Logger.Info("  GET  /api/training/metrics")
+	logger.Logger.Info("  GET  /api/training/{id}")
+	logger.Logger.Info("  GET  /api/predictions")
+	logger.Logger.Info("  GET  /api/predictions/accuracy")
+	logger.Logger.Info("  GET  /api/predictions/accuracy-trend")
+	logger.Logger.Info("  GET  /api/predictions/compare/{symbol}")
+	logger.Logger.Info("  GET  /api/predictions/error-distribution")
+	logger.Logger.Info("  GET  /api/predictions/{id}")
+	logger.Logger.Info("  GET  /api/algorithms/comparison")
+	logger.Logger.Info("  GET  /api/algorithms/backtest")
+	logger.Logger.Info("  GET  /api/stocks/{symbol}/chart")
+	logger.Logger.Info("  GET  /api/stocks/{symbol}/current")
+	logger.Logger.Info("  GET  /api/stocks/{symbol}/history")
+	logger.Logger.Info("  GET  /api/stocks/{symbol}/detail")
+	logger.Logger.Info("  GET  /api/stocks/watchlist")
+	logger.Logger.Info("  GET  /api/market/overview")
+	logger.Logger.Info("  GET  /api/gold/latest")
+	logger.Logger.Info("  GET  /api/gold/prices")
+	logger.Logger.Info("  GET  /api/gold/chart")
+	logger.Logger.Info("  GET  /api/gold/predictions/latest")
+	logger.Logger.Info("  GET  /api/gold/predictions/chart")
+	logger.Logger.Info("  GET  /api/gold/predictions")
+	logger.Logger.Info("  POST /api/stocks/{symbol}/crawl")
+	logger.Logger.Info("  POST /api/stocks/{symbol}/predict")
+	logger.Logger.Info("  POST /api/trigger/crawler")
+	logger.Logger.Info("  POST /api/trigger/predict")
+	logger.Logger.Info("  POST /api/trigger/gold-crawler")
+	logger.Logger.Info("  POST /api/trigger/gold-history")
+	logger.Logger.Info("  POST /api/trigger/gold-predict")
+	logger.Logger.Info("  POST /api/trigger/train")
+	logger.Logger.Info("  POST /api/trigger/reconcile")
+	logger.Logger.Info("  POST /api/trigger/stock-history")
 }

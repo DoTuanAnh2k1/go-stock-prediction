@@ -10,7 +10,7 @@ import (
 // StockPrice - Bảng stock_prices
 type StockPrice struct {
 	ID            uint            `gorm:"primaryKey;autoIncrement" json:"id"`
-	StockID       uint            `gorm:"not null;index:idx_stock_date" json:"stock_id"`
+	StockID       uint            `gorm:"type:int unsigned;not null;index:idx_stock_date" json:"stock_id"`
 	TradingDate   time.Time       `gorm:"not null;index:idx_stock_date" json:"trading_date"`
 	OpenPrice     decimal.Decimal `gorm:"type:decimal(15,2);not null" json:"open_price"`
 	HighPrice     decimal.Decimal `gorm:"type:decimal(15,2);not null" json:"high_price"`

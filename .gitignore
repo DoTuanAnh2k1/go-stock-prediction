@@ -23,8 +23,6 @@ profile.cov
 # Go workspace file
 go.work
 go.work.sum
-go.mod
-go.sum
 vendor
 
 # env file
@@ -35,3 +33,12 @@ vendor
 .vscode/
 
 source_dump.txt
+
+# Logs
+*.log
+
+# Claude Code internal
+memory/
+
+# Node
+node_modules/

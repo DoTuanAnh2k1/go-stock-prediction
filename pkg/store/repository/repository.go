@@ -4,6 +4,8 @@ import (
 	"go-stock-prediction/pkg/models/models_config"
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // DatabaseStore - interface chính cho tất cả DB operations
@@ -18,6 +20,10 @@ type DatabaseStore interface {
 	Prediction
 	SyncLog
 	Utility
+	GoldPriceStore
+	GoldPredictionStore
+	MacroIndicatorStore
+	TrainingLogStore
 }
 
 // Exchange - interface cho exchange operations
@@ -83,6 +89,21 @@ type Prediction interface {
 	GetPredictionsByStockIDAndAlgorithm(stockID uint, algorithmName string) ([]modelsdb.Prediction, error)
 	GetLatestPredictionsByStockID(stockID uint, limit int) ([]modelsdb.Prediction, error)
 	GetPredictionsByDateRange(fromDate, toDate time.Time) ([]modelsdb.Prediction, error)
+	GetPredictionsFiltered(stockID *uint, algorithm string, fromDate, toDate time.Time, offset, limit int) ([]modelsdb.Prediction, int64, error)
+	// GetConfirmedPredictionsPage returns paginated predictions that have actual_price set.
+	GetConfirmedPredictionsPage(stockID *uint, algorithm string, fromDate, toDate time.Time, offset, limit int) ([]modelsdb.Prediction, int64, error)
+	// GetPredictionsWithActual returns predictions that have actual_price set (not null),
+	// optionally filtered by stockID. Results are ordered by target_date DESC.
+	// days = 0 means no date limit.
+	GetPredictionsWithActual(stockID *uint, algorithm string, days int) ([]modelsdb.Prediction, error)
+	// GetPendingPredictions returns predictions where actual_price IS NULL and target_date <= cutoff.
+	GetPendingPredictions(cutoff time.Time) ([]modelsdb.Prediction, error)
+	// UpdatePredictionActual updates actual_price, accuracy, and status for a prediction.
+	UpdatePredictionActual(id uint, actualPrice, accuracy *decimal.Decimal, status string) error
+	// GetPredictionCountByAlgorithm returns total prediction count per algorithm_name.
+	GetPredictionCountByAlgorithm() (map[string]int64, error)
+	// GetSuccessfulPredictionCountByAlgorithm returns count of predictions with accuracy >= threshold per algorithm.
+	GetSuccessfulPredictionCountByAlgorithm(accuracyThreshold float64) (map[string]int64, error)
 
 	// Write operations
 	SavePrediction(prediction *modelsdb.Prediction) error
@@ -90,6 +111,22 @@ type Prediction interface {
 	UpdatePrediction(prediction *modelsdb.Prediction) error
 	DeletePrediction(id uint) error
 	BulkCreatePredictions(predictions []modelsdb.Prediction) error
+	// DeletePredictionsBeforeDate deletes all predictions whose target_date < date.
+	// Used by historical backtest to clear stale data before re-inserting.
+	DeletePredictionsBeforeDate(date time.Time) error
+}
+
+// TrainingLogStore - interface cho training log operations
+type TrainingLogStore interface {
+	CreateTrainingLog(log *modelsdb.TrainingLog) error
+	GetTrainingLogByID(id uint) (*modelsdb.TrainingLog, error)
+	GetTrainingLogsBySessionID(sessionID string) ([]modelsdb.TrainingLog, error)
+	GetTrainingSessions(limit, offset int) ([]modelsdb.TrainingLog, int64, error)
+	// GetLatestTrainingLogByAlgorithm returns the most recent TrainingLog for each algorithm.
+	// The returned slice has at most one entry per algorithm_name.
+	GetLatestTrainingLogByAlgorithm() ([]modelsdb.TrainingLog, error)
+	// GetTrainingMetricsAggregate returns aggregate stats across all training logs.
+	GetTrainingMetricsAggregate() (modelsdb.TrainingMetricsAggregate, error)
 }
 
 // SyncLog - interface cho sync log operations

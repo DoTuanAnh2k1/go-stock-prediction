@@ -2,6 +2,7 @@ package arimagarch
 
 import (
 	"context"
+	"fmt"
 	modelssvc "go-stock-prediction/pkg/models/models_svc"
 	"math"
 	"testing"
@@ -292,5 +293,60 @@ func TestARIMAGetAccuracy_ZeroBeforeBacktest(t *testing.T) {
 	a := newARIMAPredictor()
 	if a.GetAccuracy() != 0.0 {
 		t.Errorf("GetAccuracy before backtest = %v, want 0.0", a.GetAccuracy())
+	}
+}
+
+// ---- Phase 1 regression: confidence and CurrentPrice fixes ----
+
+func TestARIMAPredict_ConfidenceGreaterThanZero(t *testing.T) {
+	a := newARIMAPredictor()
+	// Need at least 100 data points
+	historical := make([]string, 150)
+	for i := range historical {
+		historical[i] = fmt.Sprintf("%f", 50000.0+float64(i)*50.0)
+	}
+	data := &modelssvc.StockData{Historical: historical}
+	result, err := a.Predict(context.Background(), data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Confidence <= 0 {
+		t.Errorf("Confidence should be > 0, got %v", result.Confidence)
+	}
+	if result.Confidence > 1.0 {
+		t.Errorf("Confidence should be <= 1.0, got %v", result.Confidence)
+	}
+}
+
+func TestARIMAPredict_GetAccuracyAfterPredict(t *testing.T) {
+	a := newARIMAPredictor()
+	historical := make([]string, 150)
+	for i := range historical {
+		historical[i] = fmt.Sprintf("%f", 50000.0+float64(i)*50.0)
+	}
+	data := &modelssvc.StockData{Historical: historical}
+	_, err := a.Predict(context.Background(), data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	accuracy := a.GetAccuracy()
+	if accuracy <= 0 {
+		t.Errorf("GetAccuracy() after Predict should be > 0, got %v", accuracy)
+	}
+}
+
+func TestARIMAPredict_CurrentPriceSet(t *testing.T) {
+	a := newARIMAPredictor()
+	historical := make([]string, 150)
+	for i := range historical {
+		historical[i] = "50000"
+	}
+	data := &modelssvc.StockData{Historical: historical}
+	result, err := a.Predict(context.Background(), data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.CurrentPrice != 50000 {
+		t.Errorf("CurrentPrice should be 50000, got %v", result.CurrentPrice)
 	}
 }

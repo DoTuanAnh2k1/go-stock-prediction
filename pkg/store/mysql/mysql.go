@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"go-stock-prediction/pkg/logger"
+	modelsdb "go-stock-prediction/pkg/models/models_db"
 	"go-stock-prediction/pkg/models/models_config"
 
 	"gorm.io/driver/mysql"
@@ -46,6 +47,12 @@ func (c *Client) Init(cfg models_config.DatabaseConfig) error {
 	logger.Logger.Infof("Connect to database: %s", dsn)
 	c.Db = db
 	c.cfg = cfg.Mysql
+
+	if err := db.AutoMigrate(modelsdb.AllModels...); err != nil {
+		logger.Logger.Errorf("AutoMigrate failed: %v", err)
+		return err
+	}
+	logger.Logger.Info("AutoMigrate completed successfully")
 
 	return nil
 }

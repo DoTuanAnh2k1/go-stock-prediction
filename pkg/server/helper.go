@@ -54,16 +54,35 @@ func ResponseSuccess(w http.ResponseWriter, status int, data interface{}) {
 	}
 }
 
+// getPredictionStatus computes the prediction status based on target date and actual price.
+// Rules:
+//   - "pending"              — target_date is still in the future, no actual price yet
+//   - "pending_confirmation" — target_date has passed but actual_price is still unknown
+//   - "confirmed"            — actual_price is known and error < 5 %
+//   - "wrong"               — actual_price is known and error >= 5 %
 func getPredictionStatus(targetDate time.Time, actualPrice *decimal.Decimal) string {
-	if actualPrice != nil {
-		return "confirmed"
+	return getPredictionStatusWithPredicted(targetDate, actualPrice, nil)
+}
+
+// getPredictionStatusWithPredicted is the full version that uses both actual and predicted prices.
+func getPredictionStatusWithPredicted(targetDate time.Time, actualPrice *decimal.Decimal, predictedPrice *decimal.Decimal) string {
+	if actualPrice == nil {
+		if time.Now().After(targetDate) {
+			return "pending_confirmation"
+		}
+		return "pending"
 	}
 
-	if time.Now().After(targetDate) {
-		return "pending_confirmation"
+	// actual price is known — determine confirmed vs wrong
+	if predictedPrice != nil && actualPrice.GreaterThan(decimal.Zero) {
+		diff := predictedPrice.Sub(*actualPrice).Abs()
+		errPct := diff.Div(*actualPrice)
+		threshold := decimal.NewFromFloat(0.05)
+		if errPct.GreaterThanOrEqual(threshold) {
+			return "wrong"
+		}
 	}
-
-	return "pending"
+	return "confirmed"
 }
 
 // Helper functions
@@ -198,36 +217,41 @@ func calculateVolatility(changes []float64) float64 {
 }
 
 func getTopByChange(stocks []modelsapi.StockCurrentPriceDTO, gainers bool, limit int) []modelsapi.StockCurrentPriceDTO {
+	tmp := make([]modelsapi.StockCurrentPriceDTO, len(stocks))
+	copy(tmp, stocks)
 	// Sort by change percent
-	sort.Slice(stocks, func(i, j int) bool {
+	sort.Slice(tmp, func(i, j int) bool {
 		if gainers {
-			return stocks[i].ChangePercent.GreaterThan(stocks[j].ChangePercent)
+			return tmp[i].ChangePercent.GreaterThan(tmp[j].ChangePercent)
 		}
-		return stocks[i].ChangePercent.LessThan(stocks[j].ChangePercent)
+		return tmp[i].ChangePercent.LessThan(tmp[j].ChangePercent)
 	})
 
-	if len(stocks) > limit {
-		return stocks[:limit]
+	if len(tmp) > limit {
+		return tmp[:limit]
 	}
-	return stocks
+	return tmp
 }
 
 func getTopByVolume(stocks []modelsapi.StockCurrentPriceDTO, limit int) []modelsapi.StockCurrentPriceDTO {
+	tmp := make([]modelsapi.StockCurrentPriceDTO, len(stocks))
+	copy(tmp, stocks)
 	// Sort by volume
-	sort.Slice(stocks, func(i, j int) bool {
-		return stocks[i].Volume > stocks[j].Volume
+	sort.Slice(tmp, func(i, j int) bool {
+		return tmp[i].Volume > tmp[j].Volume
 	})
 
-	if len(stocks) > limit {
-		return stocks[:limit]
+	if len(tmp) > limit {
+		return tmp[:limit]
 	}
-	return stocks
+	return tmp
 }
 
 var validAlgorithms = map[string]bool{
 	"moving_average": true,
 	"lstm_nn":        true,
 	"arima_garch":    true,
+	"ensemble":       true,
 }
 
 var validPeriods = map[string]bool{
@@ -279,4 +303,26 @@ func validatePeriod(period string) error {
 		return fmt.Errorf("unknown period: %s (valid: 1D, 1W, 1M, 3M, 6M, 1Y)", period)
 	}
 	return nil
+}
+
+func validatePage(pageStr string) (int, error) {
+	if pageStr == "" {
+		return 1, nil
+	}
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		return 0, fmt.Errorf("page must be a positive integer")
+	}
+	return page, nil
+}
+
+func validateDateParam(dateStr string) (time.Time, error) {
+	if dateStr == "" {
+		return time.Time{}, nil
+	}
+	t, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid date format, expected YYYY-MM-DD")
+	}
+	return t, nil
 }

@@ -1,0 +1,47 @@
+[
+  {
+    "id": 1,
+    "symbol": "VCB",
+    "company_name": "Ngân hàng TMCP Ngoại thương Việt Nam",
+    "exchange_id": 1,
+    "is_vn30": true,
+    "is_vn100": true,
+    "sector": "Ngân hàng"
+  },
+  {
+    "id": 2,
+    "symbol": "FPT",
+    "company_name": "Công ty Cổ phần FPT",
+    "exchange_id": 1,
+    "is_vn30": true,
+    "is_vn100": true,
+    "sector": "Công nghệ"
+  },
+  {
+    "id": 3,
+    "symbol": "VIC",
+    "company_name": "Tập đoàn Vingroup",
+    "exchange_id": 1,
+    "is_vn30": true,
+    "is_vn100": true,
+    "sector": "Bất động sản"
+  },
+  {
+    "id": 4,
+    "symbol": "VNM",
+    "company_name": "Công ty Cổ phần Sữa Việt Nam",
+    "exchange_id": 1,
+    "is_vn30": true,
+    "is_vn100": true,
+    "sector": "Thực phẩm"
+  },
+  {
+    "id": 5,
+    "symbol": "HPG",
+    "company_name": "Công ty Cổ phần Tập đoàn Hòa Phát",
+    "exchange_id": 1,
+    "is_vn30": true,
+    "is_vn100": true,
+    "sector": "Thép"
+  }
+]

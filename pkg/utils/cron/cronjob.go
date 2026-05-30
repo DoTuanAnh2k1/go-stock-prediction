@@ -36,6 +36,7 @@ const (
 	// Daily at specific times
 	Daily6AM      = "0 0 6 * * *"
 	Daily9AM      = "0 0 9 * * *"
+	Daily10AM     = "0 0 10 * * *"
 	Daily12PM     = "0 0 12 * * *"
 	Daily6PM      = "0 0 18 * * *"
 	Daily9PM      = "0 0 21 * * *"

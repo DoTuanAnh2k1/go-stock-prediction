@@ -1,0 +1,11 @@
+[
+  {"source": "SJC", "product_type": "1L", "trading_date": "2026-05-26", "buy_price": "92500000", "sell_price": "94500000", "currency": "VND"},
+  {"source": "SJC", "product_type": "1L", "trading_date": "2026-05-27", "buy_price": "92800000", "sell_price": "94800000", "currency": "VND"},
+  {"source": "SJC", "product_type": "1L", "trading_date": "2026-05-28", "buy_price": "93000000", "sell_price": "95000000", "currency": "VND"},
+  {"source": "SJC", "product_type": "5c", "trading_date": "2026-05-26", "buy_price": "92000000", "sell_price": "94000000", "currency": "VND"},
+  {"source": "SJC", "product_type": "5c", "trading_date": "2026-05-27", "buy_price": "92300000", "sell_price": "94300000", "currency": "VND"},
+  {"source": "SJC", "product_type": "5c", "trading_date": "2026-05-28", "buy_price": "92500000", "sell_price": "94500000", "currency": "VND"},
+  {"source": "WORLD", "product_type": "XAU/USD", "trading_date": "2026-05-26", "buy_price": "2350.50", "sell_price": "2351.50", "currency": "USD"},
+  {"source": "WORLD", "product_type": "XAU/USD", "trading_date": "2026-05-27", "buy_price": "2355.00", "sell_price": "2356.00", "currency": "USD"},
+  {"source": "WORLD", "product_type": "XAU/USD", "trading_date": "2026-05-28", "buy_price": "2360.00", "sell_price": "2361.00", "currency": "USD"}
+]

@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  test-mysql:
+    image: mysql:8.0
+    container_name: go-stock-prediction-test-db
+    environment:
+      MYSQL_ROOT_PASSWORD: test123
+      MYSQL_DATABASE: go_stock_prediction_test
+    ports:
+      - "3307:3306"
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ptest123"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    tmpfs:
+      - /var/lib/mysql

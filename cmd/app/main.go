@@ -7,6 +7,7 @@ import (
 	"go-stock-prediction/pkg/server"
 	"go-stock-prediction/pkg/service/crawler"
 	"go-stock-prediction/pkg/service/predict"
+	goldpredict "go-stock-prediction/pkg/service/predict/gold"
 	"go-stock-prediction/pkg/store/repository"
 	"os"
 	"os/signal"
@@ -46,6 +47,7 @@ func main() {
 	}()
 
 	go predict.Init()
+	go goldpredict.Init()
 
 	stopOrKillServer()
 }

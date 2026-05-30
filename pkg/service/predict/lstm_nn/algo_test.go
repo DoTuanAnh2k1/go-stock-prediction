@@ -2,6 +2,7 @@ package lstmnn
 
 import (
 	"context"
+	"fmt"
 	modelssvc "go-stock-prediction/pkg/models/models_svc"
 	"math"
 	"testing"
@@ -308,5 +309,60 @@ func TestLSTMGetAccuracy_ZeroBeforeBacktest(t *testing.T) {
 	l := newLSTMPredictor()
 	if l.GetAccuracy() != 0.0 {
 		t.Errorf("GetAccuracy before backtest = %v, want 0.0", l.GetAccuracy())
+	}
+}
+
+// ---- Phase 1 regression: confidence and CurrentPrice fixes ----
+
+func TestLSTMPredict_ConfidenceGreaterThanZero(t *testing.T) {
+	l := newLSTMPredictor()
+	// Need at least 60 data points (sequenceLen) plus extras for training
+	historical := make([]string, 100)
+	for i := range historical {
+		historical[i] = fmt.Sprintf("%f", 50000.0+float64(i)*100.0)
+	}
+	data := &modelssvc.StockData{Historical: historical}
+	result, err := l.Predict(context.Background(), data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Confidence <= 0 {
+		t.Errorf("Confidence should be > 0 after training, got %v", result.Confidence)
+	}
+	if result.Confidence > 1.0 {
+		t.Errorf("Confidence should be <= 1.0, got %v", result.Confidence)
+	}
+}
+
+func TestLSTMPredict_GetAccuracyAfterPredict(t *testing.T) {
+	l := newLSTMPredictor()
+	historical := make([]string, 100)
+	for i := range historical {
+		historical[i] = fmt.Sprintf("%f", 50000.0+float64(i)*100.0)
+	}
+	data := &modelssvc.StockData{Historical: historical}
+	_, err := l.Predict(context.Background(), data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	accuracy := l.GetAccuracy()
+	if accuracy <= 0 {
+		t.Errorf("GetAccuracy() after Predict should be > 0, got %v", accuracy)
+	}
+}
+
+func TestLSTMPredict_CurrentPriceSet(t *testing.T) {
+	l := newLSTMPredictor()
+	historical := make([]string, 100)
+	for i := range historical {
+		historical[i] = "50000"
+	}
+	data := &modelssvc.StockData{Historical: historical}
+	result, err := l.Predict(context.Background(), data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.CurrentPrice != 50000 {
+		t.Errorf("CurrentPrice should be 50000, got %v", result.CurrentPrice)
 	}
 }

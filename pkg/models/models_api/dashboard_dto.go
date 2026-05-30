@@ -14,6 +14,22 @@ type DashboardStatsDTO struct {
 	TotalPredictions int64 `json:"total_predictions"`
 }
 
+// AlgorithmStatsEntry - thống kê cho một thuật toán trong dashboard
+type AlgorithmStatsEntry struct {
+	Accuracy    string `json:"accuracy"`
+	Predictions int    `json:"predictions"`
+}
+
+// DashboardStatsFullDTO - DTO cho GET /api/dashboard/stats
+type DashboardStatsFullDTO struct {
+	TotalStocks      int64                          `json:"total_stocks"`
+	TotalPredictions int64                          `json:"total_predictions"`
+	AvgAccuracy      string                         `json:"avg_accuracy"`
+	LastCrawl        *time.Time                     `json:"last_crawl"`
+	LastPrediction   *time.Time                     `json:"last_prediction"`
+	Algorithms       map[string]AlgorithmStatsEntry `json:"algorithms"`
+}
+
 // MarketOverviewDTO - DTO cho market overview
 type MarketOverview1DTO struct {
 	VN30Index     decimal.Decimal `json:"vn30_index"`
@@ -30,11 +46,11 @@ type MarketOverview1DTO struct {
 	LastUpdated   time.Time       `json:"last_updated"`
 }
 
-// StockDetailDTO - DTO chi tiết cho 1 mã cổ phiếu
+// StockDetailDTO - DTO chi tiết cho 1 mã cổ phiếu (Phase 3)
 type StockDetailDTO struct {
-	Stock             StockDTO             `json:"stock"`
-	LatestPrice       *StockPriceDTO       `json:"latest_price,omitempty"`
-	PriceHistory      []StockPriceDTO      `json:"price_history,omitempty"`
-	LatestPredictions []PredictionDTO      `json:"latest_predictions,omitempty"`
-	PredictionStats   []PredictionStatsDTO `json:"prediction_stats,omitempty"`
+	Stock        StockDTO              `json:"stock"`
+	CurrentPrice StockCurrentPriceDTO  `json:"current_price"`
+	History      []StockPriceDTO       `json:"history"`
+	Predictions  []PredictionDetailDTO `json:"predictions"`
+	Stats        StockStatsDTO         `json:"stats"`
 }

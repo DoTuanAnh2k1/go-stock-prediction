@@ -3,9 +3,9 @@ version: "3.8"
 services:
   # Database
   db:
-    platform: linux/x86_64
-    image: mysql:5.7
+    image: mysql:8.0
     container_name: mysql_db
+    command: --default-authentication-plugin=mysql_native_password
     volumes:
       - db_data:/var/lib/mysql
       - ./database.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -22,7 +22,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 40s
     networks:
       - app-network
 
@@ -35,7 +35,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    restart: on-failure
+    restart: unless-stopped
     ports:
       - "31300:31300"
     environment:
@@ -50,6 +50,20 @@ services:
       LOG_LEVEL: INFO
       DB_LOG_LEVEL: INFO
       API_KEY: ""
+    networks:
+      - app-network
+
+  # Frontend (React + Vite + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: vnstock_frontend
+    depends_on:
+      - app
+    restart: unless-stopped
+    ports:
+      - "36018:80"
     networks:
       - app-network
 

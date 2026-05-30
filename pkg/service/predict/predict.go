@@ -2,20 +2,18 @@ package predict
 
 import (
 	"context"
+	"go-stock-prediction/pkg/service/predict/iface"
 	modelssvc "go-stock-prediction/pkg/models/models_svc"
 	"log"
 )
+
+// PredictionAlgorithm is the interface all prediction algorithms must implement.
+type PredictionAlgorithm = iface.PredictionAlgorithm
 
 // Domain interfaces theo pattern Import -> Calculate -> Export
 type DataImporter interface {
 	Import(ctx context.Context, symbol string) (*modelssvc.StockData, error)
 	ImportBatch(ctx context.Context, symbols []string) ([]*modelssvc.StockData, error)
-}
-
-type PredictionAlgorithm interface {
-	Predict(ctx context.Context, data *modelssvc.StockData) (*modelssvc.Prediction, error)
-	GetName() string
-	GetAccuracy() float64 // Độ chính xác của thuật toán
 }
 
 type DataExporter interface {

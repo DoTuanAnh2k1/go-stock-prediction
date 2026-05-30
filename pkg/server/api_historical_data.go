@@ -5,7 +5,9 @@ import (
 	modelsapi "go-stock-prediction/pkg/models/models_api"
 	"go-stock-prediction/pkg/store/repository"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // GetHistoricalData - GET /api/stocks/{symbol}/history?period=1M&limit=50
@@ -23,19 +25,33 @@ func GetHistoricalData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse query params
-	period := r.URL.Query().Get("period")
-	if period == "" {
-		period = "1M"
-	}
+	// Parse query params — support both ?days=N (frontend sparklines) and ?period=1M
+	var fromDate, toDate time.Time
+	var period string
 
-	if err := validatePeriod(period); err != nil {
-		ResponseError(w, http.StatusBadRequest, err.Error())
-		return
+	daysStr := r.URL.Query().Get("days")
+	if daysStr != "" {
+		days, err := strconv.Atoi(daysStr)
+		if err != nil || days <= 0 || days > 1000 {
+			days = 30
+		}
+		toDate = time.Now()
+		fromDate = toDate.AddDate(0, 0, -days)
+		period = strconv.Itoa(days) + "D"
+	} else {
+		period = r.URL.Query().Get("period")
+		if period == "" {
+			period = "1M"
+		}
+		if err := validatePeriod(period); err != nil {
+			ResponseError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		fromDate, toDate = calculateDateRange(period)
 	}
 
 	limitStr := r.URL.Query().Get("limit")
-	limit, err := validateLimit(limitStr, 50, 500)
+	limit, err := validateLimit(limitStr, 500, 1000)
 	if err != nil {
 		ResponseError(w, http.StatusBadRequest, err.Error())
 		return
@@ -51,9 +67,6 @@ func GetHistoricalData(w http.ResponseWriter, r *http.Request) {
 		ResponseError(w, http.StatusNotFound, "Stock not found")
 		return
 	}
-
-	// Calculate date range based on period
-	fromDate, toDate := calculateDateRange(period)
 
 	// Get historical prices
 	prices, err := store.GetStockPricesByStockIDAndDateRange(stock.ID, fromDate, toDate)

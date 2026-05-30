@@ -82,9 +82,11 @@ func (m *MovingAveragePredictor) Predict(ctx context.Context, data *modelssvc.St
 	// Dự đoán giá
 	predictedPrice := m.calculatePredictedPrice(currentPrice, signal, confidence)
 
+	m.backtestAccuracy = confidence
 	return &modelssvc.Prediction{
 		PredictedPrice: predictedPrice,
-		CurrentPrice:   currentPrice, // <- Thêm field này!
+		CurrentPrice:   currentPrice,
+		Confidence:     confidence,
 	}, nil
 }
 

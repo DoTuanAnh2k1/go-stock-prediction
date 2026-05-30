@@ -48,6 +48,19 @@ func (l *LSTMPredictor) Predict(ctx context.Context, data *modelssvc.StockData) 
 	// Train on all available data
 	l.train(X, Y)
 
+	// Calculate backtest accuracy
+	if len(X) > 0 {
+		totalError := 0.0
+		for i := 0; i < len(X); i++ {
+			pred := l.predict(X[i])
+			if Y[i] > 0 {
+				totalError += math.Abs(pred-Y[i]) / Y[i]
+			}
+		}
+		mape := totalError / float64(len(X))
+		l.backtestAccuracy = math.Max(0, math.Min(1.0, 1.0-mape))
+	}
+
 	// Predict next price using features at last index
 	features := l.extractFeatures(prices, len(prices)-1)
 	currentPrice := prices[len(prices)-1]

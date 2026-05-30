@@ -18,8 +18,8 @@ type ipRateLimiter struct {
 
 var globalLimiter = &ipRateLimiter{
 	limiters: make(map[string]*rate.Limiter),
-	r:        rate.Limit(10),
-	b:        30,
+	r:        rate.Limit(60), // 60 req/s — browser loads ~38 parallel requests on page load
+	b:        120,            // burst 120 to handle initial sparkline + gold chart batch
 }
 
 func (l *ipRateLimiter) getLimiter(ip string) *rate.Limiter {

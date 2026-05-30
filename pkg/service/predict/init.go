@@ -2,11 +2,13 @@ package predict
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"go-stock-prediction/pkg/logger"
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 	modelssvc "go-stock-prediction/pkg/models/models_svc"
 	arimagarch "go-stock-prediction/pkg/service/predict/arima_garch"
+	"go-stock-prediction/pkg/service/predict/ensemble"
 	lstmnn "go-stock-prediction/pkg/service/predict/lstm_nn"
 	movingaverage "go-stock-prediction/pkg/service/predict/moving_average"
 	"go-stock-prediction/pkg/store/repository"
@@ -26,11 +28,17 @@ var (
 
 // PredictionService manages all prediction algorithms and training
 type PredictionService struct {
-	algorithms  map[string]PredictionAlgorithm
-	store       repository.DatabaseStore
-	isTraining  bool
-	lastTrained time.Time
-	mutex       sync.RWMutex
+	algorithms    map[string]PredictionAlgorithm
+	store         repository.DatabaseStore
+	isTraining    bool
+	lastTrained   time.Time
+	mutex         sync.RWMutex
+	// Training progress fields (protected by mutex)
+	trainingProgress      float64   // 0–100
+	trainingPhase         string    // human-readable current phase
+	trainingStarted       time.Time // when current training began
+	trainingTotalAlgos    int       // total algorithms to train
+	trainingDoneAlgos     int       // algorithms completed so far
 }
 
 // TrainingResult contains results from training process
@@ -82,6 +90,14 @@ func Init() {
 			logger.Logger.Info("✅ Daily prediction cronjob registered - every day 6 PM")
 		}
 
+		// Setup daily reconciliation job - every day at 6 AM to update actual prices
+		err = cron.AddJob("Daily Prediction Reconcile", cron.Daily6AM, CronjobDailyReconcile)
+		if err != nil {
+			logger.Logger.Errorf("Failed to add daily reconcile cronjob: %v", err)
+		} else {
+			logger.Logger.Info("✅ Daily reconcile cronjob registered - every day 6 AM")
+		}
+
 		logger.Logger.Info("🎯 Prediction service initialized successfully!")
 	})
 }
@@ -105,6 +121,11 @@ func registerAlgorithms() {
 	predictor.algorithms["arima_garch"] = arimaPredictor
 	logger.Logger.Infof("✅ Registered: %s", arimaPredictor.GetName())
 
+	// Register Ensemble predictor (stacks the 3 base algorithms)
+	ensemblePredictor := ensemble.New([]PredictionAlgorithm{maPredictor, lstmPredictor, arimaPredictor})
+	predictor.algorithms["ensemble"] = ensemblePredictor
+	logger.Logger.Infof("✅ Registered: %s", ensemblePredictor.GetName())
+
 	logger.Logger.Infof("🚀 Total %d algorithms registered", len(predictor.algorithms))
 }
 
@@ -124,12 +145,19 @@ func CronjobWeeklyTraining() error {
 		return nil
 	}
 	predictor.isTraining = true
+	predictor.trainingProgress = 0
+	predictor.trainingPhase = "Initializing"
+	predictor.trainingStarted = time.Now()
+	predictor.trainingDoneAlgos = 0
+	predictor.trainingTotalAlgos = len(predictor.algorithms)
 	predictor.mutex.Unlock()
 
 	defer func() {
 		predictor.mutex.Lock()
 		predictor.isTraining = false
 		predictor.lastTrained = time.Now()
+		predictor.trainingProgress = 100
+		predictor.trainingPhase = "idle"
 		predictor.mutex.Unlock()
 	}()
 
@@ -147,14 +175,44 @@ func CronjobWeeklyTraining() error {
 
 	logger.Logger.Infof("📊 Training models on %d VN30 stocks", len(stocks))
 
+	sessionID := generateSessionID()
+
 	// Train each algorithm
 	var trainingResults []TrainingResult
+	algIdx := 0
 	for algName, algorithm := range predictor.algorithms {
+		predictor.mutex.Lock()
+		predictor.trainingPhase = fmt.Sprintf("Training %s (%d/%d)", algName, algIdx+1, len(predictor.algorithms))
+		predictor.trainingProgress = float64(algIdx) / float64(len(predictor.algorithms)) * 100
+		predictor.trainingDoneAlgos = algIdx
+		predictor.mutex.Unlock()
+
 		result := trainSingleAlgorithm(ctx, algName, algorithm, stocks)
 		trainingResults = append(trainingResults, result)
 
+		algIdx++
+		predictor.mutex.Lock()
+		predictor.trainingDoneAlgos = algIdx
+		predictor.trainingProgress = float64(algIdx) / float64(len(predictor.algorithms)) * 100
+		predictor.mutex.Unlock()
+
 		logger.Logger.Infof("✅ %s training completed: %d/%d successful, accuracy: %v",
 			algName, result.SuccessCount, result.TotalStocks, result.Accuracy)
+
+		trainingLog := &modelsdb.TrainingLog{
+			SessionID:     sessionID,
+			AlgorithmName: algName,
+			TotalStocks:   result.TotalStocks,
+			SuccessCount:  result.SuccessCount,
+			ErrorCount:    result.ErrorCount,
+			Accuracy:      result.Accuracy,
+			DurationMs:    result.Duration.Milliseconds(),
+			StartedAt:     result.TrainedAt,
+			CompletedAt:   result.TrainedAt.Add(result.Duration),
+		}
+		if err := predictor.store.CreateTrainingLog(trainingLog); err != nil {
+			logger.Logger.Errorf("Failed to save training log for %s: %v", algName, err)
+		}
 	}
 
 	// Log overall training results
@@ -284,12 +342,18 @@ func generateStockPrediction(ctx context.Context, stock modelsdb.Stock, algName 
 		return nil, fmt.Errorf("prediction failed: %v", err)
 	}
 
+	// Prefer the prediction's own confidence; fall back to algorithm's backtest accuracy
+	confidence := prediction.Confidence
+	if confidence == 0 {
+		confidence = algorithm.GetAccuracy()
+	}
+
 	// Create database record
 	dbPrediction := &modelsdb.Prediction{
 		StockID:        stock.ID,
 		PredictedPrice: decimal.NewFromFloat(prediction.PredictedPrice),
-		CurrentPrice:   decimal.NewFromFloat(prediction.CurrentPrice), // <- Thêm này!
-		Confidence:     decimal.NewFromFloat(algorithm.GetAccuracy()),
+		CurrentPrice:   decimal.NewFromFloat(prediction.CurrentPrice),
+		Confidence:     decimal.NewFromFloat(confidence),
 		AlgorithmName:  algName,
 		PredictionDate: time.Now(),
 		TargetDate:     time.Now().AddDate(0, 0, 1), // Next trading day
@@ -375,6 +439,162 @@ func logTrainingResults(results []TrainingResult, totalDuration time.Duration) e
 	}
 
 	return predictor.store.CreateSyncLog(syncLog)
+}
+
+// TrainSingleAlgorithmByName trains a single named algorithm immediately and saves a TrainingLog.
+// It returns the session ID for tracking.
+func TrainSingleAlgorithmByName(algorithmName string) (string, error) {
+	if predictor == nil {
+		return "", fmt.Errorf("prediction service not initialized")
+	}
+
+	predictor.mutex.Lock()
+	if predictor.isTraining {
+		predictor.mutex.Unlock()
+		return "", fmt.Errorf("training already in progress")
+	}
+	predictor.isTraining = true
+	predictor.mutex.Unlock()
+
+	defer func() {
+		predictor.mutex.Lock()
+		predictor.isTraining = false
+		predictor.lastTrained = time.Now()
+		predictor.mutex.Unlock()
+	}()
+
+	algorithm, ok := predictor.algorithms[algorithmName]
+	if !ok {
+		return "", fmt.Errorf("unknown algorithm: %s", algorithmName)
+	}
+
+	stocks, err := predictor.store.GetVN30Stocks()
+	if err != nil {
+		return "", fmt.Errorf("failed to get stocks: %v", err)
+	}
+
+	sessionID := generateSessionID()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
+
+	result := trainSingleAlgorithm(ctx, algorithmName, algorithm, stocks)
+
+	trainingLog := &modelsdb.TrainingLog{
+		SessionID:     sessionID,
+		AlgorithmName: algorithmName,
+		TotalStocks:   result.TotalStocks,
+		SuccessCount:  result.SuccessCount,
+		ErrorCount:    result.ErrorCount,
+		Accuracy:      result.Accuracy,
+		DurationMs:    result.Duration.Milliseconds(),
+		StartedAt:     result.TrainedAt,
+		CompletedAt:   result.TrainedAt.Add(result.Duration),
+	}
+	predictor.store.CreateTrainingLog(trainingLog)
+
+	return sessionID, nil
+}
+
+// TrainAllAlgorithms kicks off a full training run in the background and returns a session ID.
+func TrainAllAlgorithms() (string, error) {
+	if predictor == nil {
+		return "", fmt.Errorf("prediction service not initialized")
+	}
+
+	predictor.mutex.Lock()
+	if predictor.isTraining {
+		predictor.mutex.Unlock()
+		return "", fmt.Errorf("training already in progress")
+	}
+	predictor.isTraining = true
+	predictor.mutex.Unlock()
+
+	sessionID := generateSessionID()
+
+	go func() {
+		defer func() {
+			predictor.mutex.Lock()
+			predictor.isTraining = false
+			predictor.lastTrained = time.Now()
+			predictor.mutex.Unlock()
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cancel()
+
+		stocks, err := predictor.store.GetVN30Stocks()
+		if err != nil {
+			logger.Logger.Errorf("Failed to get VN30 stocks for manual training: %v", err)
+			return
+		}
+
+		var trainingResults []TrainingResult
+		for algName, algorithm := range predictor.algorithms {
+			result := trainSingleAlgorithm(ctx, algName, algorithm, stocks)
+			trainingResults = append(trainingResults, result)
+
+			trainingLog := &modelsdb.TrainingLog{
+				SessionID:     sessionID,
+				AlgorithmName: algName,
+				TotalStocks:   result.TotalStocks,
+				SuccessCount:  result.SuccessCount,
+				ErrorCount:    result.ErrorCount,
+				Accuracy:      result.Accuracy,
+				DurationMs:    result.Duration.Milliseconds(),
+				StartedAt:     result.TrainedAt,
+				CompletedAt:   result.TrainedAt.Add(result.Duration),
+			}
+			if err := predictor.store.CreateTrainingLog(trainingLog); err != nil {
+				logger.Logger.Errorf("Failed to save training log: %v", err)
+			}
+		}
+
+		duration := time.Since(trainingResults[0].TrainedAt)
+		logTrainingResults(trainingResults, duration)
+		logger.Logger.Info("Manual training completed")
+	}()
+
+	return sessionID, nil
+}
+
+// generateSessionID generates a random UUID-like session identifier using crypto/rand
+func generateSessionID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
+// PredictSingleStock runs all algorithms on a single stock and saves predictions
+func PredictSingleStock(symbol string) (int, error) {
+	if predictor == nil {
+		return 0, fmt.Errorf("prediction service not initialized")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	stock, err := predictor.store.GetStockBySymbol(symbol)
+	if err != nil {
+		return 0, fmt.Errorf("stock not found: %s", symbol)
+	}
+
+	successCount := 0
+	for algName, algorithm := range predictor.algorithms {
+		prediction, err := generateStockPrediction(ctx, *stock, algName, algorithm)
+		if err != nil {
+			logger.Logger.Errorf("Failed to predict %s with %s: %v", symbol, algName, err)
+			continue
+		}
+
+		err = predictor.store.CreatePrediction(prediction)
+		if err != nil {
+			logger.Logger.Errorf("Failed to save prediction for %s: %v", symbol, err)
+			continue
+		}
+		successCount++
+	}
+
+	return successCount, nil
 }
 
 // GetPredictionService returns the global prediction service instance

@@ -13,7 +13,6 @@ RUN apk add --no-cache ca-certificates wget tzdata
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 WORKDIR /app
 COPY --from=builder /app/go-stock-prediction .
-COPY --from=builder /app/web ./web
 USER appuser
 EXPOSE 31300
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s CMD wget -qO- http://localhost:31300/health/simple || exit 1

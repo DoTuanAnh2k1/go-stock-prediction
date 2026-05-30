@@ -2,6 +2,7 @@ package movingaverage
 
 import (
 	"context"
+	"fmt"
 	modelssvc "go-stock-prediction/pkg/models/models_svc"
 	"math"
 	"strings"
@@ -481,5 +482,59 @@ func TestGetAccuracy_ZeroBeforeBacktest(t *testing.T) {
 	m := newPredictor()
 	if m.GetAccuracy() != 0.0 {
 		t.Errorf("GetAccuracy before backtest = %v, want 0.0", m.GetAccuracy())
+	}
+}
+
+// ---- Phase 1 regression: confidence and CurrentPrice fixes ----
+
+func TestPredict_ConfidenceGreaterThanZero(t *testing.T) {
+	m := newPredictor()
+	historical := make([]string, 25)
+	for i := range historical {
+		historical[i] = fmt.Sprintf("%f", 100.0+float64(i)*0.5)
+	}
+	data := &modelssvc.StockData{Historical: historical}
+	result, err := m.Predict(context.Background(), data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Confidence <= 0 {
+		t.Errorf("Confidence should be > 0, got %v", result.Confidence)
+	}
+	if result.Confidence > 1.0 {
+		t.Errorf("Confidence should be <= 1.0, got %v", result.Confidence)
+	}
+}
+
+func TestPredict_GetAccuracyAfterPredict(t *testing.T) {
+	m := newPredictor()
+	historical := make([]string, 25)
+	for i := range historical {
+		historical[i] = fmt.Sprintf("%f", 100.0+float64(i)*0.5)
+	}
+	data := &modelssvc.StockData{Historical: historical}
+	_, err := m.Predict(context.Background(), data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	accuracy := m.GetAccuracy()
+	if accuracy <= 0 {
+		t.Errorf("GetAccuracy() after Predict should be > 0, got %v", accuracy)
+	}
+}
+
+func TestPredict_CurrentPriceSet(t *testing.T) {
+	m := newPredictor()
+	historical := make([]string, 25)
+	for i := range historical {
+		historical[i] = "50000"
+	}
+	data := &modelssvc.StockData{Historical: historical}
+	result, err := m.Predict(context.Background(), data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.CurrentPrice != 50000 {
+		t.Errorf("CurrentPrice should be 50000, got %v", result.CurrentPrice)
 	}
 }

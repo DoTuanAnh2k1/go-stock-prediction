@@ -1,0 +1,14 @@
+[
+  {
+    "id": 1,
+    "code": "HOSE",
+    "name": "Sở Giao dịch Chứng khoán TP.HCM",
+    "timezone": "Asia/Ho_Chi_Minh"
+  },
+  {
+    "id": 2,
+    "code": "HNX",
+    "name": "Sở Giao dịch Chứng khoán Hà Nội",
+    "timezone": "Asia/Ho_Chi_Minh"
+  }
+]

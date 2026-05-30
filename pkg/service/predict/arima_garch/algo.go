@@ -69,6 +69,7 @@ func (a *ARIMAGARCHPredictor) Predict(ctx context.Context, data *modelssvc.Stock
 	currentPrice := prices[len(prices)-1]
 	predictedPrice := a.returnToPrice(currentPrice, prediction.mean)
 
+	a.backtestAccuracy = prediction.confidence
 	return &modelssvc.Prediction{
 		PredictedPrice: predictedPrice,
 		CurrentPrice:   currentPrice,

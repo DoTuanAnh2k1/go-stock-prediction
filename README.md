@@ -98,6 +98,108 @@ docker build -t go-stock-prediction .
 docker run -p 31300:31300 --env-file .env go-stock-prediction
 ```
 
+## Hướng dẫn sử dụng
+
+### Lần đầu khởi động (luồng bắt buộc)
+
+Khi mới cài đặt, DB trống nên phải thực hiện tuần tự các bước sau trước khi dùng dashboard:
+
+**Bước 1 — Crawl dữ liệu lịch sử bằng Python (bắt buộc, chạy 1 lần)**
+
+```bash
+pip install vnstock mysql-connector-python pandas
+python cmd/crawdata/main.py
+```
+
+Script dùng vnstock API để nhập 6 tháng dữ liệu giá vào DB. Quá trình mất khoảng 5–10 phút.
+
+**Bước 2 — Trigger crawl thủ công**
+
+Vào tab **Cổ phiếu** trên dashboard → nhấn nút "Thu thập dữ liệu". Hoặc dùng curl:
+
+```bash
+curl -X POST http://localhost:31300/api/trigger/crawler
+```
+
+**Bước 3 — Huấn luyện mô hình**
+
+Vào tab **Huấn luyện** → nhấn "Bắt đầu huấn luyện". Hoặc:
+
+```bash
+curl -X POST http://localhost:31300/api/trigger/train
+```
+
+**Bước 4 — Chạy dự đoán**
+
+Vào tab **Dự đoán** → nhấn "Dự đoán ngay". Hoặc:
+
+```bash
+curl -X POST http://localhost:31300/api/trigger/predict
+```
+
+**Bước 5** — Reload trang để thấy dữ liệu.
+
+---
+
+### 5 trang chính của dashboard (`http://localhost:31300`)
+
+| Trang | URL | Mô tả |
+|-------|-----|-------|
+| Tổng quan | `/` | Thống kê tổng hợp, danh sách theo dõi, dự đoán mới nhất |
+| Cổ phiếu | `/stocks` | Bảng VN30/VN100, biểu đồ 7 ngày (sparkline), lọc theo ngành/sàn, click để xem chi tiết |
+| Dự đoán | `/predictions` | Lịch sử dự đoán, so sánh predicted vs actual, biểu đồ accuracy 3 thuật toán |
+| Huấn luyện | `/training` | Trạng thái train, lịch sử phiên train, loss curve theo thời gian thực |
+| Giá Vàng | `/gold` | Giá SJC, XAU/USD, biểu đồ lịch sử |
+
+---
+
+### Tính năng chính từng trang
+
+**Trang Cổ phiếu (`/stocks`)**
+
+- Cột "Biểu đồ 7 ngày": sparkline SVG hiển thị xu hướng giá mini
+- Click vào hàng stock → modal chi tiết: giá OHLC, biểu đồ, dự đoán từng thuật toán
+- Lọc: dropdown "Tất cả ngành" và "Tất cả sàn" → gọi `GET /api/market/overview` với filter
+- Nút ⭐ → thêm vào Danh sách theo dõi (lưu localStorage, hiện trên tab Tổng quan)
+- Nút "Thu thập dữ liệu" / "Dự đoán ngay" → trigger thủ công
+
+**Trang Dự đoán (`/predictions`)**
+
+- 3 card thuật toán (MA, LSTM, ARIMA-GARCH) với accuracy % từ DB thật
+- Bảng có filter: lọc theo mã cổ phiếu, thuật toán, khoảng thời gian
+- Cột "Giá thực tế" và "Độ chính xác" tự động populate khi đã qua `target_date`
+- Trạng thái dự đoán: Đang chờ / Chính xác / Sai (error >= 5%)
+- Biểu đồ "Dự đoán vs Thực tế": chọn mã stock → line chart 2 đường (`GET /api/predictions/compare/{symbol}`)
+- Nút Export CSV
+
+**Trang Huấn luyện (`/training`)**
+
+- Xem trạng thái hiện tại (Idle / Đang huấn luyện)
+- Nút "Bắt đầu huấn luyện" → khi train xong sẽ có thông báo browser notification
+- Loss curve: khi đang train LSTM, biểu đồ loss cập nhật mỗi 2 giây
+- Lịch sử các phiên train: algorithm, thời gian, accuracy
+
+**Trang Giá Vàng (`/gold`)**
+
+- Giá SJC 1 Lượng (mua/bán), SJC Nhẫn Tròn, XAU/USD
+- Biểu đồ lịch sử 30 ngày
+- Nút "Thu thập dữ liệu" → trigger gold crawler thủ công (`POST /api/trigger/gold-crawler`)
+
+---
+
+### Trigger thủ công bằng curl
+
+Ngoài UI, tất cả trigger đều có thể gọi qua API:
+
+```bash
+curl -X POST http://localhost:31300/api/trigger/crawler       # crawl cổ phiếu
+curl -X POST http://localhost:31300/api/trigger/predict       # chạy dự đoán
+curl -X POST http://localhost:31300/api/trigger/train         # huấn luyện mô hình
+curl -X POST http://localhost:31300/api/trigger/gold-crawler  # crawl giá vàng
+```
+
+---
+
 ## API Endpoints
 
 | Method | Path | Mô tả |
