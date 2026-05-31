@@ -265,6 +265,7 @@ var validAlgorithms = map[string]bool{
 	"lstm_nn":        true,
 	"arima_garch":    true,
 	"ema":            true,
+	"lightgbm":       true,
 	"ensemble":       true,
 }
 

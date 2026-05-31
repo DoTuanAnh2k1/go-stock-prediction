@@ -30,8 +30,19 @@ type goldPredictionsResponse struct {
 	Total int                  `json:"total"`
 }
 
-// GetGoldPredictions handles GET /api/gold/predictions
-// Query params: source, product_type, algorithm, days (default 30), limit (default 100)
+// GetGoldPredictions godoc
+//
+//	@Summary      List gold predictions
+//	@Description  Returns gold price predictions filtered by source, product type, and algorithm
+//	@Tags         Gold Predictions
+//	@Produce      json
+//	@Param        source        query  string  false  "Gold source (e.g. SJC, BTMC)"
+//	@Param        product_type  query  string  false  "Product type (e.g. 1l, nhan_tron)"
+//	@Param        algorithm     query  string  false  "Algorithm name (e.g. lstm_nn)"
+//	@Param        limit         query  int     false  "Maximum number of results (default 100)"
+//	@Success      200           {object}  goldPredictionsResponse
+//	@Failure      500           {object}  ResponseFailure
+//	@Router       /api/gold/predictions [get]
 func GetGoldPredictions(w http.ResponseWriter, r *http.Request) {
 	source := r.URL.Query().Get("source")
 	productType := r.URL.Query().Get("product_type")
@@ -72,8 +83,15 @@ func GetGoldPredictions(w http.ResponseWriter, r *http.Request) {
 	ResponseSuccess(w, http.StatusOK, goldPredictionsResponse{Data: items, Total: len(items)})
 }
 
-// GetLatestGoldPredictions handles GET /api/gold/predictions/latest
-// Returns the most recent prediction per (source, product_type, algorithm).
+// GetLatestGoldPredictions godoc
+//
+//	@Summary      Get latest gold predictions
+//	@Description  Returns the most recent prediction per (source, product_type, algorithm) combination
+//	@Tags         Gold Predictions
+//	@Produce      json
+//	@Success      200  {object}  goldPredictionsResponse
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/gold/predictions/latest [get]
 func GetLatestGoldPredictions(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 	preds, err := store.GetLatestGoldPredictions()
@@ -117,8 +135,19 @@ type goldPredictionChartResponse struct {
 	Data        []goldPredictionChartPoint `json:"data"`
 }
 
-// GetGoldPredictionChart handles GET /api/gold/predictions/chart
-// Query params: source, product_type, algorithm, days (default 30)
+// GetGoldPredictionChart godoc
+//
+//	@Summary      Get gold prediction chart data
+//	@Description  Returns chronologically ordered predicted vs actual price data for charting, optionally filtered by algorithm
+//	@Tags         Gold Predictions
+//	@Produce      json
+//	@Param        source        query  string  false  "Gold source (e.g. SJC, BTMC)"
+//	@Param        product_type  query  string  false  "Product type (e.g. 1l, nhan_tron)"
+//	@Param        algorithm     query  string  false  "Algorithm name (e.g. lstm_nn)"
+//	@Param        days          query  int     false  "Number of days to look back (default 30)"
+//	@Success      200           {object}  goldPredictionChartResponse
+//	@Failure      500           {object}  ResponseFailure
+//	@Router       /api/gold/predictions/chart [get]
 func GetGoldPredictionChart(w http.ResponseWriter, r *http.Request) {
 	source := r.URL.Query().Get("source")
 	productType := r.URL.Query().Get("product_type")
@@ -172,7 +201,19 @@ func GetGoldPredictionChart(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// TriggerGoldPredictHandler handles POST /api/trigger/gold-predict
+// TriggerGoldPredictHandler godoc
+//
+//	@Summary      Trigger gold prediction
+//	@Description  Runs a prediction for all gold instruments (XAU/spot, BTMC/sjc, BTMC/nhan_tron) in the background via the prediction service.
+//	@Tags         Triggers
+//	@Accept       json
+//	@Produce      json
+//	@Success      200  {object}  map[string]string
+//	@Failure      401  {object}  ResponseFailure
+//	@Failure      500  {object}  ResponseFailure
+//	@Failure      503  {object}  ResponseFailure
+//	@Security     BearerAuth
+//	@Router       /api/trigger/gold-predict [post]
 func TriggerGoldPredictHandler(w http.ResponseWriter, r *http.Request) {
 	client := requireGRPCClient(w)
 	if client == nil {

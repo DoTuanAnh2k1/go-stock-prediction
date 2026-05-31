@@ -26,7 +26,15 @@ type fuelLatestResponse struct {
 // fuelProducts is the canonical list of Vietnamese retail fuel product types.
 var fuelProducts = []string{"ron95_iii", "ron95_v", "diezel_005s", "dau_hoa"}
 
-// GetFuelLatest handles GET /api/fuel/latest
+// GetFuelLatest godoc
+//
+//	@Summary      Get latest fuel prices
+//	@Description  Returns the most recent retail price for each Vietnamese fuel product type (ron95_iii, ron95_v, diezel_005s, dau_hoa)
+//	@Tags         Fuel
+//	@Produce      json
+//	@Success      200  {object}  fuelLatestResponse
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/fuel/latest [get]
 func GetFuelLatest(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 
@@ -66,7 +74,17 @@ type fuelPricesResponse struct {
 	Data        []fuelPricePoint `json:"data"`
 }
 
-// GetFuelPrices handles GET /api/fuel/prices?product=ron95_iii&days=180
+// GetFuelPrices godoc
+//
+//	@Summary      Get historical fuel prices
+//	@Description  Returns retail price history for a given fuel product type over the specified number of days
+//	@Tags         Fuel
+//	@Produce      json
+//	@Param        product  query  string  false  "Fuel product type (e.g. ron95_iii, ron95_v, diezel_005s, dau_hoa)"
+//	@Param        days     query  int     false  "Number of days to look back (default 180)"
+//	@Success      200      {object}  fuelPricesResponse
+//	@Failure      500      {object}  ResponseFailure
+//	@Router       /api/fuel/prices [get]
 func GetFuelPrices(w http.ResponseWriter, r *http.Request) {
 	productType := r.URL.Query().Get("product")
 	daysStr := r.URL.Query().Get("days")
@@ -109,7 +127,17 @@ type fuelChartResponse struct {
 	Prices      []decimal.Decimal `json:"prices"`
 }
 
-// GetFuelChart handles GET /api/fuel/chart?product=ron95_iii&days=180
+// GetFuelChart godoc
+//
+//	@Summary      Get fuel price chart data
+//	@Description  Returns chronologically ordered date labels and prices for charting
+//	@Tags         Fuel
+//	@Produce      json
+//	@Param        product  query  string  false  "Fuel product type (e.g. ron95_iii, ron95_v, diezel_005s, dau_hoa)"
+//	@Param        days     query  int     false  "Number of days to look back (default 180)"
+//	@Success      200      {object}  fuelChartResponse
+//	@Failure      500      {object}  ResponseFailure
+//	@Router       /api/fuel/chart [get]
 func GetFuelChart(w http.ResponseWriter, r *http.Request) {
 	productType := r.URL.Query().Get("product")
 	daysStr := r.URL.Query().Get("days")

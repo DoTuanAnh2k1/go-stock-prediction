@@ -34,8 +34,8 @@ jobs:
       - name: Download modules
         run: go mod download
 
-      - name: Build
-        run: go build ./...
+      - name: Build API
+        run: go build -o /dev/null ./cmd/api
 
       - name: Vet
         run: go vet ./...

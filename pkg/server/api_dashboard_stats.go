@@ -11,9 +11,15 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// GetDashboardStats - GET /api/dashboard/stats
-// Returns real-time dashboard statistics: stock/prediction counts, per-algorithm accuracy,
-// last crawl timestamp, and last prediction timestamp. Result is cached for 60 seconds.
+// GetDashboardStats godoc
+//
+//	@Summary      Get dashboard statistics
+//	@Description  Returns real-time dashboard statistics: total stock count, total prediction count, per-algorithm accuracy (last 30 days), last crawl timestamp, and last prediction timestamp. Response is cached for 60 seconds.
+//	@Tags         Dashboard
+//	@Produce      json
+//	@Success      200  {object}  modelsapi.DashboardStatsFullDTO
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/dashboard/stats [get]
 func GetDashboardStats(w http.ResponseWriter, r *http.Request) {
 	const cacheKey = "dashboard:stats"
 

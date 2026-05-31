@@ -8,8 +8,19 @@ import (
 	"strings"
 )
 
-// TriggerStockCrawl crawls latest data for a single stock
-// POST /api/stocks/{symbol}/crawl
+// TriggerStockCrawl godoc
+//
+//	@Summary      Crawl latest data for a single stock
+//	@Description  Triggers the prediction service to crawl and save the latest price data for the given stock symbol.
+//	@Tags         Stocks
+//	@Accept       json
+//	@Produce      json
+//	@Param        symbol path string true "Stock symbol (e.g. VCB)"
+//	@Success      200 {object} map[string]interface{}
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      404 {object} ResponseFailure
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/stocks/{symbol}/crawl [post]
 func TriggerStockCrawl(w http.ResponseWriter, r *http.Request) {
 	pathParts := strings.Split(r.URL.Path, "/")
 	if len(pathParts) < 5 {
@@ -53,8 +64,19 @@ func TriggerStockCrawl(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// TriggerStockPredict runs all prediction algorithms for a single stock
-// POST /api/stocks/{symbol}/predict
+// TriggerStockPredict godoc
+//
+//	@Summary      Run all prediction algorithms for a single stock
+//	@Description  Triggers the prediction service to run all configured prediction algorithms synchronously for the given stock symbol.
+//	@Tags         Stocks
+//	@Accept       json
+//	@Produce      json
+//	@Param        symbol path string true "Stock symbol (e.g. VCB)"
+//	@Success      200 {object} map[string]interface{}
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      404 {object} ResponseFailure
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/stocks/{symbol}/predict [post]
 func TriggerStockPredict(w http.ResponseWriter, r *http.Request) {
 	pathParts := strings.Split(r.URL.Path, "/")
 	if len(pathParts) < 5 {

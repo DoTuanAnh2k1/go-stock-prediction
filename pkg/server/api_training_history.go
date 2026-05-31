@@ -13,6 +13,17 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// GetTrainingHistory godoc
+//
+//	@Summary      Get training history
+//	@Description  Returns a list of past training sessions grouped by session ID, with per-algorithm results and overall accuracy. Optional filters: limit (1-50, default 10) and level (error|info).
+//	@Tags         Training
+//	@Produce      json
+//	@Param        limit  query     int     false  "Number of sessions to return (1-50, default 10)"
+//	@Param        level  query     string  false  "Filter by log level: error or info"
+//	@Success      200    {object}  modelsapi.TrainingHistoryDTO
+//	@Failure      500    {object}  ResponseFailure
+//	@Router       /api/training/history [get]
 func GetTrainingHistory(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("Getting training history...")
 

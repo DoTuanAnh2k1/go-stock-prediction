@@ -99,6 +99,24 @@ func totalPages(total int64, limit int) int {
 // GET /api/markets/{key}/predictions
 // -----------------------------------------------------------------------
 
+// GetMarketPredictions godoc
+//
+//	@Summary      List predictions for a market
+//	@Description  Returns a paginated list of predictions for the specified market (vn30 or gold). Supports filtering by algorithm, status, and free-text search. Sortable by any field.
+//	@Tags         Markets
+//	@Produce      json
+//	@Param        key        path      string  true   "Market key: vn30 or gold"
+//	@Param        page       query     int     false  "Page number (default 1)"
+//	@Param        limit      query     int     false  "Page size (1-100, default 20)"
+//	@Param        search     query     string  false  "Free-text search by symbol or company name"
+//	@Param        algorithm  query     string  false  "Filter by algorithm key (e.g. lstm_nn)"
+//	@Param        status     query     string  false  "Filter by prediction status (e.g. confirmed, pending)"
+//	@Param        sort_by    query     string  false  "Sort field (default prediction_date)"
+//	@Param        sort_dir   query     string  false  "Sort direction: asc or desc (default desc)"
+//	@Success      200        {object}  marketPredictionsResponse
+//	@Failure      404        {object}  ResponseFailure
+//	@Failure      500        {object}  ResponseFailure
+//	@Router       /api/markets/{key}/predictions [get]
 func GetMarketPredictions(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
 
@@ -203,6 +221,22 @@ func GetMarketPredictions(w http.ResponseWriter, r *http.Request) {
 // GET /api/markets/{key}/training
 // -----------------------------------------------------------------------
 
+// GetMarketTraining godoc
+//
+//	@Summary      List training sessions for a market
+//	@Description  Returns a paginated list of training sessions for the specified market (vn30 or gold). Supports filtering by algorithm and sorting.
+//	@Tags         Markets
+//	@Produce      json
+//	@Param        key        path      string  true   "Market key: vn30 or gold"
+//	@Param        page       query     int     false  "Page number (default 1)"
+//	@Param        limit      query     int     false  "Page size (1-100, default 20)"
+//	@Param        algorithm  query     string  false  "Filter by algorithm key (e.g. lstm_nn)"
+//	@Param        sort_by    query     string  false  "Sort field (default started_at)"
+//	@Param        sort_dir   query     string  false  "Sort direction: asc or desc (default desc)"
+//	@Success      200        {object}  marketTrainingResponse
+//	@Failure      404        {object}  ResponseFailure
+//	@Failure      500        {object}  ResponseFailure
+//	@Router       /api/markets/{key}/training [get]
 func GetMarketTraining(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
 

@@ -25,7 +25,15 @@ type nasdaqLatestResponse struct {
 	UpdatedAt time.Time          `json:"updated_at"`
 }
 
-// GetNasdaqLatest handles GET /api/nasdaq/latest
+// GetNasdaqLatest godoc
+//
+//	@Summary      Get latest NASDAQ prices
+//	@Description  Returns the most recent closing price for each tracked NASDAQ symbol
+//	@Tags         NASDAQ
+//	@Produce      json
+//	@Success      200  {object}  nasdaqLatestResponse
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/nasdaq/latest [get]
 func GetNasdaqLatest(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 
@@ -72,7 +80,17 @@ type nasdaqPricesResponse struct {
 	Data   []nasdaqPricePoint `json:"data"`
 }
 
-// GetNasdaqPrices handles GET /api/nasdaq/prices?symbol=AAPL&days=30
+// GetNasdaqPrices godoc
+//
+//	@Summary      Get historical NASDAQ prices
+//	@Description  Returns OHLCV price data for a given NASDAQ symbol over the specified number of days
+//	@Tags         NASDAQ
+//	@Produce      json
+//	@Param        symbol  query  string  false  "NASDAQ symbol (e.g. AAPL, MSFT)"
+//	@Param        days    query  int     false  "Number of days to look back (default 30)"
+//	@Success      200     {object}  nasdaqPricesResponse
+//	@Failure      500     {object}  ResponseFailure
+//	@Router       /api/nasdaq/prices [get]
 func GetNasdaqPrices(w http.ResponseWriter, r *http.Request) {
 	symbol := r.URL.Query().Get("symbol")
 	daysStr := r.URL.Query().Get("days")
@@ -119,7 +137,17 @@ type nasdaqChartResponse struct {
 	Prices []decimal.Decimal `json:"prices"`
 }
 
-// GetNasdaqChart handles GET /api/nasdaq/chart?symbol=AAPL&days=30
+// GetNasdaqChart godoc
+//
+//	@Summary      Get NASDAQ price chart data
+//	@Description  Returns chronologically ordered date labels and closing prices for charting
+//	@Tags         NASDAQ
+//	@Produce      json
+//	@Param        symbol  query  string  false  "NASDAQ symbol (e.g. AAPL, MSFT)"
+//	@Param        days    query  int     false  "Number of days to look back (default 30)"
+//	@Success      200     {object}  nasdaqChartResponse
+//	@Failure      500     {object}  ResponseFailure
+//	@Router       /api/nasdaq/chart [get]
 func GetNasdaqChart(w http.ResponseWriter, r *http.Request) {
 	symbol := r.URL.Query().Get("symbol")
 	daysStr := r.URL.Query().Get("days")

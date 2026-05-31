@@ -8,7 +8,17 @@ import (
 	"strings"
 )
 
-// GetCurrentPrice - GET /api/stocks/{symbol}/current
+// GetCurrentPrice godoc
+//
+//	@Summary      Get current price for a stock
+//	@Description  Returns the latest price, change, volume, and market status for the given stock symbol.
+//	@Tags         Stocks
+//	@Produce      json
+//	@Param        symbol path string true "Stock symbol (e.g. VCB)"
+//	@Success      200 {object} modelsapi.StockCurrentPriceDTO
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      404 {object} ResponseFailure
+//	@Router       /api/stocks/{symbol}/current [get]
 func GetCurrentPrice(w http.ResponseWriter, r *http.Request) {
 	// Extract symbol from URL path
 	pathParts := strings.Split(r.URL.Path, "/")

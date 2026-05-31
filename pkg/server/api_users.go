@@ -24,7 +24,18 @@ type userResponse struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// ListUsersHandler handles GET /api/users — admin only
+// ListUsersHandler godoc
+//
+//	@Summary      List all users
+//	@Description  Returns all registered users; requires admin role
+//	@Tags         Users
+//	@Produce      json
+//	@Security     BearerAuth
+//	@Success      200 {array}  userResponse
+//	@Failure      401 {object} ResponseFailure
+//	@Failure      403 {object} ResponseFailure
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/users [get]
 func ListUsersHandler(w http.ResponseWriter, r *http.Request) {
 	if !requireAdmin(w, r) {
 		return
@@ -47,7 +58,22 @@ func ListUsersHandler(w http.ResponseWriter, r *http.Request) {
 	ResponseSuccess(w, http.StatusOK, resp)
 }
 
-// CreateUserHandler handles POST /api/users — admin only
+// CreateUserHandler godoc
+//
+//	@Summary      Create user
+//	@Description  Creates a new user account; requires admin role. Role defaults to "user" if an invalid value is supplied
+//	@Tags         Users
+//	@Accept       json
+//	@Produce      json
+//	@Security     BearerAuth
+//	@Param        body body createUserRequest true "New user details"
+//	@Success      201 {object} userResponse
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      401 {object} ResponseFailure
+//	@Failure      403 {object} ResponseFailure
+//	@Failure      409 {object} ResponseFailure "Username already exists"
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/users [post]
 func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	if !requireAdmin(w, r) {
 		return
@@ -88,7 +114,20 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// DeleteUserHandler handles DELETE /api/users/{id} — admin only
+// DeleteUserHandler godoc
+//
+//	@Summary      Delete user
+//	@Description  Deletes a user by ID; requires admin role. An admin cannot delete their own account
+//	@Tags         Users
+//	@Produce      json
+//	@Security     BearerAuth
+//	@Param        id path int true "User ID"
+//	@Success      200 {object} map[string]string
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      401 {object} ResponseFailure
+//	@Failure      403 {object} ResponseFailure
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/users/{id} [delete]
 func DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
 	if !requireAdmin(w, r) {
 		return

@@ -27,7 +27,19 @@ type userInfo struct {
 	Role     string `json:"role"`
 }
 
-// LoginHandler handles POST /api/auth/login
+// LoginHandler godoc
+//
+//	@Summary      Login
+//	@Description  Authenticate with username and password, returns a JWT valid for 24 hours
+//	@Tags         Auth
+//	@Accept       json
+//	@Produce      json
+//	@Param        body body loginRequest true "Login credentials"
+//	@Success      200 {object} loginResponse
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      401 {object} ResponseFailure
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/auth/login [post]
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -69,7 +81,16 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// MeHandler handles GET /api/auth/me
+// MeHandler godoc
+//
+//	@Summary      Get current user
+//	@Description  Returns the authenticated user's username and role based on the JWT token
+//	@Tags         Auth
+//	@Produce      json
+//	@Security     BearerAuth
+//	@Success      200 {object} userInfo
+//	@Failure      401 {object} ResponseFailure
+//	@Router       /api/auth/me [get]
 func MeHandler(w http.ResponseWriter, r *http.Request) {
 	if !requireAuth(w, r) {
 		return
@@ -85,7 +106,21 @@ type changePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
-// ChangePasswordHandler handles PUT /api/auth/password
+// ChangePasswordHandler godoc
+//
+//	@Summary      Change password
+//	@Description  Changes the authenticated user's password; requires the current password for verification
+//	@Tags         Auth
+//	@Accept       json
+//	@Produce      json
+//	@Security     BearerAuth
+//	@Param        body body changePasswordRequest true "Current and new password"
+//	@Success      200 {object} map[string]string
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      401 {object} ResponseFailure
+//	@Failure      404 {object} ResponseFailure
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/auth/password [put]
 func ChangePasswordHandler(w http.ResponseWriter, r *http.Request) {
 	if !requireAuth(w, r) {
 		return

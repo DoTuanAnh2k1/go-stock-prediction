@@ -13,9 +13,21 @@ const (
 	maxHistoricalDays     = 1000
 )
 
-// TriggerStockHistoryHandler handles POST /api/trigger/stock-history.
-// It accepts an optional query param ?days=N (default 365, max 1000) and delegates
-// to the prediction microservice via gRPC, which runs the crawl in background.
+// TriggerStockHistoryHandler godoc
+//
+//	@Summary      Trigger historical stock price crawl
+//	@Description  Starts a historical VN30 stock price crawl in the background. Accepts an optional days query parameter (default 365, max 1000).
+//	@Tags         Triggers
+//	@Accept       json
+//	@Produce      json
+//	@Param        days  query     int  false  "Number of historical days to crawl (default 365, max 1000)"
+//	@Success      202   {object}  map[string]interface{}
+//	@Failure      400   {object}  ResponseFailure
+//	@Failure      401   {object}  ResponseFailure
+//	@Failure      500   {object}  ResponseFailure
+//	@Failure      503   {object}  ResponseFailure
+//	@Security     BearerAuth
+//	@Router       /api/trigger/stock-history [post]
 func TriggerStockHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	days := defaultHistoricalDays
 

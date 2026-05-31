@@ -19,6 +19,22 @@ type TriggerTrainResponse struct {
 	Message   string `json:"message"`
 }
 
+// TriggerTrainHandler godoc
+//
+//	@Summary      Trigger model training
+//	@Description  Starts training for all algorithms or a specific algorithm. Returns 409 if training is already in progress. The algorithm field is optional; if omitted, all algorithms are trained.
+//	@Tags         Triggers
+//	@Accept       json
+//	@Produce      json
+//	@Param        body  body      TriggerTrainRequest  false  "Training request (algorithm is optional)"
+//	@Success      202   {object}  TriggerTrainResponse
+//	@Failure      400   {object}  ResponseFailure
+//	@Failure      401   {object}  ResponseFailure
+//	@Failure      409   {object}  ResponseFailure
+//	@Failure      500   {object}  ResponseFailure
+//	@Failure      503   {object}  ResponseFailure
+//	@Security     BearerAuth
+//	@Router       /api/trigger/train [post]
 func TriggerTrainHandler(w http.ResponseWriter, r *http.Request) {
 	var req TriggerTrainRequest
 	if r.Body != nil {

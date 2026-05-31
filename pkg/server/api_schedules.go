@@ -23,7 +23,17 @@ type updateScheduleRequest struct {
 	Enabled        bool   `json:"enabled"`
 }
 
-// GetSchedulesHandler handles GET /api/schedules — requires auth.
+// GetSchedulesHandler godoc
+//
+//	@Summary      List cron schedules
+//	@Description  Returns all configured cron job schedules; requires authentication
+//	@Tags         Schedules
+//	@Produce      json
+//	@Security     BearerAuth
+//	@Success      200 {array}  scheduleResponse
+//	@Failure      401 {object} ResponseFailure
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/schedules [get]
 func GetSchedulesHandler(w http.ResponseWriter, r *http.Request) {
 	if !requireAuth(w, r) {
 		return
@@ -47,7 +57,22 @@ func GetSchedulesHandler(w http.ResponseWriter, r *http.Request) {
 	ResponseSuccess(w, http.StatusOK, resp)
 }
 
-// UpdateScheduleHandler handles PUT /api/schedules/{key} — requires auth.
+// UpdateScheduleHandler godoc
+//
+//	@Summary      Update cron schedule
+//	@Description  Updates the cron expression and enabled flag for a specific job; validates the expression before saving. Prediction Service picks up the change within one minute without a restart
+//	@Tags         Schedules
+//	@Accept       json
+//	@Produce      json
+//	@Security     BearerAuth
+//	@Param        key  path string              true "Job key (e.g. crawler_daily)"
+//	@Param        body body updateScheduleRequest true "New cron expression and enabled state"
+//	@Success      200 {object} map[string]string
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      401 {object} ResponseFailure
+//	@Failure      404 {object} ResponseFailure "Schedule not found"
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/schedules/{key} [put]
 func UpdateScheduleHandler(w http.ResponseWriter, r *http.Request) {
 	if !requireAuth(w, r) {
 		return

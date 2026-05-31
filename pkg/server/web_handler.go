@@ -65,6 +65,14 @@ type MemoryStats struct {
 var startTime = time.Now()
 
 // HealthCheckHandler provides a comprehensive health check endpoint
+//
+//	@Summary		Detailed health check
+//	@Description	Returns full system health including database, config, and runtime metrics
+//	@Tags			health
+//	@Produce		json
+//	@Success		200	{object}	HealthStatus	"System is healthy"
+//	@Success		503	{object}	HealthStatus	"System is unhealthy or degraded"
+//	@Router			/health [get]
 func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Debugf("Health check requested from %s", getClientIP(r))
 
@@ -196,12 +204,27 @@ func formatUptime(d time.Duration) string {
 }
 
 // SimpleHealthHandler is a simple health check for load balancers (just returns 200 OK)
+//
+//	@Summary		Simple health check
+//	@Description	Lightweight liveness probe — returns 200 OK when the process is running
+//	@Tags			health
+//	@Produce		plain
+//	@Success		200	{string}	string	"OK"
+//	@Router			/health/simple [get]
 func SimpleHealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 }
 
 // ReadyHandler returns 200 when the service is ready to accept traffic
+//
+//	@Summary		Readiness check
+//	@Description	Returns 200 READY when the database is reachable, 503 NOT READY otherwise
+//	@Tags			health
+//	@Produce		plain
+//	@Success		200	{string}	string	"READY"
+//	@Success		503	{string}	string	"NOT READY"
+//	@Router			/health/ready [get]
 func ReadyHandler(w http.ResponseWriter, r *http.Request) {
 	// Check if critical services are ready
 	store := repository.GetSingleton()

@@ -16,8 +16,22 @@ import (
 
 const marketOverviewCacheKey = "market_overview"
 
-// GetMarketOverview - GET /api/market/overview
-// Supports optional query params: ?sector=ngan-hang&exchange=HOSE&q=vcb&page=1&page_size=10&sort_by=change_percent&sort_order=desc
+// GetMarketOverview godoc
+//
+//	@Summary      Get VN30 market overview
+//	@Description  Returns the VN30 market overview including the composite index, top gainers/losers, most active stocks, and a paginated, filterable list of all VN30 stocks with their latest prices. Response is cached for 60 seconds when no query params are supplied.
+//	@Tags         Market
+//	@Produce      json
+//	@Param        sector      query     string  false  "Filter by sector (e.g. ngan-hang)"
+//	@Param        exchange    query     string  false  "Filter by exchange code (e.g. HOSE)"
+//	@Param        q           query     string  false  "Search by symbol or company name"
+//	@Param        page        query     int     false  "Page number (default 1)"
+//	@Param        page_size   query     int     false  "Page size (1-100, default 10)"
+//	@Param        sort_by     query     string  false  "Sort field: price or change_percent (default change_percent)"
+//	@Param        sort_order  query     string  false  "Sort direction: asc or desc (default desc)"
+//	@Success      200         {object}  modelsapi.MarketOverviewDTO
+//	@Failure      500         {object}  ResponseFailure
+//	@Router       /api/market/overview [get]
 func GetMarketOverview(w http.ResponseWriter, r *http.Request) {
 	sectorFilter := strings.TrimSpace(r.URL.Query().Get("sector"))
 	exchangeFilter := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("exchange")))

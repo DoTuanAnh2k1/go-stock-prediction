@@ -9,8 +9,17 @@ import (
 	"time"
 )
 
-// GetStockDetail - GET /api/stocks/{symbol}/detail
-// Returns comprehensive stock info: current price, 30-day history, latest predictions, and stats.
+// GetStockDetail godoc
+//
+//	@Summary      Get comprehensive stock detail
+//	@Description  Returns comprehensive stock info: current price, 30-day history, latest predictions, and stats.
+//	@Tags         Stocks
+//	@Produce      json
+//	@Param        symbol path string true "Stock symbol (e.g. VCB)"
+//	@Success      200 {object} modelsapi.StockDetailDTO
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      404 {object} ResponseFailure
+//	@Router       /api/stocks/{symbol}/detail [get]
 func GetStockDetail(w http.ResponseWriter, r *http.Request) {
 	// Extract symbol from path /api/stocks/{symbol}/detail
 	pathParts := strings.Split(r.URL.Path, "/")

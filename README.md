@@ -5,6 +5,7 @@ Hệ thống dự đoán giá cổ phiếu thị trường chứng khoán Việt
 ## Tính năng
 
 - **Thu thập dữ liệu:** Crawl giá cổ phiếu VN30 từ VietStock mỗi ngày lúc 12 PM; crawl giá vàng SJC/XAU/USD lúc 10 AM
+- **Backup tự động:** mysqldump toàn bộ DB mỗi ngày lúc 2 AM vào `BACKUP_DIR`; dọn file backup cũ hơn 7 ngày lúc 3 AM
 - **Dự đoán giá:** 4 thuật toán ML chạy song song — Moving Average (VWMA), LSTM Neural Network, ARIMA-GARCH, Ensemble
 - **Walk-forward Backtest:** Backtest lịch sử toàn bộ VN30 với cơ chế fold tự động (`/api/trigger/historical-backtest`)
 - **Huấn luyện tự động:** Mỗi Chủ nhật lúc 9 AM, hệ thống tự train lại toàn bộ mô hình
@@ -270,6 +271,8 @@ Lịch được lưu trong bảng DB `cron_schedules` và có thể chỉnh sử
 | `crawler_daily` | Mỗi ngày 12:00 PM | Crawl giá cổ phiếu từ VietStock |
 | `predict_daily` | Mỗi ngày 6:00 PM | Chạy dự đoán giá cho ngày giao dịch tiếp theo |
 | `train_weekly` | Chủ nhật 9:00 AM | Huấn luyện lại toàn bộ mô hình |
+| `db_backup_daily` | Mỗi ngày 2:00 AM | Backup database bằng mysqldump vào `BACKUP_DIR` |
+| `backup_cleanup_daily` | Mỗi ngày 3:00 AM | Xóa file backup cũ hơn 7 ngày |
 
 ## Các thuật toán dự đoán
 

@@ -9,8 +9,15 @@ import (
 	"runtime"
 )
 
-// GetTrainingMetrics handles GET /api/training/metrics
-// Returns aggregate training performance statistics.
+// GetTrainingMetrics godoc
+//
+//	@Summary      Get aggregate training metrics
+//	@Description  Returns aggregate training performance statistics including average training time, data quality score, success rate, total sessions, total predictions, and current process memory usage.
+//	@Tags         Training
+//	@Produce      json
+//	@Success      200  {object}  modelsapi.TrainingMetricsDTO
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/training/metrics [get]
 func GetTrainingMetrics(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("Getting training metrics...")
 

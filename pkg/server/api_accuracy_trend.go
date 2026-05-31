@@ -13,10 +13,17 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// GetAccuracyTrend - GET /api/predictions/accuracy-trend
-// Returns per-day accuracy rates for each algorithm over the last N days (default 30, max 365).
-// Predictions with Accuracy >= 0.9 are counted as accurate.
-// Result is cached for 120 seconds.
+// GetAccuracyTrend godoc
+//
+//	@Summary      Get per-day accuracy trend for all algorithms
+//	@Description  Returns daily accuracy rates for each prediction algorithm over the last N days (default 30, max 365). A prediction with accuracy >= 90% is counted as accurate. Results are cached for 120 seconds.
+//	@Tags         Predictions
+//	@Produce      json
+//	@Param        days query int false "Number of days to look back (1-365)" default(30)
+//	@Success      200 {array}  modelsapi.AccuracyTrendPointDTO
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/predictions/accuracy-trend [get]
 func GetAccuracyTrend(w http.ResponseWriter, r *http.Request) {
 	daysStr := r.URL.Query().Get("days")
 	days := 30

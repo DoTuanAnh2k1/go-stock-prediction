@@ -27,7 +27,15 @@ type cryptoLatestResponse struct {
 	UpdatedAt time.Time          `json:"updated_at"`
 }
 
-// GetCryptoLatest handles GET /api/crypto/latest
+// GetCryptoLatest godoc
+//
+//	@Summary      Get latest crypto prices
+//	@Description  Returns the most recent price, market cap, and 24h volume for each tracked cryptocurrency
+//	@Tags         Crypto
+//	@Produce      json
+//	@Success      200  {object}  cryptoLatestResponse
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/crypto/latest [get]
 func GetCryptoLatest(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 
@@ -74,7 +82,17 @@ type cryptoPricesResponse struct {
 	Data   []cryptoPricePoint `json:"data"`
 }
 
-// GetCryptoPrices handles GET /api/crypto/prices?coin=bitcoin&days=30
+// GetCryptoPrices godoc
+//
+//	@Summary      Get historical crypto prices
+//	@Description  Returns close price, market cap, and 24h volume for a given coin over the specified number of days
+//	@Tags         Crypto
+//	@Produce      json
+//	@Param        coin  query  string  false  "Coin ID (e.g. bitcoin, ethereum)"
+//	@Param        days  query  int     false  "Number of days to look back (default 30)"
+//	@Success      200   {object}  cryptoPricesResponse
+//	@Failure      500   {object}  ResponseFailure
+//	@Router       /api/crypto/prices [get]
 func GetCryptoPrices(w http.ResponseWriter, r *http.Request) {
 	coinID := r.URL.Query().Get("coin")
 	daysStr := r.URL.Query().Get("days")
@@ -119,7 +137,17 @@ type cryptoChartResponse struct {
 	Prices []decimal.Decimal `json:"prices"`
 }
 
-// GetCryptoChart handles GET /api/crypto/chart?coin=bitcoin&days=30
+// GetCryptoChart godoc
+//
+//	@Summary      Get crypto price chart data
+//	@Description  Returns chronologically ordered date labels and closing prices for charting
+//	@Tags         Crypto
+//	@Produce      json
+//	@Param        coin  query  string  false  "Coin ID (e.g. bitcoin, ethereum)"
+//	@Param        days  query  int     false  "Number of days to look back (default 30)"
+//	@Success      200   {object}  cryptoChartResponse
+//	@Failure      500   {object}  ResponseFailure
+//	@Router       /api/crypto/chart [get]
 func GetCryptoChart(w http.ResponseWriter, r *http.Request) {
 	coinID := r.URL.Query().Get("coin")
 	daysStr := r.URL.Query().Get("days")

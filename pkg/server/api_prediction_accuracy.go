@@ -12,6 +12,17 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// GetPredictionAccuracy godoc
+//
+//	@Summary      Get prediction accuracy per algorithm
+//	@Description  Returns accuracy statistics for each prediction algorithm over the last N days. A prediction with accuracy >= 90% is counted as accurate.
+//	@Tags         Predictions
+//	@Produce      json
+//	@Param        days query int false "Number of days to look back (1-365)" default(30)
+//	@Success      200 {array}  modelsapi.PredictionAccuracyDTO
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/predictions/accuracy [get]
 func GetPredictionAccuracy(w http.ResponseWriter, r *http.Request) {
 	daysStr := r.URL.Query().Get("days")
 	days := 30

@@ -9,8 +9,15 @@ import (
 	"time"
 )
 
-// GetTrainingAlgorithms handles GET /api/training/algorithms
-// Returns per-algorithm status, config, accuracy, and prediction counts.
+// GetTrainingAlgorithms godoc
+//
+//	@Summary      List training algorithms
+//	@Description  Returns per-algorithm details including status (trained/untrained), configuration, accuracy, training time, total predictions, and success rate. Sourced from the algorithm registry and latest training logs.
+//	@Tags         Training
+//	@Produce      json
+//	@Success      200  {array}   modelsapi.TrainingAlgorithmDTO
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/training/algorithms [get]
 func GetTrainingAlgorithms(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("Getting training algorithms...")
 

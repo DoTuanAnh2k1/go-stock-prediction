@@ -30,7 +30,15 @@ type cryptoPredictionsResponse struct {
 	Total int                    `json:"total"`
 }
 
-// GetCryptoPredictionsLatest handles GET /api/crypto/predictions/latest
+// GetCryptoPredictionsLatest godoc
+//
+//	@Summary      Get latest crypto predictions
+//	@Description  Returns the most recent prediction per (coin_id, algorithm) combination
+//	@Tags         Crypto Predictions
+//	@Produce      json
+//	@Success      200  {object}  cryptoPredictionsResponse
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/crypto/predictions/latest [get]
 func GetCryptoPredictionsLatest(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 	preds, err := store.GetLatestCryptoPredictions()
@@ -73,7 +81,18 @@ type cryptoPredictionChartResponse struct {
 	Data      []cryptoPredictionChartPoint `json:"data"`
 }
 
-// GetCryptoPredictionsChart handles GET /api/crypto/predictions/chart?coin=bitcoin&days=30
+// GetCryptoPredictionsChart godoc
+//
+//	@Summary      Get crypto prediction chart data
+//	@Description  Returns chronologically ordered predicted vs actual price data for charting, optionally filtered by algorithm
+//	@Tags         Crypto Predictions
+//	@Produce      json
+//	@Param        coin       query  string  false  "Coin ID (e.g. bitcoin, ethereum)"
+//	@Param        algorithm  query  string  false  "Algorithm name (e.g. lstm_nn)"
+//	@Param        days       query  int     false  "Number of days to look back (default 30)"
+//	@Success      200        {object}  cryptoPredictionChartResponse
+//	@Failure      500        {object}  ResponseFailure
+//	@Router       /api/crypto/predictions/chart [get]
 func GetCryptoPredictionsChart(w http.ResponseWriter, r *http.Request) {
 	coinID := r.URL.Query().Get("coin")
 	algorithm := r.URL.Query().Get("algorithm")
@@ -133,7 +152,22 @@ type cryptoPredictionsPageResponse struct {
 	Limit int                    `json:"limit"`
 }
 
-// GetCryptoPredictions handles GET /api/crypto/predictions?page=1&limit=20&coin=&algorithm=
+// GetCryptoPredictions godoc
+//
+//	@Summary      List crypto predictions with pagination
+//	@Description  Returns paginated crypto predictions with optional filtering by coin, algorithm, and status
+//	@Tags         Crypto Predictions
+//	@Produce      json
+//	@Param        coin       query  string  false  "Filter by coin ID (e.g. bitcoin)"
+//	@Param        algorithm  query  string  false  "Filter by algorithm name"
+//	@Param        status     query  string  false  "Filter by status (pending, confirmed, wrong)"
+//	@Param        sort_by    query  string  false  "Sort field"
+//	@Param        sort_dir   query  string  false  "Sort direction (asc, desc)"
+//	@Param        page       query  int     false  "Page number (default 1)"
+//	@Param        limit      query  int     false  "Items per page, max 100 (default 20)"
+//	@Success      200        {object}  cryptoPredictionsPageResponse
+//	@Failure      500        {object}  ResponseFailure
+//	@Router       /api/crypto/predictions [get]
 func GetCryptoPredictions(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	coinID := q.Get("coin")

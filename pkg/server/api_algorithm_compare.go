@@ -12,6 +12,16 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// GetAlgorithmComparison godoc
+//
+//	@Summary      Compare algorithm performance
+//	@Description  Returns a side-by-side comparison of all prediction algorithms over a configurable lookback period. Includes average error, accuracy rate, total predictions, and the best-performing algorithm for the period.
+//	@Tags         Algorithms
+//	@Produce      json
+//	@Param        days  query     int  false  "Lookback period in days (default 30)"
+//	@Success      200   {object}  modelsapi.AlgorithmComparisonDTO
+//	@Failure      500   {object}  ResponseFailure
+//	@Router       /api/algorithms/comparison [get]
 func GetAlgorithmComparison(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("⚔️ Getting algorithm comparison...")
 

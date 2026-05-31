@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { Panel, KPI, Icon, Chg, Seg, ConfBar } from '../components/ui';
 import { Sparkline, LineChart } from '../components/charts';
-import { crawlGold, predictGold } from '../api';
+import { crawlGold, predictGold, goldBacktest } from '../api';
 import { vnsToast } from '../components/ui';
 
 function Legend({ items }: { items: [string, string][] }) {
@@ -28,6 +28,7 @@ export default function Gold() {
   const isOz = src ? src.unit === 'oz' : false;
   const n = days === '30' ? 30 : days === '90' ? 90 : 180;
   const hist = src ? (src.hist || []).slice(-n) : [];
+  const histLabels = src ? (src.histLabels || []).slice(-n) : [];
 
   const find = (pred: (g: any) => boolean) => srcs.find(pred);
   let kpis = [
@@ -102,7 +103,12 @@ export default function Gold() {
         {hist.length > 0
           ? <LineChart
               series={[{ name: src!.name, data: hist, color: 'var(--gold)' }]}
-              labels={hist.map((_, i) => i % Math.ceil(n / 7) === 0 ? `${i + 1}` : '')}
+              labels={histLabels.length
+                ? histLabels.map((l, i) => {
+                    if (i % Math.ceil(n / 7) !== 0) return '';
+                    const p = l.slice(5).split('-'); return p[1] + '/' + p[0];
+                  })
+                : hist.map((_, i) => i % Math.ceil(n / 7) === 0 ? `${i + 1}` : '')}
               height={300} area yFmt={fmtGold} valueFmt={fmtFull} padL={58}
             />
           : <div className="empty" style={{ height: 300, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -144,10 +150,16 @@ export default function Gold() {
       <div className="grid grid--halves section-gap">
         <Panel title="Dự đoán giá vàng phiên mai" flush
           tools={
-            <button className="btn btn--sm" style={{ background: 'var(--gold)', borderColor: 'var(--gold)', color: 'oklch(0.2 0.02 80)' }}
-              onClick={() => predictGold().then((ok) => vnsToast(ok ? 'Đã gửi yêu cầu chạy dự đoán vàng' : 'Chưa gọi được API dự đoán'))}>
-              <Icon name="play" size={13} />Chạy dự đoán
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn--sm" style={{ background: 'var(--gold)', borderColor: 'var(--gold)', color: 'oklch(0.2 0.02 80)' }}
+                onClick={() => predictGold().then((ok) => vnsToast(ok ? 'Đã gửi yêu cầu chạy dự đoán vàng' : 'Chưa gọi được API dự đoán'))}>
+                <Icon name="play" size={13} />Chạy dự đoán
+              </button>
+              <button className="btn btn--sm" style={{ background: 'var(--accent)', borderColor: 'var(--accent)' }}
+                onClick={() => goldBacktest().then((ok) => vnsToast(ok ? 'Đang chạy gold backtest...' : 'Chưa gọi được API backtest'))}>
+                <Icon name="activity" size={13} />Backtest lịch sử
+              </button>
+            </div>
           }>
           {D.goldPreds.length === 0
             ? <div className="empty">

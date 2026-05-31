@@ -8,8 +8,19 @@ import (
 	"time"
 )
 
-// TriggerReconcileHandler handles POST /api/trigger/reconcile
-// It runs prediction reconciliation immediately (fills actual_price, accuracy, status).
+// TriggerReconcileHandler godoc
+//
+//	@Summary      Trigger prediction reconciliation
+//	@Description  Runs prediction reconciliation immediately, filling in actual_price, accuracy, and status for past predictions. Runs synchronously with a 10-minute timeout.
+//	@Tags         Triggers
+//	@Accept       json
+//	@Produce      json
+//	@Success      200  {object}  map[string]string
+//	@Failure      401  {object}  ResponseFailure
+//	@Failure      500  {object}  ResponseFailure
+//	@Failure      503  {object}  ResponseFailure
+//	@Security     BearerAuth
+//	@Router       /api/trigger/reconcile [post]
 func TriggerReconcileHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("TriggerReconcileHandler: manual reconcile triggered")
 

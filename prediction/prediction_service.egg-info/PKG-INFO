@@ -1,0 +1,32 @@
+Metadata-Version: 2.4
+Name: prediction-service
+Version: 0.1.0
+Summary: Python gRPC Prediction Service for go-stock-prediction
+Requires-Python: >=3.12
+Requires-Dist: grpcio==1.70.0
+Requires-Dist: grpcio-tools==1.70.0
+Requires-Dist: protobuf==5.29.4
+Requires-Dist: sqlalchemy[asyncio]==2.0.40
+Requires-Dist: aiomysql==0.2.0
+Requires-Dist: pydantic-settings==2.9.1
+Requires-Dist: structlog==25.1.0
+Requires-Dist: aiohttp==3.11.18
+Requires-Dist: beautifulsoup4==4.13.4
+Requires-Dist: lxml==5.4.0
+Requires-Dist: apscheduler==3.11.0
+Requires-Dist: numpy==2.2.5
+Requires-Dist: pandas==2.2.3
+Requires-Dist: scikit-learn==1.6.1
+Requires-Dist: pymysql>=1.1.0
+Requires-Dist: cryptography>=42.0.0
+Provides-Extra: dev
+Requires-Dist: pytest==8.3.5; extra == "dev"
+Requires-Dist: pytest-asyncio==0.26.0; extra == "dev"
+Requires-Dist: httpx==0.28.1; extra == "dev"
+Requires-Dist: requests>=2.32.0; extra == "dev"
+Requires-Dist: ruff>=0.8.0; extra == "dev"
+Provides-Extra: ml
+Requires-Dist: torch>=2.5.0; extra == "ml"
+Requires-Dist: statsmodels>=0.14.0; extra == "ml"
+Requires-Dist: arch>=7.0.0; extra == "ml"
+Requires-Dist: lightgbm>=4.5.0; extra == "ml"

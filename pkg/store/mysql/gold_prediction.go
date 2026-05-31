@@ -4,6 +4,8 @@ import (
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // CreateGoldPrediction saves a new gold prediction record.
@@ -107,4 +109,31 @@ func (c *Client) GetGoldPredictionsPage(page, limit int, search, algorithm, stat
 		Limit(limit).
 		Find(&preds).Error
 	return preds, total, err
+}
+
+// GetPendingGoldPredictions returns gold predictions where actual_price IS NULL and target_date <= cutoff.
+func (c *Client) GetPendingGoldPredictions(cutoff time.Time) ([]modelsdb.GoldPrediction, error) {
+	var preds []modelsdb.GoldPrediction
+	err := c.Db.Where("actual_price IS NULL AND target_date <= ? AND deleted_at IS NULL", cutoff).Find(&preds).Error
+	return preds, err
+}
+
+// UpdateGoldPredictionActual sets actual_price and accuracy for a gold prediction.
+func (c *Client) UpdateGoldPredictionActual(id uint, actual, accuracy *decimal.Decimal) error {
+	return c.Db.Model(&modelsdb.GoldPrediction{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"actual_price": actual,
+			"accuracy":     accuracy,
+		}).Error
+}
+
+// DeleteGoldPredictionsBeforeDate deletes all gold predictions whose target_date < cutoff.
+func (c *Client) DeleteGoldPredictionsBeforeDate(cutoff time.Time) error {
+	return c.Db.Where("target_date < ? AND deleted_at IS NULL", cutoff).Delete(&modelsdb.GoldPrediction{}).Error
+}
+
+// BulkCreateGoldPredictions inserts multiple gold predictions in batches of 200.
+func (c *Client) BulkCreateGoldPredictions(preds []modelsdb.GoldPrediction) error {
+	return c.Db.CreateInBatches(preds, 200).Error
 }

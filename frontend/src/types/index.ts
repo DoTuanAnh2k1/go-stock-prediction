@@ -99,6 +99,7 @@ export interface GoldSource {
   chgPct: number;
   spark: number[];
   hist: number[];
+  histLabels?: string[];
 }
 
 export interface GoldPred {

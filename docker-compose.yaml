@@ -26,11 +26,11 @@ services:
     networks:
       - app-network
 
-  # Prediction Service (gRPC)
+  # Prediction Service (gRPC) — Python implementation
   prediction:
     build:
       context: .
-      dockerfile: Dockerfile.prediction
+      dockerfile: prediction/Dockerfile
     container_name: prediction_service
     depends_on:
       db:
@@ -46,7 +46,6 @@ services:
       MYSQL_DB_NAME: go_stock_prediction
       MYSQL_DEBUG: "false"
       LOG_LEVEL: INFO
-      DB_LOG_LEVEL: INFO
     networks:
       - app-network
 
@@ -134,3 +133,4 @@ networks:
 
 volumes:
   db_data:
+  backup_data:

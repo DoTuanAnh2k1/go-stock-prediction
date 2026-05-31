@@ -37,8 +37,20 @@ type ErrorDistributionDTO struct {
 	Data []ErrorDistributionPoint `json:"data"`
 }
 
-// GetPredictionCompare handles GET /api/predictions/compare/{symbol}
-// Query params: ?days=30 (default 30), ?algorithm=lstm_nn (optional)
+// GetPredictionCompare godoc
+//
+//	@Summary      Compare predicted vs actual prices for a stock
+//	@Description  Returns a time series of predicted price vs actual price per algorithm for the given stock symbol, filtered by optional algorithm and day window.
+//	@Tags         Predictions
+//	@Produce      json
+//	@Param        symbol    path   string true  "Stock symbol (e.g. VCB)"
+//	@Param        days      query  int    false "Look-back window in days (1-365)" default(30)
+//	@Param        algorithm query  string false "Filter by algorithm (moving_average, lstm_nn, arima_garch, ema, ensemble)"
+//	@Success      200 {object} PredictionCompareDTO
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      404 {object} ResponseFailure
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/predictions/compare/{symbol} [get]
 func GetPredictionCompare(w http.ResponseWriter, r *http.Request) {
 	symbol := r.PathValue("symbol")
 	if symbol == "" {
@@ -97,8 +109,17 @@ func GetPredictionCompare(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetErrorDistribution handles GET /api/predictions/error-distribution
-// Returns scatter plot data: predicted_change_pct vs actual_change_pct per prediction.
+// GetErrorDistribution godoc
+//
+//	@Summary      Get prediction error distribution (scatter plot data)
+//	@Description  Returns scatter plot data of predicted change % vs actual change % for all confirmed predictions. Optionally filtered by algorithm.
+//	@Tags         Predictions
+//	@Produce      json
+//	@Param        algorithm query string false "Filter by algorithm (moving_average, lstm_nn, arima_garch, ema, ensemble)"
+//	@Success      200 {object} ErrorDistributionDTO
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/predictions/error-distribution [get]
 func GetErrorDistribution(w http.ResponseWriter, r *http.Request) {
 	algorithm := r.URL.Query().Get("algorithm")
 	if err := validateAlgorithm(algorithm); err != nil {

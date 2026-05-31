@@ -10,7 +10,21 @@ import (
 	"time"
 )
 
-// GetHistoricalData - GET /api/stocks/{symbol}/history?period=1M&limit=50
+// GetHistoricalData godoc
+//
+//	@Summary      Get historical price data for a stock
+//	@Description  Returns OHLCV price history and statistics for the given stock. Supports ?days=N or ?period=1M query params.
+//	@Tags         Stocks
+//	@Produce      json
+//	@Param        symbol path   string false "Stock symbol (e.g. VCB)"
+//	@Param        days   query  int    false "Number of days of history (1-1000, overrides period)"
+//	@Param        period query  string false "Time period shorthand (1D, 1W, 1M, 3M, 6M, 1Y)" default(1M)
+//	@Param        limit  query  int    false "Maximum number of records to return (1-1000)"     default(500)
+//	@Success      200 {object} modelsapi.StockHistoricalDataDTO
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      404 {object} ResponseFailure
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/stocks/{symbol}/history [get]
 func GetHistoricalData(w http.ResponseWriter, r *http.Request) {
 	// Extract symbol from URL
 	pathParts := strings.Split(r.URL.Path, "/")

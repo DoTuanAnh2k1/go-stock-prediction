@@ -15,7 +15,19 @@ import (
 	"go-stock-prediction/pkg/server"
 	"go-stock-prediction/pkg/store/repository"
 	"golang.org/x/crypto/bcrypt"
+
+	_ "go-stock-prediction/docs"
 )
+
+//	@title			Go Stock Prediction API
+//	@version		1.0
+//	@description	Vietnamese stock market prediction system — ML algorithms (VWMA, EMA, LSTM, ARIMA-GARCH, Ensemble) for VN30 stocks, gold, NASDAQ, crypto, and fuel prices.
+//	@host			localhost:8118
+//	@BasePath		/
+//	@securityDefinitions.apikey	BearerAuth
+//	@in							header
+//	@name						Authorization
+//	@description				JWT token from POST /api/auth/login. Format: Bearer {token}
 
 func main() {
 	// Initialize the configuration

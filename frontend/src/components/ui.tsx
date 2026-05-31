@@ -173,10 +173,13 @@ const MARKET_SUBS = [
 
 // Flat list for MobNav (top-level items only)
 const NAV: NavItem[] = [
-  { id: 'dashboard', path: '/',             label: 'Tổng quan', icon: 'grid'    },
-  { id: 'vn30',      path: '/markets/vn30', label: 'VN30',      icon: 'candles' },
-  { id: 'gold',      path: '/markets/gold', label: 'Vàng',      icon: 'gold'    },
-  { id: 'guide',     path: '/guide',        label: 'Hướng dẫn', icon: 'book'    },
+  { id: 'dashboard', path: '/',                  label: 'Tổng quan', icon: 'grid'    },
+  { id: 'vn30',      path: '/markets/vn30',      label: 'VN30',      icon: 'candles' },
+  { id: 'gold',      path: '/markets/gold',      label: 'Vàng',      icon: 'gold'    },
+  { id: 'nasdaq100', path: '/markets/nasdaq100', label: 'NASDAQ',    icon: 'nasdaq'  },
+  { id: 'crypto',    path: '/markets/crypto',    label: 'Crypto',    icon: 'crypto'  },
+  { id: 'fuel',      path: '/markets/fuel',      label: 'Xăng',      icon: 'fuel'    },
+  { id: 'guide',     path: '/guide',             label: 'Hướng dẫn', icon: 'book'    },
 ];
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────

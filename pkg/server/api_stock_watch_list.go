@@ -9,7 +9,16 @@ import (
 	"time"
 )
 
-// GetStockWatchlist - GET /api/stocks/watchlist?symbols=VCB,VIC,FPT
+// GetStockWatchlist godoc
+//
+//	@Summary      Get current price data for a watchlist of stocks
+//	@Description  Returns current price, change, volume and market status for a comma-separated list of stock symbols.
+//	@Tags         Stocks
+//	@Produce      json
+//	@Param        symbols query string true "Comma-separated stock symbols (e.g. VCB,VIC,FPT)"
+//	@Success      200 {object} modelsapi.StockWatchlistDTO
+//	@Failure      400 {object} ResponseFailure
+//	@Router       /api/stocks/watchlist [get]
 func GetStockWatchlist(w http.ResponseWriter, r *http.Request) {
 	symbolsParam := r.URL.Query().Get("symbols")
 	if symbolsParam == "" {

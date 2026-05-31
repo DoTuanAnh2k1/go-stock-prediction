@@ -29,7 +29,15 @@ type fuelPredictionsResponse struct {
 	Total int                  `json:"total"`
 }
 
-// GetFuelPredictionsLatest handles GET /api/fuel/predictions/latest
+// GetFuelPredictionsLatest godoc
+//
+//	@Summary      Get latest fuel predictions
+//	@Description  Returns the most recent prediction per (product_type, algorithm) combination
+//	@Tags         Fuel Predictions
+//	@Produce      json
+//	@Success      200  {object}  fuelPredictionsResponse
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/fuel/predictions/latest [get]
 func GetFuelPredictionsLatest(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 	preds, err := store.GetLatestFuelPredictions()
@@ -71,7 +79,18 @@ type fuelPredictionChartResponse struct {
 	Data        []fuelPredictionChartPoint `json:"data"`
 }
 
-// GetFuelPredictionsChart handles GET /api/fuel/predictions/chart?product=ron95_iii&days=180
+// GetFuelPredictionsChart godoc
+//
+//	@Summary      Get fuel prediction chart data
+//	@Description  Returns chronologically ordered predicted vs actual price data for charting, optionally filtered by algorithm
+//	@Tags         Fuel Predictions
+//	@Produce      json
+//	@Param        product    query  string  false  "Fuel product type (e.g. ron95_iii, ron95_v)"
+//	@Param        algorithm  query  string  false  "Algorithm name (e.g. lstm_nn)"
+//	@Param        days       query  int     false  "Number of days to look back (default 180)"
+//	@Success      200        {object}  fuelPredictionChartResponse
+//	@Failure      500        {object}  ResponseFailure
+//	@Router       /api/fuel/predictions/chart [get]
 func GetFuelPredictionsChart(w http.ResponseWriter, r *http.Request) {
 	productType := r.URL.Query().Get("product")
 	algorithm := r.URL.Query().Get("algorithm")
@@ -131,7 +150,22 @@ type fuelPredictionsPageResponse struct {
 	Limit int                  `json:"limit"`
 }
 
-// GetFuelPredictions handles GET /api/fuel/predictions?page=1&limit=20&product=&algorithm=
+// GetFuelPredictions godoc
+//
+//	@Summary      List fuel predictions with pagination
+//	@Description  Returns paginated fuel predictions with optional filtering by product type, algorithm, and status
+//	@Tags         Fuel Predictions
+//	@Produce      json
+//	@Param        product    query  string  false  "Filter by fuel product type"
+//	@Param        algorithm  query  string  false  "Filter by algorithm name"
+//	@Param        status     query  string  false  "Filter by status (pending, confirmed, wrong)"
+//	@Param        sort_by    query  string  false  "Sort field"
+//	@Param        sort_dir   query  string  false  "Sort direction (asc, desc)"
+//	@Param        page       query  int     false  "Page number (default 1)"
+//	@Param        limit      query  int     false  "Items per page, max 100 (default 20)"
+//	@Success      200        {object}  fuelPredictionsPageResponse
+//	@Failure      500        {object}  ResponseFailure
+//	@Router       /api/fuel/predictions [get]
 func GetFuelPredictions(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	productType := q.Get("product")

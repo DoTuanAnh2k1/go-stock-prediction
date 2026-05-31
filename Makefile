@@ -1,7 +1,7 @@
-.PHONY: test test-unit test-integration test-coverage build test-db-up test-db-down vet
+.PHONY: test test-unit test-integration test-coverage build test-db-up test-db-down vet swagger test-phase5
 
 build:
-	go build -o go-stock-prediction ./cmd/app
+	go build -o api-server ./cmd/api
 
 vet:
 	go vet ./...
@@ -31,3 +31,19 @@ test-db-up:
 
 test-db-down:
 	docker compose -f docker-compose.test.yml down -v
+
+# Phase 5 full regression — Python prediction service + API Backend end-to-end
+test-phase5:
+	cd prediction && make test-phase5
+
+reset:
+	docker compose down
+	docker compose up -d --build
+
+up:
+	docker compose up -d
+
+swagger:
+	swag init -g cmd/api/main.go -o docs/
+	@echo "Swagger docs generated at docs/"
+	@echo "UI available at http://localhost:8118/swagger/"

@@ -8,6 +8,15 @@ import (
 	"time"
 )
 
+// GetTrainingStatus godoc
+//
+//	@Summary      Get current training status
+//	@Description  Returns whether training is in progress, the last trained time, next scheduled training, current phase, and progress percentage. Calls the prediction gRPC service internally.
+//	@Tags         Training
+//	@Produce      json
+//	@Success      200  {object}  modelsapi.TrainingStatusDTO
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/training/status [get]
 func GetTrainingStatus(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("Getting training status...")
 

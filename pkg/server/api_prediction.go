@@ -11,6 +11,24 @@ import (
 	"time"
 )
 
+// GetPredictions godoc
+//
+//	@Summary      List predictions with filters
+//	@Description  Returns a paginated list of predictions. Use ?status=confirmed for backtest/confirmed predictions only (default window 6 months). Otherwise defaults to last 30 days.
+//	@Tags         Predictions
+//	@Produce      json
+//	@Param        symbol    query  string false "Filter by stock symbol (e.g. VCB)"
+//	@Param        algorithm query  string false "Filter by algorithm name (moving_average, lstm_nn, arima_garch, ema, ensemble)"
+//	@Param        status    query  string false "Filter by status — use 'confirmed' for reconciled predictions"
+//	@Param        page      query  int    false "Page number (1-based)" default(1)
+//	@Param        limit     query  int    false "Records per page (1-100)"            default(20)
+//	@Param        from      query  string false "Start date filter (YYYY-MM-DD)"
+//	@Param        to        query  string false "End date filter (YYYY-MM-DD)"
+//	@Success      200 {object} modelsapi.PredictionListDTO
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      404 {object} ResponseFailure
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/predictions [get]
 func GetPredictions(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("Getting predictions...")
 
@@ -156,6 +174,18 @@ func GetPredictions(w http.ResponseWriter, r *http.Request) {
 	ResponseSuccess(w, http.StatusOK, result)
 }
 
+// GetPredictionDetail godoc
+//
+//	@Summary      Get a single prediction by ID
+//	@Description  Returns full detail for one prediction record including stock info, predicted price, actual price, accuracy and status.
+//	@Tags         Predictions
+//	@Produce      json
+//	@Param        id path int true "Prediction ID"
+//	@Success      200 {object} modelsapi.PredictionDetailDTO
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      404 {object} ResponseFailure
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/predictions/{id} [get]
 func GetPredictionDetail(w http.ResponseWriter, r *http.Request) {
 	// Extract ID from path /api/predictions/{id}
 	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")

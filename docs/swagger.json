@@ -1,0 +1,5281 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "Vietnamese stock market prediction system — ML algorithms (VWMA, EMA, LSTM, ARIMA-GARCH, Ensemble) for VN30 stocks, gold, NASDAQ, crypto, and fuel prices.",
+        "title": "Go Stock Prediction API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "host": "localhost:8118",
+    "basePath": "/",
+    "paths": {
+        "/api/algorithms/backtest": {
+            "get": {
+                "description": "Runs a walk-forward backtest on up to 500 recent price points for the given stock symbol using Moving Average, LSTM, and ARIMA-GARCH algorithms. Returns MAE, RMSE, MAPE, and directional accuracy for each algorithm. Requires at least 150 historical data points.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Algorithms"
+                ],
+                "summary": "Run algorithm backtest for a stock",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Stock symbol (e.g. VCB)",
+                        "name": "symbol",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/algorithms/comparison": {
+            "get": {
+                "description": "Returns a side-by-side comparison of all prediction algorithms over a configurable lookback period. Includes average error, accuracy rate, total predictions, and the best-performing algorithm for the period.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Algorithms"
+                ],
+                "summary": "Compare algorithm performance",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Lookback period in days (default 30)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/modelsapi.AlgorithmComparisonDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/login": {
+            "post": {
+                "description": "Authenticate with username and password, returns a JWT valid for 24 hours",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Login",
+                "parameters": [
+                    {
+                        "description": "Login credentials",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.loginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.loginResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the authenticated user's username and role based on the JWT token",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Get current user",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.userInfo"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/password": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Changes the authenticated user's password; requires the current password for verification",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Change password",
+                "parameters": [
+                    {
+                        "description": "Current and new password",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.changePasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/crypto/chart": {
+            "get": {
+                "description": "Returns chronologically ordered date labels and closing prices for charting",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Crypto"
+                ],
+                "summary": "Get crypto price chart data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Coin ID (e.g. bitcoin, ethereum)",
+                        "name": "coin",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days to look back (default 30)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.cryptoChartResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/crypto/latest": {
+            "get": {
+                "description": "Returns the most recent price, market cap, and 24h volume for each tracked cryptocurrency",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Crypto"
+                ],
+                "summary": "Get latest crypto prices",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.cryptoLatestResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/crypto/predictions": {
+            "get": {
+                "description": "Returns paginated crypto predictions with optional filtering by coin, algorithm, and status",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Crypto Predictions"
+                ],
+                "summary": "List crypto predictions with pagination",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by coin ID (e.g. bitcoin)",
+                        "name": "coin",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by algorithm name",
+                        "name": "algorithm",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status (pending, confirmed, wrong)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort direction (asc, desc)",
+                        "name": "sort_dir",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page, max 100 (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.cryptoPredictionsPageResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/crypto/predictions/chart": {
+            "get": {
+                "description": "Returns chronologically ordered predicted vs actual price data for charting, optionally filtered by algorithm",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Crypto Predictions"
+                ],
+                "summary": "Get crypto prediction chart data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Coin ID (e.g. bitcoin, ethereum)",
+                        "name": "coin",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Algorithm name (e.g. lstm_nn)",
+                        "name": "algorithm",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days to look back (default 30)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.cryptoPredictionChartResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/crypto/predictions/latest": {
+            "get": {
+                "description": "Returns the most recent prediction per (coin_id, algorithm) combination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Crypto Predictions"
+                ],
+                "summary": "Get latest crypto predictions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.cryptoPredictionsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/crypto/prices": {
+            "get": {
+                "description": "Returns close price, market cap, and 24h volume for a given coin over the specified number of days",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Crypto"
+                ],
+                "summary": "Get historical crypto prices",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Coin ID (e.g. bitcoin, ethereum)",
+                        "name": "coin",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days to look back (default 30)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.cryptoPricesResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/dashboard/stats": {
+            "get": {
+                "description": "Returns real-time dashboard statistics: total stock count, total prediction count, per-algorithm accuracy (last 30 days), last crawl timestamp, and last prediction timestamp. Response is cached for 60 seconds.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard"
+                ],
+                "summary": "Get dashboard statistics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/modelsapi.DashboardStatsFullDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/fuel/chart": {
+            "get": {
+                "description": "Returns chronologically ordered date labels and prices for charting",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Fuel"
+                ],
+                "summary": "Get fuel price chart data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Fuel product type (e.g. ron95_iii, ron95_v, diezel_005s, dau_hoa)",
+                        "name": "product",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days to look back (default 180)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.fuelChartResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/fuel/latest": {
+            "get": {
+                "description": "Returns the most recent retail price for each Vietnamese fuel product type (ron95_iii, ron95_v, diezel_005s, dau_hoa)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Fuel"
+                ],
+                "summary": "Get latest fuel prices",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.fuelLatestResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/fuel/predictions": {
+            "get": {
+                "description": "Returns paginated fuel predictions with optional filtering by product type, algorithm, and status",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Fuel Predictions"
+                ],
+                "summary": "List fuel predictions with pagination",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by fuel product type",
+                        "name": "product",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by algorithm name",
+                        "name": "algorithm",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status (pending, confirmed, wrong)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort direction (asc, desc)",
+                        "name": "sort_dir",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page, max 100 (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.fuelPredictionsPageResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/fuel/predictions/chart": {
+            "get": {
+                "description": "Returns chronologically ordered predicted vs actual price data for charting, optionally filtered by algorithm",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Fuel Predictions"
+                ],
+                "summary": "Get fuel prediction chart data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Fuel product type (e.g. ron95_iii, ron95_v)",
+                        "name": "product",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Algorithm name (e.g. lstm_nn)",
+                        "name": "algorithm",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days to look back (default 180)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.fuelPredictionChartResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/fuel/predictions/latest": {
+            "get": {
+                "description": "Returns the most recent prediction per (product_type, algorithm) combination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Fuel Predictions"
+                ],
+                "summary": "Get latest fuel predictions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.fuelPredictionsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/fuel/prices": {
+            "get": {
+                "description": "Returns retail price history for a given fuel product type over the specified number of days",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Fuel"
+                ],
+                "summary": "Get historical fuel prices",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Fuel product type (e.g. ron95_iii, ron95_v, diezel_005s, dau_hoa)",
+                        "name": "product",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days to look back (default 180)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.fuelPricesResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/gold/chart": {
+            "get": {
+                "description": "Returns chronologically ordered labels and buy/sell price arrays suitable for charting",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Gold"
+                ],
+                "summary": "Get gold price chart data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Gold source (e.g. SJC, BTMC)",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Product type (e.g. 1l, nhan_tron)",
+                        "name": "product_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days to look back (default 30)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.goldChartResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/gold/latest": {
+            "get": {
+                "description": "Returns the most recent buy/sell price for each gold source and product type",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Gold"
+                ],
+                "summary": "Get latest gold prices",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.goldLatestResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/gold/predictions": {
+            "get": {
+                "description": "Returns gold price predictions filtered by source, product type, and algorithm",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Gold Predictions"
+                ],
+                "summary": "List gold predictions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Gold source (e.g. SJC, BTMC)",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Product type (e.g. 1l, nhan_tron)",
+                        "name": "product_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Algorithm name (e.g. lstm_nn)",
+                        "name": "algorithm",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of results (default 100)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.goldPredictionsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/gold/predictions/chart": {
+            "get": {
+                "description": "Returns chronologically ordered predicted vs actual price data for charting, optionally filtered by algorithm",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Gold Predictions"
+                ],
+                "summary": "Get gold prediction chart data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Gold source (e.g. SJC, BTMC)",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Product type (e.g. 1l, nhan_tron)",
+                        "name": "product_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Algorithm name (e.g. lstm_nn)",
+                        "name": "algorithm",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days to look back (default 30)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.goldPredictionChartResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/gold/predictions/latest": {
+            "get": {
+                "description": "Returns the most recent prediction per (source, product_type, algorithm) combination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Gold Predictions"
+                ],
+                "summary": "Get latest gold predictions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.goldPredictionsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/gold/prices": {
+            "get": {
+                "description": "Returns buy/sell prices for a given gold source and product type over the specified number of days",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Gold"
+                ],
+                "summary": "Get historical gold prices",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Gold source (e.g. SJC, BTMC)",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Product type (e.g. 1l, nhan_tron)",
+                        "name": "product_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days to look back (default 30)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.goldPricesResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/market/overview": {
+            "get": {
+                "description": "Returns the VN30 market overview including the composite index, top gainers/losers, most active stocks, and a paginated, filterable list of all VN30 stocks with their latest prices. Response is cached for 60 seconds when no query params are supplied.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Market"
+                ],
+                "summary": "Get VN30 market overview",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by sector (e.g. ngan-hang)",
+                        "name": "sector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by exchange code (e.g. HOSE)",
+                        "name": "exchange",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search by symbol or company name",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (1-100, default 10)",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort field: price or change_percent (default change_percent)",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort direction: asc or desc (default desc)",
+                        "name": "sort_order",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/modelsapi.MarketOverviewDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/markets/{key}/predictions": {
+            "get": {
+                "description": "Returns a paginated list of predictions for the specified market (vn30 or gold). Supports filtering by algorithm, status, and free-text search. Sortable by any field.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Markets"
+                ],
+                "summary": "List predictions for a market",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Market key: vn30 or gold",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (1-100, default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Free-text search by symbol or company name",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by algorithm key (e.g. lstm_nn)",
+                        "name": "algorithm",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by prediction status (e.g. confirmed, pending)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort field (default prediction_date)",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort direction: asc or desc (default desc)",
+                        "name": "sort_dir",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.marketPredictionsResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/markets/{key}/training": {
+            "get": {
+                "description": "Returns a paginated list of training sessions for the specified market (vn30 or gold). Supports filtering by algorithm and sorting.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Markets"
+                ],
+                "summary": "List training sessions for a market",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Market key: vn30 or gold",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (1-100, default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by algorithm key (e.g. lstm_nn)",
+                        "name": "algorithm",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort field (default started_at)",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort direction: asc or desc (default desc)",
+                        "name": "sort_dir",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.marketTrainingResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/nasdaq/chart": {
+            "get": {
+                "description": "Returns chronologically ordered date labels and closing prices for charting",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NASDAQ"
+                ],
+                "summary": "Get NASDAQ price chart data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "NASDAQ symbol (e.g. AAPL, MSFT)",
+                        "name": "symbol",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days to look back (default 30)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.nasdaqChartResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/nasdaq/latest": {
+            "get": {
+                "description": "Returns the most recent closing price for each tracked NASDAQ symbol",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NASDAQ"
+                ],
+                "summary": "Get latest NASDAQ prices",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.nasdaqLatestResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/nasdaq/predictions": {
+            "get": {
+                "description": "Returns paginated NASDAQ predictions with optional filtering by symbol, algorithm, and status",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NASDAQ Predictions"
+                ],
+                "summary": "List NASDAQ predictions with pagination",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by NASDAQ symbol",
+                        "name": "symbol",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by algorithm name",
+                        "name": "algorithm",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status (pending, confirmed, wrong)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort direction (asc, desc)",
+                        "name": "sort_dir",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page, max 100 (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.nasdaqPredictionsPageResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/nasdaq/predictions/chart": {
+            "get": {
+                "description": "Returns chronologically ordered predicted vs actual price data for charting, optionally filtered by algorithm",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NASDAQ Predictions"
+                ],
+                "summary": "Get NASDAQ prediction chart data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "NASDAQ symbol (e.g. AAPL, MSFT)",
+                        "name": "symbol",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Algorithm name (e.g. lstm_nn)",
+                        "name": "algorithm",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days to look back (default 30)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.nasdaqPredictionChartResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/nasdaq/predictions/latest": {
+            "get": {
+                "description": "Returns the most recent prediction per (symbol, algorithm) combination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NASDAQ Predictions"
+                ],
+                "summary": "Get latest NASDAQ predictions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.nasdaqPredictionsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/nasdaq/prices": {
+            "get": {
+                "description": "Returns OHLCV price data for a given NASDAQ symbol over the specified number of days",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NASDAQ"
+                ],
+                "summary": "Get historical NASDAQ prices",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "NASDAQ symbol (e.g. AAPL, MSFT)",
+                        "name": "symbol",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days to look back (default 30)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.nasdaqPricesResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/predictions": {
+            "get": {
+                "description": "Returns a paginated list of predictions. Use ?status=confirmed for backtest/confirmed predictions only (default window 6 months). Otherwise defaults to last 30 days.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Predictions"
+                ],
+                "summary": "List predictions with filters",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by stock symbol (e.g. VCB)",
+                        "name": "symbol",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by algorithm name (moving_average, lstm_nn, arima_garch, ema, ensemble)",
+                        "name": "algorithm",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status — use 'confirmed' for reconciled predictions",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number (1-based)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Records per page (1-100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date filter (YYYY-MM-DD)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date filter (YYYY-MM-DD)",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/modelsapi.PredictionListDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/predictions/accuracy": {
+            "get": {
+                "description": "Returns accuracy statistics for each prediction algorithm over the last N days. A prediction with accuracy \u003e= 90% is counted as accurate.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Predictions"
+                ],
+                "summary": "Get prediction accuracy per algorithm",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 30,
+                        "description": "Number of days to look back (1-365)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/modelsapi.PredictionAccuracyDTO"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/predictions/accuracy-trend": {
+            "get": {
+                "description": "Returns daily accuracy rates for each prediction algorithm over the last N days (default 30, max 365). A prediction with accuracy \u003e= 90% is counted as accurate. Results are cached for 120 seconds.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Predictions"
+                ],
+                "summary": "Get per-day accuracy trend for all algorithms",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 30,
+                        "description": "Number of days to look back (1-365)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/modelsapi.AccuracyTrendPointDTO"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/predictions/compare/{symbol}": {
+            "get": {
+                "description": "Returns a time series of predicted price vs actual price per algorithm for the given stock symbol, filtered by optional algorithm and day window.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Predictions"
+                ],
+                "summary": "Compare predicted vs actual prices for a stock",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Stock symbol (e.g. VCB)",
+                        "name": "symbol",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 30,
+                        "description": "Look-back window in days (1-365)",
+                        "name": "days",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by algorithm (moving_average, lstm_nn, arima_garch, ema, ensemble)",
+                        "name": "algorithm",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.PredictionCompareDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/predictions/error-distribution": {
+            "get": {
+                "description": "Returns scatter plot data of predicted change % vs actual change % for all confirmed predictions. Optionally filtered by algorithm.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Predictions"
+                ],
+                "summary": "Get prediction error distribution (scatter plot data)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by algorithm (moving_average, lstm_nn, arima_garch, ema, ensemble)",
+                        "name": "algorithm",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.ErrorDistributionDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/predictions/{id}": {
+            "get": {
+                "description": "Returns full detail for one prediction record including stock info, predicted price, actual price, accuracy and status.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Predictions"
+                ],
+                "summary": "Get a single prediction by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Prediction ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/modelsapi.PredictionDetailDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/schedules": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all configured cron job schedules; requires authentication",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Schedules"
+                ],
+                "summary": "List cron schedules",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/server.scheduleResponse"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/schedules/{key}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates the cron expression and enabled flag for a specific job; validates the expression before saving. Prediction Service picks up the change within one minute without a restart",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Schedules"
+                ],
+                "summary": "Update cron schedule",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job key (e.g. crawler_daily)",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "New cron expression and enabled state",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.updateScheduleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Schedule not found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/stocks/watchlist": {
+            "get": {
+                "description": "Returns current price, change, volume and market status for a comma-separated list of stock symbols.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Stocks"
+                ],
+                "summary": "Get current price data for a watchlist of stocks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Comma-separated stock symbols (e.g. VCB,VIC,FPT)",
+                        "name": "symbols",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/modelsapi.StockWatchlistDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/stocks/{symbol}/chart": {
+            "get": {
+                "description": "Returns candlestick (OHLCV) and volume data for the given stock symbol over the specified period and interval.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Stocks"
+                ],
+                "summary": "Get OHLCV chart data for a stock",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Stock symbol (e.g. VCB)",
+                        "name": "symbol",
+                        "in": "path"
+                    },
+                    {
+                        "type": "string",
+                        "default": "1D",
+                        "description": "Time period (1D, 1W, 1M, 3M, 6M, 1Y)",
+                        "name": "period",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "1h",
+                        "description": "Data interval (e.g. 5m, 1h, 1d)",
+                        "name": "interval",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/modelsapi.StockChartDataDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/stocks/{symbol}/crawl": {
+            "post": {
+                "description": "Triggers the prediction service to crawl and save the latest price data for the given stock symbol.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Stocks"
+                ],
+                "summary": "Crawl latest data for a single stock",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Stock symbol (e.g. VCB)",
+                        "name": "symbol",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/stocks/{symbol}/current": {
+            "get": {
+                "description": "Returns the latest price, change, volume, and market status for the given stock symbol.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Stocks"
+                ],
+                "summary": "Get current price for a stock",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Stock symbol (e.g. VCB)",
+                        "name": "symbol",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/modelsapi.StockCurrentPriceDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/stocks/{symbol}/detail": {
+            "get": {
+                "description": "Returns comprehensive stock info: current price, 30-day history, latest predictions, and stats.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Stocks"
+                ],
+                "summary": "Get comprehensive stock detail",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Stock symbol (e.g. VCB)",
+                        "name": "symbol",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/modelsapi.StockDetailDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/stocks/{symbol}/history": {
+            "get": {
+                "description": "Returns OHLCV price history and statistics for the given stock. Supports ?days=N or ?period=1M query params.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Stocks"
+                ],
+                "summary": "Get historical price data for a stock",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Stock symbol (e.g. VCB)",
+                        "name": "symbol",
+                        "in": "path"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days of history (1-1000, overrides period)",
+                        "name": "days",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "1M",
+                        "description": "Time period shorthand (1D, 1W, 1M, 3M, 6M, 1Y)",
+                        "name": "period",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 500,
+                        "description": "Maximum number of records to return (1-1000)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/modelsapi.StockHistoricalDataDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/stocks/{symbol}/predict": {
+            "post": {
+                "description": "Triggers the prediction service to run all configured prediction algorithms synchronously for the given stock symbol.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Stocks"
+                ],
+                "summary": "Run all prediction algorithms for a single stock",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Stock symbol (e.g. VCB)",
+                        "name": "symbol",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/training/algorithms": {
+            "get": {
+                "description": "Returns per-algorithm details including status (trained/untrained), configuration, accuracy, training time, total predictions, and success rate. Sourced from the algorithm registry and latest training logs.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Training"
+                ],
+                "summary": "List training algorithms",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/modelsapi.TrainingAlgorithmDTO"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/training/history": {
+            "get": {
+                "description": "Returns a list of past training sessions grouped by session ID, with per-algorithm results and overall accuracy. Optional filters: limit (1-50, default 10) and level (error|info).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Training"
+                ],
+                "summary": "Get training history",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Number of sessions to return (1-50, default 10)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by log level: error or info",
+                        "name": "level",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/modelsapi.TrainingHistoryDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/training/metrics": {
+            "get": {
+                "description": "Returns aggregate training performance statistics including average training time, data quality score, success rate, total sessions, total predictions, and current process memory usage.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Training"
+                ],
+                "summary": "Get aggregate training metrics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/modelsapi.TrainingMetricsDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/training/status": {
+            "get": {
+                "description": "Returns whether training is in progress, the last trained time, next scheduled training, current phase, and progress percentage. Calls the prediction gRPC service internally.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Training"
+                ],
+                "summary": "Get current training status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/modelsapi.TrainingStatusDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/training/{id}": {
+            "get": {
+                "description": "Returns detailed information about a specific training session identified by numeric log ID or session UUID. Includes per-algorithm results aggregated from all logs belonging to that session.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Training"
+                ],
+                "summary": "Get training session detail",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Training log ID (numeric) or session UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/modelsapi.TrainingSessionDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/crawler": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Starts a VN30 stock price crawl in the background via the prediction service. Also invalidates the market overview cache.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger VN30 stock crawler",
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/crypto-crawler": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Starts a cryptocurrency (BTC/ETH) price crawl in the background via the prediction service. Returns 202 immediately.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger crypto price crawler",
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/crypto-predict": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Runs a prediction for all registered cryptocurrency instruments (BTC, ETH) in the background via the prediction service. Returns 202 immediately.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger crypto prediction",
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/fuel-crawler": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Starts a fuel price crawl in the background via the prediction service. Returns 202 immediately.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger fuel price crawler",
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/fuel-predict": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Runs a prediction for all registered fuel instruments in the background via the prediction service. Returns 202 immediately.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger fuel price prediction",
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/gold-crawler": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Crawls current gold prices (SJC BTMC and XAU/USD) synchronously via the prediction service.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger gold price crawler",
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/gold-historical-backtest": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Starts a walk-forward backtest over all gold instruments (XAU/spot, BTMC/sjc, BTMC/nhan_tron) in the background. Returns 202 immediately. Returns 409 if a backtest is already running.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger gold historical backtest",
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/gold-history": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Starts a historical XAU/USD gold price import in the background via the prediction service. Returns 202 immediately.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger gold price history import",
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/gold-predict": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Runs a prediction for all gold instruments (XAU/spot, BTMC/sjc, BTMC/nhan_tron) in the background via the prediction service.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger gold prediction",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/historical-backtest": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Starts a walk-forward backtest in the background via the prediction service. Accepts optional query params: train_window (default 30), step_size (default 6), and market (one of \"\", \"VN30\", \"GOLD\", \"NASDAQ100\", \"CRYPTO\", \"FUEL\"). Returns 409 if a backtest is already running.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger walk-forward historical backtest",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Minimum data points before first prediction (default 30)",
+                        "name": "train_window",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Fold size — data points between retraining (default 6)",
+                        "name": "step_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Target market key: VN30, GOLD, NASDAQ100, CRYPTO, FUEL (default: all)",
+                        "name": "market",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/nasdaq-crawler": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Starts a NASDAQ100 price crawl in the background via the prediction service. Returns 202 immediately.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger NASDAQ100 crawler",
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/nasdaq-predict": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Runs a prediction for all NASDAQ100 instruments in the background via the prediction service. Returns 202 immediately.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger NASDAQ100 prediction",
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/predict": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Runs weekly training and daily prediction synchronously across all registered markets via the prediction service.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger prediction run",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/reconcile": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Runs prediction reconciliation immediately, filling in actual_price, accuracy, and status for past predictions. Runs synchronously with a 10-minute timeout.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger prediction reconciliation",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/stock-history": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Starts a historical VN30 stock price crawl in the background. Accepts an optional days query parameter (default 365, max 1000).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger historical stock price crawl",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Number of historical days to crawl (default 365, max 1000)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/train": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Starts training for all algorithms or a specific algorithm. Returns 409 if training is already in progress. The algorithm field is optional; if omitted, all algorithms are trained.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger model training",
+                "parameters": [
+                    {
+                        "description": "Training request (algorithm is optional)",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/server.TriggerTrainRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/server.TriggerTrainResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all registered users; requires admin role",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "List all users",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/server.userResponse"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new user account; requires admin role. Role defaults to \"user\" if an invalid value is supplied",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Create user",
+                "parameters": [
+                    {
+                        "description": "New user details",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.createUserRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/server.userResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "409": {
+                        "description": "Username already exists",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a user by ID; requires admin role. An admin cannot delete their own account",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Delete user",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Returns full system health including database, config, and runtime metrics",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Detailed health check",
+                "responses": {
+                    "200": {
+                        "description": "System is healthy",
+                        "schema": {
+                            "$ref": "#/definitions/server.HealthStatus"
+                        }
+                    },
+                    "503": {
+                        "description": "System is unhealthy or degraded",
+                        "schema": {
+                            "$ref": "#/definitions/server.HealthStatus"
+                        }
+                    }
+                }
+            }
+        },
+        "/health/ready": {
+            "get": {
+                "description": "Returns 200 READY when the database is reachable, 503 NOT READY otherwise",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Readiness check",
+                "responses": {
+                    "200": {
+                        "description": "READY",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "NOT READY",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/health/simple": {
+            "get": {
+                "description": "Lightweight liveness probe — returns 200 OK when the process is running",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Simple health check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "modelsapi.AccuracyTrendPointDTO": {
+            "type": "object",
+            "properties": {
+                "arima_garch": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "ema": {
+                    "type": "number"
+                },
+                "lstm_nn": {
+                    "type": "number"
+                },
+                "moving_average": {
+                    "type": "number"
+                }
+            }
+        },
+        "modelsapi.AlgorithmComparisonDTO": {
+            "type": "object",
+            "properties": {
+                "algorithms": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modelsapi.AlgorithmPerformanceDTO"
+                    }
+                },
+                "best_algorithm": {
+                    "type": "string"
+                },
+                "period": {
+                    "type": "string"
+                }
+            }
+        },
+        "modelsapi.AlgorithmPerformanceDTO": {
+            "type": "object",
+            "properties": {
+                "accuracy_rate": {
+                    "type": "number"
+                },
+                "avg_error": {
+                    "type": "number"
+                },
+                "last_prediction": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "total_predictions": {
+                    "type": "integer"
+                },
+                "trend": {
+                    "description": "improving, declining, stable",
+                    "type": "string"
+                }
+            }
+        },
+        "modelsapi.AlgorithmResultDTO": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "duration_ms": {
+                    "type": "integer"
+                },
+                "error_count": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "success_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "modelsapi.AlgorithmStatsEntry": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "string"
+                },
+                "predictions": {
+                    "type": "integer"
+                }
+            }
+        },
+        "modelsapi.ChartPointDTO": {
+            "type": "object",
+            "properties": {
+                "close": {
+                    "type": "number"
+                },
+                "high": {
+                    "type": "number"
+                },
+                "low": {
+                    "type": "number"
+                },
+                "open": {
+                    "type": "number"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "modelsapi.DashboardStatsFullDTO": {
+            "type": "object",
+            "properties": {
+                "algorithms": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/modelsapi.AlgorithmStatsEntry"
+                    }
+                },
+                "avg_accuracy": {
+                    "type": "string"
+                },
+                "last_crawl": {
+                    "type": "string"
+                },
+                "last_prediction": {
+                    "type": "string"
+                },
+                "total_predictions": {
+                    "type": "integer"
+                },
+                "total_stocks": {
+                    "type": "integer"
+                }
+            }
+        },
+        "modelsapi.MarketOverviewDTO": {
+            "type": "object",
+            "properties": {
+                "gainers": {
+                    "type": "integer"
+                },
+                "index_change": {
+                    "type": "number"
+                },
+                "index_percent": {
+                    "type": "number"
+                },
+                "last_updated": {
+                    "type": "string"
+                },
+                "losers": {
+                    "type": "integer"
+                },
+                "most_active": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modelsapi.StockCurrentPriceDTO"
+                    }
+                },
+                "stocks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modelsapi.StockFlatDTO"
+                    }
+                },
+                "stocks_page": {
+                    "type": "integer"
+                },
+                "stocks_page_size": {
+                    "type": "integer"
+                },
+                "stocks_total": {
+                    "type": "integer"
+                },
+                "stocks_total_pages": {
+                    "type": "integer"
+                },
+                "top_gainers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modelsapi.StockCurrentPriceDTO"
+                    }
+                },
+                "top_losers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modelsapi.StockCurrentPriceDTO"
+                    }
+                },
+                "total_stocks": {
+                    "type": "integer"
+                },
+                "total_value": {
+                    "type": "number"
+                },
+                "total_volume": {
+                    "type": "integer"
+                },
+                "unchanged": {
+                    "type": "integer"
+                },
+                "vn30_index": {
+                    "type": "number"
+                }
+            }
+        },
+        "modelsapi.PredictionAccuracyDTO": {
+            "type": "object",
+            "properties": {
+                "accuracy_rate": {
+                    "type": "number"
+                },
+                "accurate_predictions": {
+                    "type": "integer"
+                },
+                "algorithm_name": {
+                    "type": "string"
+                },
+                "avg_error": {
+                    "type": "number"
+                },
+                "period": {
+                    "type": "string"
+                },
+                "total_predictions": {
+                    "type": "integer"
+                }
+            }
+        },
+        "modelsapi.PredictionDetailDTO": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "actual_price": {
+                    "type": "number"
+                },
+                "algorithm_name": {
+                    "type": "string"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "current_price": {
+                    "description": "\u003c- Thêm field này!",
+                    "type": "number"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "predicted_price": {
+                    "type": "number"
+                },
+                "prediction_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "stock": {
+                    "$ref": "#/definitions/modelsapi.StockDTO"
+                },
+                "target_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "modelsapi.PredictionFilterDTO": {
+            "type": "object",
+            "properties": {
+                "algorithm_name": {
+                    "type": "string"
+                },
+                "from_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "stock_symbol": {
+                    "type": "string"
+                },
+                "to_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "modelsapi.PredictionListDTO": {
+            "type": "object",
+            "properties": {
+                "filters": {
+                    "$ref": "#/definitions/modelsapi.PredictionFilterDTO"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "predictions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modelsapi.PredictionDetailDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "total_count": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "modelsapi.StockChartDataDTO": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modelsapi.ChartPointDTO"
+                    }
+                },
+                "interval": {
+                    "description": "\"1m\", \"5m\", \"15m\", \"1h\", \"1d\"",
+                    "type": "string"
+                },
+                "period": {
+                    "type": "string"
+                },
+                "symbol": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "volume": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modelsapi.VolumePointDTO"
+                    }
+                }
+            }
+        },
+        "modelsapi.StockCurrentPriceDTO": {
+            "type": "object",
+            "properties": {
+                "change": {
+                    "type": "number"
+                },
+                "change_percent": {
+                    "type": "number"
+                },
+                "current_price": {
+                    "type": "number"
+                },
+                "high": {
+                    "type": "number"
+                },
+                "last_updated": {
+                    "type": "string"
+                },
+                "low": {
+                    "type": "number"
+                },
+                "market_status": {
+                    "description": "\"open\", \"closed\", \"pre_market\", \"after_hours\"",
+                    "type": "string"
+                },
+                "open": {
+                    "type": "number"
+                },
+                "stock": {
+                    "$ref": "#/definitions/modelsapi.StockDTO"
+                },
+                "trading_date": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                },
+                "volume": {
+                    "type": "integer"
+                }
+            }
+        },
+        "modelsapi.StockDTO": {
+            "type": "object",
+            "properties": {
+                "company_name": {
+                    "type": "string"
+                },
+                "exchange_id": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_vn100": {
+                    "type": "boolean"
+                },
+                "is_vn30": {
+                    "type": "boolean"
+                },
+                "listing_date": {
+                    "type": "string"
+                },
+                "sector": {
+                    "type": "string"
+                },
+                "symbol": {
+                    "type": "string"
+                }
+            }
+        },
+        "modelsapi.StockDetailDTO": {
+            "type": "object",
+            "properties": {
+                "current_price": {
+                    "$ref": "#/definitions/modelsapi.StockCurrentPriceDTO"
+                },
+                "history": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modelsapi.StockPriceDTO"
+                    }
+                },
+                "predictions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modelsapi.PredictionDetailDTO"
+                    }
+                },
+                "stats": {
+                    "$ref": "#/definitions/modelsapi.StockStatsDTO"
+                },
+                "stock": {
+                    "$ref": "#/definitions/modelsapi.StockDTO"
+                }
+            }
+        },
+        "modelsapi.StockFlatDTO": {
+            "type": "object",
+            "properties": {
+                "change": {
+                    "type": "number"
+                },
+                "change_percent": {
+                    "type": "number"
+                },
+                "company_name": {
+                    "type": "string"
+                },
+                "current_price": {
+                    "type": "number"
+                },
+                "exchange": {
+                    "type": "string"
+                },
+                "is_vn30": {
+                    "type": "boolean"
+                },
+                "sector": {
+                    "type": "string"
+                },
+                "symbol": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                },
+                "volume": {
+                    "type": "integer"
+                }
+            }
+        },
+        "modelsapi.StockHistoricalDataDTO": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "type": "string"
+                },
+                "period": {
+                    "description": "\"1D\", \"1W\", \"1M\", \"3M\", \"6M\", \"1Y\"",
+                    "type": "string"
+                },
+                "price_data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modelsapi.StockPriceDTO"
+                    }
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "statistics": {
+                    "$ref": "#/definitions/modelsapi.StockStatsDTO"
+                },
+                "stock": {
+                    "$ref": "#/definitions/modelsapi.StockDTO"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "modelsapi.StockPriceDTO": {
+            "type": "object",
+            "properties": {
+                "change": {
+                    "type": "number"
+                },
+                "change_percent": {
+                    "type": "number"
+                },
+                "close_price": {
+                    "type": "number"
+                },
+                "foreign_buy": {
+                    "type": "integer"
+                },
+                "foreign_sell": {
+                    "type": "integer"
+                },
+                "high_price": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "low_price": {
+                    "type": "number"
+                },
+                "open_price": {
+                    "type": "number"
+                },
+                "stock_id": {
+                    "type": "integer"
+                },
+                "trading_date": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                },
+                "volume": {
+                    "type": "integer"
+                }
+            }
+        },
+        "modelsapi.StockStatsDTO": {
+            "type": "object",
+            "properties": {
+                "average_price": {
+                    "type": "number"
+                },
+                "highest_price": {
+                    "type": "number"
+                },
+                "lowest_price": {
+                    "type": "number"
+                },
+                "percent_change": {
+                    "description": "% thay đổi từ đầu period",
+                    "type": "number"
+                },
+                "price_change": {
+                    "description": "Thay đổi từ đầu period",
+                    "type": "number"
+                },
+                "total_value": {
+                    "type": "number"
+                },
+                "total_volume": {
+                    "type": "integer"
+                },
+                "trading_days": {
+                    "type": "integer"
+                },
+                "volatility": {
+                    "description": "Độ biến động",
+                    "type": "number"
+                }
+            }
+        },
+        "modelsapi.StockWatchlistDTO": {
+            "type": "object",
+            "properties": {
+                "last_updated": {
+                    "type": "string"
+                },
+                "stocks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modelsapi.StockCurrentPriceDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "modelsapi.TrainingAlgorithmDTO": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "config": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "key": {
+                    "type": "string"
+                },
+                "last_trained": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "success_rate": {
+                    "type": "number"
+                },
+                "total_predictions": {
+                    "type": "integer"
+                },
+                "training_time_seconds": {
+                    "type": "number"
+                }
+            }
+        },
+        "modelsapi.TrainingHistoryDTO": {
+            "type": "object",
+            "properties": {
+                "avg_accuracy": {
+                    "type": "number"
+                },
+                "last_week_count": {
+                    "type": "integer"
+                },
+                "sessions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modelsapi.TrainingSessionDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "modelsapi.TrainingMetricsDTO": {
+            "type": "object",
+            "properties": {
+                "avg_training_time": {
+                    "type": "string"
+                },
+                "avg_training_time_ms": {
+                    "type": "number"
+                },
+                "data_quality": {
+                    "type": "number"
+                },
+                "memory_usage_mb": {
+                    "type": "integer"
+                },
+                "success_rate": {
+                    "type": "number"
+                },
+                "total_predictions": {
+                    "type": "integer"
+                },
+                "total_sessions": {
+                    "type": "integer"
+                }
+            }
+        },
+        "modelsapi.TrainingSessionDTO": {
+            "type": "object",
+            "properties": {
+                "algorithms": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modelsapi.AlgorithmResultDTO"
+                    }
+                },
+                "duration_ms": {
+                    "type": "integer"
+                },
+                "error_count": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "overall_accuracy": {
+                    "type": "number"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "success_count": {
+                    "type": "integer"
+                },
+                "total_stocks": {
+                    "type": "integer"
+                }
+            }
+        },
+        "modelsapi.TrainingStatusDTO": {
+            "type": "object",
+            "properties": {
+                "current_phase": {
+                    "type": "string"
+                },
+                "estimated_time": {
+                    "type": "string"
+                },
+                "is_training": {
+                    "type": "boolean"
+                },
+                "last_trained": {
+                    "type": "string"
+                },
+                "next_training": {
+                    "type": "string"
+                },
+                "progress": {
+                    "type": "number"
+                }
+            }
+        },
+        "modelsapi.VolumePointDTO": {
+            "type": "object",
+            "properties": {
+                "timestamp": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                },
+                "volume": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.ErrorDistributionDTO": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.ErrorDistributionPoint"
+                    }
+                }
+            }
+        },
+        "server.ErrorDistributionPoint": {
+            "type": "object",
+            "properties": {
+                "actual_change_pct": {
+                    "type": "number"
+                },
+                "algorithm": {
+                    "type": "string"
+                },
+                "predicted_change_pct": {
+                    "type": "number"
+                },
+                "symbol": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.HealthStatus": {
+            "type": "object",
+            "properties": {
+                "server_name": {
+                    "type": "string"
+                },
+                "services": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "status": {
+                    "type": "string"
+                },
+                "system": {
+                    "$ref": "#/definitions/server.SystemInfo"
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "uptime": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.MemoryStats": {
+            "type": "object",
+            "properties": {
+                "alloc_mb": {
+                    "type": "integer"
+                },
+                "sys_mb": {
+                    "type": "integer"
+                },
+                "total_alloc_mb": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.PredictionCompareDTO": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.PredictionComparePoint"
+                    }
+                },
+                "symbol": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.PredictionComparePoint": {
+            "type": "object",
+            "properties": {
+                "actual": {
+                    "type": "number"
+                },
+                "algorithm": {
+                    "type": "string"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "predicted": {
+                    "type": "number"
+                }
+            }
+        },
+        "server.ResponseFailure": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "status_code": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.SystemInfo": {
+            "type": "object",
+            "properties": {
+                "go_version": {
+                    "type": "string"
+                },
+                "memory": {
+                    "$ref": "#/definitions/server.MemoryStats"
+                },
+                "num_goroutine": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.TriggerTrainRequest": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.TriggerTrainResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.changePasswordRequest": {
+            "type": "object",
+            "properties": {
+                "current_password": {
+                    "type": "string"
+                },
+                "new_password": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.createUserRequest": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "role": {
+                    "description": "\"admin\" or \"user\"",
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.cryptoChartResponse": {
+            "type": "object",
+            "properties": {
+                "coin_id": {
+                    "type": "string"
+                },
+                "dates": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "prices": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                }
+            }
+        },
+        "server.cryptoLatestItem": {
+            "type": "object",
+            "properties": {
+                "close_price": {
+                    "type": "number"
+                },
+                "coin_id": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "market_cap": {
+                    "type": "number"
+                },
+                "symbol": {
+                    "type": "string"
+                },
+                "trading_date": {
+                    "type": "string"
+                },
+                "volume_24h": {
+                    "type": "number"
+                }
+            }
+        },
+        "server.cryptoLatestResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.cryptoLatestItem"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.cryptoPredictionChartPoint": {
+            "type": "object",
+            "properties": {
+                "actual_price": {
+                    "type": "number"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "predicted_price": {
+                    "type": "number"
+                }
+            }
+        },
+        "server.cryptoPredictionChartResponse": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "coin_id": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.cryptoPredictionChartPoint"
+                    }
+                }
+            }
+        },
+        "server.cryptoPredictionItem": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "actual_price": {
+                    "type": "number"
+                },
+                "algorithm_name": {
+                    "type": "string"
+                },
+                "coin_id": {
+                    "type": "string"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "current_price": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "predicted_price": {
+                    "type": "number"
+                },
+                "prediction_date": {
+                    "type": "string"
+                },
+                "symbol": {
+                    "type": "string"
+                },
+                "target_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.cryptoPredictionsPageResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.cryptoPredictionItem"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.cryptoPredictionsResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.cryptoPredictionItem"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.cryptoPricePoint": {
+            "type": "object",
+            "properties": {
+                "close_price": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "market_cap": {
+                    "type": "number"
+                },
+                "volume_24h": {
+                    "type": "number"
+                }
+            }
+        },
+        "server.cryptoPricesResponse": {
+            "type": "object",
+            "properties": {
+                "coin_id": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.cryptoPricePoint"
+                    }
+                }
+            }
+        },
+        "server.fuelChartResponse": {
+            "type": "object",
+            "properties": {
+                "dates": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "prices": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "product_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.fuelLatestItem": {
+            "type": "object",
+            "properties": {
+                "price": {
+                    "type": "number"
+                },
+                "product_type": {
+                    "type": "string"
+                },
+                "trading_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.fuelLatestResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.fuelLatestItem"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.fuelPredictionChartPoint": {
+            "type": "object",
+            "properties": {
+                "actual_price": {
+                    "type": "number"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "predicted_price": {
+                    "type": "number"
+                }
+            }
+        },
+        "server.fuelPredictionChartResponse": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.fuelPredictionChartPoint"
+                    }
+                },
+                "product_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.fuelPredictionItem": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "actual_price": {
+                    "type": "number"
+                },
+                "algorithm_name": {
+                    "type": "string"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "current_price": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "predicted_price": {
+                    "type": "number"
+                },
+                "prediction_date": {
+                    "type": "string"
+                },
+                "product_type": {
+                    "type": "string"
+                },
+                "target_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.fuelPredictionsPageResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.fuelPredictionItem"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.fuelPredictionsResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.fuelPredictionItem"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.fuelPricePoint": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "price": {
+                    "type": "number"
+                }
+            }
+        },
+        "server.fuelPricesResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.fuelPricePoint"
+                    }
+                },
+                "product_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.goldChartResponse": {
+            "type": "object",
+            "properties": {
+                "buy_prices": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "labels": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sell_prices": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                }
+            }
+        },
+        "server.goldLatestItem": {
+            "type": "object",
+            "properties": {
+                "buy_price": {
+                    "type": "number"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "product_type": {
+                    "type": "string"
+                },
+                "sell_price": {
+                    "type": "number"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "trading_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.goldLatestResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.goldLatestItem"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.goldPredictionChartPoint": {
+            "type": "object",
+            "properties": {
+                "actual_price": {
+                    "type": "number"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "predicted_price": {
+                    "type": "number"
+                }
+            }
+        },
+        "server.goldPredictionChartResponse": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.goldPredictionChartPoint"
+                    }
+                },
+                "product_type": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.goldPredictionItem": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "actual_price": {
+                    "type": "number"
+                },
+                "algorithm_name": {
+                    "type": "string"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "current_price": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "predicted_price": {
+                    "type": "number"
+                },
+                "prediction_date": {
+                    "type": "string"
+                },
+                "product_type": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "target_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.goldPredictionsResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.goldPredictionItem"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.goldPricePoint": {
+            "type": "object",
+            "properties": {
+                "buy_price": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "sell_price": {
+                    "type": "number"
+                }
+            }
+        },
+        "server.goldPricesResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.goldPricePoint"
+                    }
+                },
+                "product_type": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.loginRequest": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.loginResponse": {
+            "type": "object",
+            "properties": {
+                "token": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/server.userInfo"
+                }
+            }
+        },
+        "server.marketPredictionsResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "limit": {
+                    "type": "integer"
+                },
+                "market": {
+                    "type": "string"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.marketTrainingResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "limit": {
+                    "type": "integer"
+                },
+                "market": {
+                    "type": "string"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.nasdaqChartResponse": {
+            "type": "object",
+            "properties": {
+                "dates": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "prices": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "symbol": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.nasdaqLatestItem": {
+            "type": "object",
+            "properties": {
+                "close_price": {
+                    "type": "number"
+                },
+                "company_name": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "symbol": {
+                    "type": "string"
+                },
+                "trading_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.nasdaqLatestResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.nasdaqLatestItem"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.nasdaqPredictionChartPoint": {
+            "type": "object",
+            "properties": {
+                "actual_price": {
+                    "type": "number"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "predicted_price": {
+                    "type": "number"
+                }
+            }
+        },
+        "server.nasdaqPredictionChartResponse": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.nasdaqPredictionChartPoint"
+                    }
+                },
+                "symbol": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.nasdaqPredictionItem": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "actual_price": {
+                    "type": "number"
+                },
+                "algorithm_name": {
+                    "type": "string"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "current_price": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "predicted_price": {
+                    "type": "number"
+                },
+                "prediction_date": {
+                    "type": "string"
+                },
+                "symbol": {
+                    "type": "string"
+                },
+                "target_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.nasdaqPredictionsPageResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.nasdaqPredictionItem"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.nasdaqPredictionsResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.nasdaqPredictionItem"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.nasdaqPricePoint": {
+            "type": "object",
+            "properties": {
+                "close_price": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "high_price": {
+                    "type": "number"
+                },
+                "low_price": {
+                    "type": "number"
+                },
+                "open_price": {
+                    "type": "number"
+                },
+                "volume": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.nasdaqPricesResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.nasdaqPricePoint"
+                    }
+                },
+                "symbol": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.scheduleResponse": {
+            "type": "object",
+            "properties": {
+                "cron_expression": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "job_key": {
+                    "type": "string"
+                },
+                "job_name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.updateScheduleRequest": {
+            "type": "object",
+            "properties": {
+                "cron_expression": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "server.userInfo": {
+            "type": "object",
+            "properties": {
+                "role": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.userResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "JWT token from POST /api/auth/login. Format: Bearer {token}",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

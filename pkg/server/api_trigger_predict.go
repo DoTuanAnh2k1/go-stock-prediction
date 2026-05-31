@@ -6,6 +6,19 @@ import (
 	"net/http"
 )
 
+// TriggerPredictHandler godoc
+//
+//	@Summary      Trigger prediction run
+//	@Description  Runs weekly training and daily prediction synchronously across all registered markets via the prediction service.
+//	@Tags         Triggers
+//	@Accept       json
+//	@Produce      json
+//	@Success      200  {object}  map[string]string
+//	@Failure      401  {object}  ResponseFailure
+//	@Failure      500  {object}  ResponseFailure
+//	@Failure      503  {object}  ResponseFailure
+//	@Security     BearerAuth
+//	@Router       /api/trigger/predict [post]
 func TriggerPredictHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("Trigger predict")
 	client := requireGRPCClient(w)

@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prediction-service"
+version = "0.1.0"
+description = "Python gRPC Prediction Service for go-stock-prediction"
+requires-python = ">=3.12"
+dependencies = [
+    "grpcio==1.70.0",
+    "grpcio-tools==1.70.0",
+    "protobuf==5.29.4",
+    "sqlalchemy[asyncio]==2.0.40",
+    "aiomysql==0.2.0",
+    "pydantic-settings==2.9.1",
+    "structlog==25.1.0",
+    "aiohttp==3.11.18",
+    "beautifulsoup4==4.13.4",
+    "lxml==5.4.0",
+    "apscheduler==3.11.0",
+    "numpy==2.2.5",
+    "pandas==2.2.3",
+    "scikit-learn==1.6.1",
+    # pymysql kept for sync SQLAlchemy sessions used by existing repository layer
+    "pymysql>=1.1.0",
+    "cryptography>=42.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.5",
+    "pytest-asyncio==0.26.0",
+    "httpx==0.28.1",
+    "requests>=2.32.0",
+    "ruff>=0.8.0",
+]
+# Phase 3 ML extras — install separately when needed
+ml = [
+    "torch>=2.5.0",
+    "statsmodels>=0.14.0",
+    "arch>=7.0.0",
+    "lightgbm>=4.5.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.setuptools.package-dir]
+"" = "."
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501", "B008", "B017", "SIM117"]

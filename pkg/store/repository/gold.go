@@ -3,6 +3,8 @@ package repository
 import (
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 type GoldPriceStore interface {
@@ -19,6 +21,15 @@ type GoldPredictionStore interface {
 	GetLatestGoldPredictions() ([]modelsdb.GoldPrediction, error)
 	GetGoldPredictionsByDateRange(source, productType string, from, to time.Time) ([]modelsdb.GoldPrediction, error)
 	GetGoldPredictionsPage(page, limit int, search, algorithm, status, sortBy, sortDir string) ([]modelsdb.GoldPrediction, int64, error)
+	// GetPendingGoldPredictions returns gold predictions where actual_price IS NULL and target_date <= cutoff.
+	GetPendingGoldPredictions(cutoff time.Time) ([]modelsdb.GoldPrediction, error)
+	// UpdateGoldPredictionActual sets actual_price and accuracy for a gold prediction.
+	UpdateGoldPredictionActual(id uint, actual, accuracy *decimal.Decimal) error
+	// DeleteGoldPredictionsBeforeDate deletes all gold predictions whose target_date < cutoff.
+	// Used by gold historical backtest to clear stale data before re-inserting.
+	DeleteGoldPredictionsBeforeDate(cutoff time.Time) error
+	// BulkCreateGoldPredictions inserts multiple gold predictions in batches.
+	BulkCreateGoldPredictions(preds []modelsdb.GoldPrediction) error
 }
 
 type MacroIndicatorStore interface {

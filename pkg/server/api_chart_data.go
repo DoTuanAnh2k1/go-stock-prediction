@@ -8,7 +8,20 @@ import (
 	"strings"
 )
 
-// GetChartData - GET /api/stocks/{symbol}/chart?period=1D&interval=5m
+// GetChartData godoc
+//
+//	@Summary      Get OHLCV chart data for a stock
+//	@Description  Returns candlestick (OHLCV) and volume data for the given stock symbol over the specified period and interval.
+//	@Tags         Stocks
+//	@Produce      json
+//	@Param        symbol   path   string false "Stock symbol (e.g. VCB)"
+//	@Param        period   query  string false "Time period (1D, 1W, 1M, 3M, 6M, 1Y)" default(1D)
+//	@Param        interval query  string false "Data interval (e.g. 5m, 1h, 1d)"       default(1h)
+//	@Success      200 {object} modelsapi.StockChartDataDTO
+//	@Failure      400 {object} ResponseFailure
+//	@Failure      404 {object} ResponseFailure
+//	@Failure      500 {object} ResponseFailure
+//	@Router       /api/stocks/{symbol}/chart [get]
 func GetChartData(w http.ResponseWriter, r *http.Request) {
 	// Extract symbol from URL
 	pathParts := strings.Split(r.URL.Path, "/")

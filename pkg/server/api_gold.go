@@ -25,7 +25,15 @@ type goldLatestResponse struct {
 	UpdatedAt time.Time        `json:"updated_at"`
 }
 
-// GetGoldLatest handles GET /api/gold/latest
+// GetGoldLatest godoc
+//
+//	@Summary      Get latest gold prices
+//	@Description  Returns the most recent buy/sell price for each gold source and product type
+//	@Tags         Gold
+//	@Produce      json
+//	@Success      200  {object}  goldLatestResponse
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/gold/latest [get]
 func GetGoldLatest(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 
@@ -67,7 +75,18 @@ type goldPricesResponse struct {
 	Data        []goldPricePoint `json:"data"`
 }
 
-// GetGoldPrices handles GET /api/gold/prices?source=SJC&product_type=1l&days=30
+// GetGoldPrices godoc
+//
+//	@Summary      Get historical gold prices
+//	@Description  Returns buy/sell prices for a given gold source and product type over the specified number of days
+//	@Tags         Gold
+//	@Produce      json
+//	@Param        source        query  string  false  "Gold source (e.g. SJC, BTMC)"
+//	@Param        product_type  query  string  false  "Product type (e.g. 1l, nhan_tron)"
+//	@Param        days          query  int     false  "Number of days to look back (default 30)"
+//	@Success      200           {object}  goldPricesResponse
+//	@Failure      500           {object}  ResponseFailure
+//	@Router       /api/gold/prices [get]
 func GetGoldPrices(w http.ResponseWriter, r *http.Request) {
 	source := r.URL.Query().Get("source")
 	productType := r.URL.Query().Get("product_type")
@@ -114,7 +133,18 @@ type goldChartResponse struct {
 	SellPrices []decimal.Decimal `json:"sell_prices"`
 }
 
-// GetGoldChart handles GET /api/gold/chart?source=SJC&product_type=1l&days=30
+// GetGoldChart godoc
+//
+//	@Summary      Get gold price chart data
+//	@Description  Returns chronologically ordered labels and buy/sell price arrays suitable for charting
+//	@Tags         Gold
+//	@Produce      json
+//	@Param        source        query  string  false  "Gold source (e.g. SJC, BTMC)"
+//	@Param        product_type  query  string  false  "Product type (e.g. 1l, nhan_tron)"
+//	@Param        days          query  int     false  "Number of days to look back (default 30)"
+//	@Success      200           {object}  goldChartResponse
+//	@Failure      500           {object}  ResponseFailure
+//	@Router       /api/gold/chart [get]
 func GetGoldChart(w http.ResponseWriter, r *http.Request) {
 	source := r.URL.Query().Get("source")
 	productType := r.URL.Query().Get("product_type")

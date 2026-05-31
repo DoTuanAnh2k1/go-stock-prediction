@@ -1,12 +1,19 @@
 package server
 
 import (
-	"go-stock-prediction/pkg/logger"
 	"net/http"
+
+	"go-stock-prediction/pkg/logger"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
 func addHandler() *http.ServeMux {
 	mux := http.NewServeMux()
+
+	// Swagger UI
+	mux.Handle("/swagger/", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+	))
 
 	// Health check endpoints
 	mux.HandleFunc("/health", HealthCheckHandler)
@@ -134,6 +141,7 @@ func SetupAllRoutes() *http.ServeMux {
 
 func logRegisteredRoutes() {
 	logger.Logger.Info("Registered Routes:")
+	logger.Logger.Info("  GET  /swagger/            -> Swagger UI")
 	logger.Logger.Info("Health Routes:")
 	logger.Logger.Info("  GET  /health              -> Detailed Health Check")
 	logger.Logger.Info("  GET  /health/simple       -> Simple Health Check")

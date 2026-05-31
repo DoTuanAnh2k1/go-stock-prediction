@@ -29,7 +29,15 @@ type nasdaqPredictionsResponse struct {
 	Total int                    `json:"total"`
 }
 
-// GetNasdaqPredictionsLatest handles GET /api/nasdaq/predictions/latest
+// GetNasdaqPredictionsLatest godoc
+//
+//	@Summary      Get latest NASDAQ predictions
+//	@Description  Returns the most recent prediction per (symbol, algorithm) combination
+//	@Tags         NASDAQ Predictions
+//	@Produce      json
+//	@Success      200  {object}  nasdaqPredictionsResponse
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/nasdaq/predictions/latest [get]
 func GetNasdaqPredictionsLatest(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 	preds, err := store.GetLatestNasdaqPredictions()
@@ -71,7 +79,18 @@ type nasdaqPredictionChartResponse struct {
 	Data      []nasdaqPredictionChartPoint `json:"data"`
 }
 
-// GetNasdaqPredictionsChart handles GET /api/nasdaq/predictions/chart?symbol=AAPL&days=30
+// GetNasdaqPredictionsChart godoc
+//
+//	@Summary      Get NASDAQ prediction chart data
+//	@Description  Returns chronologically ordered predicted vs actual price data for charting, optionally filtered by algorithm
+//	@Tags         NASDAQ Predictions
+//	@Produce      json
+//	@Param        symbol     query  string  false  "NASDAQ symbol (e.g. AAPL, MSFT)"
+//	@Param        algorithm  query  string  false  "Algorithm name (e.g. lstm_nn)"
+//	@Param        days       query  int     false  "Number of days to look back (default 30)"
+//	@Success      200        {object}  nasdaqPredictionChartResponse
+//	@Failure      500        {object}  ResponseFailure
+//	@Router       /api/nasdaq/predictions/chart [get]
 func GetNasdaqPredictionsChart(w http.ResponseWriter, r *http.Request) {
 	symbol := r.URL.Query().Get("symbol")
 	algorithm := r.URL.Query().Get("algorithm")
@@ -131,7 +150,22 @@ type nasdaqPredictionsPageResponse struct {
 	Limit int                    `json:"limit"`
 }
 
-// GetNasdaqPredictions handles GET /api/nasdaq/predictions?page=1&limit=20&symbol=&algorithm=
+// GetNasdaqPredictions godoc
+//
+//	@Summary      List NASDAQ predictions with pagination
+//	@Description  Returns paginated NASDAQ predictions with optional filtering by symbol, algorithm, and status
+//	@Tags         NASDAQ Predictions
+//	@Produce      json
+//	@Param        symbol     query  string  false  "Filter by NASDAQ symbol"
+//	@Param        algorithm  query  string  false  "Filter by algorithm name"
+//	@Param        status     query  string  false  "Filter by status (pending, confirmed, wrong)"
+//	@Param        sort_by    query  string  false  "Sort field"
+//	@Param        sort_dir   query  string  false  "Sort direction (asc, desc)"
+//	@Param        page       query  int     false  "Page number (default 1)"
+//	@Param        limit      query  int     false  "Items per page, max 100 (default 20)"
+//	@Success      200        {object}  nasdaqPredictionsPageResponse
+//	@Failure      500        {object}  ResponseFailure
+//	@Router       /api/nasdaq/predictions [get]
 func GetNasdaqPredictions(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	symbol := q.Get("symbol")

@@ -7,8 +7,19 @@ import (
 	pb "go-stock-prediction/proto/prediction"
 )
 
-// TriggerGoldHistoryHandler handles POST /api/trigger/gold-history.
-// It delegates to the prediction microservice via gRPC and immediately returns 202 Accepted.
+// TriggerGoldHistoryHandler godoc
+//
+//	@Summary      Trigger gold price history import
+//	@Description  Starts a historical XAU/USD gold price import in the background via the prediction service. Returns 202 immediately.
+//	@Tags         Triggers
+//	@Accept       json
+//	@Produce      json
+//	@Success      202  "Accepted"
+//	@Failure      401  {object}  ResponseFailure
+//	@Failure      500  {object}  ResponseFailure
+//	@Failure      503  {object}  ResponseFailure
+//	@Security     BearerAuth
+//	@Router       /api/trigger/gold-history [post]
 func TriggerGoldHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("[trigger] gold-history import requested")
 	client := requireGRPCClient(w)

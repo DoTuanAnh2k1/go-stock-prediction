@@ -12,6 +12,18 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// GetTrainingDetail godoc
+//
+//	@Summary      Get training session detail
+//	@Description  Returns detailed information about a specific training session identified by numeric log ID or session UUID. Includes per-algorithm results aggregated from all logs belonging to that session.
+//	@Tags         Training
+//	@Produce      json
+//	@Param        id   path      string  true  "Training log ID (numeric) or session UUID"
+//	@Success      200  {object}  modelsapi.TrainingSessionDTO
+//	@Failure      400  {object}  ResponseFailure
+//	@Failure      404  {object}  ResponseFailure
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/training/{id} [get]
 func GetTrainingDetail(w http.ResponseWriter, r *http.Request) {
 	// Extract id from path /api/training/{id}
 	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
