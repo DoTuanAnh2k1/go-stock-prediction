@@ -39,7 +39,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25'
+          cache: false
 
       - name: Download modules
         run: go mod download
@@ -47,11 +48,16 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Run tests with coverage
-        run: go test ./... -v -count=1 -coverprofile=coverage.out -timeout 120s
+      - name: Run tests
+        run: go test ./... -v -count=1 -timeout 120s
+
+      - name: Generate coverage report
+        run: go test ./... -count=1 -coverprofile=coverage.out -timeout 120s
+        continue-on-error: true
 
       - name: Show coverage summary
         run: go tool cover -func=coverage.out | grep total
+        continue-on-error: true
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -59,3 +65,4 @@ jobs:
           name: coverage-report
           path: coverage.out
           retention-days: 14
+        if: always()

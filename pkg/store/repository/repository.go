@@ -24,6 +24,15 @@ type DatabaseStore interface {
 	GoldPredictionStore
 	MacroIndicatorStore
 	TrainingLogStore
+	UserStore
+	CronScheduleStore
+}
+
+// CronScheduleStore - interface cho cron schedule operations
+type CronScheduleStore interface {
+	GetAllCronSchedules() ([]modelsdb.CronSchedule, error)
+	GetCronScheduleByKey(jobKey string) (*modelsdb.CronSchedule, error)
+	UpsertCronSchedule(s *modelsdb.CronSchedule) error
 }
 
 // Exchange - interface cho exchange operations
@@ -114,6 +123,9 @@ type Prediction interface {
 	// DeletePredictionsBeforeDate deletes all predictions whose target_date < date.
 	// Used by historical backtest to clear stale data before re-inserting.
 	DeletePredictionsBeforeDate(date time.Time) error
+	// GetPredictionsByMarketPage returns paginated predictions filtered by market.
+	// marketKey="vn30" filters stocks with is_vn30=true.
+	GetPredictionsByMarketPage(marketKey string, page, limit int, search, sortBy, sortDir, algorithm, status string) ([]modelsdb.Prediction, int64, error)
 }
 
 // TrainingLogStore - interface cho training log operations
@@ -127,6 +139,8 @@ type TrainingLogStore interface {
 	GetLatestTrainingLogByAlgorithm() ([]modelsdb.TrainingLog, error)
 	// GetTrainingMetricsAggregate returns aggregate stats across all training logs.
 	GetTrainingMetricsAggregate() (modelsdb.TrainingMetricsAggregate, error)
+	// GetTrainingSessionsByMarket returns paginated training logs filtered by market_key.
+	GetTrainingSessionsByMarket(marketKey string, page, limit int, algorithm, sortBy, sortDir string) ([]modelsdb.TrainingLog, int64, error)
 }
 
 // SyncLog - interface cho sync log operations

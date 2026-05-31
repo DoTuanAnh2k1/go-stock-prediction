@@ -1,8 +1,10 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useData } from './context/DataContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { Sidebar, Topbar, Ticker, MobNav, ErrorBoundary } from './components/ui';
 import { TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakSlider, TweakToggle, useTweaks } from './components/tweaks-panel';
+import { LoginModal } from './components/LoginModal';
 import Dashboard from './pages/Dashboard';
 import Stocks from './pages/Stocks';
 import Predictions from './pages/Predictions';
@@ -10,6 +12,11 @@ import Training from './pages/Training';
 import Gold from './pages/Gold';
 import Crypto from './pages/Crypto';
 import Guide from './pages/Guide';
+import MarketPredictions from './pages/MarketPredictions';
+import MarketTraining from './pages/MarketTraining';
+import MarketDetail from './pages/MarketDetail';
+import Users from './pages/Users';
+import Settings from './pages/Settings';
 
 const TWEAK_DEFAULTS = {
   accent: '#5B8DEF',
@@ -18,12 +25,14 @@ const TWEAK_DEFAULTS = {
   ticker: true,
 };
 
-export default function App() {
+function AppInner() {
   const { status } = useData();
+  const { user, logout } = useAuth();
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [theme, setTheme] = useState<'dark' | 'light'>(
     () => (localStorage.getItem('vns_theme') as 'dark' | 'light') || 'dark'
   );
+  const [showLogin, setShowLogin] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -32,8 +41,6 @@ export default function App() {
 
   useEffect(() => {
     const r = document.documentElement;
-    // Convert hex accent to CSS custom property
-    // The CSS uses oklch-based accent, so we set it via data-accent for overriding
     r.style.setProperty('--accent-override', t.accent);
     r.setAttribute('data-density', t.density);
     r.style.fontSize = t.fontScale + '%';
@@ -44,17 +51,43 @@ export default function App() {
       <Sidebar status={status} />
       <div className="main">
         {t.ticker && <Ticker />}
-        <Topbar theme={theme} setTheme={setTheme} status={status} />
+        <Topbar
+          theme={theme}
+          setTheme={setTheme}
+          status={status}
+          user={user}
+          onLoginClick={() => setShowLogin(true)}
+          onLogout={logout}
+        />
         <div className="content">
           <Routes>
+            {/* ── Main routes ─────────────────────────────────── */}
             <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
             <Route path="/dashboard" element={<Navigate to="/" replace />} />
-            <Route path="/stocks" element={<ErrorBoundary><Stocks /></ErrorBoundary>} />
-            <Route path="/predictions" element={<ErrorBoundary><Predictions /></ErrorBoundary>} />
-            <Route path="/training" element={<ErrorBoundary><Training /></ErrorBoundary>} />
-            <Route path="/gold" element={<ErrorBoundary><Gold /></ErrorBoundary>} />
-            <Route path="/crypto" element={<ErrorBoundary><Crypto /></ErrorBoundary>} />
+
+            {/* ── Market routes ────────────────────────────────── */}
+            <Route path="/markets/vn30" element={<ErrorBoundary><Stocks /></ErrorBoundary>} />
+            <Route path="/markets/gold" element={<ErrorBoundary><Gold /></ErrorBoundary>} />
+
+            <Route path="/markets/:marketKey/predictions" element={<ErrorBoundary><MarketPredictions /></ErrorBoundary>} />
+            <Route path="/markets/:marketKey/training" element={<ErrorBoundary><MarketTraining /></ErrorBoundary>} />
+            <Route path="/markets/:marketKey/detail" element={<ErrorBoundary><MarketDetail /></ErrorBoundary>} />
+
+            <Route path="/markets/crypto" element={<ErrorBoundary><Crypto /></ErrorBoundary>} />
+
+            {/* ── Support ──────────────────────────────────────── */}
             <Route path="/guide" element={<ErrorBoundary><Guide /></ErrorBoundary>} />
+            <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+
+            {/* ── Admin ────────────────────────────────────────── */}
+            <Route path="/admin/users" element={<ErrorBoundary><Users /></ErrorBoundary>} />
+
+            {/* ── Legacy redirects (keep bookmarks working) ────── */}
+            <Route path="/stocks" element={<Navigate to="/markets/vn30" replace />} />
+            <Route path="/gold" element={<Navigate to="/markets/gold" replace />} />
+            <Route path="/crypto" element={<Navigate to="/markets/crypto" replace />} />
+            <Route path="/predictions" element={<Navigate to="/markets/vn30/predictions" replace />} />
+            <Route path="/training" element={<Navigate to="/markets/vn30/training" replace />} />
           </Routes>
         </div>
       </div>
@@ -72,6 +105,15 @@ export default function App() {
           onChange={(v) => setTweak('ticker', v)} />
       </TweaksPanel>
       <MobNav />
+      {showLogin && <LoginModal onClose={() => setShowLogin(false)} />}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppInner />
+    </AuthProvider>
   );
 }

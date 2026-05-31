@@ -2,6 +2,7 @@ package mysql
 
 import (
 	modelsdb "go-stock-prediction/pkg/models/models_db"
+	"strings"
 	"time"
 )
 
@@ -57,4 +58,53 @@ func (c *Client) GetGoldPredictionsByDateRange(source, productType string, from,
 	}
 	err := query.Find(&preds).Error
 	return preds, err
+}
+
+// GetGoldPredictionsPage returns paginated gold predictions with optional filters.
+func (c *Client) GetGoldPredictionsPage(page, limit int, search, algorithm, status, sortBy, sortDir string) ([]modelsdb.GoldPrediction, int64, error) {
+	var preds []modelsdb.GoldPrediction
+	var total int64
+
+	// Whitelist sortBy
+	validSortBy := map[string]bool{
+		"prediction_date": true,
+		"target_date":     true,
+		"accuracy":        true,
+		"confidence":      true,
+	}
+	if !validSortBy[sortBy] {
+		sortBy = "prediction_date"
+	}
+	if strings.ToLower(sortDir) != "asc" {
+		sortDir = "DESC"
+	} else {
+		sortDir = "ASC"
+	}
+
+	query := c.Db.Model(&modelsdb.GoldPrediction{})
+
+	if search != "" {
+		like := "%" + search + "%"
+		query = query.Where("source LIKE ? OR product_type LIKE ?", like, like)
+	}
+	if algorithm != "" {
+		query = query.Where("algorithm_name = ?", algorithm)
+	}
+	switch status {
+	case "confirmed":
+		query = query.Where("actual_price IS NOT NULL")
+	case "pending":
+		query = query.Where("actual_price IS NULL")
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	err := query.Order(sortBy + " " + sortDir).
+		Offset(offset).
+		Limit(limit).
+		Find(&preds).Error
+	return preds, total, err
 }

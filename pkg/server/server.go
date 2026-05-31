@@ -14,7 +14,7 @@ func StartHTTPServer() {
 	// Get server config
 	serverAddr := config.GetServerConfig().Host + ":" + config.GetServerConfig().Port
 
-	handler := CORSMiddleware(RateLimitMiddleware(mux))
+	handler := CORSMiddleware(RateLimitMiddleware(JWTMiddleware(mux)))
 
 	// Create HTTP server với proper configuration
 	server := &http.Server{

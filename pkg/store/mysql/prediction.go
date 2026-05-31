@@ -2,6 +2,7 @@ package mysql
 
 import (
 	modelsdb "go-stock-prediction/pkg/models/models_db"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -227,6 +228,64 @@ func (c *Client) GetSuccessfulPredictionCountByAlgorithm(accuracyThreshold float
 // DeletePredictionsBeforeDate - xóa tất cả predictions có target_date < date
 func (c *Client) DeletePredictionsBeforeDate(date time.Time) error {
 	return c.Db.Where("target_date < ?", date).Delete(&modelsdb.Prediction{}).Error
+}
+
+// GetPredictionsByMarketPage returns paginated predictions filtered by market.
+// Currently supports marketKey="vn30" (stocks with is_vn30=true).
+func (c *Client) GetPredictionsByMarketPage(marketKey string, page, limit int, search, sortBy, sortDir, algorithm, status string) ([]modelsdb.Prediction, int64, error) {
+	var preds []modelsdb.Prediction
+	var total int64
+
+	// Whitelist sortBy
+	validSortBy := map[string]bool{
+		"prediction_date": true,
+		"target_date":     true,
+		"accuracy":        true,
+		"confidence":      true,
+	}
+	if !validSortBy[sortBy] {
+		sortBy = "prediction_date"
+	}
+	if strings.ToLower(sortDir) != "asc" {
+		sortDir = "DESC"
+	} else {
+		sortDir = "ASC"
+	}
+
+	query := c.Db.Model(&modelsdb.Prediction{}).
+		Joins("JOIN stocks s ON s.id = predictions.stock_id AND s.deleted_at IS NULL")
+
+	switch marketKey {
+	case "vn30":
+		query = query.Where("s.is_vn30 = ?", true)
+	}
+
+	if search != "" {
+		like := "%" + search + "%"
+		query = query.Where("(s.symbol LIKE ? OR s.company_name LIKE ?)", like, like)
+	}
+	if algorithm != "" {
+		query = query.Where("predictions.algorithm_name = ?", algorithm)
+	}
+	switch status {
+	case "confirmed":
+		query = query.Where("predictions.actual_price IS NOT NULL")
+	case "pending":
+		query = query.Where("predictions.actual_price IS NULL")
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	err := query.
+		Preload("Stock").
+		Order("predictions." + sortBy + " " + sortDir).
+		Offset(offset).
+		Limit(limit).
+		Find(&preds).Error
+	return preds, total, err
 }
 
 // GetPendingPredictions - lấy predictions chưa có actual_price và target_date <= cutoff

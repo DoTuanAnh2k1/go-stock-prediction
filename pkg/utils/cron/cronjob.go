@@ -131,6 +131,21 @@ func IsRunning() bool {
 	return defaultManager.IsRunning()
 }
 
+// RescheduleJob updates the schedule for an existing job in the default manager.
+func RescheduleJob(id, newSchedule string) error {
+	return defaultManager.RescheduleJob(id, newSchedule)
+}
+
+// DisableJob removes a job from the scheduler (it can be re-added later).
+func DisableJob(id string) {
+	_ = defaultManager.RemoveJob(id)
+}
+
+// EnableJob adds a job back to the scheduler (used after DisableJob).
+func EnableJob(id, schedule string, jobFunc JobFunc) error {
+	return defaultManager.AddJob(id, schedule, jobFunc)
+}
+
 // AddJob adds a new job to the cron scheduler
 func (cm *CronManager) AddJob(id, schedule string, jobFunc JobFunc) error {
 	cm.mu.Lock()
@@ -178,6 +193,43 @@ func (cm *CronManager) RemoveJob(id string) error {
 	}
 
 	delete(cm.jobs, id)
+	return nil
+}
+
+// RescheduleJob changes the schedule of an existing job.
+// The job must already exist. The job function is preserved.
+func (cm *CronManager) RescheduleJob(id, newSchedule string) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	job, exists := cm.jobs[id]
+	if !exists {
+		return fmt.Errorf("job '%s' does not exist", id)
+	}
+
+	// Validate new schedule
+	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.DowOptional)
+	if _, err := parser.Parse(newSchedule); err != nil {
+		return fmt.Errorf("invalid schedule '%s': %v", newSchedule, err)
+	}
+
+	// Remove old entry from running scheduler
+	if cm.running && job.entryID != 0 {
+		cm.cron.Remove(job.entryID)
+		job.entryID = 0
+	}
+
+	job.Schedule = newSchedule
+
+	// Re-add with new schedule
+	if cm.running {
+		entryID, err := cm.cron.AddFunc(newSchedule, cm.wrapJobFunc(job))
+		if err != nil {
+			return fmt.Errorf("failed to reschedule job '%s': %v", id, err)
+		}
+		job.entryID = entryID
+	}
+
 	return nil
 }
 

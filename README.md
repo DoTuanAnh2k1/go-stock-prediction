@@ -76,6 +76,9 @@ GRPC_TARGET=prediction:8119   # Docker internal; dùng localhost:8119 khi chạy
 
 # Auth
 API_KEY=                       # Optional — bảo vệ một số trigger endpoint
+ADMIN_USERNAME=admin           # Username đăng nhập dashboard (default: admin)
+ADMIN_PASSWORD=admin123        # Password đăng nhập dashboard (default: admin123)
+JWT_SECRET=change-me-in-production  # Secret ký JWT — bắt buộc đổi trong production
 
 # Database
 DB_DRIVER=mysql
@@ -119,46 +122,69 @@ Script dùng vnstock API để nhập dữ liệu giá lịch sử vào DB.
 
 Khi mới cài đặt, DB trống — thực hiện tuần tự:
 
+```bash
+# Lấy JWT token (admin được tạo tự động từ ADMIN_USERNAME/ADMIN_PASSWORD env vars)
+TOKEN=$(curl -s -X POST http://localhost/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
+```
+
 **Bước 1 — Crawl lịch sử (bắt buộc)**
 
 ```bash
 python cmd/crawdata/main.py
 # hoặc qua API (crawl 365 ngày gần nhất)
-curl -X POST "http://localhost/api/trigger/stock-history?days=365"
+curl -X POST "http://localhost/api/trigger/stock-history" \
+  -H "Authorization: Bearer $TOKEN" -d '{"days":365}'
 ```
 
 **Bước 2 — Huấn luyện mô hình**
 
 ```bash
-curl -X POST http://localhost/api/trigger/train
+curl -X POST http://localhost/api/trigger/train -H "Authorization: Bearer $TOKEN"
 ```
 
 **Bước 3 — Chạy walk-forward backtest (tạo dữ liệu `confirmed` để xem chart)**
 
 ```bash
-curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&step_size=6"
+curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&step_size=6" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 **Bước 4 — Chạy dự đoán hiện tại**
 
 ```bash
-curl -X POST http://localhost/api/trigger/predict
+curl -X POST http://localhost/api/trigger/predict -H "Authorization: Bearer $TOKEN"
 ```
 
 ## Trigger thủ công bằng curl
 
+Tất cả trigger endpoints yêu cầu JWT. Lấy token trước:
+
 ```bash
-curl -X POST http://localhost/api/trigger/crawler              # crawl cổ phiếu
-curl -X POST http://localhost/api/trigger/predict              # chạy dự đoán
-curl -X POST http://localhost/api/trigger/train                # huấn luyện tất cả
-curl -X POST http://localhost/api/trigger/gold-crawler         # crawl giá vàng
-curl -X POST http://localhost/api/trigger/reconcile            # reconcile actual price
+TOKEN=$(curl -s -X POST http://localhost/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
+
+curl -X POST http://localhost/api/trigger/crawler -H "Authorization: Bearer $TOKEN"             # crawl cổ phiếu
+curl -X POST http://localhost/api/trigger/predict -H "Authorization: Bearer $TOKEN"             # chạy dự đoán
+curl -X POST http://localhost/api/trigger/train -H "Authorization: Bearer $TOKEN"               # huấn luyện tất cả
+curl -X POST http://localhost/api/trigger/gold-crawler -H "Authorization: Bearer $TOKEN"        # crawl giá vàng
+curl -X POST http://localhost/api/trigger/reconcile -H "Authorization: Bearer $TOKEN"           # reconcile actual price
 
 # Backtest toàn bộ lịch sử VN30 (async, trả 202 ngay)
-curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&step_size=6"
+curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&step_size=6" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## API Endpoints
+
+### Auth
+
+| Method | Path | Mô tả |
+|--------|------|-------|
+| `POST` | `/api/auth/login` | Đăng nhập — body: `{"username":"","password":""}`, trả JWT 24h |
+| `GET` | `/api/auth/me` | Xác minh token — header: `Authorization: Bearer <token>` |
 
 ### Predictions
 
@@ -203,22 +229,31 @@ curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&s
 | `GET` | `/api/gold/predictions/chart` | Biểu đồ dự đoán vs thực tế (vàng) |
 | `GET` | `/api/gold/predictions` | Danh sách dự đoán vàng |
 
+### Schedules
+
+| Method | Path | Mô tả |
+|--------|------|-------|
+| `GET` | `/api/schedules` | Danh sách lịch tác vụ cron — yêu cầu JWT |
+| `PUT` | `/api/schedules/{key}` | Cập nhật lịch tác vụ — yêu cầu JWT; body: `{"cron_expression":"0 0 12 * * *","enabled":true}` |
+
 ### Dashboard, Algorithms & Triggers
+
+Tất cả `POST /api/trigger/*` yêu cầu JWT (`Authorization: Bearer <token>`).
 
 | Method | Path | Mô tả |
 |--------|------|-------|
 | `GET` | `/api/dashboard/stats` | Thống kê tổng quan |
 | `GET` | `/api/algorithms/comparison` | So sánh các thuật toán |
 | `GET` | `/api/algorithms/backtest` | Backtest thuật toán |
-| `POST` | `/api/trigger/crawler` | Crawl VN30 (background) |
-| `POST` | `/api/trigger/predict` | Chạy dự đoán (background) |
-| `POST` | `/api/trigger/train` | Huấn luyện — body: `{"algorithm":"lstm_nn"}` (optional) |
-| `POST` | `/api/trigger/gold-crawler` | Crawl giá vàng |
-| `POST` | `/api/trigger/gold-history` | Import lịch sử XAU |
-| `POST` | `/api/trigger/gold-predict` | Dự đoán vàng |
-| `POST` | `/api/trigger/reconcile` | Reconcile actual prices |
-| `POST` | `/api/trigger/stock-history` | Crawl lịch sử stock — body: `{"days":365}` |
-| `POST` | `/api/trigger/historical-backtest` | Walk-forward backtest — query: `?train_window=30&step_size=6`; trả 202, 409 nếu đang chạy |
+| `POST` | `/api/trigger/crawler` | Crawl VN30 (background) — yêu cầu JWT |
+| `POST` | `/api/trigger/predict` | Chạy dự đoán (background) — yêu cầu JWT |
+| `POST` | `/api/trigger/train` | Huấn luyện — body: `{"algorithm":"lstm_nn"}` (optional) — yêu cầu JWT |
+| `POST` | `/api/trigger/gold-crawler` | Crawl giá vàng — yêu cầu JWT |
+| `POST` | `/api/trigger/gold-history` | Import lịch sử XAU — yêu cầu JWT |
+| `POST` | `/api/trigger/gold-predict` | Dự đoán vàng — yêu cầu JWT |
+| `POST` | `/api/trigger/reconcile` | Reconcile actual prices — yêu cầu JWT |
+| `POST` | `/api/trigger/stock-history` | Crawl lịch sử stock — body: `{"days":365}` — yêu cầu JWT |
+| `POST` | `/api/trigger/historical-backtest` | Walk-forward backtest — query: `?train_window=30&step_size=6`; trả 202, 409 nếu đang chạy — yêu cầu JWT |
 | `POST` | `/api/stocks/{symbol}/crawl` | Crawl một mã cổ phiếu |
 | `POST` | `/api/stocks/{symbol}/predict` | Dự đoán một mã cổ phiếu |
 | `GET` | `/health` | Health check chi tiết |
@@ -226,13 +261,15 @@ curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&s
 
 ## Lịch chạy tự động
 
-| Thời gian | Công việc |
-|-----------|-----------|
-| Mỗi ngày 6:00 AM | Reconcile dự đoán với giá thực tế |
-| Mỗi ngày 10:00 AM | Crawl giá vàng SJC và XAU/USD |
-| Mỗi ngày 12:00 PM | Crawl giá cổ phiếu từ VietStock |
-| Mỗi ngày 6:00 PM | Chạy dự đoán giá cho ngày giao dịch tiếp theo |
-| Chủ nhật 9:00 AM | Huấn luyện lại toàn bộ mô hình |
+Lịch được lưu trong bảng DB `cron_schedules` và có thể chỉnh sửa live qua `PUT /api/schedules/{key}` hoặc Settings page trên frontend — không cần restart service.
+
+| Job Key | Thời gian mặc định | Công việc |
+|---------|-------------------|-----------|
+| `reconcile_daily` | Mỗi ngày 6:00 AM | Reconcile dự đoán với giá thực tế |
+| `gold_crawler_daily` | Mỗi ngày 10:00 AM | Crawl giá vàng SJC và XAU/USD |
+| `crawler_daily` | Mỗi ngày 12:00 PM | Crawl giá cổ phiếu từ VietStock |
+| `predict_daily` | Mỗi ngày 6:00 PM | Chạy dự đoán giá cho ngày giao dịch tiếp theo |
+| `train_weekly` | Chủ nhật 9:00 AM | Huấn luyện lại toàn bộ mô hình |
 
 ## Các thuật toán dự đoán
 

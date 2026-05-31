@@ -480,3 +480,108 @@ function trigger(path: string): Promise<boolean> {
 export const crawlGold  = () => trigger('/trigger/gold-crawler');
 export const predictGold = () => trigger('/trigger/gold-predict');
 export const train      = () => trigger('/trigger/train');
+
+// ── Schedule management ──────────────────────────────────────────────────────
+export interface ScheduleItem {
+  job_key: string;
+  job_name: string;
+  cron_expression: string;
+  enabled: boolean;
+  updated_at: string;
+}
+
+function getToken(): string {
+  return localStorage.getItem('vns_token') || '';
+}
+
+export async function fetchSchedules(): Promise<ScheduleItem[]> {
+  const res = await fetch('/api/schedules', {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+export async function updateSchedule(key: string, expr: string, enabled: boolean): Promise<void> {
+  const res = await fetch(`/api/schedules/${key}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify({ cron_expression: expr, enabled }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as any).message || 'HTTP ' + res.status);
+  }
+}
+
+export async function triggerEndpoint(endpoint: string): Promise<string> {
+  const res = await fetch(`/api/trigger/${endpoint}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as any).message || 'HTTP ' + res.status);
+  return (data as any).message || 'OK';
+}
+
+// ── Market Predictions (server-side paginated) ────────────────────────────────
+export interface MarketPredictionsParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
+  algorithm?: string;
+  status?: string;
+}
+
+export interface MarketPageResponse {
+  market: string;
+  data: any[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
+export function fetchMarketPredictions(
+  marketKey: string,
+  params: MarketPredictionsParams = {}
+): Promise<MarketPageResponse> {
+  const p = new URLSearchParams();
+  if (params.page)      p.set('page', String(params.page));
+  if (params.limit)     p.set('limit', String(params.limit));
+  if (params.search)    p.set('search', params.search);
+  if (params.sort_by)   p.set('sort_by', params.sort_by);
+  if (params.sort_dir)  p.set('sort_dir', params.sort_dir);
+  if (params.algorithm) p.set('algorithm', params.algorithm);
+  if (params.status)    p.set('status', params.status);
+  return fetchJSON('/markets/' + encodeURIComponent(marketKey) + '/predictions?' + p.toString())
+    .catch(() => ({ market: marketKey, data: [], total: 0, page: 1, limit: params.limit || 20, total_pages: 0 }));
+}
+
+// ── Market Training (server-side paginated) ───────────────────────────────────
+export interface MarketTrainingParams {
+  page?: number;
+  limit?: number;
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
+  algorithm?: string;
+}
+
+export function fetchMarketTraining(
+  marketKey: string,
+  params: MarketTrainingParams = {}
+): Promise<MarketPageResponse> {
+  const p = new URLSearchParams();
+  if (params.page)      p.set('page', String(params.page));
+  if (params.limit)     p.set('limit', String(params.limit));
+  if (params.sort_by)   p.set('sort_by', params.sort_by);
+  if (params.sort_dir)  p.set('sort_dir', params.sort_dir);
+  if (params.algorithm) p.set('algorithm', params.algorithm);
+  return fetchJSON('/markets/' + encodeURIComponent(marketKey) + '/training?' + p.toString())
+    .catch(() => ({ market: marketKey, data: [], total: 0, page: 1, limit: params.limit || 20, total_pages: 0 }));
+}

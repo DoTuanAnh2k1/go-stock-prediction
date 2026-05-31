@@ -17,6 +17,11 @@ func addHandler() *http.ServeMux {
 	// API ROUTES (JSON responses)
 	// ===========================================
 
+	// Auth APIs
+	mux.HandleFunc("POST /api/auth/login", LoginHandler)
+	mux.HandleFunc("GET /api/auth/me", MeHandler)
+	mux.HandleFunc("PUT /api/auth/password", ChangePasswordHandler)
+
 	// Dashboard APIs
 	mux.HandleFunc("/api/dashboard/stats", GetDashboardStats)
 
@@ -53,20 +58,33 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("/api/gold/predictions/chart", GetGoldPredictionChart)
 	mux.HandleFunc("/api/gold/predictions", GetGoldPredictions)
 
+	// Market-level paginated APIs
+	mux.HandleFunc("/api/markets/{key}/predictions", GetMarketPredictions)
+	mux.HandleFunc("/api/markets/{key}/training", GetMarketTraining)
+
 	// Per-stock crawl and predict APIs
 	mux.HandleFunc("POST /api/stocks/{symbol}/crawl", TriggerStockCrawl)
 	mux.HandleFunc("POST /api/stocks/{symbol}/predict", TriggerStockPredict)
 
-	// Trigger APIs
-	mux.HandleFunc("POST /api/trigger/crawler", APIKeyMiddleware(TriggerCrawlerHandler))
-	mux.HandleFunc("POST /api/trigger/predict", APIKeyMiddleware(TriggerPredictHandler))
-	mux.HandleFunc("POST /api/trigger/gold-crawler", TriggerGoldCrawlerHandler)
-	mux.HandleFunc("POST /api/trigger/gold-history", TriggerGoldHistoryHandler)
-	mux.HandleFunc("POST /api/trigger/gold-predict", TriggerGoldPredictHandler)
-	mux.HandleFunc("POST /api/trigger/train", TriggerTrainHandler)
-	mux.HandleFunc("POST /api/trigger/reconcile", TriggerReconcileHandler)
-	mux.HandleFunc("POST /api/trigger/stock-history", TriggerStockHistoryHandler)
-	mux.HandleFunc("POST /api/trigger/historical-backtest", TriggerHistoricalBacktestHandler)
+	// Trigger APIs (require JWT authentication)
+	mux.HandleFunc("POST /api/trigger/crawler", AuthRequired(TriggerCrawlerHandler))
+	mux.HandleFunc("POST /api/trigger/predict", AuthRequired(TriggerPredictHandler))
+	mux.HandleFunc("POST /api/trigger/gold-crawler", AuthRequired(TriggerGoldCrawlerHandler))
+	mux.HandleFunc("POST /api/trigger/gold-history", AuthRequired(TriggerGoldHistoryHandler))
+	mux.HandleFunc("POST /api/trigger/gold-predict", AuthRequired(TriggerGoldPredictHandler))
+	mux.HandleFunc("POST /api/trigger/train", AuthRequired(TriggerTrainHandler))
+	mux.HandleFunc("POST /api/trigger/reconcile", AuthRequired(TriggerReconcileHandler))
+	mux.HandleFunc("POST /api/trigger/stock-history", AuthRequired(TriggerStockHistoryHandler))
+	mux.HandleFunc("POST /api/trigger/historical-backtest", AuthRequired(TriggerHistoricalBacktestHandler))
+
+	// User management APIs (admin only)
+	mux.HandleFunc("GET /api/users", ListUsersHandler)
+	mux.HandleFunc("POST /api/users", CreateUserHandler)
+	mux.HandleFunc("DELETE /api/users/{id}", DeleteUserHandler)
+
+	// Cron schedule APIs (require JWT authentication)
+	mux.HandleFunc("GET /api/schedules", AuthRequired(GetSchedulesHandler))
+	mux.HandleFunc("PUT /api/schedules/{key}", AuthRequired(UpdateScheduleHandler))
 
 	return mux
 }
@@ -84,6 +102,9 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  GET  /health/simple       -> Simple Health Check")
 	logger.Logger.Info("  GET  /health/ready        -> Readiness Check")
 	logger.Logger.Info("API Routes:")
+	logger.Logger.Info("  POST /api/auth/login")
+	logger.Logger.Info("  GET  /api/auth/me")
+	logger.Logger.Info("  PUT  /api/auth/password")
 	logger.Logger.Info("  GET  /api/dashboard/stats")
 	logger.Logger.Info("  GET  /api/training/status")
 	logger.Logger.Info("  GET  /api/training/history")
@@ -110,6 +131,8 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  GET  /api/gold/predictions/latest")
 	logger.Logger.Info("  GET  /api/gold/predictions/chart")
 	logger.Logger.Info("  GET  /api/gold/predictions")
+	logger.Logger.Info("  GET  /api/markets/{key}/predictions")
+	logger.Logger.Info("  GET  /api/markets/{key}/training")
 	logger.Logger.Info("  POST /api/stocks/{symbol}/crawl")
 	logger.Logger.Info("  POST /api/stocks/{symbol}/predict")
 	logger.Logger.Info("  POST /api/trigger/crawler")
@@ -120,4 +143,10 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  POST /api/trigger/train")
 	logger.Logger.Info("  POST /api/trigger/reconcile")
 	logger.Logger.Info("  POST /api/trigger/stock-history")
+	logger.Logger.Info("  POST /api/trigger/historical-backtest")
+	logger.Logger.Info("  GET  /api/users")
+	logger.Logger.Info("  POST /api/users")
+	logger.Logger.Info("  DELETE /api/users/{id}")
+	logger.Logger.Info("  GET  /api/schedules")
+	logger.Logger.Info("  PUT  /api/schedules/{key}")
 }

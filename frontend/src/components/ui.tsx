@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, Link } from 'react-router-dom';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import { Sparkline } from './charts';
 import type { FmtUtils } from '../types';
 
@@ -12,6 +13,7 @@ const I: Record<string, React.ReactNode> = {
   cpu:       <><rect x="6" y="6" width="12" height="12"/><line x1="9" y1="3" x2="9" y2="6"/><line x1="15" y1="3" x2="15" y2="6"/><line x1="9" y1="18" x2="9" y2="21"/><line x1="15" y1="18" x2="15" y2="21"/><line x1="3" y1="9" x2="6" y2="9"/><line x1="3" y1="15" x2="6" y2="15"/><line x1="18" y1="9" x2="21" y2="9"/><line x1="18" y1="15" x2="21" y2="15"/></>,
   gold:      <><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6"/><path d="M5 12v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-6"/></>,
   book:      <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></>,
+  settings:  <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></>,
   search:    <><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></>,
   sun:       <><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="5.6" y2="5.6"/><line x1="18.4" y1="18.4" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="5.6" y2="18.4"/><line x1="18.4" y1="5.6" x2="19.8" y2="4.2"/></>,
   moon:      <path d="M21 12.8A8 8 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/>,
@@ -19,6 +21,7 @@ const I: Record<string, React.ReactNode> = {
   download:  <><path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><line x1="4" y1="20" x2="20" y2="20"/></>,
   play:      <polygon points="6 4 19 12 6 20"/>,
   bell:      <><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M10.5 20a1.8 1.8 0 0 0 3 0"/></>,
+  user:      <><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></>,
   caretUp:   <polyline points="6 14 12 8 18 14"/>,
   caretDown: <polyline points="6 10 12 16 18 10"/>,
   arrowUp:   <><line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/></>,
@@ -139,18 +142,42 @@ export function ConfBar({ v }: { v: number }) {
 }
 
 // ── Nav config ────────────────────────────────────────────────────────────────
-const NAV = [
-  { id: 'dashboard',   path: '/',            label: 'Tổng quan',   icon: 'grid' },
-  { id: 'stocks',      path: '/stocks',       label: 'Cổ phiếu',   icon: 'candles' },
-  { id: 'predictions', path: '/predictions',  label: 'Dự đoán',    icon: 'pulse' },
-  { id: 'training',    path: '/training',     label: 'Huấn luyện', icon: 'cpu' },
-  { id: 'gold',        path: '/gold',         label: 'Giá vàng',   icon: 'gold' },
-  { id: 'crypto',      path: '/crypto',       label: 'Crypto',      icon: 'crypto' },
-  { id: 'guide',       path: '/guide',        label: 'Hướng dẫn',  icon: 'book' },
+interface NavItem { id: string; path: string; label: string; icon: string; }
+
+// Market definitions with sub-pages
+interface MarketDef {
+  key: string;
+  label: string;
+  icon: string;
+  color: string;
+  comingSoon?: boolean;
+}
+
+const MARKETS: MarketDef[] = [
+  { key: 'vn30',  label: 'VN30',  icon: 'candles', color: 'var(--accent)' },
+  { key: 'gold',  label: 'Vàng',  icon: 'gold',    color: 'var(--gold)'   },
+  { key: 'crypto',label: 'Crypto',icon: 'crypto',   color: 'var(--text-3)', comingSoon: true },
+];
+
+const MARKET_SUBS = [
+  { path: '',             label: 'Tổng quan' },
+  { path: '/predictions', label: 'Dự đoán'   },
+  { path: '/training',    label: 'Huấn luyện'},
+];
+
+// Flat list for MobNav (top-level items only)
+const NAV: NavItem[] = [
+  { id: 'dashboard', path: '/',             label: 'Tổng quan', icon: 'grid'    },
+  { id: 'vn30',      path: '/markets/vn30', label: 'VN30',      icon: 'candles' },
+  { id: 'gold',      path: '/markets/gold', label: 'Vàng',      icon: 'gold'    },
+  { id: 'guide',     path: '/guide',        label: 'Hướng dẫn', icon: 'book'    },
 ];
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 export function Sidebar({ status }: { status: 'loading' | 'live' | 'demo' }) {
+  const { pathname } = useLocation();
+  const { user } = useAuth();
+
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -161,28 +188,78 @@ export function Sidebar({ status }: { status: 'loading' | 'live' | 'demo' }) {
         </div>
       </div>
       <nav className="nav">
+        {/* Dashboard */}
+        <NavLink to="/" end className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
+          <Icon name="grid" size={17} /><span>Tổng quan</span>
+        </NavLink>
+
+        {/* Markets section */}
         <div className="nav__label">Thị trường</div>
-        {NAV.slice(0, 3).map((n) => (
-          <NavLink key={n.id} to={n.path} end={n.path === '/'}
-            className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
-            <Icon name={n.icon} size={17} /><span>{n.label}</span>
-          </NavLink>
-        ))}
-        <div className="nav__label">Mô hình &amp; Tài sản</div>
-        {NAV.slice(3, 6).map((n) => (
-          <NavLink key={n.id} to={n.path}
-            className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
-            <Icon name={n.icon} size={17} /><span>{n.label}</span>
-          </NavLink>
-        ))}
+        {MARKETS.map((m) => {
+          const base = '/markets/' + m.key;
+          const expanded = pathname.startsWith(base);
+          return (
+            <React.Fragment key={m.key}>
+              {/* Market parent row */}
+              <Link
+                to={base}
+                className={`nav__item nav__item--market ${expanded ? 'active' : ''}`}
+                style={expanded ? { borderLeftColor: m.color, color: 'var(--text)' } : {}}
+              >
+                <Icon name={m.icon} size={17} style={expanded ? { color: m.color } : {}} />
+                <span>{m.label}</span>
+                {m.comingSoon && (
+                  <span className="badge badge--muted" style={{ marginLeft: 'auto', fontSize: 9, padding: '1px 5px' }}>Soon</span>
+                )}
+                {!m.comingSoon && (
+                  <Icon
+                    name={expanded ? 'caretUp' : 'caretDown'}
+                    size={13}
+                    style={{ marginLeft: 'auto', color: 'var(--text-3)' }}
+                  />
+                )}
+              </Link>
+
+              {/* Sub-items — only render when expanded */}
+              {expanded && !m.comingSoon && MARKET_SUBS.map((sub) => {
+                const subPath = base + sub.path;
+                const subIcon = sub.path === '' ? (m.key === 'gold' ? 'gold' : 'candles') : sub.path === '/predictions' ? 'pulse' : 'cpu';
+                return (
+                  <NavLink
+                    key={sub.path}
+                    to={subPath}
+                    end={sub.path === ''}
+                    className={({ isActive }) => `nav__sub-item ${isActive ? 'active' : ''}`}
+                  >
+                    <Icon name={subIcon} size={13} />
+                    <span>{sub.label}</span>
+                  </NavLink>
+                );
+              })}
+            </React.Fragment>
+          );
+        })}
+
+        {/* Support section */}
         <div className="nav__label">Hỗ trợ</div>
-        {NAV.slice(6).map((n) => (
-          <NavLink key={n.id} to={n.path}
-            className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
-            <Icon name={n.icon} size={17} /><span>{n.label}</span>
+        <NavLink to="/guide" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
+          <Icon name="book" size={17} /><span>Hướng dẫn</span>
+        </NavLink>
+        {user && (
+          <NavLink to="/settings" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
+            <Icon name="settings" size={17} /><span>Cài đặt</span>
           </NavLink>
-        ))}
+        )}
       </nav>
+
+      {user?.role === 'admin' && (
+        <div className="sidebar__admin">
+          <NavLink to="/admin/users" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
+            <Icon name="user" size={17} /><span>Người dùng</span>
+          </NavLink>
+        </div>
+      )}
+
       <div className="sidebar__foot">
         <div className="mkt">
           <div className="mkt__row">
@@ -192,7 +269,7 @@ export function Sidebar({ status }: { status: 'loading' | 'live' | 'demo' }) {
             </span>
           </div>
           <div className="mkt__row" style={{ color: 'var(--text-3)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-            <Icon name="clock" size={13} /><span>VN30 · phiên gần nhất</span>
+            <Icon name="clock" size={13} /><span>Dữ liệu · phiên gần nhất</span>
           </div>
         </div>
       </div>
@@ -224,16 +301,33 @@ export function Ticker() {
 
 // ── Topbar ────────────────────────────────────────────────────────────────────
 const TITLES: Record<string, [string, string]> = {
-  '/':           ['Tổng quan thị trường', 'DASHBOARD'],
-  '/stocks':     ['Cổ phiếu', 'EQUITIES · VN30'],
-  '/predictions':['Dự đoán', 'FORECASTS'],
-  '/training':   ['Huấn luyện mô hình', 'ML TRAINING'],
-  '/gold':       ['Giá vàng', 'GOLD'],
-  '/crypto':     ['Cryptocurrency', 'CRYPTO · Coming Soon'],
-  '/guide':      ['Hướng dẫn sử dụng', 'USER GUIDE'],
+  '/':                         ['Tổng quan thị trường',  'DASHBOARD'],
+  '/markets/vn30':             ['VN30',                  'EQUITIES · VN30'],
+  '/markets/vn30/predictions': ['Dự đoán VN30',          'PREDICTIONS · VN30'],
+  '/markets/vn30/training':    ['Huấn luyện VN30',       'TRAINING · VN30'],
+  '/markets/gold':             ['Vàng',                  'GOLD'],
+  '/markets/gold/predictions': ['Dự đoán Vàng',          'PREDICTIONS · GOLD'],
+  '/markets/gold/training':    ['Huấn luyện Vàng',       'TRAINING · GOLD'],
+  '/markets/crypto':           ['Cryptocurrency',        'CRYPTO · Coming Soon'],
+  '/guide':                    ['Hướng dẫn sử dụng',     'USER GUIDE'],
+  '/settings':                 ['Cài đặt',               'SETTINGS'],
+  '/admin/users':              ['Quản lý người dùng',    'ADMIN · USERS'],
+  // legacy paths (still reachable until redirect fires)
+  '/stocks':                   ['VN30',                  'EQUITIES · VN30'],
+  '/predictions':              ['Dự đoán',               'FORECASTS'],
+  '/training':                 ['Huấn luyện mô hình',    'ML TRAINING'],
+  '/gold':                     ['Giá vàng',              'GOLD'],
+  '/crypto':                   ['Cryptocurrency',        'CRYPTO · Coming Soon'],
 };
 
-export function Topbar({ theme, setTheme }: { theme: 'dark' | 'light'; setTheme: (t: 'dark' | 'light') => void; status?: string }) {
+export function Topbar({ theme, setTheme, user, onLoginClick, onLogout }: {
+  theme: 'dark' | 'light';
+  setTheme: (t: 'dark' | 'light') => void;
+  status?: string;
+  user?: { username: string } | null;
+  onLoginClick?: () => void;
+  onLogout?: () => void;
+}) {
   const [q, setQ] = useState('');
   const { pathname } = useLocation();
   const [t1, t2] = TITLES[pathname] || ['', ''];
@@ -252,6 +346,24 @@ export function Topbar({ theme, setTheme }: { theme: 'dark' | 'light'; setTheme:
         <button className={theme === 'light' ? 'active' : ''} onClick={() => setTheme('light')} title="Sáng"><Icon name="sun" size={15} /></button>
         <button className={theme === 'dark' ? 'active' : ''} onClick={() => setTheme('dark')} title="Tối"><Icon name="moon" size={15} /></button>
       </div>
+      {user ? (
+        <div className="auth-user">
+          <Icon name="user" size={14} />
+          <span className="auth-user__name">{user.username}</span>
+          <button className="btn btn--icon btn--ghost" title="Đăng xuất" onClick={onLogout}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
+        </div>
+      ) : (
+        <button className="btn btn--sm btn--ghost auth-login-btn" onClick={onLoginClick}>
+          <Icon name="user" size={14} />
+          Đăng nhập
+        </button>
+      )}
     </div>
   );
 }

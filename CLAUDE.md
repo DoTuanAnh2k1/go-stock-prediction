@@ -65,6 +65,10 @@ pkg/server/api_trigger_gold_history.go  # POST /api/trigger/gold-history (→ gR
 pkg/server/api_trigger_reconcile.go     # POST /api/trigger/reconcile (→ gRPC TriggerReconcile)
 pkg/server/api_trigger_stock_history.go # POST /api/trigger/stock-history (→ gRPC TriggerStockHistory)
 pkg/server/api_trigger_historical_backtest.go # POST /api/trigger/historical-backtest (→ gRPC TriggerHistoricalBacktest, trả 202, 409 nếu đang chạy)
+pkg/server/api_auth.go                  # POST /api/auth/login (DB + bcrypt), GET /api/auth/me — JWT authentication
+pkg/server/api_users.go                 # GET/POST /api/users, DELETE /api/users/{id} — quản lý user (admin only)
+pkg/server/api_schedules.go             # GET /api/schedules, PUT /api/schedules/{key} — quản lý lịch cron động
+pkg/server/middleware_jwt.go            # JWTMiddleware (non-blocking, inject claims vào context), getClaims(), requireAuth(), requireAdmin(), AuthRequired()
 pkg/server/helper.go                    # requireGRPCClient(), ResponseError(), ResponseSuccess() và các helper
 pkg/service/crawler/init.go             # Khởi tạo crawler và đăng ký cron job
 pkg/service/crawler/crawler.go          # Logic scraping VietStock bằng Gocolly
@@ -88,17 +92,25 @@ pkg/service/market/registry.go          # Register(), Get(key), All() cho asset 
 pkg/service/market/vn30/market.go       # VN30 market implementation — 30 cổ phiếu HOSE, tự đăng ký qua init()
 pkg/service/market/gold/market.go       # Gold market implementation — 3 sản phẩm: XAU/spot, BTMC/sjc, BTMC/nhan_tron; tự đăng ký qua init()
 pkg/service/predict/orchestrator/orchestrator.go # RunAllMarkets(ctx), RunForMarket(ctx, key) — chạy prediction qua tất cả registered markets
-pkg/store/repository/repository.go     # Interface DatabaseStore (composite) — bao gồm GetConfirmedPredictionsPage, DeletePredictionsBeforeDate, BulkCreatePredictions
+pkg/store/repository/repository.go     # Interface DatabaseStore (composite) — bao gồm GetConfirmedPredictionsPage, DeletePredictionsBeforeDate, BulkCreatePredictions, CronScheduleStore
+pkg/store/repository/user.go           # UserStore interface — CreateUser, GetUserByUsername, GetUserByID, GetAllUsers, DeleteUser, AdminExists
 pkg/store/mysql/                        # Triển khai MySQL dùng GORM
-pkg/models/models_db/                   # GORM struct: Stock, StockPrice, Prediction, SyncLog, Exchange, GoldPrice, TrainingLog, TrainingMetrics
+pkg/store/mysql/user.go                 # MySQL implementation của UserStore
+pkg/store/mysql/cron_schedule.go        # MySQL implementation của CronScheduleStore — GetAllCronSchedules, GetCronScheduleByKey, UpsertCronSchedule
+pkg/models/models_db/                   # GORM struct: Stock, StockPrice, Prediction, SyncLog, Exchange, GoldPrice, TrainingLog, TrainingMetrics, User, CronSchedule
+pkg/models/models_db/cron_schedule.go   # CronSchedule GORM struct (JobKey, JobName, CronExpression, Enabled, UpdatedAt)
+pkg/models/models_db/user.go            # User GORM struct (Username, PasswordHash, Role)
 pkg/models/models_db/gold_price.go      # GoldPrice GORM struct
 pkg/models/models_db/training_log.go    # TrainingLog GORM struct
 pkg/models/models_db/training_metrics.go # TrainingMetrics struct
 pkg/models/models_api/                  # DTO cho JSON response
-pkg/models/models_config/config.go      # Config struct — bao gồm GRPCConfig (ServerPort, ClientTarget)
+pkg/models/models_config/config.go      # Config struct — bao gồm GRPCConfig (ServerPort, ClientTarget) và ServerConfig (AdminUsername, AdminPassword, JWTSecret)
 pkg/utils/cron/                         # Hằng số cron schedule + wrapper
 web/templates/                          # HTML templates (Go's html/template)
 web/static/js/                          # Frontend JS — AJAX gọi các /api/* endpoint
+frontend/src/context/AuthContext.tsx    # AuthProvider + useAuth hook — quản lý JWT trong localStorage
+frontend/src/components/LoginModal.tsx  # Login modal component — gọi POST /api/auth/login
+frontend/src/pages/Users.tsx            # Trang quản lý user — chỉ hiển thị với role admin
 ```
 
 ## Luồng khởi động
@@ -109,9 +121,10 @@ web/static/js/                          # Frontend JS — AJAX gọi các /api/*
 2. Set timezone — `Asia/Ho_Chi_Minh`
 3. `logger.Init()` — Khởi tạo ZeroLog
 4. `repository.Init()` — Kết nối MySQL (shared DB, dùng cho read queries)
-5. `grpcclient.Init(config.GetGRPCConfig().ClientTarget)` — Kết nối tới Prediction Service
-6. `server.StartHTTPServer()` — HTTP server trên `:8118` (goroutine)
-7. Chờ SIGTERM/SIGINT → `grpcclient.Close()` → shutdown
+5. `seedAdminUser()` — Tạo admin user từ env vars nếu chưa có admin nào trong DB
+6. `grpcclient.Init(config.GetGRPCConfig().ClientTarget)` — Kết nối tới Prediction Service
+7. `server.StartHTTPServer()` — HTTP server trên `:8118` (goroutine)
+8. Chờ SIGTERM/SIGINT → `grpcclient.Close()` → shutdown
 
 ### Prediction Service (cmd/prediction/main.go)
 
@@ -136,7 +149,10 @@ GRPC_SERVER_PORT=8119          # Port Prediction Service lắng nghe
 GRPC_TARGET=localhost:8119     # Địa chỉ API Backend dùng để kết nối Prediction Service (Docker: prediction:8119)
 
 # Auth
-API_KEY=                       # Optional — bảo vệ một số trigger endpoint
+API_KEY=                       # Optional — hiện tại không được dùng để bảo vệ trigger endpoints (đã chuyển sang JWT)
+ADMIN_USERNAME=admin           # Username đăng nhập dashboard (default: admin)
+ADMIN_PASSWORD=admin123        # Password đăng nhập dashboard (default: admin123)
+JWT_SECRET=change-me-in-production  # Secret ký JWT — bắt buộc đổi trong production
 
 # Database
 DB_DRIVER=mysql
@@ -161,9 +177,13 @@ DB_LOG_LEVEL=DEBUG
 - **API handlers:** Mỗi nhóm endpoint có file riêng `api_<topic>.go` trong `pkg/server/`.
 - **Algorithms:** Mỗi thuật toán implement interface `PredictionAlgorithm` với method `Predict(ctx, StockData) → Prediction`.
 - **Logging:** Dùng `pkg/logger` (zerolog), không dùng `fmt.Println` hay `log` stdlib.
-- **gRPC triggers:** Tất cả trigger handler trong `pkg/server/api_trigger_*.go` và `pkg/server/api_stock_actions.go` đều gọi `requireGRPCClient(w)` trước. Hàm này trả về 503 nếu gRPC client chưa init (e.g. khi chạy unit test không có prediction service).
+- **gRPC triggers:** Tất cả trigger handler trong `pkg/server/api_trigger_*.go` và `pkg/server/api_stock_actions.go` đều gọi `requireGRPCClient(w)` trước. Hàm này trả về 503 nếu gRPC client chưa init (e.g. khi chạy unit test không có prediction service). Tất cả trigger endpoints được wrap bằng `AuthRequired()` trong router — yêu cầu JWT hợp lệ, không còn dùng `API_KEY` header.
+- **Dynamic cron schedules:** Lịch cron được lưu trong bảng `cron_schedules`. Khi startup, `seedCronSchedules()` tạo các hàng mặc định nếu chưa tồn tại. Prediction Service poll DB mỗi phút để phát hiện thay đổi và tự reschedule — không cần restart. Dùng `CronScheduleStore` interface (`GetAllCronSchedules`, `GetCronScheduleByKey`, `UpsertCronSchedule`) để truy cập, không truy cập bảng trực tiếp.
 - **Proto regeneration:** Khi thay đổi `proto/prediction/prediction.proto`, chạy lệnh `protoc` trong mục Lệnh thường dùng để tái sinh `*.pb.go`. Không sửa tay các file generated.
 - **Data ordering — QUAN TRỌNG:** DB trả `stock_prices` với `ORDER BY trading_date DESC` (mới nhất trước). Tất cả thuật toán (MA/LSTM/ARIMA-GARCH/Ensemble) dùng `prices[len-1]` làm giá hiện tại — vì vậy **phải đảo ngược DESC → ASC** trước khi build `Historical []string`. Logic đảo ngược nằm trong `getStockTrainingData()`, `getStockPredictionData()`, và `walkForwardStock()` (dùng `reverseStockPrices()`). Không thêm query `ORDER BY ASC` trực tiếp — repository interface trả DESC, tầng service tự xử lý.
+- **JWT middleware — non-blocking:** `JWTMiddleware` trong `pkg/server/middleware_jwt.go` nằm trong middleware chain `CORS → RateLimit → JWT → mux`. Middleware này chỉ inject claims vào context nếu token hợp lệ — request không có token vẫn tiếp tục (unauthenticated). Các handler bảo vệ dùng `requireAuth(w, r)` hoặc `requireAdmin(w, r)` để enforce.
+- **Admin seeder:** Khi startup, `seedAdminUser()` trong `cmd/api/main.go` kiểm tra `AdminExists()`. Nếu chưa có user nào với `role="admin"`, tạo một user mới từ `ADMIN_USERNAME`/`ADMIN_PASSWORD` env vars với bcrypt hash. Chạy một lần duy nhất — các lần sau bỏ qua nếu admin đã tồn tại.
+- **User management:** `ADMIN_USERNAME`/`ADMIN_PASSWORD` trong `.env` chỉ dùng để seed lần đầu. Sau đó quản lý user hoàn toàn qua API `/api/users` (admin JWT required). Password lưu dưới dạng bcrypt hash — không lưu plaintext.
 
 ## Hướng dẫn mở rộng (Extension Guide)
 
@@ -213,19 +233,25 @@ Tóm tắt các bước bắt buộc:
 ## Database
 
 - **ORM:** GORM v2
-- **Tables chính:** `exchanges`, `stocks`, `stock_prices`, `predictions`, `sync_logs`, `gold_prices`, `training_logs`
+- **Tables chính:** `exchanges`, `stocks`, `stock_prices`, `predictions`, `sync_logs`, `gold_prices`, `training_logs`, `users`, `cron_schedules`
 - **Auto-migrate:** Chạy khi start app qua `models_db/migrations.go`
 - **Schema đầy đủ:** `database.sql` ở root
 
 ## Cron schedules
 
-| Hằng số | Schedule | Công việc |
-|---------|----------|-----------|
-| `Daily6AM` | `0 0 6 * * *` | Reconcile dự đoán với giá thực tế |
-| `Daily10AM` | `0 0 10 * * *` | Crawl giá vàng SJC và XAU/USD |
-| `Daily12PM` | `0 0 12 * * *` | Crawl dữ liệu giá cổ phiếu |
-| `Daily6PM` | `0 0 18 * * *` | Chạy dự đoán cho TẤT CẢ markets (VN30 + GOLD + markets mới) qua `orchestrator.RunAllMarkets()` |
-| `WeeklySundayAM` | `0 0 9 * * SUN` | Huấn luyện mô hình |
+Lịch cron được lưu trong bảng `cron_schedules` và có thể chỉnh sửa live qua API `/api/schedules` hoặc Settings page trên frontend — **không cần restart service**. Prediction Service poll DB mỗi phút để phát hiện thay đổi và rescheduling tự động.
+
+Khi lần đầu startup, `seedCronSchedules()` trong `pkg/server/api_schedules.go` tạo các hàng mặc định nếu chưa tồn tại.
+
+| Job Key (DB) | Schedule mặc định | Công việc |
+|-------------|-------------------|-----------|
+| `reconcile_daily` | `0 0 6 * * *` | Reconcile dự đoán với giá thực tế |
+| `gold_crawler_daily` | `0 0 10 * * *` | Crawl giá vàng SJC và XAU/USD |
+| `crawler_daily` | `0 0 12 * * *` | Crawl dữ liệu giá cổ phiếu (VN30) |
+| `predict_daily` | `0 0 18 * * *` | Chạy dự đoán cho TẤT CẢ markets qua `orchestrator.RunAllMarkets()` |
+| `train_weekly` | `0 0 9 * * SUN` | Huấn luyện mô hình |
+
+Hằng số cron trong `pkg/utils/cron/` vẫn được dùng làm giá trị mặc định khi seed.
 
 ## Ports
 
@@ -250,6 +276,21 @@ Tóm tắt các bước bắt buộc:
 | `phpmyadmin` | `phpmyadmin/phpmyadmin` | `db` | Admin UI — expose :8081 |
 
 ## API Endpoints
+
+### Auth
+
+| Method | Path | Ghi chú |
+|--------|------|---------|
+| `POST` | `/api/auth/login` | Đăng nhập — body: `{"username":"","password":""}`, query DB + bcrypt verify, trả JWT 24h với claims `sub`, `role`, `user_id`; response: `{"token":"...","user":{"username":"...","role":"..."}}` |
+| `GET` | `/api/auth/me` | Xác minh token — header: `Authorization: Bearer <token>`, trả `{"username":"...","role":"..."}` hoặc 401 |
+
+### User Management
+
+| Method | Path | Ghi chú |
+|--------|------|---------|
+| `GET` | `/api/users` | Danh sách tất cả users — yêu cầu admin JWT; trả `[{"id":1,"username":"...","role":"...","created_at":"..."}]` |
+| `POST` | `/api/users` | Tạo user mới — yêu cầu admin JWT; body: `{"username":"","password":"","role":"user\|admin"}`; role mặc định `"user"` nếu không hợp lệ; trả 409 nếu username đã tồn tại |
+| `DELETE` | `/api/users/{id}` | Xóa user theo ID — yêu cầu admin JWT; trả 400 nếu tự xóa chính mình |
 
 ### Predictions
 
@@ -302,58 +343,81 @@ Tóm tắt các bước bắt buộc:
 | `GET` | `/api/algorithms/comparison` | So sánh các thuật toán |
 | `GET` | `/api/algorithms/backtest` | Backtest thuật toán |
 
-### Trigger
+### Schedules
 
 | Method | Path | Ghi chú |
 |--------|------|---------|
-| `POST` | `/api/trigger/crawler` | Crawl VN30 (background) — yêu cầu API_KEY nếu cấu hình |
-| `POST` | `/api/trigger/predict` | Chạy dự đoán (background) — yêu cầu API_KEY nếu cấu hình |
-| `POST` | `/api/trigger/train` | Huấn luyện toàn bộ hoặc một thuật toán — body JSON `{"algorithm":"lstm_nn"}` (optional) |
-| `POST` | `/api/trigger/gold-crawler` | Crawl giá vàng đồng bộ |
-| `POST` | `/api/trigger/gold-history` | Import lịch sử XAU (background) |
-| `POST` | `/api/trigger/gold-predict` | Dự đoán vàng (background) |
-| `POST` | `/api/trigger/reconcile` | Reconcile dự đoán với giá thực tế |
-| `POST` | `/api/trigger/stock-history` | Crawl lịch sử stock (background) — body JSON `{"days":365}` |
-| `POST` | `/api/trigger/historical-backtest` | Walk-forward backtest (background) — query: `?train_window=30&step_size=6`; trả 202; 409 nếu đang chạy |
+| `GET` | `/api/schedules` | Danh sách lịch tác vụ — yêu cầu JWT; trả `[{"job_key":"...","job_name":"...","cron_expression":"...","enabled":true,"updated_at":"..."}]` |
+| `PUT` | `/api/schedules/{key}` | Cập nhật lịch tác vụ — yêu cầu JWT; body: `{"cron_expression":"0 0 12 * * *","enabled":true}`; validate cron expression trước khi lưu |
+
+### Trigger
+
+Tất cả trigger endpoint đều yêu cầu JWT authentication (`Authorization: Bearer <token>`), được enforce qua `AuthRequired()` middleware wrapper trong router.
+
+| Method | Path | Ghi chú |
+|--------|------|---------|
+| `POST` | `/api/trigger/crawler` | Crawl VN30 (background) — yêu cầu JWT |
+| `POST` | `/api/trigger/predict` | Chạy dự đoán (background) — yêu cầu JWT |
+| `POST` | `/api/trigger/train` | Huấn luyện toàn bộ hoặc một thuật toán — body JSON `{"algorithm":"lstm_nn"}` (optional) — yêu cầu JWT |
+| `POST` | `/api/trigger/gold-crawler` | Crawl giá vàng đồng bộ — yêu cầu JWT |
+| `POST` | `/api/trigger/gold-history` | Import lịch sử XAU (background) — yêu cầu JWT |
+| `POST` | `/api/trigger/gold-predict` | Dự đoán vàng (background) — yêu cầu JWT |
+| `POST` | `/api/trigger/reconcile` | Reconcile dự đoán với giá thực tế — yêu cầu JWT |
+| `POST` | `/api/trigger/stock-history` | Crawl lịch sử stock (background) — body JSON `{"days":365}` — yêu cầu JWT |
+| `POST` | `/api/trigger/historical-backtest` | Walk-forward backtest (background) — query: `?train_window=30&step_size=6`; trả 202; 409 nếu đang chạy — yêu cầu JWT |
 
 ## Trigger thủ công qua API
 
-Tất cả trigger endpoint đều gọi gRPC sang Prediction Service. Một số endpoint yêu cầu `API_KEY` header.
+Tất cả trigger endpoint đều gọi gRPC sang Prediction Service. Tất cả đều yêu cầu JWT (`Authorization: Bearer <token>`). Lấy token qua `POST /api/auth/login` trước.
 
 ```bash
-# Chạy crawler stock ngay (yêu cầu API_KEY nếu được cấu hình)
-curl -X POST http://localhost:8118/api/trigger/crawler
+# Lấy JWT token
+TOKEN=$(curl -s -X POST http://localhost:8118/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
 
-# Chạy dự đoán ngay (yêu cầu API_KEY nếu được cấu hình)
-curl -X POST http://localhost:8118/api/trigger/predict
+# Chạy crawler stock ngay
+curl -X POST http://localhost:8118/api/trigger/crawler -H "Authorization: Bearer $TOKEN"
+
+# Chạy dự đoán ngay
+curl -X POST http://localhost:8118/api/trigger/predict -H "Authorization: Bearer $TOKEN"
 
 # Huấn luyện mô hình ngay (tất cả thuật toán)
-curl -X POST http://localhost:8118/api/trigger/train
+curl -X POST http://localhost:8118/api/trigger/train -H "Authorization: Bearer $TOKEN"
 
 # Huấn luyện một thuật toán cụ thể
-curl -X POST http://localhost:8118/api/trigger/train -d '{"algorithm":"lstm_nn"}'
+curl -X POST http://localhost:8118/api/trigger/train -H "Authorization: Bearer $TOKEN" -d '{"algorithm":"lstm_nn"}'
 
 # Crawl vàng ngay
-curl -X POST http://localhost:8118/api/trigger/gold-crawler
+curl -X POST http://localhost:8118/api/trigger/gold-crawler -H "Authorization: Bearer $TOKEN"
 
 # Import lịch sử vàng (XAU)
-curl -X POST http://localhost:8118/api/trigger/gold-history
+curl -X POST http://localhost:8118/api/trigger/gold-history -H "Authorization: Bearer $TOKEN"
 
 # Chạy dự đoán vàng ngay
-curl -X POST http://localhost:8118/api/trigger/gold-predict
+curl -X POST http://localhost:8118/api/trigger/gold-predict -H "Authorization: Bearer $TOKEN"
 
 # Reconcile dự đoán với giá thực tế
-curl -X POST http://localhost:8118/api/trigger/reconcile
+curl -X POST http://localhost:8118/api/trigger/reconcile -H "Authorization: Bearer $TOKEN"
 
 # Crawl lịch sử cổ phiếu (mặc định 365 ngày)
-curl -X POST http://localhost:8118/api/trigger/stock-history -d '{"days":365}'
+curl -X POST http://localhost:8118/api/trigger/stock-history -H "Authorization: Bearer $TOKEN" -d '{"days":365}'
 
 # Chạy historical backtest (query params, không phải body)
-curl -X POST "http://localhost:8118/api/trigger/historical-backtest?train_window=30&step_size=6"
+curl -X POST "http://localhost:8118/api/trigger/historical-backtest?train_window=30&step_size=6" -H "Authorization: Bearer $TOKEN"
 
 # Crawl và dự đoán một mã cụ thể
 curl -X POST http://localhost:8118/api/stocks/VCB/crawl
 curl -X POST http://localhost:8118/api/stocks/VCB/predict
+
+# Xem lịch cron
+curl http://localhost:8118/api/schedules -H "Authorization: Bearer $TOKEN"
+
+# Cập nhật lịch cron (ví dụ: đổi giờ crawl stock sang 1 PM)
+curl -X PUT http://localhost:8118/api/schedules/crawler_daily \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"cron_expression":"0 0 13 * * *","enabled":true}'
 ```
 
 ## gRPC Service Contract

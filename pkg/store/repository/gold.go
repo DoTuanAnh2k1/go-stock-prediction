@@ -18,6 +18,7 @@ type GoldPredictionStore interface {
 	GetGoldPredictions(source, productType, algorithm string, limit int) ([]modelsdb.GoldPrediction, error)
 	GetLatestGoldPredictions() ([]modelsdb.GoldPrediction, error)
 	GetGoldPredictionsByDateRange(source, productType string, from, to time.Time) ([]modelsdb.GoldPrediction, error)
+	GetGoldPredictionsPage(page, limit int, search, algorithm, status, sortBy, sortDir string) ([]modelsdb.GoldPrediction, int64, error)
 }
 
 type MacroIndicatorStore interface {

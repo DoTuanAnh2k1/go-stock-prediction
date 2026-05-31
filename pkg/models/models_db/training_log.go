@@ -11,6 +11,7 @@ type TrainingLog struct {
 	ID            uint            `gorm:"primaryKey;autoIncrement" json:"id"`
 	SessionID     string          `gorm:"size:36;not null;index" json:"session_id"`
 	AlgorithmName string          `gorm:"size:50;not null;index" json:"algorithm_name"`
+	MarketKey     string          `gorm:"size:20;not null;default:'vn30';index" json:"market_key"`
 	TotalStocks   int             `gorm:"not null" json:"total_stocks"`
 	SuccessCount  int             `gorm:"not null" json:"success_count"`
 	ErrorCount    int             `gorm:"not null" json:"error_count"`

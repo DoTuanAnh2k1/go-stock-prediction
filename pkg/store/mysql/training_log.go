@@ -2,6 +2,7 @@ package mysql
 
 import (
 	modelsdb "go-stock-prediction/pkg/models/models_db"
+	"strings"
 )
 
 func (c *Client) CreateTrainingLog(log *modelsdb.TrainingLog) error {
@@ -80,6 +81,43 @@ func (c *Client) GetLatestTrainingLogByAlgorithm() ([]modelsdb.TrainingLog, erro
 	var logs []modelsdb.TrainingLog
 	err = c.Db.Where("id IN ?", ids).Find(&logs).Error
 	return logs, err
+}
+
+// GetTrainingSessionsByMarket returns paginated training logs filtered by market_key.
+func (c *Client) GetTrainingSessionsByMarket(marketKey string, page, limit int, algorithm, sortBy, sortDir string) ([]modelsdb.TrainingLog, int64, error) {
+	var logs []modelsdb.TrainingLog
+	var total int64
+
+	validSortBy := map[string]bool{
+		"started_at":  true,
+		"accuracy":    true,
+		"duration_ms": true,
+	}
+	if !validSortBy[sortBy] {
+		sortBy = "started_at"
+	}
+	if strings.ToLower(sortDir) != "asc" {
+		sortDir = "DESC"
+	} else {
+		sortDir = "ASC"
+	}
+
+	query := c.Db.Model(&modelsdb.TrainingLog{}).Where("market_key = ?", marketKey)
+
+	if algorithm != "" {
+		query = query.Where("algorithm_name = ?", algorithm)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	err := query.Order(sortBy + " " + sortDir).
+		Offset(offset).
+		Limit(limit).
+		Find(&logs).Error
+	return logs, total, err
 }
 
 // GetTrainingMetricsAggregate returns aggregated stats across all training logs.

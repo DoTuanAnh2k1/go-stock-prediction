@@ -75,6 +75,9 @@ services:
       LOG_LEVEL: INFO
       DB_LOG_LEVEL: INFO
       API_KEY: ""
+      ADMIN_USERNAME: "admin"
+      ADMIN_PASSWORD: "admin123"
+      JWT_SECRET: "go-stock-prediction-jwt-secret-2024"
     networks:
       - app-network
 

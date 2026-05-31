@@ -27,6 +27,14 @@ var (
 	once      sync.Once
 )
 
+// predictDefaults holds the default cron schedules for predict jobs.
+// These are seeded to DB on first run and loaded from DB on subsequent runs.
+var predictDefaults = []modelsdb.CronSchedule{
+	{JobKey: "weekly_training", JobName: "Huấn luyện mô hình (hàng tuần)", CronExpression: cron.WeeklySundayAM, Enabled: true},
+	{JobKey: "daily_prediction", JobName: "Dự đoán hằng ngày (All Markets)", CronExpression: cron.Daily6PM, Enabled: true},
+	{JobKey: "daily_reconcile", JobName: "Reconcile dự đoán (hàng ngày)", CronExpression: cron.Daily6AM, Enabled: true},
+}
+
 // PredictionService manages all prediction algorithms and training
 type PredictionService struct {
 	algorithms map[string]PredictionAlgorithm
@@ -75,32 +83,94 @@ func Init() {
 		// Register all prediction algorithms
 		registerAlgorithms()
 
-		// Setup weekly training cronjob - every Sunday at 9 AM
-		err := cron.AddJob("Weekly Model Training", cron.WeeklySundayAM, CronjobWeeklyTraining)
-		if err != nil {
-			logger.Logger.Errorf("Failed to add weekly training cronjob: %v", err)
-		} else {
-			logger.Logger.Info("Weekly training cronjob registered - every Sunday 9 AM")
+		// Load schedules from DB (seed defaults on first run) and register cron jobs
+		for _, def := range predictDefaults {
+			s := loadOrSeedPredictSchedule(store, def)
+			jobFn := getPredictJobFn(s.JobKey)
+			if s.Enabled {
+				if err := cron.AddJob(s.JobKey, s.CronExpression, jobFn); err != nil {
+					logger.Logger.Errorf("Failed to add cron job %s: %v", s.JobKey, err)
+				} else {
+					logger.Logger.Infof("Registered cron job %s: %s", s.JobKey, s.CronExpression)
+				}
+			} else {
+				logger.Logger.Infof("Cron job %s is disabled", s.JobKey)
+			}
 		}
-
-		// Setup daily prediction job — now orchestrator-driven (all markets)
-		err = cron.AddJob("Daily Prediction (All Markets)", cron.Daily6PM, CronjobDailyPrediction)
-		if err != nil {
-			logger.Logger.Errorf("Failed to add daily prediction cronjob: %v", err)
-		} else {
-			logger.Logger.Info("Daily prediction cronjob registered - every day 6 PM (all markets)")
-		}
-
-		// Setup daily reconciliation job - every day at 6 AM to update actual prices
-		err = cron.AddJob("Daily Prediction Reconcile", cron.Daily6AM, CronjobDailyReconcile)
-		if err != nil {
-			logger.Logger.Errorf("Failed to add daily reconcile cronjob: %v", err)
-		} else {
-			logger.Logger.Info("Daily reconcile cronjob registered - every day 6 AM")
-		}
+		go watchPredictSchedules(store)
 
 		logger.Logger.Info("Prediction service initialized successfully!")
 	})
+}
+
+// loadOrSeedPredictSchedule gets the schedule from DB, or seeds it from default if not present.
+func loadOrSeedPredictSchedule(store repository.DatabaseStore, def modelsdb.CronSchedule) modelsdb.CronSchedule {
+	s, err := store.GetCronScheduleByKey(def.JobKey)
+	if err != nil {
+		_ = store.UpsertCronSchedule(&def)
+		return def
+	}
+	return *s
+}
+
+func getPredictJobFn(jobKey string) cron.JobFunc {
+	switch jobKey {
+	case "weekly_training":
+		return CronjobWeeklyTraining
+	case "daily_reconcile":
+		return CronjobDailyReconcile
+	default: // "daily_prediction"
+		return CronjobDailyPrediction
+	}
+}
+
+// watchPredictSchedules checks DB every minute for schedule changes and reschedules jobs.
+func watchPredictSchedules(store repository.DatabaseStore) {
+	type state struct {
+		expr    string
+		enabled bool
+	}
+	current := make(map[string]state)
+	for _, def := range predictDefaults {
+		if s, err := store.GetCronScheduleByKey(def.JobKey); err == nil {
+			current[def.JobKey] = state{expr: s.CronExpression, enabled: s.Enabled}
+		} else {
+			current[def.JobKey] = state{expr: def.CronExpression, enabled: def.Enabled}
+		}
+	}
+
+	ticker := time.NewTicker(time.Minute)
+	for range ticker.C {
+		for _, def := range predictDefaults {
+			s, err := store.GetCronScheduleByKey(def.JobKey)
+			if err != nil {
+				continue
+			}
+			prev := current[def.JobKey]
+			if s.CronExpression == prev.expr && s.Enabled == prev.enabled {
+				continue
+			}
+			jobFn := getPredictJobFn(def.JobKey)
+			if s.Enabled {
+				if prev.enabled {
+					if err := cron.RescheduleJob(def.JobKey, s.CronExpression); err != nil {
+						logger.Logger.Errorf("Failed to reschedule %s: %v", def.JobKey, err)
+						continue
+					}
+				} else {
+					if err := cron.EnableJob(def.JobKey, s.CronExpression, jobFn); err != nil {
+						logger.Logger.Errorf("Failed to enable %s: %v", def.JobKey, err)
+						continue
+					}
+				}
+				logger.Logger.Infof("Rescheduled %s → %s", def.JobKey, s.CronExpression)
+			} else if prev.enabled {
+				cron.DisableJob(def.JobKey)
+				logger.Logger.Infof("Disabled cron job %s", def.JobKey)
+			}
+			current[def.JobKey] = state{expr: s.CronExpression, enabled: s.Enabled}
+		}
+	}
 }
 
 // registerAlgorithms builds all algorithms from the central registry.
@@ -182,6 +252,7 @@ func CronjobWeeklyTraining() error {
 		trainingLog := &modelsdb.TrainingLog{
 			SessionID:     sessionID,
 			AlgorithmName: algName,
+			MarketKey:     "vn30",
 			TotalStocks:   result.TotalStocks,
 			SuccessCount:  result.SuccessCount,
 			ErrorCount:    result.ErrorCount,
@@ -420,6 +491,7 @@ func TrainSingleAlgorithmByName(algorithmName string) (string, error) {
 	trainingLog := &modelsdb.TrainingLog{
 		SessionID:     sessionID,
 		AlgorithmName: algorithmName,
+		MarketKey:     "vn30",
 		TotalStocks:   result.TotalStocks,
 		SuccessCount:  result.SuccessCount,
 		ErrorCount:    result.ErrorCount,
@@ -474,6 +546,7 @@ func TrainAllAlgorithms() (string, error) {
 			trainingLog := &modelsdb.TrainingLog{
 				SessionID:     sessionID,
 				AlgorithmName: algName,
+				MarketKey:     "vn30",
 				TotalStocks:   result.TotalStocks,
 				SuccessCount:  result.SuccessCount,
 				ErrorCount:    result.ErrorCount,
