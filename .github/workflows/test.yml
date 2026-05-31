@@ -7,8 +7,34 @@ on:
     branches: [main]
 
 jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - run: go mod download
+      - name: Build API
+        run: go build -o /dev/null ./cmd/api
+      - name: Build Prediction
+        run: go build -o /dev/null ./cmd/prediction
+
+  vet:
+    name: Vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - run: go mod download
+      - name: Go vet
+        run: go vet ./...
+
   test:
-    name: Unit Tests & Coverage
+    name: Unit Tests
     runs-on: ubuntu-latest
 
     services:
@@ -33,36 +59,105 @@ jobs:
       TEST_MYSQL_DB: go_stock_prediction_test
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
-          cache: false
+          go-version: "1.25"
+      - run: go mod download
 
-      - name: Download modules
-        run: go mod download
+      - name: Run tests with coverage
+        run: go test ./... -v -count=1 -coverprofile=coverage.out -timeout 120s 2>&1 | tee test-output.txt
 
-      - name: Vet
-        run: go vet ./...
+      - name: Save coverage data
+        if: always()
+        run: |
+          go tool cover -func=coverage.out > coverage-func.txt 2>/dev/null || true
+          go tool cover -func=coverage.out | grep total | awk '{print $3}' > coverage-total.txt 2>/dev/null || echo "N/A" > coverage-total.txt
+          grep -E "^ok|^FAIL|^\?" test-output.txt > package-results.txt 2>/dev/null || true
 
-      - name: Run tests
-        run: go test ./... -v -count=1 -timeout 120s
-
-      - name: Generate coverage report
-        run: go test ./... -count=1 -coverprofile=coverage.out -timeout 120s
-        continue-on-error: true
-
-      - name: Show coverage summary
-        run: go tool cover -func=coverage.out | grep total
-        continue-on-error: true
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
-          path: coverage.out
+          name: coverage-data
+          path: |
+            coverage.out
+            coverage-func.txt
+            coverage-total.txt
+            package-results.txt
           retention-days: 14
         if: always()
+
+  report:
+    name: Summary Report
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [build, vet, test]
+
+    steps:
+      - name: Download coverage data
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-data
+        continue-on-error: true
+
+      - name: Generate summary table
+        run: |
+          cat <<'HEADER' >> $GITHUB_STEP_SUMMARY
+          ## CI Pipeline Results
+
+          | Stage | Status | Result |
+          |-------|--------|--------|
+          HEADER
+
+          # Stage results
+          if [ "${{ needs.build.result }}" = "success" ]; then
+            echo "| **Build** | :white_check_mark: | passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| **Build** | :x: | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.vet.result }}" = "success" ]; then
+            echo "| **Vet** | :white_check_mark: | passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| **Vet** | :x: | ${{ needs.vet.result }} |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.test.result }}" = "success" ]; then
+            echo "| **Unit Tests** | :white_check_mark: | passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| **Unit Tests** | :x: | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Coverage total
+          if [ -f coverage-total.txt ]; then
+            TOTAL=$(cat coverage-total.txt)
+            echo "### Coverage: ${TOTAL}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Per-package results table
+          if [ -f package-results.txt ] && [ -s package-results.txt ]; then
+            echo "<details>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary>Package Details</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Package | Status | Time | Coverage |" >> $GITHUB_STEP_SUMMARY
+            echo "|---------|--------|------|----------|" >> $GITHUB_STEP_SUMMARY
+            while IFS= read -r line; do
+              if echo "$line" | grep -q "^ok"; then
+                PKG=$(echo "$line" | awk '{print $2}' | sed 's|go-stock-prediction/||')
+                TIME=$(echo "$line" | awk '{print $3}')
+                COV=$(echo "$line" | grep -oP 'coverage: \K[0-9.]+%' || echo "-")
+                echo "| \`$PKG\` | :white_check_mark: | ${TIME} | ${COV} |" >> $GITHUB_STEP_SUMMARY
+              elif echo "$line" | grep -q "^FAIL"; then
+                PKG=$(echo "$line" | awk '{print $2}' | sed 's|go-stock-prediction/||')
+                TIME=$(echo "$line" | awk '{print $3}')
+                echo "| \`$PKG\` | :x: | ${TIME} | - |" >> $GITHUB_STEP_SUMMARY
+              elif echo "$line" | grep -q "^\?"; then
+                PKG=$(echo "$line" | awk '{print $2}' | sed 's|go-stock-prediction/||')
+                echo "| \`$PKG\` | :fast_forward: | - | no test |" >> $GITHUB_STEP_SUMMARY
+              fi
+            done < package-results.txt
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+          fi
