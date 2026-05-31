@@ -30,8 +30,8 @@ var (
 // predictDefaults holds the default cron schedules for predict jobs.
 // These are seeded to DB on first run and loaded from DB on subsequent runs.
 var predictDefaults = []modelsdb.CronSchedule{
-	{JobKey: "weekly_training", JobName: "Huấn luyện mô hình (hàng tuần)", CronExpression: cron.WeeklySundayAM, Enabled: true},
-	{JobKey: "daily_prediction", JobName: "Dự đoán hằng ngày (All Markets)", CronExpression: cron.Daily6PM, Enabled: true},
+	{JobKey: "weekly_training", JobName: "Huấn luyện mô hình (hàng tuần)", CronExpression: cron.Daily9AM, Enabled: true},
+	{JobKey: "daily_prediction", JobName: "Dự đoán hằng ngày (All Markets)", CronExpression: cron.EveryHour, Enabled: true},
 	{JobKey: "daily_reconcile", JobName: "Reconcile dự đoán (hàng ngày)", CronExpression: cron.Daily6AM, Enabled: true},
 }
 

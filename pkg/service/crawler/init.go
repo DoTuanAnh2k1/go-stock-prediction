@@ -12,7 +12,7 @@ import (
 // Default schedules — used to seed DB on first run.
 var crawlerDefaults = []modelsdb.CronSchedule{
 	{JobKey: "crawler_stock", JobName: "Crawler Stock (VN30)", CronExpression: cron.Daily12PM, Enabled: true},
-	{JobKey: "crawler_gold", JobName: "Crawler Gold (SJC/XAU)", CronExpression: cron.Daily10AM, Enabled: true},
+	{JobKey: "crawler_gold", JobName: "Crawler Gold (SJC/XAU)", CronExpression: cron.EveryHour, Enabled: true},
 }
 
 func Init() {

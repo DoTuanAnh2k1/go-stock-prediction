@@ -7,16 +7,163 @@ function getToken() {
   return localStorage.getItem('vns_token') || '';
 }
 
-// ── Cron expression human-readable hint ──────────────────────────────────────
-function cronHint(expr: string): string {
+// ── Cron schedule helpers ─────────────────────────────────────────────────────
+
+type FreqType = 'every_hour' | 'every_n_hours' | 'daily' | 'weekly';
+
+const DOW_OPTIONS = [
+  { value: 'MON', label: 'Thứ 2' },
+  { value: 'TUE', label: 'Thứ 3' },
+  { value: 'WED', label: 'Thứ 4' },
+  { value: 'THU', label: 'Thứ 5' },
+  { value: 'FRI', label: 'Thứ 6' },
+  { value: 'SAT', label: 'Thứ 7' },
+  { value: 'SUN', label: 'Chủ nhật' },
+];
+
+interface ParsedSchedule {
+  type: FreqType;
+  interval: number;
+  hour: number;
+  minute: number;
+  dow: string;
+}
+
+function parseCron(expr: string): ParsedSchedule {
+  const defaults: ParsedSchedule = { type: 'daily', interval: 2, hour: 12, minute: 0, dow: 'MON' };
   const parts = expr.trim().split(/\s+/);
-  if (parts.length !== 6) return '';
-  const [, min, hour, , , dow] = parts;
-  const h = parseInt(hour), m = parseInt(min);
-  if (isNaN(h) || isNaN(m)) return '';
-  const t = ('0' + h).slice(-2) + ':' + ('0' + m).slice(-2);
-  if (dow && dow !== '*' && dow !== '?') return `Hàng tuần ${dow} ${t}`;
-  return `Hàng ngày lúc ${t}`;
+  if (parts.length !== 6) return defaults;
+  const [, minStr, hourStr, , , dowStr] = parts;
+  // every hour: 0 0 * * * *
+  if (hourStr === '*' && dowStr === '*') return { ...defaults, type: 'every_hour' };
+  // every N hours: 0 0 */N * * *
+  if (hourStr.startsWith('*/') && dowStr === '*') {
+    const n = parseInt(hourStr.slice(2));
+    return { ...defaults, type: 'every_n_hours', interval: isNaN(n) ? 2 : n };
+  }
+  const h = parseInt(hourStr);
+  const m = parseInt(minStr);
+  // weekly: 0 0 H * * DOW
+  if (dowStr !== '*' && !isNaN(h)) {
+    return { ...defaults, type: 'weekly', hour: h, minute: isNaN(m) ? 0 : m, dow: dowStr };
+  }
+  // daily: 0 0 H * * *
+  if (!isNaN(h)) {
+    return { ...defaults, type: 'daily', hour: h, minute: isNaN(m) ? 0 : m };
+  }
+  return defaults;
+}
+
+function buildCron(p: ParsedSchedule): string {
+  const h = p.hour, m = p.minute;
+  switch (p.type) {
+    case 'every_hour':    return '0 0 * * * *';
+    case 'every_n_hours': return `0 0 */${p.interval} * * *`;
+    case 'daily':         return `0 ${m} ${h} * * *`;
+    case 'weekly':        return `0 ${m} ${h} * * ${p.dow}`;
+  }
+}
+
+function cronLabel(expr: string): string {
+  const p = parseCron(expr);
+  const pad = (n: number) => ('0' + n).slice(-2);
+  switch (p.type) {
+    case 'every_hour':    return 'Mỗi giờ';
+    case 'every_n_hours': return `Mỗi ${p.interval} giờ`;
+    case 'daily':         return `Hàng ngày ${pad(p.hour)}:${pad(p.minute)}`;
+    case 'weekly': {
+      const d = DOW_OPTIONS.find(x => x.value === p.dow)?.label || p.dow;
+      return `${d} ${pad(p.hour)}:${pad(p.minute)}`;
+    }
+  }
+}
+
+// ── Schedule editor ───────────────────────────────────────────────────────────
+
+function ScheduleEditor({ expr, onChange }: { expr: string; onChange: (newExpr: string) => void }) {
+  const init = parseCron(expr);
+  const [type, setType]         = useState<FreqType>(init.type);
+  const [interval, setInterval] = useState(init.interval);
+  const [hour, setHour]         = useState(init.hour);
+  const [minute, setMinute]     = useState(init.minute);
+  const [dow, setDow]           = useState(init.dow);
+
+  useEffect(() => {
+    onChange(buildCron({ type, interval, hour, minute, dow }));
+  }, [type, interval, hour, minute, dow]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* Frequency type */}
+      <select
+        className="sel"
+        value={type}
+        onChange={(e) => setType(e.target.value as FreqType)}
+        style={{ fontSize: 13 }}
+      >
+        <option value="every_hour">Mỗi giờ</option>
+        <option value="every_n_hours">Mỗi N giờ</option>
+        <option value="daily">Hàng ngày lúc</option>
+        <option value="weekly">Hàng tuần vào</option>
+      </select>
+
+      {/* Every N hours */}
+      {type === 'every_n_hours' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Mỗi</span>
+          <select
+            className="sel"
+            value={interval}
+            onChange={(e) => setInterval(Number(e.target.value))}
+            style={{ fontSize: 13 }}
+          >
+            {[2, 3, 4, 6, 8, 12].map((n) => (
+              <option key={n} value={n}>{n} giờ</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Weekly: day selector */}
+      {type === 'weekly' && (
+        <select
+          className="sel"
+          value={dow}
+          onChange={(e) => setDow(e.target.value)}
+          style={{ fontSize: 13 }}
+        >
+          {DOW_OPTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+        </select>
+      )}
+
+      {/* Daily / Weekly: time picker */}
+      {(type === 'daily' || type === 'weekly') && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input
+            type="number" min={0} max={23}
+            value={hour}
+            onChange={(e) => setHour(Math.max(0, Math.min(23, Number(e.target.value))))}
+            className="field__input"
+            style={{ width: 52, fontFamily: 'var(--font-mono)', fontSize: 13, textAlign: 'center' }}
+          />
+          <span style={{ color: 'var(--text-3)', fontWeight: 700 }}>:</span>
+          <input
+            type="number" min={0} max={59}
+            value={minute}
+            onChange={(e) => setMinute(Math.max(0, Math.min(59, Number(e.target.value))))}
+            className="field__input"
+            style={{ width: 52, fontFamily: 'var(--font-mono)', fontSize: 13, textAlign: 'center' }}
+          />
+          <span style={{ fontSize: 11, color: 'var(--text-3)' }}>giờ : phút</span>
+        </div>
+      )}
+
+      {/* Preview */}
+      <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', padding: '2px 0' }}>
+        {buildCron({ type, interval, hour, minute, dow })}
+      </div>
+    </div>
+  );
 }
 
 // ── Trigger button ────────────────────────────────────────────────────────────
@@ -61,10 +208,10 @@ function TriggerBtn({ label, endpoint, icon }: { label: string; endpoint: string
 // ── Cron schedule row ─────────────────────────────────────────────────────────
 function ScheduleRow({ s, onSaved }: { s: ScheduleItem; onSaved: () => void }) {
   const [editing, setEditing] = useState(false);
-  const [expr, setExpr] = useState(s.cron_expression);
+  const [expr, setExpr]       = useState(s.cron_expression);
   const [enabled, setEnabled] = useState(s.enabled);
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState('');
+  const [saving, setSaving]   = useState(false);
+  const [err, setErr]         = useState('');
 
   const save = async () => {
     setSaving(true);
@@ -89,43 +236,37 @@ function ScheduleRow({ s, onSaved }: { s: ScheduleItem; onSaved: () => void }) {
 
   return (
     <tr>
-      <td style={{ padding: '10px 12px', fontSize: 13 }}>
+      {/* Job name column */}
+      <td style={{ padding: '10px 12px', fontSize: 13, verticalAlign: 'top' }}>
         <div style={{ fontWeight: 500 }}>{s.job_name}</div>
         <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>
           {s.job_key}
         </div>
       </td>
-      <td style={{ padding: '10px 12px' }}>
+
+      {/* Schedule column */}
+      <td style={{ padding: '10px 12px', verticalAlign: 'top' }}>
         {editing ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <input
-              className="field__input"
-              style={{ fontFamily: 'var(--font-mono)', fontSize: 13, width: 190 }}
-              value={expr}
-              onChange={(e) => setExpr(e.target.value)}
-              placeholder="0 0 12 * * *"
-            />
-            <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{cronHint(expr)}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <ScheduleEditor expr={expr} onChange={setExpr} />
             {err && <div style={{ fontSize: 11, color: 'var(--down)' }}>{err}</div>}
           </div>
         ) : (
           <div>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)' }}>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>{cronLabel(s.cron_expression)}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
               {s.cron_expression}
-            </span>
-            <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{cronHint(s.cron_expression)}</div>
+            </div>
           </div>
         )}
       </td>
-      <td style={{ padding: '10px 12px' }}>
+
+      {/* Enabled column */}
+      <td style={{ padding: '10px 12px', verticalAlign: 'top' }}>
         {editing ? (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-            />
-            <span style={{ fontSize: 12 }}>{enabled ? 'Bật' : 'Tắt'}</span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+            {enabled ? 'Bật' : 'Tắt'}
           </label>
         ) : (
           <span className={`badge ${s.enabled ? 'badge--up' : 'badge--muted'}`}>
@@ -133,7 +274,9 @@ function ScheduleRow({ s, onSaved }: { s: ScheduleItem; onSaved: () => void }) {
           </span>
         )}
       </td>
-      <td style={{ padding: '10px 12px' }}>
+
+      {/* Actions column */}
+      <td style={{ padding: '10px 12px', verticalAlign: 'top' }}>
         {editing ? (
           <div style={{ display: 'flex', gap: 6 }}>
             <button className="btn btn--primary" style={{ fontSize: 12, padding: '5px 12px' }} disabled={saving} onClick={save}>
@@ -144,11 +287,7 @@ function ScheduleRow({ s, onSaved }: { s: ScheduleItem; onSaved: () => void }) {
             </button>
           </div>
         ) : (
-          <button
-            className="btn btn--ghost"
-            style={{ fontSize: 12, padding: '5px 10px' }}
-            onClick={() => setEditing(true)}
-          >
+          <button className="btn btn--ghost" style={{ fontSize: 12, padding: '5px 10px' }} onClick={() => setEditing(true)}>
             <Icon name="settings" size={12} />
           </button>
         )}
@@ -300,7 +439,7 @@ export default function Settings() {
               <thead>
                 <tr>
                   <th style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-3)' }}>Tác vụ</th>
-                  <th style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-3)' }}>Lịch (6-field cron)</th>
+                  <th style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-3)' }}>Lịch</th>
                   <th style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-3)' }}>Trạng thái</th>
                   <th style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-3)' }}></th>
                 </tr>
@@ -313,9 +452,6 @@ export default function Settings() {
             </table>
           </div>
         )}
-        <div style={{ padding: '10px 12px', borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--text-3)' }}>
-          Định dạng cron 6 trường: giây phút giờ ngày tháng ngày-tuần (ví dụ: 0 0 12 * * * = mỗi ngày 12:00)
-        </div>
       </Panel>
 
       {/* Manual triggers */}

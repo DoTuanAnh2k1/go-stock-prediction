@@ -35,13 +35,13 @@ func GetMarketOverview(w http.ResponseWriter, r *http.Request) {
 	if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= 100 {
 		pageSize = ps
 	}
+	// Only use cache when there are no params of any kind — check raw values before normalization
+	hasParams := sectorFilter != "" || exchangeFilter != "" || q != "" || pageStr != "" || pageSizeStr != "" || sortByStr != "" || sortOrderStr != ""
+
 	if sortByStr != "price" && sortByStr != "change_percent" {
 		sortByStr = "change_percent"
 	}
 	sortDesc := sortOrderStr != "asc"
-
-	// Only use cache when there are no params of any kind
-	hasParams := sectorFilter != "" || exchangeFilter != "" || q != "" || pageStr != "" || pageSizeStr != "" || sortByStr != "" || sortOrderStr != ""
 	if !hasParams {
 		if cached, ok := globalCache.Get(marketOverviewCacheKey); ok {
 			ResponseSuccess(w, http.StatusOK, cached)
