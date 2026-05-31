@@ -82,6 +82,7 @@ message StockHistoryRequest {
 message BacktestRequest {
   int32 train_window = 1;
   int32 step_size = 2;
+  string market_key = 3; // "" or "VN30" = stock backtest, "GOLD" = gold, "NASDAQ100", "CRYPTO", "FUEL"
 }
 
 message StockRequest {
