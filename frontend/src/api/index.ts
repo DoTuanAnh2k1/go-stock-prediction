@@ -461,7 +461,7 @@ export function enrich(data: AppData, onUpdate: () => void): void {
       data.goldSources.map((g) =>
         goldChart(g.source, g.product, 180).then((c) => {
           if (c.sell.length) {
-            g.hist = c.sell; g.spark = c.sell.slice(-24);
+            g.hist = c.sell; g.spark = c.sell.slice(-24); g.histLabels = c.labels;
             const prev = c.sell[c.sell.length - 2] || g.sell;
             g.chg = g.sell - prev;
             g.chgPct = prev ? +((g.chg / prev) * 100).toFixed(2) : 0;
@@ -477,9 +477,25 @@ function trigger(path: string): Promise<boolean> {
   return fetch(BASE + path, { method: 'POST' }).then((r) => r.ok).catch(() => false);
 }
 
-export const crawlGold  = () => trigger('/trigger/gold-crawler');
-export const predictGold = () => trigger('/trigger/gold-predict');
-export const train      = () => trigger('/trigger/train');
+export const crawlGold    = () => trigger('/trigger/gold-crawler');
+export const predictGold  = () => trigger('/trigger/gold-predict');
+export const train        = () => trigger('/trigger/train');
+export const goldBacktest = () => fetch(BASE + '/trigger/gold-historical-backtest', {
+  method: 'POST',
+  headers: { Authorization: 'Bearer ' + getToken() },
+}).then((r) => r.ok).catch(() => false);
+
+// ── NASDAQ ───────────────────────────────────────────────────────────────────
+export const crawlNasdaq   = () => trigger('/trigger/nasdaq-crawler');
+export const predictNasdaq = () => trigger('/trigger/nasdaq-predict');
+
+// ── Crypto ───────────────────────────────────────────────────────────────────
+export const crawlCrypto   = () => trigger('/trigger/crypto-crawler');
+export const predictCrypto = () => trigger('/trigger/crypto-predict');
+
+// ── Fuel ─────────────────────────────────────────────────────────────────────
+export const crawlFuel   = () => trigger('/trigger/fuel-crawler');
+export const predictFuel = () => trigger('/trigger/fuel-predict');
 
 // ── Schedule management ──────────────────────────────────────────────────────
 export interface ScheduleItem {

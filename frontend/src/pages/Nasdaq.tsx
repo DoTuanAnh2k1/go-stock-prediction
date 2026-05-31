@@ -4,14 +4,12 @@ import { LineChart } from '../components/charts';
 import { useAuth } from '../context/AuthContext';
 
 // ── Types ────────────────────────────────────────────────────────────────────
-interface CryptoLatestItem {
-  coin_id: string;
+interface NasdaqLatestItem {
   symbol: string;
-  name?: string;
   close_price: number;
-  market_cap?: number;
-  volume_24h?: number;
   trading_date: string;
+  currency: string;
+  change?: number;
   change_percent?: number;
 }
 
@@ -21,13 +19,13 @@ interface ChartData {
 }
 
 interface PredictionItem {
-  coin_id?: string;
-  symbol?: string;
+  symbol: string;
   algorithm_name: string;
   current_price: number;
   predicted_price: number;
   confidence: number;
   prediction_date: string;
+  target_date?: string;
 }
 
 interface PredChartData {
@@ -60,23 +58,13 @@ async function authPost(path: string): Promise<boolean> {
   return res.ok;
 }
 
-function fmtCrypto(v: number): string {
-  if (v >= 1000) {
-    return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-  return '$' + v.toFixed(2);
+function fmtUSD(v: number): string {
+  return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function fmtCryptoShort(v: number): string {
+function fmtUSDShort(v: number): string {
   if (v >= 1000) return '$' + (v / 1000).toFixed(1) + 'K';
-  return '$' + v.toFixed(2);
-}
-
-function fmtMarketCap(v: number): string {
-  if (v >= 1e12) return '$' + (v / 1e12).toFixed(2) + 'T';
-  if (v >= 1e9) return '$' + (v / 1e9).toFixed(2) + 'B';
-  if (v >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M';
-  return '$' + v.toLocaleString('en-US');
+  return '$' + v.toFixed(0);
 }
 
 function ddmm(s: string): string {
@@ -114,17 +102,15 @@ function Legend({ items }: { items: [string, string][] }) {
   );
 }
 
-// ── Coin definitions ──────────────────────────────────────────────────────────
-const COINS = [
-  { id: 'bitcoin',  label: 'Bitcoin',  symbol: 'BTC', color: '#F7931A' },
-  { id: 'ethereum', label: 'Ethereum', symbol: 'ETH', color: '#627EEA' },
-];
+// ── Top symbols to show as KPI cards ─────────────────────────────────────────
+const KPI_SYMBOLS = ['QQQ', 'AAPL', 'MSFT', 'NVDA'];
 
-export default function Crypto() {
+export default function Nasdaq() {
   const { isLoggedIn } = useAuth();
 
-  const [latest, setLatest] = useState<CryptoLatestItem[]>([]);
-  const [activeCoin, setActiveCoin] = useState<string>('bitcoin');
+  // State
+  const [latest, setLatest] = useState<NasdaqLatestItem[]>([]);
+  const [activeSym, setActiveSym] = useState<string | null>(null);
   const [days, setDays] = useState('90');
   const [chart, setChart] = useState<ChartData>({ dates: [], prices: [] });
   const [preds, setPreds] = useState<PredictionItem[]>([]);
@@ -136,13 +122,16 @@ export default function Crypto() {
   useEffect(() => {
     setLoading(true);
     Promise.allSettled([
-      apiFetch('/api/crypto/latest'),
-      apiFetch('/api/crypto/predictions/latest'),
+      apiFetch('/api/nasdaq/latest'),
+      apiFetch('/api/nasdaq/predictions/latest'),
     ]).then(([latestRes, predsRes]) => {
       if (latestRes.status === 'fulfilled' && latestRes.value) {
         const raw = Array.isArray(latestRes.value) ? latestRes.value
           : Array.isArray(latestRes.value?.data) ? latestRes.value.data : [];
         setLatest(raw);
+        if (raw.length > 0 && !activeSym) {
+          setActiveSym(raw[0].symbol);
+        }
       }
       if (predsRes.status === 'fulfilled' && predsRes.value) {
         const raw = Array.isArray(predsRes.value) ? predsRes.value
@@ -153,12 +142,13 @@ export default function Crypto() {
     });
   }, []);
 
-  // Load chart when coin or days changes
+  // Load chart when symbol or days changes
   useEffect(() => {
+    if (!activeSym) return;
     setChartLoading(true);
     Promise.allSettled([
-      apiFetch(`/api/crypto/chart?coin=${encodeURIComponent(activeCoin)}&days=${days}`),
-      apiFetch(`/api/crypto/predictions/chart?coin=${encodeURIComponent(activeCoin)}&days=${days}`),
+      apiFetch(`/api/nasdaq/chart?symbol=${encodeURIComponent(activeSym)}&days=${days}`),
+      apiFetch(`/api/nasdaq/predictions/chart?symbol=${encodeURIComponent(activeSym)}&days=${days}`),
     ]).then(([chartRes, predChartRes]) => {
       if (chartRes.status === 'fulfilled' && chartRes.value) {
         const v = chartRes.value;
@@ -186,29 +176,26 @@ export default function Crypto() {
       }
       setChartLoading(false);
     });
-  }, [activeCoin, days]);
+  }, [activeSym, days]);
 
-  const activeCoinDef = COINS.find((c) => c.id === activeCoin) || COINS[0];
+  // KPI cards: prioritise known symbols, fill with whatever we got
+  const kpiItems = (() => {
+    const bySymbol = new Map(latest.map((s) => [s.symbol, s]));
+    const result: NasdaqLatestItem[] = [];
+    for (const sym of KPI_SYMBOLS) {
+      const item = bySymbol.get(sym);
+      if (item) result.push(item);
+    }
+    for (const item of latest) {
+      if (!KPI_SYMBOLS.includes(item.symbol)) result.push(item);
+    }
+    return result.slice(0, 4);
+  })();
+
   const n = parseInt(days);
   const chartLabels = chart.dates.map((d, i) =>
     i % Math.ceil(n / 7) === 0 ? ddmm(d) : ''
   );
-
-  // Build KPI items: prefer BTC and ETH, then others
-  const kpiCoins = (() => {
-    const byId = new Map(latest.map((c) => [c.coin_id, c]));
-    const bySym = new Map(latest.map((c) => [c.symbol?.toUpperCase(), c]));
-    const result: CryptoLatestItem[] = [];
-    for (const coin of COINS) {
-      const item = byId.get(coin.id) || bySym.get(coin.symbol);
-      if (item) result.push(item);
-    }
-    // Fill remaining slots from the API response
-    for (const item of latest) {
-      if (!result.find((r) => r.coin_id === item.coin_id)) result.push(item);
-    }
-    return result.slice(0, 4);
-  })();
 
   if (loading) {
     return (
@@ -218,7 +205,7 @@ export default function Crypto() {
         </div>
         <div className="empty section-gap">
           <div className="empty__icon"><Icon name="layers" size={18} /></div>
-          <p>Đang tải dữ liệu crypto...</p>
+          <p>Đang tải dữ liệu NASDAQ 100...</p>
         </div>
       </div>
     );
@@ -228,29 +215,27 @@ export default function Crypto() {
     <div className="content__inner fade">
       {/* KPI cards */}
       <div className="grid grid--kpis section-gap">
-        {kpiCoins.length === 0 ? (
-          [1, 2, 3, 4].map((i) => <KPI key={i} label="—" value="N/A" sub="Chưa có dữ liệu" />)
-        ) : (
-          kpiCoins.map((c) => {
-            const coinDef = COINS.find((d) => d.id === c.coin_id || d.symbol === c.symbol?.toUpperCase());
-            return (
+        {kpiItems.length === 0
+          ? [1, 2, 3, 4].map((i) => (
+              <KPI key={i} label="—" value="N/A" sub="Chưa có dữ liệu" />
+            ))
+          : kpiItems.map((s) => (
               <KPI
-                key={c.coin_id}
-                label={coinDef ? `${coinDef.label} (${coinDef.symbol})` : (c.symbol || c.coin_id)}
-                value={fmtCrypto(num(c.close_price))}
-                sub={c.market_cap ? 'MCap: ' + fmtMarketCap(num(c.market_cap)) : c.trading_date?.slice(0, 10) || '—'}
-                chgPct={c.change_percent != null ? num(c.change_percent) : undefined}
-                sparkColor={coinDef?.color || 'var(--accent)'}
+                key={s.symbol}
+                label={s.symbol}
+                value={fmtUSD(num(s.close_price))}
+                sub={s.trading_date ? s.trading_date.slice(0, 10) : '—'}
+                chgPct={s.change_percent != null ? num(s.change_percent) : undefined}
+                sparkColor="var(--accent)"
               />
-            );
-          })
-        )}
+            ))
+        }
       </div>
 
       {/* Price chart */}
       <Panel
-        title="Biểu đồ giá Crypto"
-        dot={activeCoinDef.label + ' (' + activeCoinDef.symbol + ')'}
+        title="Biểu đồ giá NASDAQ 100"
+        dot={activeSym || '—'}
         className="section-gap"
         tools={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -268,8 +253,8 @@ export default function Crypto() {
                 <button
                   className="btn btn--sm"
                   onClick={() =>
-                    authPost('/api/trigger/crypto-crawler').then((ok) =>
-                      vnsToast(ok ? 'Đã gửi yêu cầu thu thập Crypto' : 'Không thể gửi yêu cầu thu thập')
+                    authPost('/api/trigger/nasdaq-crawler').then((ok) =>
+                      vnsToast(ok ? 'Đã gửi yêu cầu thu thập NASDAQ' : 'Không thể gửi yêu cầu thu thập')
                     )
                   }
                 >
@@ -279,8 +264,8 @@ export default function Crypto() {
                   className="btn btn--sm"
                   style={{ background: 'var(--accent)', borderColor: 'var(--accent)', color: '#fff' }}
                   onClick={() =>
-                    authPost('/api/trigger/crypto-predict').then((ok) =>
-                      vnsToast(ok ? 'Đã gửi yêu cầu chạy dự đoán Crypto' : 'Không thể gửi yêu cầu dự đoán')
+                    authPost('/api/trigger/nasdaq-predict').then((ok) =>
+                      vnsToast(ok ? 'Đã gửi yêu cầu chạy dự đoán NASDAQ' : 'Không thể gửi yêu cầu dự đoán')
                     )
                   }
                 >
@@ -291,49 +276,32 @@ export default function Crypto() {
           </div>
         }
       >
-        {/* Coin tabs */}
-        <div className="chips" style={{ marginBottom: 16 }}>
-          {COINS.map((c) => (
-            <button
-              key={c.id}
-              className={`chip ${activeCoin === c.id ? 'active' : ''}`}
-              onClick={() => setActiveCoin(c.id)}
-            >
-              {c.label} ({c.symbol})
-            </button>
-          ))}
-          {/* Extra coins from API not in COINS list */}
-          {latest
-            .filter((c) => !COINS.find((d) => d.id === c.coin_id || d.symbol === c.symbol?.toUpperCase()))
-            .map((c) => (
+        {/* Symbol selector chips */}
+        {latest.length > 0 && (
+          <div className="chips" style={{ marginBottom: 16 }}>
+            {latest.map((s) => (
               <button
-                key={c.coin_id}
-                className={`chip ${activeCoin === c.coin_id ? 'active' : ''}`}
-                onClick={() => setActiveCoin(c.coin_id)}
+                key={s.symbol}
+                className={`chip ${activeSym === s.symbol ? 'active' : ''}`}
+                onClick={() => setActiveSym(s.symbol)}
               >
-                {c.symbol || c.coin_id}
+                {s.symbol}
               </button>
-            ))
-          }
-        </div>
+            ))}
+          </div>
+        )}
 
-        {/* Current price display */}
-        {(() => {
-          const cur = latest.find((c) => c.coin_id === activeCoin);
+        {activeSym && (() => {
+          const cur = latest.find((s) => s.symbol === activeSym);
           return cur ? (
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 10 }}>
               <span className="num" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-1px' }}>
-                {fmtCrypto(num(cur.close_price))}
+                {fmtUSD(num(cur.close_price))}
               </span>
-              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>USD</span>
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>USD / share</span>
               {cur.change_percent != null && <Chg pct={num(cur.change_percent)} />}
-              {cur.volume_24h != null && (
-                <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                  Vol 24h: {fmtMarketCap(num(cur.volume_24h))}
-                </span>
-              )}
               <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-                {cur.trading_date?.slice(0, 10) || '—'}
+                NASDAQ 100 · {cur.trading_date ? cur.trading_date.slice(0, 10) : '—'}
               </span>
             </div>
           ) : null;
@@ -346,13 +314,13 @@ export default function Crypto() {
           </div>
         ) : chart.prices.length > 0 ? (
           <LineChart
-            series={[{ name: activeCoinDef.label, data: chart.prices, color: activeCoinDef.color }]}
+            series={[{ name: activeSym || 'Price', data: chart.prices, color: 'var(--accent)' }]}
             labels={chartLabels}
             height={300}
             area
-            yFmt={fmtCryptoShort}
-            valueFmt={fmtCrypto}
-            padL={70}
+            yFmt={fmtUSDShort}
+            valueFmt={fmtUSD}
+            padL={58}
           />
         ) : (
           <div className="empty" style={{ height: 300, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -364,7 +332,7 @@ export default function Crypto() {
 
       {/* Predictions + Prediction chart */}
       <div className="grid grid--halves section-gap">
-        <Panel title="Dự đoán Crypto phiên mai" flush>
+        <Panel title="Dự đoán NASDAQ phiên mai" flush>
           {preds.length === 0 ? (
             <div className="empty">
               <div className="empty__icon"><Icon name="layers" size={18} /></div>
@@ -375,7 +343,7 @@ export default function Crypto() {
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Coin</th>
+                    <th>Mã</th>
                     <th className="c">TT</th>
                     <th className="r">Hiện tại</th>
                     <th className="r">Dự đoán</th>
@@ -391,13 +359,12 @@ export default function Crypto() {
                     const { short, cls } = algoShort(p.algorithm_name);
                     let conf = num(p.confidence);
                     if (conf > 0 && conf <= 1) conf = Math.round(conf * 100);
-                    const sym = p.symbol || p.coin_id || '—';
                     return (
                       <tr key={i}>
-                        <td className="sym" style={{ fontSize: 12.5 }}>{sym.toUpperCase()}</td>
+                        <td className="sym" style={{ fontSize: 12.5 }}>{p.symbol}</td>
                         <td className="c"><span className={`algo algo--${cls}`}>{short}</span></td>
-                        <td className="r num" style={{ color: 'var(--text-2)', fontSize: 12 }}>{fmtCrypto(cur)}</td>
-                        <td className="r num" style={{ fontWeight: 600, fontSize: 12 }}>{fmtCrypto(pred)}</td>
+                        <td className="r num" style={{ color: 'var(--text-2)', fontSize: 12 }}>{fmtUSD(cur)}</td>
+                        <td className="r num" style={{ fontWeight: 600, fontSize: 12 }}>{fmtUSD(pred)}</td>
                         <td className="r"><Chg pct={deltaPct} /></td>
                         <td className="r"><ConfBar v={conf} /></td>
                       </tr>
@@ -409,24 +376,21 @@ export default function Crypto() {
           )}
         </Panel>
 
-        <Panel
-          title="Dự đoán vs Thực tế"
-          sub={activeCoinDef.label + ' · Ensemble'}
-        >
+        <Panel title="Dự đoán vs Thực tế" sub={activeSym ? activeSym + ' · Ensemble' : 'NASDAQ 100'}>
           {predChart.labels.length > 0 ? (
             <>
               <LineChart
                 series={[
                   { name: 'Thực tế', data: predChart.actual, color: 'var(--text-2)', w: 1.8 },
-                  { name: 'Dự đoán', data: predChart.pred, color: activeCoinDef.color, dash: '5 4', w: 2 },
+                  { name: 'Dự đoán', data: predChart.pred, color: 'var(--accent)', dash: '5 4', w: 2 },
                 ]}
                 labels={predChart.labels.map((l, i) => i % 5 === 0 ? l : '')}
                 height={236}
-                yFmt={fmtCryptoShort}
-                valueFmt={fmtCrypto}
-                padL={70}
+                yFmt={fmtUSDShort}
+                valueFmt={fmtUSD}
+                padL={58}
               />
-              <Legend items={[['Thực tế', 'var(--text-2)'], ['Dự đoán', activeCoinDef.color]]} />
+              <Legend items={[['Thực tế', 'var(--text-2)'], ['Dự đoán', 'var(--accent)']]} />
             </>
           ) : (
             <div className="empty" style={{ height: 236, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -437,8 +401,8 @@ export default function Crypto() {
         </Panel>
       </div>
 
-      {/* Market info table */}
-      <div className="sec-head section-gap"><h2>Thông tin thị trường Crypto</h2><div className="line"></div></div>
+      {/* Latest prices table */}
+      <div className="sec-head section-gap"><h2>Bảng giá NASDAQ 100</h2><div className="line"></div></div>
       <Panel flush className="section-gap">
         {latest.length === 0 ? (
           <div className="empty">
@@ -450,43 +414,27 @@ export default function Crypto() {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Coin</th>
-                  <th className="r">Giá (USD)</th>
+                  <th>Mã</th>
+                  <th className="r">Giá đóng (USD)</th>
                   <th className="r">±%</th>
-                  <th className="r">Vốn hóa</th>
-                  <th className="r">Vol 24h</th>
                   <th className="c">Ngày</th>
                 </tr>
               </thead>
               <tbody>
-                {latest.map((c, i) => {
-                  const coinDef = COINS.find((d) => d.id === c.coin_id || d.symbol === c.symbol?.toUpperCase());
-                  return (
-                    <tr key={i} className="clickable" onClick={() => setActiveCoin(c.coin_id)}>
-                      <td className="sym">
-                        {coinDef ? coinDef.label : (c.name || c.coin_id)}
-                        <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-3)' }}>
-                          {c.symbol?.toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="r num" style={{ fontWeight: 600 }}>{fmtCrypto(num(c.close_price))}</td>
-                      <td className="r">
-                        {c.change_percent != null
-                          ? <Chg pct={num(c.change_percent)} />
-                          : <span style={{ color: 'var(--text-3)' }}>—</span>}
-                      </td>
-                      <td className="r num" style={{ color: 'var(--text-2)' }}>
-                        {c.market_cap != null ? fmtMarketCap(num(c.market_cap)) : '—'}
-                      </td>
-                      <td className="r num" style={{ color: 'var(--text-3)', fontSize: 12 }}>
-                        {c.volume_24h != null ? fmtMarketCap(num(c.volume_24h)) : '—'}
-                      </td>
-                      <td className="c num" style={{ color: 'var(--text-3)', fontSize: 12 }}>
-                        {c.trading_date?.slice(0, 10) || '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {latest.map((s, i) => (
+                  <tr key={i} className="clickable" onClick={() => setActiveSym(s.symbol)}>
+                    <td className="sym">{s.symbol}</td>
+                    <td className="r num" style={{ fontWeight: 600 }}>{fmtUSD(num(s.close_price))}</td>
+                    <td className="r">
+                      {s.change_percent != null
+                        ? <Chg pct={num(s.change_percent)} />
+                        : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                    </td>
+                    <td className="c num" style={{ color: 'var(--text-3)', fontSize: 12 }}>
+                      {s.trading_date ? s.trading_date.slice(0, 10) : '—'}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

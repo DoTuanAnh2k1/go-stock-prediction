@@ -11,6 +11,8 @@ import Predictions from './pages/Predictions';
 import Training from './pages/Training';
 import Gold from './pages/Gold';
 import Crypto from './pages/Crypto';
+import Nasdaq from './pages/Nasdaq';
+import Fuel from './pages/Fuel';
 import Guide from './pages/Guide';
 import MarketPredictions from './pages/MarketPredictions';
 import MarketTraining from './pages/MarketTraining';
@@ -74,6 +76,8 @@ function AppInner() {
             <Route path="/markets/:marketKey/detail" element={<ErrorBoundary><MarketDetail /></ErrorBoundary>} />
 
             <Route path="/markets/crypto" element={<ErrorBoundary><Crypto /></ErrorBoundary>} />
+            <Route path="/markets/nasdaq100" element={<ErrorBoundary><Nasdaq /></ErrorBoundary>} />
+            <Route path="/markets/fuel" element={<ErrorBoundary><Fuel /></ErrorBoundary>} />
 
             {/* ── Support ──────────────────────────────────────── */}
             <Route path="/guide" element={<ErrorBoundary><Guide /></ErrorBoundary>} />
@@ -86,6 +90,8 @@ function AppInner() {
             <Route path="/stocks" element={<Navigate to="/markets/vn30" replace />} />
             <Route path="/gold" element={<Navigate to="/markets/gold" replace />} />
             <Route path="/crypto" element={<Navigate to="/markets/crypto" replace />} />
+            <Route path="/nasdaq" element={<Navigate to="/markets/nasdaq100" replace />} />
+            <Route path="/fuel" element={<Navigate to="/markets/fuel" replace />} />
             <Route path="/predictions" element={<Navigate to="/markets/vn30/predictions" replace />} />
             <Route path="/training" element={<Navigate to="/markets/vn30/training" replace />} />
           </Routes>

@@ -4,14 +4,11 @@ import { LineChart } from '../components/charts';
 import { useAuth } from '../context/AuthContext';
 
 // ── Types ────────────────────────────────────────────────────────────────────
-interface CryptoLatestItem {
-  coin_id: string;
-  symbol: string;
-  name?: string;
-  close_price: number;
-  market_cap?: number;
-  volume_24h?: number;
+interface FuelLatestItem {
+  product_type: string;
+  price: number;
   trading_date: string;
+  change?: number;
   change_percent?: number;
 }
 
@@ -21,8 +18,7 @@ interface ChartData {
 }
 
 interface PredictionItem {
-  coin_id?: string;
-  symbol?: string;
+  product_type?: string;
   algorithm_name: string;
   current_price: number;
   predicted_price: number;
@@ -60,23 +56,21 @@ async function authPost(path: string): Promise<boolean> {
   return res.ok;
 }
 
-function fmtCrypto(v: number): string {
-  if (v >= 1000) {
-    return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-  return '$' + v.toFixed(2);
+// API returns giá nghìn VND (e.g., 24.15 = 24.150 VND/lít)
+// If value > 1000, it's already in VND; otherwise multiply by 1000
+function normalizePrice(raw: number): number {
+  return raw > 1000 ? raw : raw * 1000;
 }
 
-function fmtCryptoShort(v: number): string {
-  if (v >= 1000) return '$' + (v / 1000).toFixed(1) + 'K';
-  return '$' + v.toFixed(2);
+function fmtFuelPrice(v: number): string {
+  const p = normalizePrice(v);
+  return p.toLocaleString('vi-VN') + ' đ';
 }
 
-function fmtMarketCap(v: number): string {
-  if (v >= 1e12) return '$' + (v / 1e12).toFixed(2) + 'T';
-  if (v >= 1e9) return '$' + (v / 1e9).toFixed(2) + 'B';
-  if (v >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M';
-  return '$' + v.toLocaleString('en-US');
+function fmtFuelShort(v: number): string {
+  const p = normalizePrice(v);
+  if (p >= 1000) return (p / 1000).toFixed(1) + 'K';
+  return '' + Math.round(p);
 }
 
 function ddmm(s: string): string {
@@ -114,18 +108,22 @@ function Legend({ items }: { items: [string, string][] }) {
   );
 }
 
-// ── Coin definitions ──────────────────────────────────────────────────────────
-const COINS = [
-  { id: 'bitcoin',  label: 'Bitcoin',  symbol: 'BTC', color: '#F7931A' },
-  { id: 'ethereum', label: 'Ethereum', symbol: 'ETH', color: '#627EEA' },
+// ── Product definitions ───────────────────────────────────────────────────────
+const PRODUCTS: { id: string; label: string; short: string; color: string }[] = [
+  { id: 'ron95_iii',  label: 'Xăng RON 95-III',    short: 'RON 95', color: 'var(--up)'     },
+  { id: 'e5_ron92',   label: 'Xăng E5 RON 92-II',  short: 'E5 92',  color: 'var(--accent)' },
+  { id: 'do_005s',    label: 'Dầu DO 0,05S-II',     short: 'Diesel', color: 'oklch(0.74 0.13 200)' },
+  { id: 'kerosene',   label: 'Dầu hỏa 2-K',         short: 'Dầu hỏa', color: 'var(--gold)'  },
 ];
 
-export default function Crypto() {
+const KPI_PRODUCTS = PRODUCTS.map((p) => p.id);
+
+export default function Fuel() {
   const { isLoggedIn } = useAuth();
 
-  const [latest, setLatest] = useState<CryptoLatestItem[]>([]);
-  const [activeCoin, setActiveCoin] = useState<string>('bitcoin');
-  const [days, setDays] = useState('90');
+  const [latest, setLatest] = useState<FuelLatestItem[]>([]);
+  const [activeProduct, setActiveProduct] = useState<string>('ron95_iii');
+  const [days, setDays] = useState('180');
   const [chart, setChart] = useState<ChartData>({ dates: [], prices: [] });
   const [preds, setPreds] = useState<PredictionItem[]>([]);
   const [predChart, setPredChart] = useState<PredChartData>({ labels: [], actual: [], pred: [] });
@@ -136,8 +134,8 @@ export default function Crypto() {
   useEffect(() => {
     setLoading(true);
     Promise.allSettled([
-      apiFetch('/api/crypto/latest'),
-      apiFetch('/api/crypto/predictions/latest'),
+      apiFetch('/api/fuel/latest'),
+      apiFetch('/api/fuel/predictions/latest'),
     ]).then(([latestRes, predsRes]) => {
       if (latestRes.status === 'fulfilled' && latestRes.value) {
         const raw = Array.isArray(latestRes.value) ? latestRes.value
@@ -153,12 +151,12 @@ export default function Crypto() {
     });
   }, []);
 
-  // Load chart when coin or days changes
+  // Load chart when product or days changes
   useEffect(() => {
     setChartLoading(true);
     Promise.allSettled([
-      apiFetch(`/api/crypto/chart?coin=${encodeURIComponent(activeCoin)}&days=${days}`),
-      apiFetch(`/api/crypto/predictions/chart?coin=${encodeURIComponent(activeCoin)}&days=${days}`),
+      apiFetch(`/api/fuel/chart?product=${encodeURIComponent(activeProduct)}&days=${days}`),
+      apiFetch(`/api/fuel/predictions/chart?product=${encodeURIComponent(activeProduct)}&days=${days}`),
     ]).then(([chartRes, predChartRes]) => {
       if (chartRes.status === 'fulfilled' && chartRes.value) {
         const v = chartRes.value;
@@ -186,28 +184,20 @@ export default function Crypto() {
       }
       setChartLoading(false);
     });
-  }, [activeCoin, days]);
+  }, [activeProduct, days]);
 
-  const activeCoinDef = COINS.find((c) => c.id === activeCoin) || COINS[0];
+  const activeProductDef = PRODUCTS.find((p) => p.id === activeProduct) || PRODUCTS[0];
   const n = parseInt(days);
-  const chartLabels = chart.dates.map((d, i) =>
-    i % Math.ceil(n / 7) === 0 ? ddmm(d) : ''
-  );
+  // Fuel data is sparse (~52 updates/year), use wider label spacing
+  const labelEvery = Math.max(1, Math.ceil(n / 8));
+  const chartLabels = chart.dates.map((d, i) => i % labelEvery === 0 ? ddmm(d) : '');
 
-  // Build KPI items: prefer BTC and ETH, then others
-  const kpiCoins = (() => {
-    const byId = new Map(latest.map((c) => [c.coin_id, c]));
-    const bySym = new Map(latest.map((c) => [c.symbol?.toUpperCase(), c]));
-    const result: CryptoLatestItem[] = [];
-    for (const coin of COINS) {
-      const item = byId.get(coin.id) || bySym.get(coin.symbol);
-      if (item) result.push(item);
-    }
-    // Fill remaining slots from the API response
-    for (const item of latest) {
-      if (!result.find((r) => r.coin_id === item.coin_id)) result.push(item);
-    }
-    return result.slice(0, 4);
+  // KPI cards: one per defined product
+  const kpiItems = (() => {
+    const byProduct = new Map(latest.map((p) => [p.product_type, p]));
+    return KPI_PRODUCTS
+      .map((id) => ({ def: PRODUCTS.find((p) => p.id === id)!, item: byProduct.get(id) || null }))
+      .filter((x) => x.def);
   })();
 
   if (loading) {
@@ -218,7 +208,7 @@ export default function Crypto() {
         </div>
         <div className="empty section-gap">
           <div className="empty__icon"><Icon name="layers" size={18} /></div>
-          <p>Đang tải dữ liệu crypto...</p>
+          <p>Đang tải dữ liệu giá xăng...</p>
         </div>
       </div>
     );
@@ -226,39 +216,49 @@ export default function Crypto() {
 
   return (
     <div className="content__inner fade">
+      {/* Info banner */}
+      <div
+        className="panel section-gap"
+        style={{
+          borderColor: 'var(--gold)',
+          background: 'color-mix(in oklch, var(--gold) 6%, var(--bg-1))',
+          marginBottom: 0,
+        }}
+      >
+        <div className="panel__body" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px' }}>
+          <Icon name="clock" size={16} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+          <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+            Giá xăng điều chỉnh theo chu kỳ ~7 ngày (quyết định của Bộ Công Thương). Dữ liệu thưa hơn thị trường chứng khoán — khoảng 52 chu kỳ/năm.
+          </span>
+        </div>
+      </div>
+
       {/* KPI cards */}
       <div className="grid grid--kpis section-gap">
-        {kpiCoins.length === 0 ? (
-          [1, 2, 3, 4].map((i) => <KPI key={i} label="—" value="N/A" sub="Chưa có dữ liệu" />)
-        ) : (
-          kpiCoins.map((c) => {
-            const coinDef = COINS.find((d) => d.id === c.coin_id || d.symbol === c.symbol?.toUpperCase());
-            return (
-              <KPI
-                key={c.coin_id}
-                label={coinDef ? `${coinDef.label} (${coinDef.symbol})` : (c.symbol || c.coin_id)}
-                value={fmtCrypto(num(c.close_price))}
-                sub={c.market_cap ? 'MCap: ' + fmtMarketCap(num(c.market_cap)) : c.trading_date?.slice(0, 10) || '—'}
-                chgPct={c.change_percent != null ? num(c.change_percent) : undefined}
-                sparkColor={coinDef?.color || 'var(--accent)'}
-              />
-            );
-          })
-        )}
+        {kpiItems.map(({ def, item }) => (
+          <KPI
+            key={def.id}
+            label={def.short}
+            value={item ? fmtFuelPrice(num(item.price)) : 'N/A'}
+            sub={item ? (item.trading_date?.slice(0, 10) || '—') : 'Chưa có dữ liệu'}
+            chgPct={item?.change_percent != null ? num(item.change_percent) : undefined}
+            sparkColor={def.color}
+          />
+        ))}
       </div>
 
       {/* Price chart */}
       <Panel
-        title="Biểu đồ giá Crypto"
-        dot={activeCoinDef.label + ' (' + activeCoinDef.symbol + ')'}
+        title="Biểu đồ giá xăng dầu"
+        dot={activeProductDef.label}
         className="section-gap"
         tools={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Seg
               options={[
-                { value: '30', label: '30N' },
                 { value: '90', label: '90N' },
                 { value: '180', label: '180N' },
+                { value: '365', label: '1N' },
               ]}
               value={days}
               onChange={setDays}
@@ -268,8 +268,8 @@ export default function Crypto() {
                 <button
                   className="btn btn--sm"
                   onClick={() =>
-                    authPost('/api/trigger/crypto-crawler').then((ok) =>
-                      vnsToast(ok ? 'Đã gửi yêu cầu thu thập Crypto' : 'Không thể gửi yêu cầu thu thập')
+                    authPost('/api/trigger/fuel-crawler').then((ok) =>
+                      vnsToast(ok ? 'Đã gửi yêu cầu thu thập giá xăng' : 'Không thể gửi yêu cầu thu thập')
                     )
                   }
                 >
@@ -277,10 +277,10 @@ export default function Crypto() {
                 </button>
                 <button
                   className="btn btn--sm"
-                  style={{ background: 'var(--accent)', borderColor: 'var(--accent)', color: '#fff' }}
+                  style={{ background: 'var(--up)', borderColor: 'var(--up)', color: '#fff' }}
                   onClick={() =>
-                    authPost('/api/trigger/crypto-predict').then((ok) =>
-                      vnsToast(ok ? 'Đã gửi yêu cầu chạy dự đoán Crypto' : 'Không thể gửi yêu cầu dự đoán')
+                    authPost('/api/trigger/fuel-predict').then((ok) =>
+                      vnsToast(ok ? 'Đã gửi yêu cầu chạy dự đoán giá xăng' : 'Không thể gửi yêu cầu dự đoán')
                     )
                   }
                 >
@@ -291,47 +291,29 @@ export default function Crypto() {
           </div>
         }
       >
-        {/* Coin tabs */}
+        {/* Product selector chips */}
         <div className="chips" style={{ marginBottom: 16 }}>
-          {COINS.map((c) => (
+          {PRODUCTS.map((p) => (
             <button
-              key={c.id}
-              className={`chip ${activeCoin === c.id ? 'active' : ''}`}
-              onClick={() => setActiveCoin(c.id)}
+              key={p.id}
+              className={`chip ${activeProduct === p.id ? 'active' : ''}`}
+              onClick={() => setActiveProduct(p.id)}
             >
-              {c.label} ({c.symbol})
+              {p.label}
             </button>
           ))}
-          {/* Extra coins from API not in COINS list */}
-          {latest
-            .filter((c) => !COINS.find((d) => d.id === c.coin_id || d.symbol === c.symbol?.toUpperCase()))
-            .map((c) => (
-              <button
-                key={c.coin_id}
-                className={`chip ${activeCoin === c.coin_id ? 'active' : ''}`}
-                onClick={() => setActiveCoin(c.coin_id)}
-              >
-                {c.symbol || c.coin_id}
-              </button>
-            ))
-          }
         </div>
 
         {/* Current price display */}
         {(() => {
-          const cur = latest.find((c) => c.coin_id === activeCoin);
+          const cur = latest.find((p) => p.product_type === activeProduct);
           return cur ? (
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 10 }}>
               <span className="num" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-1px' }}>
-                {fmtCrypto(num(cur.close_price))}
+                {fmtFuelPrice(num(cur.price))}
               </span>
-              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>USD</span>
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>/ lít</span>
               {cur.change_percent != null && <Chg pct={num(cur.change_percent)} />}
-              {cur.volume_24h != null && (
-                <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                  Vol 24h: {fmtMarketCap(num(cur.volume_24h))}
-                </span>
-              )}
               <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
                 {cur.trading_date?.slice(0, 10) || '—'}
               </span>
@@ -346,13 +328,13 @@ export default function Crypto() {
           </div>
         ) : chart.prices.length > 0 ? (
           <LineChart
-            series={[{ name: activeCoinDef.label, data: chart.prices, color: activeCoinDef.color }]}
+            series={[{ name: activeProductDef.label, data: chart.prices, color: activeProductDef.color }]}
             labels={chartLabels}
             height={300}
             area
-            yFmt={fmtCryptoShort}
-            valueFmt={fmtCrypto}
-            padL={70}
+            yFmt={fmtFuelShort}
+            valueFmt={fmtFuelPrice}
+            padL={54}
           />
         ) : (
           <div className="empty" style={{ height: 300, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -364,7 +346,7 @@ export default function Crypto() {
 
       {/* Predictions + Prediction chart */}
       <div className="grid grid--halves section-gap">
-        <Panel title="Dự đoán Crypto phiên mai" flush>
+        <Panel title="Dự đoán giá xăng kỳ tới" flush>
           {preds.length === 0 ? (
             <div className="empty">
               <div className="empty__icon"><Icon name="layers" size={18} /></div>
@@ -375,7 +357,7 @@ export default function Crypto() {
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Coin</th>
+                    <th>Sản phẩm</th>
                     <th className="c">TT</th>
                     <th className="r">Hiện tại</th>
                     <th className="r">Dự đoán</th>
@@ -391,13 +373,14 @@ export default function Crypto() {
                     const { short, cls } = algoShort(p.algorithm_name);
                     let conf = num(p.confidence);
                     if (conf > 0 && conf <= 1) conf = Math.round(conf * 100);
-                    const sym = p.symbol || p.coin_id || '—';
+                    const prodDef = PRODUCTS.find((d) => d.id === p.product_type);
+                    const prodLabel = prodDef ? prodDef.short : (p.product_type || '—');
                     return (
                       <tr key={i}>
-                        <td className="sym" style={{ fontSize: 12.5 }}>{sym.toUpperCase()}</td>
+                        <td className="sym" style={{ fontSize: 12.5 }}>{prodLabel}</td>
                         <td className="c"><span className={`algo algo--${cls}`}>{short}</span></td>
-                        <td className="r num" style={{ color: 'var(--text-2)', fontSize: 12 }}>{fmtCrypto(cur)}</td>
-                        <td className="r num" style={{ fontWeight: 600, fontSize: 12 }}>{fmtCrypto(pred)}</td>
+                        <td className="r num" style={{ color: 'var(--text-2)', fontSize: 12 }}>{fmtFuelPrice(cur)}</td>
+                        <td className="r num" style={{ fontWeight: 600, fontSize: 12 }}>{fmtFuelPrice(pred)}</td>
                         <td className="r"><Chg pct={deltaPct} /></td>
                         <td className="r"><ConfBar v={conf} /></td>
                       </tr>
@@ -409,24 +392,21 @@ export default function Crypto() {
           )}
         </Panel>
 
-        <Panel
-          title="Dự đoán vs Thực tế"
-          sub={activeCoinDef.label + ' · Ensemble'}
-        >
+        <Panel title="Dự đoán vs Thực tế" sub={activeProductDef.label + ' · Ensemble'}>
           {predChart.labels.length > 0 ? (
             <>
               <LineChart
                 series={[
                   { name: 'Thực tế', data: predChart.actual, color: 'var(--text-2)', w: 1.8 },
-                  { name: 'Dự đoán', data: predChart.pred, color: activeCoinDef.color, dash: '5 4', w: 2 },
+                  { name: 'Dự đoán', data: predChart.pred, color: activeProductDef.color, dash: '5 4', w: 2 },
                 ]}
                 labels={predChart.labels.map((l, i) => i % 5 === 0 ? l : '')}
                 height={236}
-                yFmt={fmtCryptoShort}
-                valueFmt={fmtCrypto}
-                padL={70}
+                yFmt={fmtFuelShort}
+                valueFmt={fmtFuelPrice}
+                padL={54}
               />
-              <Legend items={[['Thực tế', 'var(--text-2)'], ['Dự đoán', activeCoinDef.color]]} />
+              <Legend items={[['Thực tế', 'var(--text-2)'], ['Dự đoán', activeProductDef.color]]} />
             </>
           ) : (
             <div className="empty" style={{ height: 236, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -437,8 +417,8 @@ export default function Crypto() {
         </Panel>
       </div>
 
-      {/* Market info table */}
-      <div className="sec-head section-gap"><h2>Thông tin thị trường Crypto</h2><div className="line"></div></div>
+      {/* Current prices table */}
+      <div className="sec-head section-gap"><h2>Bảng giá xăng dầu hiện tại</h2><div className="line"></div></div>
       <Panel flush className="section-gap">
         {latest.length === 0 ? (
           <div className="empty">
@@ -450,39 +430,28 @@ export default function Crypto() {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Coin</th>
-                  <th className="r">Giá (USD)</th>
+                  <th>Sản phẩm</th>
+                  <th className="r">Giá bán lẻ (VND/lít)</th>
                   <th className="r">±%</th>
-                  <th className="r">Vốn hóa</th>
-                  <th className="r">Vol 24h</th>
-                  <th className="c">Ngày</th>
+                  <th className="c">Ngày điều chỉnh</th>
                 </tr>
               </thead>
               <tbody>
-                {latest.map((c, i) => {
-                  const coinDef = COINS.find((d) => d.id === c.coin_id || d.symbol === c.symbol?.toUpperCase());
+                {latest.map((p, i) => {
+                  const prodDef = PRODUCTS.find((d) => d.id === p.product_type);
                   return (
-                    <tr key={i} className="clickable" onClick={() => setActiveCoin(c.coin_id)}>
-                      <td className="sym">
-                        {coinDef ? coinDef.label : (c.name || c.coin_id)}
-                        <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-3)' }}>
-                          {c.symbol?.toUpperCase()}
-                        </span>
+                    <tr key={i} className="clickable" onClick={() => setActiveProduct(p.product_type)}>
+                      <td>
+                        <span className="sym">{prodDef ? prodDef.label : p.product_type}</span>
                       </td>
-                      <td className="r num" style={{ fontWeight: 600 }}>{fmtCrypto(num(c.close_price))}</td>
+                      <td className="r num" style={{ fontWeight: 600 }}>{fmtFuelPrice(num(p.price))}</td>
                       <td className="r">
-                        {c.change_percent != null
-                          ? <Chg pct={num(c.change_percent)} />
+                        {p.change_percent != null
+                          ? <Chg pct={num(p.change_percent)} />
                           : <span style={{ color: 'var(--text-3)' }}>—</span>}
                       </td>
-                      <td className="r num" style={{ color: 'var(--text-2)' }}>
-                        {c.market_cap != null ? fmtMarketCap(num(c.market_cap)) : '—'}
-                      </td>
-                      <td className="r num" style={{ color: 'var(--text-3)', fontSize: 12 }}>
-                        {c.volume_24h != null ? fmtMarketCap(num(c.volume_24h)) : '—'}
-                      </td>
                       <td className="c num" style={{ color: 'var(--text-3)', fontSize: 12 }}>
-                        {c.trading_date?.slice(0, 10) || '—'}
+                        {p.trading_date ? p.trading_date.slice(0, 10) : '—'}
                       </td>
                     </tr>
                   );

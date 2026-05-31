@@ -26,6 +26,12 @@ type DatabaseStore interface {
 	TrainingLogStore
 	UserStore
 	CronScheduleStore
+	NasdaqPriceStore
+	NasdaqPredictionStore
+	CryptoPriceStore
+	CryptoPredictionStore
+	FuelPriceStore
+	FuelPredictionStore
 }
 
 // CronScheduleStore - interface cho cron schedule operations

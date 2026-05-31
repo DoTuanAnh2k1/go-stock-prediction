@@ -11,8 +11,11 @@ import (
 	"go-stock-prediction/pkg/config"
 	"go-stock-prediction/pkg/logger"
 	"go-stock-prediction/pkg/service/crawler"
-	_ "go-stock-prediction/pkg/service/market/gold" // registers GOLD market
-	_ "go-stock-prediction/pkg/service/market/vn30" // registers VN30 market
+	_ "go-stock-prediction/pkg/service/market/crypto"   // registers CRYPTO market
+	_ "go-stock-prediction/pkg/service/market/fuel"     // registers FUEL market
+	_ "go-stock-prediction/pkg/service/market/gold"     // registers GOLD market
+	_ "go-stock-prediction/pkg/service/market/nasdaq100" // registers NASDAQ100 market
+	_ "go-stock-prediction/pkg/service/market/vn30"     // registers VN30 market
 	_ "go-stock-prediction/pkg/service/predict"      // registers stock asset type via init()
 	"go-stock-prediction/pkg/service/predict/assettype"
 	_ "go-stock-prediction/pkg/service/predict/gold" // registers gold asset type via init()

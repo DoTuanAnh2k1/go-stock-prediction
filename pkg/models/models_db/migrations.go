@@ -13,4 +13,10 @@ var AllModels = []interface{}{
 	&TrainingLog{},
 	&User{},
 	&CronSchedule{},
+	&NasdaqPrice{},
+	&NasdaqPrediction{},
+	&CryptoPrice{},
+	&CryptoPrediction{},
+	&FuelPrice{},
+	&FuelPrediction{},
 }

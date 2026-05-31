@@ -58,6 +58,36 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("/api/gold/predictions/chart", GetGoldPredictionChart)
 	mux.HandleFunc("/api/gold/predictions", GetGoldPredictions)
 
+	// NASDAQ data APIs
+	mux.HandleFunc("/api/nasdaq/latest", GetNasdaqLatest)
+	mux.HandleFunc("/api/nasdaq/prices", GetNasdaqPrices)
+	mux.HandleFunc("/api/nasdaq/chart", GetNasdaqChart)
+
+	// NASDAQ prediction APIs
+	mux.HandleFunc("/api/nasdaq/predictions/latest", GetNasdaqPredictionsLatest)
+	mux.HandleFunc("/api/nasdaq/predictions/chart", GetNasdaqPredictionsChart)
+	mux.HandleFunc("/api/nasdaq/predictions", GetNasdaqPredictions)
+
+	// Crypto data APIs
+	mux.HandleFunc("/api/crypto/latest", GetCryptoLatest)
+	mux.HandleFunc("/api/crypto/prices", GetCryptoPrices)
+	mux.HandleFunc("/api/crypto/chart", GetCryptoChart)
+
+	// Crypto prediction APIs
+	mux.HandleFunc("/api/crypto/predictions/latest", GetCryptoPredictionsLatest)
+	mux.HandleFunc("/api/crypto/predictions/chart", GetCryptoPredictionsChart)
+	mux.HandleFunc("/api/crypto/predictions", GetCryptoPredictions)
+
+	// Fuel data APIs
+	mux.HandleFunc("/api/fuel/latest", GetFuelLatest)
+	mux.HandleFunc("/api/fuel/prices", GetFuelPrices)
+	mux.HandleFunc("/api/fuel/chart", GetFuelChart)
+
+	// Fuel prediction APIs
+	mux.HandleFunc("/api/fuel/predictions/latest", GetFuelPredictionsLatest)
+	mux.HandleFunc("/api/fuel/predictions/chart", GetFuelPredictionsChart)
+	mux.HandleFunc("/api/fuel/predictions", GetFuelPredictions)
+
 	// Market-level paginated APIs
 	mux.HandleFunc("/api/markets/{key}/predictions", GetMarketPredictions)
 	mux.HandleFunc("/api/markets/{key}/training", GetMarketTraining)
@@ -76,6 +106,13 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("POST /api/trigger/reconcile", AuthRequired(TriggerReconcileHandler))
 	mux.HandleFunc("POST /api/trigger/stock-history", AuthRequired(TriggerStockHistoryHandler))
 	mux.HandleFunc("POST /api/trigger/historical-backtest", AuthRequired(TriggerHistoricalBacktestHandler))
+	mux.HandleFunc("POST /api/trigger/gold-historical-backtest", AuthRequired(TriggerGoldHistoricalBacktestHandler))
+	mux.HandleFunc("POST /api/trigger/nasdaq-crawler", AuthRequired(TriggerNasdaqCrawlerHandler))
+	mux.HandleFunc("POST /api/trigger/nasdaq-predict", AuthRequired(TriggerNasdaqPredictHandler))
+	mux.HandleFunc("POST /api/trigger/crypto-crawler", AuthRequired(TriggerCryptoCrawlerHandler))
+	mux.HandleFunc("POST /api/trigger/crypto-predict", AuthRequired(TriggerCryptoPredictHandler))
+	mux.HandleFunc("POST /api/trigger/fuel-crawler", AuthRequired(TriggerFuelCrawlerHandler))
+	mux.HandleFunc("POST /api/trigger/fuel-predict", AuthRequired(TriggerFuelPredictHandler))
 
 	// User management APIs (admin only)
 	mux.HandleFunc("GET /api/users", ListUsersHandler)
@@ -144,9 +181,34 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  POST /api/trigger/reconcile")
 	logger.Logger.Info("  POST /api/trigger/stock-history")
 	logger.Logger.Info("  POST /api/trigger/historical-backtest")
+	logger.Logger.Info("  POST /api/trigger/gold-historical-backtest")
 	logger.Logger.Info("  GET  /api/users")
 	logger.Logger.Info("  POST /api/users")
 	logger.Logger.Info("  DELETE /api/users/{id}")
 	logger.Logger.Info("  GET  /api/schedules")
 	logger.Logger.Info("  PUT  /api/schedules/{key}")
+	logger.Logger.Info("  GET  /api/nasdaq/latest")
+	logger.Logger.Info("  GET  /api/nasdaq/prices")
+	logger.Logger.Info("  GET  /api/nasdaq/chart")
+	logger.Logger.Info("  GET  /api/nasdaq/predictions/latest")
+	logger.Logger.Info("  GET  /api/nasdaq/predictions/chart")
+	logger.Logger.Info("  GET  /api/nasdaq/predictions")
+	logger.Logger.Info("  GET  /api/crypto/latest")
+	logger.Logger.Info("  GET  /api/crypto/prices")
+	logger.Logger.Info("  GET  /api/crypto/chart")
+	logger.Logger.Info("  GET  /api/crypto/predictions/latest")
+	logger.Logger.Info("  GET  /api/crypto/predictions/chart")
+	logger.Logger.Info("  GET  /api/crypto/predictions")
+	logger.Logger.Info("  GET  /api/fuel/latest")
+	logger.Logger.Info("  GET  /api/fuel/prices")
+	logger.Logger.Info("  GET  /api/fuel/chart")
+	logger.Logger.Info("  GET  /api/fuel/predictions/latest")
+	logger.Logger.Info("  GET  /api/fuel/predictions/chart")
+	logger.Logger.Info("  GET  /api/fuel/predictions")
+	logger.Logger.Info("  POST /api/trigger/nasdaq-crawler")
+	logger.Logger.Info("  POST /api/trigger/nasdaq-predict")
+	logger.Logger.Info("  POST /api/trigger/crypto-crawler")
+	logger.Logger.Info("  POST /api/trigger/crypto-predict")
+	logger.Logger.Info("  POST /api/trigger/fuel-crawler")
+	logger.Logger.Info("  POST /api/trigger/fuel-predict")
 }

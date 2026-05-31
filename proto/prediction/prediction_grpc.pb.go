@@ -31,6 +31,12 @@ const (
 	PredictionService_TriggerStockCrawl_FullMethodName         = "/prediction.PredictionService/TriggerStockCrawl"
 	PredictionService_TriggerStockPredict_FullMethodName       = "/prediction.PredictionService/TriggerStockPredict"
 	PredictionService_GetTrainingStatus_FullMethodName         = "/prediction.PredictionService/GetTrainingStatus"
+	PredictionService_TriggerNasdaqCrawler_FullMethodName      = "/prediction.PredictionService/TriggerNasdaqCrawler"
+	PredictionService_TriggerNasdaqPredict_FullMethodName      = "/prediction.PredictionService/TriggerNasdaqPredict"
+	PredictionService_TriggerCryptoCrawler_FullMethodName      = "/prediction.PredictionService/TriggerCryptoCrawler"
+	PredictionService_TriggerCryptoPredict_FullMethodName      = "/prediction.PredictionService/TriggerCryptoPredict"
+	PredictionService_TriggerFuelCrawler_FullMethodName        = "/prediction.PredictionService/TriggerFuelCrawler"
+	PredictionService_TriggerFuelPredict_FullMethodName        = "/prediction.PredictionService/TriggerFuelPredict"
 )
 
 // PredictionServiceClient is the client API for PredictionService service.
@@ -64,6 +70,15 @@ type PredictionServiceClient interface {
 	TriggerStockPredict(ctx context.Context, in *StockRequest, opts ...grpc.CallOption) (*StockPredictResponse, error)
 	// Get current training status
 	GetTrainingStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TrainingStatusResponse, error)
+	// NASDAQ 100
+	TriggerNasdaqCrawler(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
+	TriggerNasdaqPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
+	// Crypto
+	TriggerCryptoCrawler(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
+	TriggerCryptoPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
+	// Fuel (Giá Xăng VN)
+	TriggerFuelCrawler(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
+	TriggerFuelPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
 }
 
 type predictionServiceClient struct {
@@ -194,6 +209,66 @@ func (c *predictionServiceClient) GetTrainingStatus(ctx context.Context, in *Emp
 	return out, nil
 }
 
+func (c *predictionServiceClient) TriggerNasdaqCrawler(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TriggerResponse)
+	err := c.cc.Invoke(ctx, PredictionService_TriggerNasdaqCrawler_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *predictionServiceClient) TriggerNasdaqPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TriggerResponse)
+	err := c.cc.Invoke(ctx, PredictionService_TriggerNasdaqPredict_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *predictionServiceClient) TriggerCryptoCrawler(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TriggerResponse)
+	err := c.cc.Invoke(ctx, PredictionService_TriggerCryptoCrawler_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *predictionServiceClient) TriggerCryptoPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TriggerResponse)
+	err := c.cc.Invoke(ctx, PredictionService_TriggerCryptoPredict_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *predictionServiceClient) TriggerFuelCrawler(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TriggerResponse)
+	err := c.cc.Invoke(ctx, PredictionService_TriggerFuelCrawler_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *predictionServiceClient) TriggerFuelPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TriggerResponse)
+	err := c.cc.Invoke(ctx, PredictionService_TriggerFuelPredict_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PredictionServiceServer is the server API for PredictionService service.
 // All implementations must embed UnimplementedPredictionServiceServer
 // for forward compatibility.
@@ -225,6 +300,15 @@ type PredictionServiceServer interface {
 	TriggerStockPredict(context.Context, *StockRequest) (*StockPredictResponse, error)
 	// Get current training status
 	GetTrainingStatus(context.Context, *Empty) (*TrainingStatusResponse, error)
+	// NASDAQ 100
+	TriggerNasdaqCrawler(context.Context, *Empty) (*TriggerResponse, error)
+	TriggerNasdaqPredict(context.Context, *Empty) (*TriggerResponse, error)
+	// Crypto
+	TriggerCryptoCrawler(context.Context, *Empty) (*TriggerResponse, error)
+	TriggerCryptoPredict(context.Context, *Empty) (*TriggerResponse, error)
+	// Fuel (Giá Xăng VN)
+	TriggerFuelCrawler(context.Context, *Empty) (*TriggerResponse, error)
+	TriggerFuelPredict(context.Context, *Empty) (*TriggerResponse, error)
 	mustEmbedUnimplementedPredictionServiceServer()
 }
 
@@ -270,6 +354,24 @@ func (UnimplementedPredictionServiceServer) TriggerStockPredict(context.Context,
 }
 func (UnimplementedPredictionServiceServer) GetTrainingStatus(context.Context, *Empty) (*TrainingStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetTrainingStatus not implemented")
+}
+func (UnimplementedPredictionServiceServer) TriggerNasdaqCrawler(context.Context, *Empty) (*TriggerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TriggerNasdaqCrawler not implemented")
+}
+func (UnimplementedPredictionServiceServer) TriggerNasdaqPredict(context.Context, *Empty) (*TriggerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TriggerNasdaqPredict not implemented")
+}
+func (UnimplementedPredictionServiceServer) TriggerCryptoCrawler(context.Context, *Empty) (*TriggerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TriggerCryptoCrawler not implemented")
+}
+func (UnimplementedPredictionServiceServer) TriggerCryptoPredict(context.Context, *Empty) (*TriggerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TriggerCryptoPredict not implemented")
+}
+func (UnimplementedPredictionServiceServer) TriggerFuelCrawler(context.Context, *Empty) (*TriggerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TriggerFuelCrawler not implemented")
+}
+func (UnimplementedPredictionServiceServer) TriggerFuelPredict(context.Context, *Empty) (*TriggerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TriggerFuelPredict not implemented")
 }
 func (UnimplementedPredictionServiceServer) mustEmbedUnimplementedPredictionServiceServer() {}
 func (UnimplementedPredictionServiceServer) testEmbeddedByValue()                           {}
@@ -508,6 +610,114 @@ func _PredictionService_GetTrainingStatus_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PredictionService_TriggerNasdaqCrawler_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PredictionServiceServer).TriggerNasdaqCrawler(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PredictionService_TriggerNasdaqCrawler_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PredictionServiceServer).TriggerNasdaqCrawler(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PredictionService_TriggerNasdaqPredict_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PredictionServiceServer).TriggerNasdaqPredict(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PredictionService_TriggerNasdaqPredict_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PredictionServiceServer).TriggerNasdaqPredict(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PredictionService_TriggerCryptoCrawler_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PredictionServiceServer).TriggerCryptoCrawler(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PredictionService_TriggerCryptoCrawler_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PredictionServiceServer).TriggerCryptoCrawler(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PredictionService_TriggerCryptoPredict_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PredictionServiceServer).TriggerCryptoPredict(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PredictionService_TriggerCryptoPredict_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PredictionServiceServer).TriggerCryptoPredict(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PredictionService_TriggerFuelCrawler_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PredictionServiceServer).TriggerFuelCrawler(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PredictionService_TriggerFuelCrawler_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PredictionServiceServer).TriggerFuelCrawler(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PredictionService_TriggerFuelPredict_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PredictionServiceServer).TriggerFuelPredict(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PredictionService_TriggerFuelPredict_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PredictionServiceServer).TriggerFuelPredict(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PredictionService_ServiceDesc is the grpc.ServiceDesc for PredictionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -562,6 +772,30 @@ var PredictionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTrainingStatus",
 			Handler:    _PredictionService_GetTrainingStatus_Handler,
+		},
+		{
+			MethodName: "TriggerNasdaqCrawler",
+			Handler:    _PredictionService_TriggerNasdaqCrawler_Handler,
+		},
+		{
+			MethodName: "TriggerNasdaqPredict",
+			Handler:    _PredictionService_TriggerNasdaqPredict_Handler,
+		},
+		{
+			MethodName: "TriggerCryptoCrawler",
+			Handler:    _PredictionService_TriggerCryptoCrawler_Handler,
+		},
+		{
+			MethodName: "TriggerCryptoPredict",
+			Handler:    _PredictionService_TriggerCryptoPredict_Handler,
+		},
+		{
+			MethodName: "TriggerFuelCrawler",
+			Handler:    _PredictionService_TriggerFuelCrawler_Handler,
+		},
+		{
+			MethodName: "TriggerFuelPredict",
+			Handler:    _PredictionService_TriggerFuelPredict_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

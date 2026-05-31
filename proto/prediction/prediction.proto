@@ -42,6 +42,18 @@ service PredictionService {
 
   // Get current training status
   rpc GetTrainingStatus(Empty) returns (TrainingStatusResponse);
+
+  // NASDAQ 100
+  rpc TriggerNasdaqCrawler(Empty) returns (TriggerResponse);
+  rpc TriggerNasdaqPredict(Empty) returns (TriggerResponse);
+
+  // Crypto
+  rpc TriggerCryptoCrawler(Empty) returns (TriggerResponse);
+  rpc TriggerCryptoPredict(Empty) returns (TriggerResponse);
+
+  // Fuel (Giá Xăng VN)
+  rpc TriggerFuelCrawler(Empty) returns (TriggerResponse);
+  rpc TriggerFuelPredict(Empty) returns (TriggerResponse);
 }
 
 message Empty {}

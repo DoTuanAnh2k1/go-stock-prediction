@@ -15,6 +15,7 @@ import (
 	"go-stock-prediction/pkg/service/crawler"
 	"go-stock-prediction/pkg/service/predict"
 	goldpredict "go-stock-prediction/pkg/service/predict/gold"
+	"go-stock-prediction/pkg/service/predict/orchestrator"
 	pb "go-stock-prediction/proto/prediction"
 )
 
@@ -232,6 +233,31 @@ func (s *Server) TriggerHistoricalBacktest(_ context.Context, req *pb.BacktestRe
 	stepSize := int(req.GetStepSize())
 	logger.Logger.Infof("[gRPC] TriggerHistoricalBacktest called (trainWindow=%d, stepSize=%d)", trainWindow, stepSize)
 
+	// trainWindow < 0 is the signal for gold historical backtest.
+	if trainWindow < 0 {
+		if !s.backtestRunning.CompareAndSwap(0, 1) {
+			return &pb.TriggerResponse{
+				Success: false,
+				Error:   "backtest already running",
+			}, status.Error(codes.Aborted, "backtest already running")
+		}
+		go func() {
+			defer s.backtestRunning.Store(0)
+			bgCtx := context.Background()
+			result, err := goldpredict.RunGoldHistoricalBacktest(bgCtx, 0, 0) // uses defaults
+			if err != nil {
+				logger.Logger.Errorf("[gRPC] RunGoldHistoricalBacktest error: %v", err)
+				return
+			}
+			logger.Logger.Infof("[gRPC] RunGoldHistoricalBacktest done: %d predictions, %d instruments in %dms",
+				result.TotalPredictions, result.StocksProcessed, result.DurationMs)
+		}()
+		return &pb.TriggerResponse{
+			Success: true,
+			Message: "Gold historical backtest started in background",
+		}, nil
+	}
+
 	if !s.backtestRunning.CompareAndSwap(0, 1) {
 		return &pb.TriggerResponse{
 			Success: false,
@@ -302,6 +328,99 @@ func (s *Server) TriggerStockPredict(_ context.Context, req *pb.StockRequest) (*
 		Symbol:           symbol,
 		PredictionsCount: int32(count),
 		Message:          fmt.Sprintf("Generated %d predictions for %s", count, symbol),
+	}, nil
+}
+
+// TriggerNasdaqCrawler fires the NASDAQ crawler in a goroutine and returns immediately.
+func (s *Server) TriggerNasdaqCrawler(_ context.Context, _ *pb.Empty) (*pb.TriggerResponse, error) {
+	logger.Logger.Info("[gRPC] TriggerNasdaqCrawler called")
+	go func() {
+		if err := crawler.CronjobNasdaqCrawler(); err != nil {
+			logger.Logger.Errorf("[gRPC] CronjobNasdaqCrawler error: %v", err)
+		}
+	}()
+	return &pb.TriggerResponse{
+		Success: true,
+		Message: "NASDAQ crawler started in background",
+	}, nil
+}
+
+// TriggerNasdaqPredict runs NASDAQ predictions via the orchestrator in a goroutine.
+func (s *Server) TriggerNasdaqPredict(_ context.Context, _ *pb.Empty) (*pb.TriggerResponse, error) {
+	logger.Logger.Info("[gRPC] TriggerNasdaqPredict called")
+	go func() {
+		n, err := orchestrator.RunForMarket(context.Background(), "NASDAQ100")
+		if err != nil {
+			logger.Logger.Errorf("[gRPC] NASDAQ prediction error: %v", err)
+			return
+		}
+		logger.Logger.Infof("[gRPC] NASDAQ prediction done: %d predictions saved", n)
+	}()
+	return &pb.TriggerResponse{
+		Success: true,
+		Message: "NASDAQ prediction started in background",
+	}, nil
+}
+
+// TriggerCryptoCrawler fires the crypto crawler in a goroutine and returns immediately.
+func (s *Server) TriggerCryptoCrawler(_ context.Context, _ *pb.Empty) (*pb.TriggerResponse, error) {
+	logger.Logger.Info("[gRPC] TriggerCryptoCrawler called")
+	go func() {
+		if err := crawler.CronjobCryptoCrawler(); err != nil {
+			logger.Logger.Errorf("[gRPC] CronjobCryptoCrawler error: %v", err)
+		}
+	}()
+	return &pb.TriggerResponse{
+		Success: true,
+		Message: "Crypto crawler started in background",
+	}, nil
+}
+
+// TriggerCryptoPredict runs crypto predictions via the orchestrator in a goroutine.
+func (s *Server) TriggerCryptoPredict(_ context.Context, _ *pb.Empty) (*pb.TriggerResponse, error) {
+	logger.Logger.Info("[gRPC] TriggerCryptoPredict called")
+	go func() {
+		n, err := orchestrator.RunForMarket(context.Background(), "CRYPTO")
+		if err != nil {
+			logger.Logger.Errorf("[gRPC] Crypto prediction error: %v", err)
+			return
+		}
+		logger.Logger.Infof("[gRPC] Crypto prediction done: %d predictions saved", n)
+	}()
+	return &pb.TriggerResponse{
+		Success: true,
+		Message: "Crypto prediction started in background",
+	}, nil
+}
+
+// TriggerFuelCrawler fires the fuel crawler in a goroutine and returns immediately.
+func (s *Server) TriggerFuelCrawler(_ context.Context, _ *pb.Empty) (*pb.TriggerResponse, error) {
+	logger.Logger.Info("[gRPC] TriggerFuelCrawler called")
+	go func() {
+		if err := crawler.CronjobFuelCrawler(); err != nil {
+			logger.Logger.Errorf("[gRPC] CronjobFuelCrawler error: %v", err)
+		}
+	}()
+	return &pb.TriggerResponse{
+		Success: true,
+		Message: "Fuel crawler started in background",
+	}, nil
+}
+
+// TriggerFuelPredict runs fuel predictions via the orchestrator in a goroutine.
+func (s *Server) TriggerFuelPredict(_ context.Context, _ *pb.Empty) (*pb.TriggerResponse, error) {
+	logger.Logger.Info("[gRPC] TriggerFuelPredict called")
+	go func() {
+		n, err := orchestrator.RunForMarket(context.Background(), "FUEL")
+		if err != nil {
+			logger.Logger.Errorf("[gRPC] Fuel prediction error: %v", err)
+			return
+		}
+		logger.Logger.Infof("[gRPC] Fuel prediction done: %d predictions saved", n)
+	}()
+	return &pb.TriggerResponse{
+		Success: true,
+		Message: "Fuel prediction started in background",
 	}, nil
 }
 

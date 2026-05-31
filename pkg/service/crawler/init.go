@@ -13,6 +13,9 @@ import (
 var crawlerDefaults = []modelsdb.CronSchedule{
 	{JobKey: "crawler_stock", JobName: "Crawler Stock (VN30)", CronExpression: cron.Daily12PM, Enabled: true},
 	{JobKey: "crawler_gold", JobName: "Crawler Gold (SJC/XAU)", CronExpression: cron.EveryHour, Enabled: true},
+	{JobKey: "crawler_nasdaq", JobName: "Crawler NASDAQ 100", CronExpression: "0 30 22 * * 1-5", Enabled: true},
+	{JobKey: "crawler_crypto", JobName: "Crawler Crypto (BTC/ETH)", CronExpression: "0 0 */4 * * *", Enabled: true},
+	{JobKey: "crawler_fuel", JobName: "Crawler Fuel (Gia xang VN)", CronExpression: cron.Daily9PM, Enabled: true},
 }
 
 func Init() {
@@ -47,6 +50,18 @@ func Init() {
 		logger.Logger.Info("Starting vang.today history backfill in background")
 		ImportVangTodayHistory()
 	}()
+	go func() {
+		logger.Logger.Info("Starting NASDAQ history backfill in background")
+		ImportNasdaqHistory()
+	}()
+	go func() {
+		logger.Logger.Info("Starting crypto history backfill in background")
+		ImportCryptoHistory()
+	}()
+	go func() {
+		logger.Logger.Info("Starting fuel history backfill in background")
+		ImportFuelHistory()
+	}()
 }
 
 // loadOrSeedCrawlerSchedule gets the schedule from DB, or seeds it from default if not present.
@@ -66,6 +81,12 @@ func getCrawlerJobFn(jobKey string) cron.JobFunc {
 	switch jobKey {
 	case "crawler_gold":
 		return CronjobGoldCrawler
+	case "crawler_nasdaq":
+		return CronjobNasdaqCrawler
+	case "crawler_crypto":
+		return CronjobCryptoCrawler
+	case "crawler_fuel":
+		return CronjobFuelCrawler
 	default:
 		return CronjobCrawler
 	}
