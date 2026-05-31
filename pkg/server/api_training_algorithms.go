@@ -3,46 +3,11 @@ package server
 import (
 	"go-stock-prediction/pkg/logger"
 	modelsapi "go-stock-prediction/pkg/models/models_api"
+	"go-stock-prediction/pkg/service/predict/registry"
 	"go-stock-prediction/pkg/store/repository"
 	"net/http"
 	"time"
 )
-
-// algorithmMeta contains static metadata for each known algorithm.
-type algorithmMeta struct {
-	displayName string
-	config      map[string]interface{}
-}
-
-var knownAlgorithms = map[string]algorithmMeta{
-	"lstm_nn": {
-		displayName: "LSTM Neural Network",
-		config: map[string]interface{}{
-			"epochs":        100,
-			"learning_rate": 0.001,
-			"hidden_layers": 2,
-			"batch_size":    32,
-		},
-	},
-	"arima_garch": {
-		displayName: "ARIMA-GARCH",
-		config: map[string]interface{}{
-			"p": 5,
-			"d": 1,
-			"q": 2,
-		},
-	},
-	"moving_average": {
-		displayName: "Moving Average (VWMA)",
-		config: map[string]interface{}{
-			"window": 20,
-		},
-	},
-	"ensemble": {
-		displayName: "Ensemble",
-		config:      map[string]interface{}{},
-	},
-}
 
 // GetTrainingAlgorithms handles GET /api/training/algorithms
 // Returns per-algorithm status, config, accuracy, and prediction counts.
@@ -91,12 +56,14 @@ func GetTrainingAlgorithms(w http.ResponseWriter, r *http.Request) {
 		successCounts = map[string]int64{}
 	}
 
-	result := make([]modelsapi.TrainingAlgorithmDTO, 0, len(knownAlgorithms))
-	for key, meta := range knownAlgorithms {
+	defs := registry.All()
+	result := make([]modelsapi.TrainingAlgorithmDTO, 0, len(defs))
+	for _, def := range defs {
+		key := def.Key
 		dto := modelsapi.TrainingAlgorithmDTO{
-			Name:             meta.displayName,
+			Name:             def.DisplayName,
 			Key:              key,
-			Config:           meta.config,
+			Config:           def.Config,
 			TotalPredictions: totalCounts[key],
 		}
 
@@ -118,7 +85,6 @@ func GetTrainingAlgorithms(w http.ResponseWriter, r *http.Request) {
 		}
 
 		result = append(result, dto)
-		_ = logByAlg // suppress unused warning
 	}
 
 	ResponseSuccess(w, http.StatusOK, result)

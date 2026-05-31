@@ -34,6 +34,10 @@ type MarketOverviewDTO struct {
 	TopGainers   []StockCurrentPriceDTO `json:"top_gainers"`
 	TopLosers    []StockCurrentPriceDTO `json:"top_losers"`
 	MostActive   []StockCurrentPriceDTO `json:"most_active"`
-	Stocks       []StockFlatDTO         `json:"stocks"`
-	LastUpdated  time.Time              `json:"last_updated"`
+	Stocks           []StockFlatDTO         `json:"stocks"`
+	StocksTotal      int                    `json:"stocks_total"`
+	StocksPage       int                    `json:"stocks_page"`
+	StocksPageSize   int                    `json:"stocks_page_size"`
+	StocksTotalPages int                    `json:"stocks_total_pages"`
+	LastUpdated      time.Time              `json:"last_updated"`
 }

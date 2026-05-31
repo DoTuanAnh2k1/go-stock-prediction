@@ -2,7 +2,7 @@
 
 ## Tổng quan dự án
 
-Hệ thống dự đoán giá cổ phiếu Việt Nam viết bằng Go. Thu thập dữ liệu từ VietStock, chạy 4 thuật toán ML (Moving Average, LSTM, ARIMA-GARCH, Ensemble), và hiển thị kết quả qua web dashboard.
+Hệ thống dự đoán giá cổ phiếu Việt Nam viết bằng Go. Thu thập dữ liệu từ VietStock, chạy 5 thuật toán ML (Moving Average, EMA, LSTM, ARIMA-GARCH, Ensemble), và hiển thị kết quả qua web dashboard.
 
 **Kiến trúc hiện tại: microservice (2 service + nginx)**
 - **API Backend** (`cmd/api`) — HTTP trên `:8118`, phục vụ toàn bộ `/api/*`. Gọi Prediction Service qua gRPC để trigger crawler/training; đọc DB trực tiếp cho các query dữ liệu.
@@ -74,8 +74,20 @@ pkg/service/predict/historical_backtest.go # Walk-forward backtest: RunHistorica
 pkg/service/predict/moving_average/     # Thuật toán VWMA
 pkg/service/predict/lstm_nn/            # Thuật toán LSTM Neural Network
 pkg/service/predict/arima_garch/        # Thuật toán ARIMA-GARCH
-pkg/service/predict/ensemble/algo.go    # Thuật toán Ensemble — trung bình có trọng số từ 3 thuật toán cơ sở
+pkg/service/predict/ensemble/algo.go    # Thuật toán Ensemble — trung bình có trọng số từ 4 thuật toán cơ sở
+pkg/service/predict/ema/algo.go         # Thuật toán EMA — MACD(12,26,9) với Vietnamese session adjustment
+pkg/service/predict/registry/registry.go   # AlgorithmDef struct, Register(), All(), Build() — hai-pass build (base trước, composite sau)
+pkg/service/predict/registry/algorithms.go # FILE DUY NHẤT cần sửa khi thêm/bỏ thuật toán
+pkg/service/predict/assettype/iface.go  # Interface AssetPredictionType: TypeKey(), TypeName(), Init(), RunPredictions()
+pkg/service/predict/assettype/registry.go  # Register(), All(), Get(key) cho asset types
+pkg/service/predict/assettype_stock.go  # Stock asset type — tự đăng ký qua init(), gọi predict.Init()
 pkg/service/predict/gold/init.go        # Gold prediction service — đăng ký cron job
+pkg/service/predict/gold/assettype_gold.go # Gold asset type — tự đăng ký qua init(), gọi goldpredict.Init()
+pkg/service/market/iface.go             # Interface AssetMarket: MarketKey(), MarketName(), GetInstruments(), FetchPrices(), SavePrediction(), Crawl(). Điểm mở rộng chính để thêm market mới.
+pkg/service/market/registry.go          # Register(), Get(key), All() cho asset markets — thread-safe, dùng sync.RWMutex
+pkg/service/market/vn30/market.go       # VN30 market implementation — 30 cổ phiếu HOSE, tự đăng ký qua init()
+pkg/service/market/gold/market.go       # Gold market implementation — 3 sản phẩm: XAU/spot, BTMC/sjc, BTMC/nhan_tron; tự đăng ký qua init()
+pkg/service/predict/orchestrator/orchestrator.go # RunAllMarkets(ctx), RunForMarket(ctx, key) — chạy prediction qua tất cả registered markets
 pkg/store/repository/repository.go     # Interface DatabaseStore (composite) — bao gồm GetConfirmedPredictionsPage, DeletePredictionsBeforeDate, BulkCreatePredictions
 pkg/store/mysql/                        # Triển khai MySQL dùng GORM
 pkg/models/models_db/                   # GORM struct: Stock, StockPrice, Prediction, SyncLog, Exchange, GoldPrice, TrainingLog, TrainingMetrics
@@ -153,6 +165,51 @@ DB_LOG_LEVEL=DEBUG
 - **Proto regeneration:** Khi thay đổi `proto/prediction/prediction.proto`, chạy lệnh `protoc` trong mục Lệnh thường dùng để tái sinh `*.pb.go`. Không sửa tay các file generated.
 - **Data ordering — QUAN TRỌNG:** DB trả `stock_prices` với `ORDER BY trading_date DESC` (mới nhất trước). Tất cả thuật toán (MA/LSTM/ARIMA-GARCH/Ensemble) dùng `prices[len-1]` làm giá hiện tại — vì vậy **phải đảo ngược DESC → ASC** trước khi build `Historical []string`. Logic đảo ngược nằm trong `getStockTrainingData()`, `getStockPredictionData()`, và `walkForwardStock()` (dùng `reverseStockPrices()`). Không thêm query `ORDER BY ASC` trực tiếp — repository interface trả DESC, tầng service tự xử lý.
 
+## Hướng dẫn mở rộng (Extension Guide)
+
+### 1. Thêm thuật toán dự đoán mới
+
+**Chỉ cần chạm vào 2 nơi** — tạo package mới và thêm 1 entry trong file registry:
+
+1. Tạo `pkg/service/predict/<tên_thuật_toán>/algo.go` — implement interface:
+   ```go
+   type PredictionAlgorithm interface {
+       Predict(ctx context.Context, data *modelssvc.StockData) (*modelssvc.Prediction, error)
+       GetName() string
+       GetAccuracy() float64
+   }
+   ```
+2. Thêm entry vào `pkg/service/predict/registry/algorithms.go` trong `init()`, phần base algorithms:
+   ```go
+   Register(AlgorithmDef{
+       Key:         "ten_thuat_toan",
+       DisplayName: "Tên Hiển Thị",
+       Config:      map[string]interface{}{"param": value},
+       Factory:     func() iface.PredictionAlgorithm { return tenthuattoan.New() },
+   })
+   ```
+3. (Tuỳ chọn) Nếu muốn thuật toán mới tham gia Ensemble, thêm `bases["ten_thuat_toan"]` vào slice trong `CompositeFactory` của Ensemble trong cùng file.
+4. Thuật toán tự động xuất hiện trong API `/api/training/algorithms` và được dùng cho cả stock lẫn gold prediction — không cần sửa thêm file nào khác.
+
+**Lưu ý về `Build()`:** Hàm này dùng hai lần lặp (two-pass). Pass 1: khởi tạo tất cả base algorithm (các def có `IsComposite = false`). Pass 2: khởi tạo composite algorithm (Ensemble) và truyền vào map các base instances đã build. Điều này đảm bảo Ensemble luôn nhận được đúng instance đang dùng.
+
+### 2. Thêm thị trường hoặc loại tài sản dự đoán mới
+
+Kể từ khi orchestrator ra đời, "thêm sàn/chỉ số" và "thêm loại tài sản" đều quy về cùng một pattern: implement `AssetMarket` và đăng ký vào registry. Orchestrator tự động picks up market mới — không cần sửa cron hay prediction logic.
+
+**Gold đã implement AssetMarket.** Để thêm crypto hoặc thị trường khác: xem hướng dẫn chi tiết tại `ADDING_NEW_MARKET.md`.
+
+Tóm tắt các bước bắt buộc:
+1. Tạo DB model + migration trong `pkg/models/models_db/`.
+2. Thêm repository methods vào `pkg/store/repository/repository.go` và implement trong `pkg/store/mysql/`.
+3. Tạo crawler trong `pkg/service/crawler/` và đăng ký cron job trong `crawler/init.go`.
+4. Tạo `pkg/service/market/<tên>/market.go` — implement `AssetMarket`, gọi `market.Register()` trong `init()`.
+5. Thêm blank import trong `cmd/prediction/main.go`:
+   ```go
+   _ "go-stock-prediction/pkg/service/market/<tên>"
+   ```
+   Orchestrator (`RunAllMarkets`) tự động chạy prediction cho market mới — không cần sửa thêm file nào.
+
 ## Database
 
 - **ORM:** GORM v2
@@ -167,7 +224,7 @@ DB_LOG_LEVEL=DEBUG
 | `Daily6AM` | `0 0 6 * * *` | Reconcile dự đoán với giá thực tế |
 | `Daily10AM` | `0 0 10 * * *` | Crawl giá vàng SJC và XAU/USD |
 | `Daily12PM` | `0 0 12 * * *` | Crawl dữ liệu giá cổ phiếu |
-| `Daily6PM` | `0 0 18 * * *` | Chạy dự đoán |
+| `Daily6PM` | `0 0 18 * * *` | Chạy dự đoán cho TẤT CẢ markets (VN30 + GOLD + markets mới) qua `orchestrator.RunAllMarkets()` |
 | `WeeklySundayAM` | `0 0 9 * * SUN` | Huấn luyện mô hình |
 
 ## Ports

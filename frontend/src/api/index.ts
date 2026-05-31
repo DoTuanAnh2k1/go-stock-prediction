@@ -1,7 +1,7 @@
 import type {
   AppData, FmtUtils, StockItem, MoverItem, PredictionItem,
   ConfirmedItem, AlgoItem, GoldSource, GoldPred, GoldPredActual,
-  GoldDetailItem, IndexData
+  GoldDetailItem, IndexData, AccTrendSeries
 } from '../types';
 
 const BASE = '/api';
@@ -43,23 +43,49 @@ function conf(c: any): number {
   return Math.round(n);
 }
 
-const ALGO: Record<string, { short: string; cls: string; name: string }> = {
+// Static fallback: CSS class + short badge label only.
+// The display name (`.name`) is overridden by /api/training/algorithms at runtime.
+// Aliases (e.g. "lstm" → "lstm_nn") are kept so partial keys from other endpoints still resolve.
+const ALGO_FALLBACK: Record<string, { short: string; cls: string; name: string }> = {
   lstm_nn:       { short: 'LSTM',  cls: 'lstm',  name: 'LSTM Neural Network' },
   lstm:          { short: 'LSTM',  cls: 'lstm',  name: 'LSTM Neural Network' },
   arima_garch:   { short: 'ARIMA', cls: 'arima', name: 'ARIMA-GARCH' },
   arima:         { short: 'ARIMA', cls: 'arima', name: 'ARIMA-GARCH' },
-  moving_average:{ short: 'MA',    cls: 'ma',    name: 'Moving Average' },
-  ma:            { short: 'MA',    cls: 'ma',    name: 'Moving Average' },
+  moving_average:{ short: 'MA',    cls: 'ma',    name: 'Moving Average (VWMA)' },
+  ma:            { short: 'MA',    cls: 'ma',    name: 'Moving Average (VWMA)' },
   ensemble:      { short: 'ENS',   cls: 'ens',   name: 'Ensemble' },
   ens:           { short: 'ENS',   cls: 'ens',   name: 'Ensemble' },
   ema:           { short: 'EMA',   cls: 'ema',   name: 'Exponential Moving Average' },
 };
-function algoMeta(n: string) {
-  return ALGO[(n || '').toLowerCase()] || {
+
+// Runtime algo map — starts as a copy of the fallback, gets enriched from
+// /api/training/algorithms in loadAll() so names always reflect the backend registry.
+let _algoMap: Record<string, { short: string; cls: string; name: string }> = { ...ALGO_FALLBACK };
+
+/** Look up display metadata for an algorithm key, with a safe fallback. */
+function algoMeta(n: string): { short: string; cls: string; name: string } {
+  return _algoMap[(n || '').toLowerCase()] || ALGO_FALLBACK[(n || '').toLowerCase()] || {
     short: (n || '?').toUpperCase().slice(0, 5),
-    cls: 'lstm',
+    cls: 'unknown',
     name: n || '—',
   };
+}
+
+// Deterministic color palette for dynamic algorithm series.
+const ALGO_COLORS: string[] = [
+  'oklch(0.74 0.13 200)', // blue-ish (LSTM)
+  'var(--gold)',           // gold (ARIMA)
+  'var(--up)',             // green (MA)
+  'oklch(0.72 0.18 150)', // teal (EMA)
+  'oklch(0.72 0.14 300)', // purple (Ensemble)
+  'oklch(0.75 0.15 30)',  // orange
+  'oklch(0.70 0.18 260)', // violet
+];
+// Known ordering for stable color assignment across refreshes.
+const ALGO_ORDER = ['lstm_nn', 'arima_garch', 'moving_average', 'ema', 'ensemble'];
+function algoColor(key: string, idx: number): string {
+  const canonical = ALGO_ORDER.indexOf(key);
+  return ALGO_COLORS[canonical >= 0 ? canonical : idx % ALGO_COLORS.length];
 }
 
 function fetchJSON(url: string, opts?: RequestInit): Promise<any> {
@@ -79,9 +105,10 @@ export function buildEmpty(): AppData {
       vnindex: { val: 0, chg: 0, chgPct: 0, vol: 0, series: [] },
       vn30:    { val: 0, chg: 0, chgPct: 0, vol: 0, series: [] },
     },
-    accTrend: { labels: [], lstm: [], arima: [], ma: [], ema: [] },
+    accTrend: { labels: [], series: [] },
     dailyCounts: { labels: [], values: [] },
     trainLogs: [], trainJobs: [],
+    algoMap: { ...ALGO_FALLBACK },
     __live: false, __sources: {},
   };
 }
@@ -113,6 +140,25 @@ export function goldChart(source: string, product: string, days?: number): Promi
       sell:   arr<number>(j.sell_prices).map(num),
     }))
     .catch(() => ({ labels: [], buy: [], sell: [] }));
+}
+
+// ── Market page (backend pagination + sort) ──────────────────────────────────
+export function fetchMarketPage(params: {
+  page?: number;
+  pageSize?: number;
+  sortBy?: 'price' | 'change_percent';
+  sortOrder?: 'asc' | 'desc';
+  q?: string;
+  sector?: string;
+}): Promise<any> {
+  const p = new URLSearchParams();
+  if (params.page) p.set('page', String(params.page));
+  if (params.pageSize) p.set('page_size', String(params.pageSize));
+  if (params.sortBy) p.set('sort_by', params.sortBy);
+  if (params.sortOrder) p.set('sort_order', params.sortOrder);
+  if (params.q) p.set('q', params.q);
+  if (params.sector) p.set('sector', params.sector);
+  return fetchJSON('/market/overview?' + p.toString());
 }
 
 // ── Builders: live API → component shape ────────────────────────────────────
@@ -189,44 +235,83 @@ function buildConfirmed(res: any): ConfirmedItem[] | null {
   });
 }
 
-function buildAlgos(accList: any): AlgoItem[] | null {
+/**
+ * Build algo list from /api/predictions/accuracy (accList) enriched with
+ * /api/training/algorithms (algoDefsRaw) which provides authoritative display names.
+ * Either source alone still produces a valid result.
+ */
+function buildAlgos(accList: any, algoDefsRaw?: any): AlgoItem[] | null {
+  // Index /api/training/algorithms by key for O(1) name lookup.
+  const defsByKey: Record<string, { name: string; status: string; last_trained?: string | null; accuracy: number; training_time_seconds: number }> = {};
+  const rawDefs = arr<any>((algoDefsRaw && (algoDefsRaw.data || algoDefsRaw)) || []);
+  for (const d of rawDefs) {
+    if (d.key) defsByKey[d.key] = d;
+  }
+
   const list = arr<any>(accList.data || accList);
-  if (!list.length) return null;
-  return list.map((a: any) => {
-    const m = algoMeta(a.algorithm_name);
+  if (!list.length && !rawDefs.length) return null;
+
+  // If accuracy list is empty but we have training defs, show defs directly.
+  const source = list.length ? list : rawDefs.map((d: any) => ({
+    algorithm_name: d.key,
+    accuracy_rate: d.accuracy * 100,
+    avg_error: 0,
+  }));
+  if (!source.length) return null;
+
+  return source.map((a: any) => {
+    const key = a.algorithm_name || a.key || '';
+    const def = defsByKey[key];
+    const m = algoMeta(key);
+    // Prefer name from /api/training/algorithms; fall back to the static ALGO_FALLBACK.
+    const displayName = (def && def.name) ? def.name : m.name;
+    const trainedAt = def && def.last_trained ? def.last_trained.slice(0, 10) : '—';
     return {
-      id: a.algorithm_name, short: m.short, name: m.name, cls: m.cls,
+      id: key, short: m.short, name: displayName, cls: m.cls,
       desc: '', acc: +num(a.accuracy_rate).toFixed(1), accDelta: 0,
-      mae: +num(a.avg_error).toFixed(2), trainedAt: '—', epochs: null, status: 'trained',
+      mae: +num(a.avg_error).toFixed(2), trainedAt, epochs: null,
+      status: (def && def.status) || 'trained',
     };
   });
 }
 
 function buildTrend(t: any): AppData['accTrend'] | null {
   if (Array.isArray(t)) {
+    // Collect all weeks and all algorithm keys seen in the data.
     const by: Record<string, Record<string, number>> = {};
+    const keysSet = new Set<string>();
     t.forEach((r: any) => {
       const w = r.week || r.date || '';
       (by[w] = by[w] || {})[r.algorithm_name] = num(r.accuracy_rate);
+      if (r.algorithm_name) keysSet.add(r.algorithm_name);
     });
     const ws = Object.keys(by).sort();
     if (!ws.length) return null;
-    return {
-      labels: ws.map(ddmm),
-      lstm:  ws.map((w) => by[w].lstm_nn || null),
-      arima: ws.map((w) => by[w].arima_garch || null),
-      ma:    ws.map((w) => by[w].moving_average || null),
-      ema:   ws.map((w) => by[w].ema || null),
-    };
+    // Sort keys by known order for stable color assignment.
+    const keys = Array.from(keysSet).sort((a, b) => {
+      const ai = ALGO_ORDER.indexOf(a), bi = ALGO_ORDER.indexOf(b);
+      return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+    });
+    const series: AccTrendSeries[] = keys.map((key, idx) => ({
+      key,
+      name: algoMeta(key).name,
+      color: algoColor(key, idx),
+      data: ws.map((w) => by[w][key] != null ? by[w][key] : null),
+    }));
+    return { labels: ws.map(ddmm), series };
   }
   if (t && t.weeks) {
-    return {
-      labels: t.weeks.map(ddmm),
-      lstm:   arr<number>(t.lstm_nn).map(num),
-      arima:  arr<number>(t.arima_garch).map(num),
-      ma:     arr<number>(t.moving_average).map(num),
-      ema:    arr<number>(t.ema).map(num),
-    };
+    // Object format: { weeks: string[], <key>: number[] }
+    const weeks: string[] = arr<string>(t.weeks);
+    if (!weeks.length) return null;
+    const keys = Object.keys(t).filter((k) => k !== 'weeks');
+    const series: AccTrendSeries[] = keys.map((key, idx) => ({
+      key,
+      name: algoMeta(key).name,
+      color: algoColor(key, idx),
+      data: arr<number>(t[key]).map(num),
+    }));
+    return { labels: weeks.map(ddmm), series };
   }
   return null;
 }
@@ -283,12 +368,13 @@ function buildGoldPredActual(res: any): GoldPredActual | null {
 export function loadAll(): Promise<{ data: AppData; raw: Record<string, any> }> {
   const P = (u: string) => fetchJSON(u).catch(() => null);
   const jobs: Record<string, Promise<any>> = {
-    market:       P('/market/overview'),
+    market:       P('/market/overview?page_size=100'),
     stats:        P('/dashboard/stats'),
     preds:        P('/predictions?limit=12'),
     confirmed:    P('/predictions?limit=80&status=confirmed'),
     acc:          P('/predictions/accuracy?days=30'),
     trend:        P('/predictions/accuracy-trend?days=90'),
+    algoDefs:     P('/training/algorithms'),
     goldLatest:   P('/gold/latest'),
     goldPreds:    P('/gold/predictions/latest'),
     goldPredChart:P('/gold/predictions/chart?source=BTMC&product_type=sjc&algorithm=ensemble&days=60'),
@@ -300,6 +386,20 @@ export function loadAll(): Promise<{ data: AppData; raw: Record<string, any> }> 
     keys.forEach((k, i) => { R[k] = vals[i]; });
     const out = buildEmpty();
     const sources: Record<string, boolean> = {};
+
+    // ── Build runtime algoMap from /api/training/algorithms ─────────────────
+    // This ensures display names always reflect the backend registry.
+    const rawDefs = arr<any>((R.algoDefs && (R.algoDefs.data || R.algoDefs)) || []);
+    if (rawDefs.length) {
+      const merged: Record<string, { short: string; cls: string; name: string }> = { ...ALGO_FALLBACK };
+      for (const d of rawDefs) {
+        if (!d.key) continue;
+        const fallback = ALGO_FALLBACK[d.key] || { short: d.key.toUpperCase().slice(0, 5), cls: 'unknown', name: d.key };
+        merged[d.key] = { short: fallback.short, cls: fallback.cls, name: d.name || fallback.name || d.key };
+      }
+      _algoMap = merged;
+      out.algoMap = merged;
+    }
 
     if (R.market) {
       const st = buildStocks(R.market);
@@ -323,7 +423,8 @@ export function loadAll(): Promise<{ data: AppData; raw: Record<string, any> }> 
 
     const pl = buildPredsLatest(R.preds); if (pl) { out.predictions = pl; sources.preds = true; }
     const cf = buildConfirmed(R.confirmed) || buildConfirmed(R.preds); if (cf) { out.confirmed = cf; }
-    const al = buildAlgos(R.acc); if (al && al.length) { out.algos = al; sources.acc = true; }
+    // Pass training algorithm defs so buildAlgos can use server-provided names.
+    const al = buildAlgos(R.acc || {}, R.algoDefs); if (al && al.length) { out.algos = al; sources.acc = true; }
     const tr = buildTrend(R.trend); if (tr) { out.accTrend = tr; }
 
     if (R.stats) {

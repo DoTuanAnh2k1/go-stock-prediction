@@ -5,74 +5,91 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"go-stock-prediction/pkg/service/predict/registry"
 )
 
-// ---- knownAlgorithms static metadata ----
+// ---- registry.All() static metadata ----
 
-func TestKnownAlgorithms_ContainsAllFourAlgorithms(t *testing.T) {
-	expected := []string{"lstm_nn", "arima_garch", "moving_average", "ensemble"}
-	for _, key := range expected {
-		if _, ok := knownAlgorithms[key]; !ok {
-			t.Errorf("knownAlgorithms is missing required key %q", key)
+func TestRegistry_ContainsRequiredAlgorithms(t *testing.T) {
+	required := []string{"lstm_nn", "arima_garch", "moving_average", "ensemble"}
+	defs := registry.All()
+	keySet := make(map[string]bool, len(defs))
+	for _, d := range defs {
+		keySet[d.Key] = true
+	}
+	for _, key := range required {
+		if !keySet[key] {
+			t.Errorf("registry is missing required algorithm key %q", key)
 		}
 	}
 }
 
-func TestKnownAlgorithms_LSTMDisplayName(t *testing.T) {
-	meta, ok := knownAlgorithms["lstm_nn"]
-	if !ok {
-		t.Fatal("lstm_nn not found in knownAlgorithms")
+func TestRegistry_LSTMDisplayName(t *testing.T) {
+	for _, def := range registry.All() {
+		if def.Key == "lstm_nn" {
+			if def.DisplayName == "" {
+				t.Error("lstm_nn DisplayName must not be empty")
+			}
+			return
+		}
 	}
-	if meta.displayName == "" {
-		t.Error("lstm_nn displayName must not be empty")
-	}
+	t.Fatal("lstm_nn not found in registry")
 }
 
-func TestKnownAlgorithms_ARIMAGARCHHasConfig(t *testing.T) {
-	meta, ok := knownAlgorithms["arima_garch"]
-	if !ok {
-		t.Fatal("arima_garch not found in knownAlgorithms")
+func TestRegistry_ARIMAGARCHHasConfig(t *testing.T) {
+	for _, def := range registry.All() {
+		if def.Key == "arima_garch" {
+			if def.Config == nil {
+				t.Error("arima_garch Config must not be nil")
+			}
+			return
+		}
 	}
-	if meta.config == nil {
-		t.Error("arima_garch config must not be nil")
-	}
+	t.Fatal("arima_garch not found in registry")
 }
 
-func TestKnownAlgorithms_MovingAverageHasWindowConfig(t *testing.T) {
-	meta, ok := knownAlgorithms["moving_average"]
-	if !ok {
-		t.Fatal("moving_average not found in knownAlgorithms")
+func TestRegistry_MovingAverageHasWindowConfig(t *testing.T) {
+	for _, def := range registry.All() {
+		if def.Key == "moving_average" {
+			if _, ok := def.Config["window"]; !ok {
+				t.Error("moving_average Config must contain 'window' key")
+			}
+			return
+		}
 	}
-	if _, ok := meta.config["window"]; !ok {
-		t.Error("moving_average config must contain 'window' key")
-	}
+	t.Fatal("moving_average not found in registry")
 }
 
-func TestKnownAlgorithms_LSTMHasEpochsConfig(t *testing.T) {
-	meta, ok := knownAlgorithms["lstm_nn"]
-	if !ok {
-		t.Fatal("lstm_nn not found in knownAlgorithms")
+func TestRegistry_LSTMHasEpochsConfig(t *testing.T) {
+	for _, def := range registry.All() {
+		if def.Key == "lstm_nn" {
+			if _, ok := def.Config["epochs"]; !ok {
+				t.Error("lstm_nn Config must contain 'epochs' key")
+			}
+			return
+		}
 	}
-	if _, ok := meta.config["epochs"]; !ok {
-		t.Error("lstm_nn config must contain 'epochs' key")
-	}
+	t.Fatal("lstm_nn not found in registry")
 }
 
-func TestKnownAlgorithms_EnsembleHasNonNilConfig(t *testing.T) {
-	meta, ok := knownAlgorithms["ensemble"]
-	if !ok {
-		t.Fatal("ensemble not found in knownAlgorithms")
+func TestRegistry_EnsembleHasNonNilConfig(t *testing.T) {
+	for _, def := range registry.All() {
+		if def.Key == "ensemble" {
+			// Config may be empty map but must not be nil.
+			if def.Config == nil {
+				t.Error("ensemble Config must not be nil (use empty map, not nil)")
+			}
+			return
+		}
 	}
-	// Config may be empty map but must not be nil.
-	if meta.config == nil {
-		t.Error("ensemble config must not be nil (use empty map, not nil)")
-	}
+	t.Fatal("ensemble not found in registry")
 }
 
-func TestKnownAlgorithms_NoExtraUnknownAlgorithms(t *testing.T) {
-	// Exactly 4 algorithms should be registered.
-	if len(knownAlgorithms) != 4 {
-		t.Errorf("knownAlgorithms has %d entries, want exactly 4", len(knownAlgorithms))
+func TestRegistry_AtLeastFourAlgorithms(t *testing.T) {
+	defs := registry.All()
+	if len(defs) < 4 {
+		t.Errorf("registry has %d entries, want at least 4", len(defs))
 	}
 }
 
@@ -172,15 +189,15 @@ func TestGetTrainingAlgorithms_500ResponseShape(t *testing.T) {
 	}
 }
 
-// ---- knownAlgorithms alignment with validAlgorithms ----
+// ---- registry alignment with validAlgorithms ----
 
-// TestKnownAlgorithms_AlignedWithValidAlgorithms verifies that every key in
-// knownAlgorithms is also present in validAlgorithms (from helper.go) so that
+// TestRegistry_AlignedWithValidAlgorithms verifies that every key in the
+// registry is also present in validAlgorithms (from helper.go) so that
 // the algorithm validation rejects nothing that the training endpoint exposes.
-func TestKnownAlgorithms_AlignedWithValidAlgorithms(t *testing.T) {
-	for key := range knownAlgorithms {
-		if !validAlgorithms[key] {
-			t.Errorf("algorithm key %q is in knownAlgorithms but missing from validAlgorithms", key)
+func TestRegistry_AlignedWithValidAlgorithms(t *testing.T) {
+	for _, def := range registry.All() {
+		if !validAlgorithms[def.Key] {
+			t.Errorf("algorithm key %q is in registry but missing from validAlgorithms", def.Key)
 		}
 	}
 }

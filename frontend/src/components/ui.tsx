@@ -26,6 +26,7 @@ const I: Record<string, React.ReactNode> = {
   filter:    <polygon points="3 4 21 4 14 12 14 19 10 21 10 12"/>,
   clock:     <><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></>,
   layers:    <><polygon points="12 2 22 8.5 12 15 2 8.5"/><polyline points="2 15.5 12 22 22 15.5"/></>,
+  crypto:    <><circle cx="12" cy="12" r="9"/><path d="M9 8h4.5a2.5 2.5 0 0 1 0 5H9"/><path d="M9 13h5a2.5 2.5 0 0 1 0 5H9"/><line x1="9" y1="8" x2="9" y2="18"/><line x1="11" y1="6" x2="11" y2="8"/><line x1="13" y1="18" x2="13" y2="20"/></>,
 };
 
 export function Icon({ name, size = 18, sw = 1.7, style, ...p }: { name: string; size?: number; sw?: number; style?: React.CSSProperties; [key: string]: any }) {
@@ -144,6 +145,7 @@ const NAV = [
   { id: 'predictions', path: '/predictions',  label: 'Dự đoán',    icon: 'pulse' },
   { id: 'training',    path: '/training',     label: 'Huấn luyện', icon: 'cpu' },
   { id: 'gold',        path: '/gold',         label: 'Giá vàng',   icon: 'gold' },
+  { id: 'crypto',      path: '/crypto',       label: 'Crypto',      icon: 'crypto' },
   { id: 'guide',       path: '/guide',        label: 'Hướng dẫn',  icon: 'book' },
 ];
 
@@ -166,15 +168,15 @@ export function Sidebar({ status }: { status: 'loading' | 'live' | 'demo' }) {
             <Icon name={n.icon} size={17} /><span>{n.label}</span>
           </NavLink>
         ))}
-        <div className="nav__label">Mô hình &amp; Vàng</div>
-        {NAV.slice(3, 5).map((n) => (
+        <div className="nav__label">Mô hình &amp; Tài sản</div>
+        {NAV.slice(3, 6).map((n) => (
           <NavLink key={n.id} to={n.path}
             className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
             <Icon name={n.icon} size={17} /><span>{n.label}</span>
           </NavLink>
         ))}
         <div className="nav__label">Hỗ trợ</div>
-        {NAV.slice(5).map((n) => (
+        {NAV.slice(6).map((n) => (
           <NavLink key={n.id} to={n.path}
             className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
             <Icon name={n.icon} size={17} /><span>{n.label}</span>
@@ -227,6 +229,7 @@ const TITLES: Record<string, [string, string]> = {
   '/predictions':['Dự đoán', 'FORECASTS'],
   '/training':   ['Huấn luyện mô hình', 'ML TRAINING'],
   '/gold':       ['Giá vàng', 'GOLD'],
+  '/crypto':     ['Cryptocurrency', 'CRYPTO · Coming Soon'],
   '/guide':      ['Hướng dẫn sử dụng', 'USER GUIDE'],
 };
 

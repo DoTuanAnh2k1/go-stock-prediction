@@ -1,33 +1,98 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useData } from '../context/DataContext';
 import { Panel, KPI, Icon, Chg, Seg } from '../components/ui';
 import { Sparkline, LineChart } from '../components/charts';
+import { fetchMarketPage } from '../api';
 import type { StockItem, MoverItem } from '../types';
+
+function toStockItems(stocks: any[]): StockItem[] {
+  return (stocks || []).map((s: any) => ({
+    sym: s.symbol || '',
+    name: s.company_name || s.symbol || '',
+    sector: s.sector || '—',
+    exchange: s.exchange || 'HOSE',
+    price: parseFloat(s.current_price) || 0,
+    change: parseFloat(s.change) || 0,
+    chgPct: parseFloat(s.change_percent) || 0,
+    volume: (parseFloat(s.volume) || 0) / 1e6,
+    value: (parseFloat(s.value) || 0) / 1e12,
+    vn30: s.is_vn30 !== false,
+    spark: [],
+    hist: [],
+  }));
+}
 
 export default function Stocks() {
   const { data: D } = useData();
   const { fmt } = D;
   const [q, setQ] = useState('');
   const [sector, setSector] = useState('');
-  const [sortBy, setSortBy] = useState<keyof StockItem>('chgPct');
-  const [dir, setDir] = useState(-1);
+  const [sortBy, setSortBy] = useState<'price' | 'change_percent'>('change_percent');
+  const [sortDesc, setSortDesc] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagedStocks, setPagedStocks] = useState<StockItem[]>([]);
+  const [meta, setMeta] = useState({ total: 0, page: 1, pageSize: 10, totalPages: 1 });
+  const [loading, setLoading] = useState(false);
   const [sel, setSel] = useState<StockItem | null>(null);
 
-  const sectors = [...new Set(D.stocks.map((s) => s.sector))];
+  const sectors = [...new Set(D.stocks.map((s) => s.sector))].filter(Boolean);
 
-  let rows = D.stocks.filter((s) =>
-    (!q || s.sym.toLowerCase().includes(q.toLowerCase()) || s.name.toLowerCase().includes(q.toLowerCase())) &&
-    (!sector || s.sector === sector)
-  );
-  rows = [...rows].sort((a, b) => {
-    const av = a[sortBy] as any, bv = b[sortBy] as any;
-    return (typeof av === 'string' ? av.localeCompare(bv) : av - bv) * dir;
-  });
+  const doFetch = useCallback((pg: number, sb: string, sd: boolean, searchQ: string, sec: string) => {
+    setLoading(true);
+    fetchMarketPage({
+      page: pg,
+      pageSize: 10,
+      sortBy: sb as 'price' | 'change_percent',
+      sortOrder: sd ? 'desc' : 'asc',
+      q: searchQ,
+      sector: sec,
+    }).then((res: any) => {
+      setPagedStocks(toStockItems(res.stocks || []));
+      setMeta({
+        total: res.stocks_total || 0,
+        page: res.stocks_page || pg,
+        pageSize: res.stocks_page_size || 10,
+        totalPages: res.stocks_total_pages || 1,
+      });
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
 
-  function sortHead(key: keyof StockItem, label: string, cls = 'r') {
+  useEffect(() => {
+    doFetch(1, 'change_percent', true, '', '');
+  }, [doFetch]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setPage(1);
+      doFetch(1, sortBy, sortDesc, q, sector);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleSort(key: 'price' | 'change_percent') {
+    const newDesc = sortBy === key ? !sortDesc : true;
+    setSortBy(key);
+    setSortDesc(newDesc);
+    setPage(1);
+    doFetch(1, key, newDesc, q, sector);
+  }
+
+  function handleSector(sec: string) {
+    setSector(sec);
+    setPage(1);
+    doFetch(1, sortBy, sortDesc, q, sec);
+  }
+
+  function handlePage(p: number) {
+    setPage(p);
+    doFetch(p, sortBy, sortDesc, q, sector);
+  }
+
+  function sortHead(key: 'price' | 'change_percent', label: string) {
     return (
-      <th className={`${cls} th-sort`} onClick={() => { if (sortBy === key) setDir(-dir); else { setSortBy(key); setDir(-1); } }}>
-        {label} {sortBy === key && <span className="caret">{dir < 0 ? '▼' : '▲'}</span>}
+      <th className="r th-sort" onClick={() => handleSort(key)}>
+        {label}{' '}
+        {sortBy === key && <span className="caret">{sortDesc ? '▼' : '▲'}</span>}
       </th>
     );
   }
@@ -49,7 +114,7 @@ export default function Stocks() {
             <Icon name="search" size={15} />
             <input placeholder="Tìm mã CK (VD: VCB, FPT...)" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          <select className="sel" value={sector} onChange={(e) => setSector(e.target.value)}>
+          <select className="sel" value={sector} onChange={(e) => handleSector(e.target.value)}>
             <option value="">Tất cả ngành</option>
             {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -57,48 +122,77 @@ export default function Stocks() {
             <option value="">Tất cả sàn</option>
             <option>HOSE</option><option>HNX</option><option>UPCOM</option>
           </select>
-          <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{rows.length} mã</span>
+          <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+            {meta.total > 0 ? meta.total + ' mã' : (loading ? '...' : D.stocks.length + ' mã')}
+          </span>
         </div>
       </Panel>
 
       <Panel title="Bảng giá cổ phiếu" sub="cập nhật cuối 15:00" flush className="section-gap"
         tools={<button className="btn btn--sm btn--ghost"><Icon name="refresh" size={13} />Làm mới</button>}>
-        {rows.length === 0
-          ? <div className="empty">
-              <div className="empty__icon"><Icon name="layers" size={18} /></div>
-              <p>Chưa có dữ liệu cổ phiếu. Bấm crawl để lấy data.</p>
-            </div>
-          : <div style={{ overflowX: 'auto' }}>
-              <table className="tbl">
-                <thead><tr>
-                  {sortHead('sym', 'Mã', 'l')}
-                  <th>Ngành</th>
-                  {sortHead('price', 'Giá')}
-                  {sortHead('change', 'Δ')}
-                  {sortHead('chgPct', '±%')}
-                  {sortHead('volume', 'KL (M)')}
-                  {sortHead('value', 'GT (ngàn tỷ)')}
-                  <th className="c">7 phiên</th>
-                  <th className="c"></th>
-                </tr></thead>
-                <tbody>
-                  {rows.map((s) => (
-                    <tr key={s.sym} className="clickable" onClick={() => setSel(s)}>
-                      <td><div className="sym">{s.sym}</div><div className="co">{s.name}</div></td>
-                      <td style={{ color: 'var(--text-3)', fontSize: 12 }}>{s.sector}</td>
-                      <td className="r num">{fmt.price(s.price)}</td>
-                      <td className="r num" style={{ color: s.change > 0 ? 'var(--up)' : s.change < 0 ? 'var(--down)' : 'var(--text-3)' }}>{fmt.sign(s.change)}</td>
-                      <td className="r"><Chg pct={s.chgPct} badge /></td>
-                      <td className="r num" style={{ color: 'var(--text-2)' }}>{s.volume.toFixed(1)}</td>
-                      <td className="r num" style={{ color: 'var(--text-2)' }}>{s.value.toFixed(2)}</td>
-                      <td className="c"><div style={{ display: 'flex', justifyContent: 'center' }}><Sparkline data={s.spark} w={86} h={26} fill={false} /></div></td>
-                      <td className="c"><Icon name="caretDown" size={14} style={{ transform: 'rotate(-90deg)', color: 'var(--text-3)' }} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        {loading && pagedStocks.length === 0
+          ? <div className="empty"><p>Đang tải...</p></div>
+          : pagedStocks.length === 0
+            ? <div className="empty">
+                <div className="empty__icon"><Icon name="layers" size={18} /></div>
+                <p>Chưa có dữ liệu cổ phiếu. Hãy bấm crawl để lấy data.</p>
+              </div>
+            : <div style={{ overflowX: 'auto' }}>
+                <table className="tbl">
+                  <thead><tr>
+                    <th className="l">Mã</th>
+                    <th>Ngành</th>
+                    {sortHead('price', 'Giá')}
+                    <th className="r">Δ</th>
+                    {sortHead('change_percent', '±%')}
+                    <th className="r">KL (M)</th>
+                    <th className="r">GT (Ngàn tỷ)</th>
+                    <th className="c">7 phiên</th>
+                    <th className="c"></th>
+                  </tr></thead>
+                  <tbody>
+                    {pagedStocks.map((s) => (
+                      <tr key={s.sym} className="clickable" onClick={() => setSel(s)}>
+                        <td><div className="sym">{s.sym}</div><div className="co">{s.name}</div></td>
+                        <td style={{ color: 'var(--text-3)', fontSize: 12 }}>{s.sector}</td>
+                        <td className="r num">{fmt.price(s.price)}</td>
+                        <td className="r num" style={{ color: s.change > 0 ? 'var(--up)' : s.change < 0 ? 'var(--down)' : 'var(--text-3)' }}>{fmt.sign(s.change)}</td>
+                        <td className="r"><Chg pct={s.chgPct} badge /></td>
+                        <td className="r num" style={{ color: 'var(--text-2)' }}>{s.volume.toFixed(1)}</td>
+                        <td className="r num" style={{ color: 'var(--text-2)' }}>{s.value.toFixed(2)}</td>
+                        <td className="c"><div style={{ display: 'flex', justifyContent: 'center' }}><Sparkline data={s.spark} w={86} h={26} fill={false} /></div></td>
+                        <td className="c"><Icon name="caretDown" size={14} style={{ transform: 'rotate(-90deg)', color: 'var(--text-3)' }} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
         }
+        {meta.totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6, padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
+            <button
+              className="btn btn--sm btn--ghost"
+              disabled={page <= 1 || loading}
+              onClick={() => handlePage(page - 1)}
+            >←</button>
+            {Array.from({ length: meta.totalPages }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                className={`btn btn--sm ${p === page ? 'btn--primary' : 'btn--ghost'}`}
+                onClick={() => handlePage(p)}
+                disabled={loading}
+              >{p}</button>
+            ))}
+            <button
+              className="btn btn--sm btn--ghost"
+              disabled={page >= meta.totalPages || loading}
+              onClick={() => handlePage(page + 1)}
+            >→</button>
+            <span style={{ fontSize: 12, color: 'var(--text-3)', marginLeft: 8 }}>
+              {meta.total} mã tổng
+            </span>
+          </div>
+        )}
       </Panel>
 
       <div className="grid grid--halves section-gap">

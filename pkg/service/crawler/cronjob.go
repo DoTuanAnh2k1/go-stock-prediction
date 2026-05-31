@@ -131,7 +131,14 @@ func getOrCreateStock(store repository.DatabaseStore, stockData modelssvc.VN30St
 	// Try to get existing stock
 	stock, err := store.GetStockBySymbol(stockData.Symbol)
 	if err == nil {
-		// Stock exists, update info if needed
+		// Stock exists, update company name and sector from canonical map if needed
+		companyName := VN30SymbolNames[stockData.Symbol]
+		sector := determineSector(stockData.Symbol)
+		if companyName != "" && (stock.CompanyName != companyName || stock.Sector != sector) {
+			stock.CompanyName = companyName
+			stock.Sector = sector
+			_ = store.UpdateStock(stock)
+		}
 		return stock, nil
 	}
 
@@ -199,8 +206,12 @@ func determineSector(symbol string) string {
 		"FPT": true, "VTI": true,
 	}
 
+	industrialSymbols := map[string]bool{
+		"HPG": true, "GVR": true,
+	}
+
 	energySymbols := map[string]bool{
-		"GAS": true, "GVR": true, "PLX": true, "POW": true,
+		"GAS": true, "PLX": true, "POW": true,
 	}
 
 	consumerSymbols := map[string]bool{
@@ -214,6 +225,8 @@ func determineSector(symbol string) string {
 		return "Real Estate"
 	case techSymbols[symbol]:
 		return "Technology"
+	case industrialSymbols[symbol]:
+		return "Industrial"
 	case energySymbols[symbol]:
 		return "Energy"
 	case consumerSymbols[symbol]:

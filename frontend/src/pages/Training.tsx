@@ -16,7 +16,7 @@ export default function Training() {
   return (
     <div className="content__inner fade">
       <div className="grid grid--kpis section-gap">
-        <KPI label="Mô hình đã huấn luyện" value={D.algos.length ? D.algos.length + ' / 4' : '—'} sub="LSTM · ARIMA · MA · ENS" />
+        <KPI label="Mô hình đã huấn luyện" value={D.algos.length ? D.algos.length + ' / ' + D.algos.length : '—'} sub={D.algos.length ? D.algos.map((a) => a.short).join(' · ') : '—'} />
         <KPI label="Độ chính xác tốt nhất" value={bestAlgo ? bestAlgo.acc.toFixed(1) + '%' : '—%'} sub={bestAlgo ? bestAlgo.name : '—'} accent />
         <KPI label="Tổng dữ liệu" value={D.stocks.length ? D.stocks.length + ' mã' : '—'} sub="cổ phiếu đang theo dõi" />
         <KPI label="Lần huấn luyện cuối" value={bestAlgo && bestAlgo.trainedAt !== '—' ? bestAlgo.trainedAt : '—'} sub="tự động" />

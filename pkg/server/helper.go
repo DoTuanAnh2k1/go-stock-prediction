@@ -264,6 +264,7 @@ var validAlgorithms = map[string]bool{
 	"moving_average": true,
 	"lstm_nn":        true,
 	"arima_garch":    true,
+	"ema":            true,
 	"ensemble":       true,
 }
 

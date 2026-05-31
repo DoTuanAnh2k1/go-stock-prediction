@@ -62,10 +62,10 @@ export default function Predictions() {
       .then(function(res: any) {
         const raw: any[] = Array.isArray(res.data) ? res.data : [];
         const pts = raw.slice(0, 500).map(function(it: any) {
-          const algoCls = it.algorithm === 'lstm_nn' || it.algorithm === 'lstm' ? 'lstm'
-            : it.algorithm === 'arima_garch' || it.algorithm === 'arima' ? 'arima'
-            : it.algorithm === 'ema' ? 'ema' : 'ma';
-          const color = algoCls === 'lstm' ? 'oklch(0.74 0.13 200)' : algoCls === 'arima' ? 'var(--gold)' : algoCls === 'ema' ? 'oklch(0.72 0.18 150)' : 'var(--up)';
+          // Derive color from the runtime algoMap via D.accTrend.series (same palette logic).
+          const algoKey = (it.algorithm || '').toLowerCase();
+          const series = D.accTrend.series.find((s) => s.key === algoKey);
+          const color = series ? series.color : 'var(--text-3)';
           const predChg = parseFloat(it.predicted_change_pct) || 0;
           const actChg  = parseFloat(it.actual_change_pct) || 0;
           return {
@@ -78,7 +78,7 @@ export default function Predictions() {
         setScatterData(pts);
       })
       .catch(function() { setScatterData([]); });
-  }, [algo]);
+  }, [algo, D.accTrend.series]);
 
   const scatterPts = scatterData;
 
@@ -141,15 +141,10 @@ export default function Predictions() {
               </div>
             : <>
                 <LineChart
-                  series={[
-                    { name: 'LSTM', data: D.accTrend.lstm, color: 'oklch(0.74 0.13 200)' },
-                    { name: 'ARIMA-GARCH', data: D.accTrend.arima, color: 'var(--gold)' },
-                    { name: 'Moving Average', data: D.accTrend.ma, color: 'var(--up)' },
-                    { name: 'EMA', data: D.accTrend.ema, color: 'oklch(0.72 0.18 150)' },
-                  ]}
+                  series={D.accTrend.series.map((s) => ({ name: s.name, data: s.data, color: s.color }))}
                   labels={D.accTrend.labels} height={236} yFmt={(v) => v.toFixed(0) + '%'} valueFmt={(v) => v.toFixed(1) + '%'}
                 />
-                <Legend items={[['LSTM', 'oklch(0.74 0.13 200)'], ['ARIMA-GARCH', 'var(--gold)'], ['Moving Average', 'var(--up)'], ['EMA', 'oklch(0.72 0.18 150)']]} />
+                <Legend items={D.accTrend.series.map((s) => [s.name, s.color] as [string, string])} />
               </>
           }
         </Panel>
@@ -231,7 +226,7 @@ export default function Predictions() {
               </div>
             : <>
                 <Scatter points={scatterPts} height={220} xLabel="Độ tin cậy (%)" />
-                <Legend items={[['LSTM', 'oklch(0.74 0.13 200)'], ['ARIMA', 'var(--gold)'], ['MA', 'var(--up)'], ['EMA', 'oklch(0.72 0.18 150)']]} />
+                <Legend items={D.accTrend.series.map((s) => [s.name, s.color] as [string, string])} />
               </>
           }
         </Panel>

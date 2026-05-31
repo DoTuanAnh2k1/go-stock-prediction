@@ -136,6 +136,14 @@ export interface TrainJob {
   eta: string;
 }
 
+/** One series in the accuracy trend chart, keyed by algorithm key (e.g. "lstm_nn"). */
+export interface AccTrendSeries {
+  key: string;
+  name: string;
+  color: string;
+  data: (number | null)[];
+}
+
 export interface AppData {
   fmt: FmtUtils;
   stocks: StockItem[];
@@ -151,10 +159,13 @@ export interface AppData {
   goldDetail: GoldDetailItem[];
   stats: { total: number; acc: number };
   indices: { vnindex: IndexData; vn30: IndexData };
-  accTrend: { labels: string[]; lstm: (number | null)[]; arima: (number | null)[]; ma: (number | null)[]; ema: (number | null)[] };
+  /** Dynamic trend series — one entry per algorithm returned by the API. */
+  accTrend: { labels: string[]; series: AccTrendSeries[] };
   dailyCounts: { labels: string[]; values: number[] };
   trainLogs: [string, string, string][];
   trainJobs: TrainJob[];
+  /** Lookup map: algorithm key → { short, cls, name } populated from /api/training/algorithms. */
+  algoMap: Record<string, { short: string; cls: string; name: string }>;
   __live: boolean;
   __sources: Record<string, boolean>;
 }

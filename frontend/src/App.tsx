@@ -8,6 +8,7 @@ import Stocks from './pages/Stocks';
 import Predictions from './pages/Predictions';
 import Training from './pages/Training';
 import Gold from './pages/Gold';
+import Crypto from './pages/Crypto';
 import Guide from './pages/Guide';
 
 const TWEAK_DEFAULTS = {
@@ -52,6 +53,7 @@ export default function App() {
             <Route path="/predictions" element={<ErrorBoundary><Predictions /></ErrorBoundary>} />
             <Route path="/training" element={<ErrorBoundary><Training /></ErrorBoundary>} />
             <Route path="/gold" element={<ErrorBoundary><Gold /></ErrorBoundary>} />
+            <Route path="/crypto" element={<ErrorBoundary><Crypto /></ErrorBoundary>} />
             <Route path="/guide" element={<ErrorBoundary><Guide /></ErrorBoundary>} />
           </Routes>
         </div>

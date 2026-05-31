@@ -4,21 +4,21 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"go-stock-prediction/pkg/logger"
-	modelsdb "go-stock-prediction/pkg/models/models_db"
-	modelssvc "go-stock-prediction/pkg/models/models_svc"
-	arimagarch "go-stock-prediction/pkg/service/predict/arima_garch"
-	"go-stock-prediction/pkg/service/predict/ensemble"
-	ema "go-stock-prediction/pkg/service/predict/ema"
-	lstmnn "go-stock-prediction/pkg/service/predict/lstm_nn"
-	movingaverage "go-stock-prediction/pkg/service/predict/moving_average"
-	"go-stock-prediction/pkg/store/repository"
-	"go-stock-prediction/pkg/utils/cron"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/shopspring/decimal"
+
+	"go-stock-prediction/pkg/logger"
+	modelsdb "go-stock-prediction/pkg/models/models_db"
+	modelssvc "go-stock-prediction/pkg/models/models_svc"
+	_ "go-stock-prediction/pkg/service/market/gold"  // registers GOLD market
+	_ "go-stock-prediction/pkg/service/market/vn30"  // registers VN30 market
+	"go-stock-prediction/pkg/service/predict/orchestrator"
+	"go-stock-prediction/pkg/service/predict/registry" // triggers algorithms.go init()
+	"go-stock-prediction/pkg/store/repository"
+	"go-stock-prediction/pkg/utils/cron"
 )
 
 // Global prediction service instance
@@ -29,17 +29,17 @@ var (
 
 // PredictionService manages all prediction algorithms and training
 type PredictionService struct {
-	algorithms    map[string]PredictionAlgorithm
-	store         repository.DatabaseStore
-	isTraining    bool
-	lastTrained   time.Time
-	mutex         sync.RWMutex
+	algorithms map[string]PredictionAlgorithm
+	store      repository.DatabaseStore
+	isTraining bool
+	lastTrained time.Time
+	mutex      sync.RWMutex
 	// Training progress fields (protected by mutex)
-	trainingProgress      float64   // 0–100
-	trainingPhase         string    // human-readable current phase
-	trainingStarted       time.Time // when current training began
-	trainingTotalAlgos    int       // total algorithms to train
-	trainingDoneAlgos     int       // algorithms completed so far
+	trainingProgress   float64   // 0–100
+	trainingPhase      string    // human-readable current phase
+	trainingStarted    time.Time // when current training began
+	trainingTotalAlgos int       // total algorithms to train
+	trainingDoneAlgos  int       // algorithms completed so far
 }
 
 // TrainingResult contains results from training process
@@ -56,7 +56,7 @@ type TrainingResult struct {
 // Init initializes the prediction service and sets up cronjobs
 func Init() {
 	once.Do(func() {
-		logger.Logger.Info("🧠 Initializing prediction service...")
+		logger.Logger.Info("Initializing prediction service...")
 
 		// Get database store
 		store := repository.GetSingleton()
@@ -75,20 +75,20 @@ func Init() {
 		// Register all prediction algorithms
 		registerAlgorithms()
 
-		// Setup weekly training cronjob - every Sunday at 2 AM (chill time!)
+		// Setup weekly training cronjob - every Sunday at 9 AM
 		err := cron.AddJob("Weekly Model Training", cron.WeeklySundayAM, CronjobWeeklyTraining)
 		if err != nil {
 			logger.Logger.Errorf("Failed to add weekly training cronjob: %v", err)
 		} else {
-			logger.Logger.Info("✅ Weekly training cronjob registered - every Sunday 9 AM")
+			logger.Logger.Info("Weekly training cronjob registered - every Sunday 9 AM")
 		}
 
-		// Setup daily prediction job - every day at 6 PM after market close
-		err = cron.AddJob("Daily Stock Prediction", cron.Daily6PM, CronjobDailyPrediction)
+		// Setup daily prediction job — now orchestrator-driven (all markets)
+		err = cron.AddJob("Daily Prediction (All Markets)", cron.Daily6PM, CronjobDailyPrediction)
 		if err != nil {
 			logger.Logger.Errorf("Failed to add daily prediction cronjob: %v", err)
 		} else {
-			logger.Logger.Info("✅ Daily prediction cronjob registered - every day 6 PM")
+			logger.Logger.Info("Daily prediction cronjob registered - every day 6 PM (all markets)")
 		}
 
 		// Setup daily reconciliation job - every day at 6 AM to update actual prices
@@ -96,48 +96,23 @@ func Init() {
 		if err != nil {
 			logger.Logger.Errorf("Failed to add daily reconcile cronjob: %v", err)
 		} else {
-			logger.Logger.Info("✅ Daily reconcile cronjob registered - every day 6 AM")
+			logger.Logger.Info("Daily reconcile cronjob registered - every day 6 AM")
 		}
 
-		logger.Logger.Info("🎯 Prediction service initialized successfully!")
+		logger.Logger.Info("Prediction service initialized successfully!")
 	})
 }
 
-// registerAlgorithms registers all available prediction algorithms
+// registerAlgorithms builds all algorithms from the central registry.
+// To add a new algorithm, edit pkg/service/predict/registry/algorithms.go only.
 func registerAlgorithms() {
-	logger.Logger.Info("📚 Registering prediction algorithms...")
-
-	// Register Moving Average predictor
-	maPredictor := movingaverage.NewMovingAveragePredictor()
-	predictor.algorithms["moving_average"] = maPredictor
-	logger.Logger.Infof("✅ Registered: %s", maPredictor.GetName())
-
-	// Register LSTM Neural Network predictor
-	lstmPredictor := lstmnn.NewLSTMPredictor()
-	predictor.algorithms["lstm_nn"] = lstmPredictor
-	logger.Logger.Infof("✅ Registered: %s", lstmPredictor.GetName())
-
-	// Register ARIMA-GARCH predictor
-	arimaPredictor := arimagarch.NewARIMAGARCHPredictor()
-	predictor.algorithms["arima_garch"] = arimaPredictor
-	logger.Logger.Infof("✅ Registered: %s", arimaPredictor.GetName())
-
-	// Register EMA predictor
-	emaPredictor := ema.NewEMAPredictor()
-	predictor.algorithms["ema"] = emaPredictor
-	logger.Logger.Infof("✅ Registered: %s", emaPredictor.GetName())
-
-	// Register Ensemble predictor (stacks the 4 base algorithms)
-	ensemblePredictor := ensemble.New([]PredictionAlgorithm{maPredictor, lstmPredictor, arimaPredictor, emaPredictor})
-	predictor.algorithms["ensemble"] = ensemblePredictor
-	logger.Logger.Infof("✅ Registered: %s", ensemblePredictor.GetName())
-
-	logger.Logger.Infof("🚀 Total %d algorithms registered", len(predictor.algorithms))
+	predictor.algorithms = registry.Build()
+	logger.Logger.Infof("%d algorithms registered via registry", len(predictor.algorithms))
 }
 
-// CronjobWeeklyTraining runs weekly model training
+// CronjobWeeklyTraining runs weekly model training (VN30 stocks only).
 func CronjobWeeklyTraining() error {
-	logger.Logger.Info("🏋️ Starting weekly model training cronjob...")
+	logger.Logger.Info("Starting weekly model training cronjob...")
 
 	if predictor == nil {
 		return fmt.Errorf("prediction service not initialized")
@@ -147,7 +122,7 @@ func CronjobWeeklyTraining() error {
 	predictor.mutex.Lock()
 	if predictor.isTraining {
 		predictor.mutex.Unlock()
-		logger.Logger.Warn("⚠️ Training already in progress, skipping...")
+		logger.Logger.Warn("Training already in progress, skipping...")
 		return nil
 	}
 	predictor.isTraining = true
@@ -168,18 +143,17 @@ func CronjobWeeklyTraining() error {
 	}()
 
 	startTime := time.Now()
-	// ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour) // 2 hours max
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute) // 15 minutes max
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
-	// Get all VN30 stocks for training
-	stocks, err := predictor.store.GetVN30Stocks()
+	// Get all VN30 stocks for training directly from repository
+	stocks, err := repository.GetSingleton().GetVN30Stocks()
 	if err != nil {
-		logger.Logger.Errorf("❌ Failed to get VN30 stocks: %v", err)
+		logger.Logger.Errorf("Failed to get VN30 stocks: %v", err)
 		return err
 	}
 
-	logger.Logger.Infof("📊 Training models on %d VN30 stocks", len(stocks))
+	logger.Logger.Infof("Training models on %d VN30 stocks", len(stocks))
 
 	sessionID := generateSessionID()
 
@@ -202,7 +176,7 @@ func CronjobWeeklyTraining() error {
 		predictor.trainingProgress = float64(algIdx) / float64(len(predictor.algorithms)) * 100
 		predictor.mutex.Unlock()
 
-		logger.Logger.Infof("✅ %s training completed: %d/%d successful, accuracy: %v",
+		logger.Logger.Infof("%s training completed: %d/%d successful, accuracy: %v",
 			algName, result.SuccessCount, result.TotalStocks, result.Accuracy)
 
 		trainingLog := &modelsdb.TrainingLog{
@@ -225,66 +199,21 @@ func CronjobWeeklyTraining() error {
 	duration := time.Since(startTime)
 	err = logTrainingResults(trainingResults, duration)
 	if err != nil {
-		logger.Logger.Errorf("❌ Failed to log training results: %v", err)
+		logger.Logger.Errorf("Failed to log training results: %v", err)
 	}
 
-	logger.Logger.Infof("🎉 Weekly training completed in %v", duration)
+	logger.Logger.Infof("Weekly training completed in %v", duration)
 	return nil
 }
 
-// CronjobDailyPrediction runs daily stock predictions
+// CronjobDailyPrediction runs daily prediction for ALL registered markets via the orchestrator.
 func CronjobDailyPrediction() error {
-	logger.Logger.Info("🔮 Starting daily prediction cronjob...")
-
-	if predictor == nil {
-		return fmt.Errorf("prediction service not initialized")
-	}
-
-	startTime := time.Now()
+	logger.Logger.Info("Starting daily prediction for all markets...")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-
-	// Get all VN30 stocks
-	stocks, err := predictor.store.GetVN30Stocks()
-	if err != nil {
-		logger.Logger.Errorf("❌ Failed to get VN30 stocks: %v", err)
-		return err
-	}
-
-	totalPredictions := 0
-	successCount := 0
-	errorCount := 0
-
-	// Generate predictions for each stock using all algorithms
-	for _, stock := range stocks {
-		for algName, algorithm := range predictor.algorithms {
-			prediction, err := generateStockPrediction(ctx, stock, algName, algorithm)
-			if err != nil {
-				logger.Logger.Errorf("❌ Failed to predict %s with %s: %v", stock.Symbol, algName, err)
-				errorCount++
-				continue
-			}
-
-			// Save prediction to database
-			err = predictor.store.CreatePrediction(prediction)
-			if err != nil {
-				logger.Logger.Errorf("❌ Failed to save prediction for %s: %v", stock.Symbol, err)
-				errorCount++
-				continue
-			}
-
-			successCount++
-			totalPredictions++
-			logger.Logger.Debugf("✅ Saved prediction for %s (%s): %v",
-				stock.Symbol, algName, prediction.PredictedPrice)
-		}
-	}
-
-	duration := time.Since(startTime)
-	logger.Logger.Infof("🎯 Daily prediction completed: %d predictions generated, %d successful, %d errors in %v",
-		totalPredictions, successCount, errorCount, duration)
-
-	return nil
+	total, err := orchestrator.RunAllMarkets(ctx)
+	logger.Logger.Infof("Daily prediction done: %d predictions across all markets", total)
+	return err
 }
 
 // trainSingleAlgorithm trains a single algorithm on all stocks
@@ -296,7 +225,7 @@ func trainSingleAlgorithm(ctx context.Context, algName string, algorithm Predict
 		TrainedAt:     startTime,
 	}
 
-	logger.Logger.Infof("🎯 Training %s on %d stocks...", algName, len(stocks))
+	logger.Logger.Infof("Training %s on %d stocks...", algName, len(stocks))
 
 	var totalAccuracy float64
 	validStocks := 0
@@ -305,7 +234,7 @@ func trainSingleAlgorithm(ctx context.Context, algName string, algorithm Predict
 		// Get historical data for training
 		stockData, err := getStockTrainingData(stock.ID)
 		if err != nil {
-			logger.Logger.Debugf("⚠️ Failed to get training data for %s: %v", stock.Symbol, err)
+			logger.Logger.Debugf("Failed to get training data for %s: %v", stock.Symbol, err)
 			result.ErrorCount++
 			continue
 		}
@@ -313,7 +242,7 @@ func trainSingleAlgorithm(ctx context.Context, algName string, algorithm Predict
 		// Train/validate algorithm (simplified - in real world you'd do proper ML training)
 		_, err = algorithm.Predict(ctx, stockData)
 		if err != nil {
-			logger.Logger.Debugf("⚠️ Failed to validate %s with %s: %v", stock.Symbol, algName, err)
+			logger.Logger.Debugf("Failed to validate %s with %s: %v", stock.Symbol, algName, err)
 			result.ErrorCount++
 			continue
 		}
@@ -476,16 +405,17 @@ func TrainSingleAlgorithmByName(algorithmName string) (string, error) {
 		return "", fmt.Errorf("unknown algorithm: %s", algorithmName)
 	}
 
-	stocks, err := predictor.store.GetVN30Stocks()
+	trainCtx, trainCancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer trainCancel()
+
+	stocks, err := repository.GetSingleton().GetVN30Stocks()
 	if err != nil {
 		return "", fmt.Errorf("failed to get stocks: %v", err)
 	}
 
 	sessionID := generateSessionID()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
-	defer cancel()
 
-	result := trainSingleAlgorithm(ctx, algorithmName, algorithm, stocks)
+	result := trainSingleAlgorithm(trainCtx, algorithmName, algorithm, stocks)
 
 	trainingLog := &modelsdb.TrainingLog{
 		SessionID:     sessionID,
@@ -530,7 +460,7 @@ func TrainAllAlgorithms() (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()
 
-		stocks, err := predictor.store.GetVN30Stocks()
+		stocks, err := repository.GetSingleton().GetVN30Stocks()
 		if err != nil {
 			logger.Logger.Errorf("Failed to get VN30 stocks for manual training: %v", err)
 			return
@@ -557,8 +487,10 @@ func TrainAllAlgorithms() (string, error) {
 			}
 		}
 
-		duration := time.Since(trainingResults[0].TrainedAt)
-		logTrainingResults(trainingResults, duration)
+		if len(trainingResults) > 0 {
+			duration := time.Since(trainingResults[0].TrainedAt)
+			logTrainingResults(trainingResults, duration)
+		}
 		logger.Logger.Info("Manual training completed")
 	}()
 

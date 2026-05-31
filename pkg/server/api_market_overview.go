@@ -6,6 +6,8 @@ import (
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 	"go-stock-prediction/pkg/store/repository"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,15 +17,33 @@ import (
 const marketOverviewCacheKey = "market_overview"
 
 // GetMarketOverview - GET /api/market/overview
-// Supports optional query params: ?sector=ngan-hang and ?exchange=HOSE
+// Supports optional query params: ?sector=ngan-hang&exchange=HOSE&q=vcb&page=1&page_size=10&sort_by=change_percent&sort_order=desc
 func GetMarketOverview(w http.ResponseWriter, r *http.Request) {
 	sectorFilter := strings.TrimSpace(r.URL.Query().Get("sector"))
 	exchangeFilter := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("exchange")))
+	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+	pageStr := r.URL.Query().Get("page")
+	pageSizeStr := r.URL.Query().Get("page_size")
+	sortByStr := r.URL.Query().Get("sort_by")
+	sortOrderStr := r.URL.Query().Get("sort_order")
 
-	// Only use cache when there are no filters
-	cacheKey := marketOverviewCacheKey
-	if sectorFilter == "" && exchangeFilter == "" {
-		if cached, ok := globalCache.Get(cacheKey); ok {
+	page := 1
+	pageSize := 10
+	if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+		page = p
+	}
+	if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= 100 {
+		pageSize = ps
+	}
+	if sortByStr != "price" && sortByStr != "change_percent" {
+		sortByStr = "change_percent"
+	}
+	sortDesc := sortOrderStr != "asc"
+
+	// Only use cache when there are no params of any kind
+	hasParams := sectorFilter != "" || exchangeFilter != "" || q != "" || pageStr != "" || pageSizeStr != "" || sortByStr != "" || sortOrderStr != ""
+	if !hasParams {
+		if cached, ok := globalCache.Get(marketOverviewCacheKey); ok {
 			ResponseSuccess(w, http.StatusOK, cached)
 			return
 		}
@@ -151,25 +171,70 @@ func GetMarketOverview(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// Filter by search query
+	if q != "" {
+		filtered := make([]modelsapi.StockFlatDTO, 0, len(flatStocks))
+		for _, s := range flatStocks {
+			if strings.Contains(strings.ToLower(s.Symbol), q) ||
+				strings.Contains(strings.ToLower(s.CompanyName), q) {
+				filtered = append(filtered, s)
+			}
+		}
+		flatStocks = filtered
+	}
+
+	// Sort
+	sort.Slice(flatStocks, func(i, j int) bool {
+		var a, b decimal.Decimal
+		if sortByStr == "price" {
+			a, b = flatStocks[i].CurrentPrice, flatStocks[j].CurrentPrice
+		} else {
+			a, b = flatStocks[i].ChangePercent, flatStocks[j].ChangePercent
+		}
+		if sortDesc {
+			return a.GreaterThan(b)
+		}
+		return a.LessThan(b)
+	})
+
+	// Paginate
+	stocksTotal := len(flatStocks)
+	totalPages := (stocksTotal + pageSize - 1) / pageSize
+	if totalPages == 0 {
+		totalPages = 1
+	}
+	start := (page - 1) * pageSize
+	end := start + pageSize
+	if start > stocksTotal {
+		start = stocksTotal
+	}
+	if end > stocksTotal {
+		end = stocksTotal
+	}
+
 	overview := &modelsapi.MarketOverviewDTO{
-		VN30Index:    vn30Index,
-		IndexChange:  indexChange,
-		IndexPercent: indexPercent,
-		TotalStocks:  len(filteredStocks),
-		Gainers:      gainers,
-		Losers:       losers,
-		Unchanged:    unchanged,
-		TotalVolume:  totalVolume,
-		TotalValue:   totalValue,
-		TopGainers:   topGainers,
-		TopLosers:    topLosers,
-		MostActive:   mostActive,
-		Stocks:       flatStocks,
-		LastUpdated:  time.Now(),
+		VN30Index:        vn30Index,
+		IndexChange:      indexChange,
+		IndexPercent:     indexPercent,
+		TotalStocks:      len(filteredStocks),
+		Gainers:          gainers,
+		Losers:           losers,
+		Unchanged:        unchanged,
+		TotalVolume:      totalVolume,
+		TotalValue:       totalValue,
+		TopGainers:       topGainers,
+		TopLosers:        topLosers,
+		MostActive:       mostActive,
+		Stocks:           flatStocks[start:end],
+		StocksTotal:      stocksTotal,
+		StocksPage:       page,
+		StocksPageSize:   pageSize,
+		StocksTotalPages: totalPages,
+		LastUpdated:      time.Now(),
 	}
 
 	// Only cache unfiltered responses
-	if sectorFilter == "" && exchangeFilter == "" {
+	if !hasParams {
 		globalCache.Set(marketOverviewCacheKey, overview, 60*time.Second)
 	}
 	ResponseSuccess(w, http.StatusOK, overview)

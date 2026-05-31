@@ -11,8 +11,11 @@ import (
 	"go-stock-prediction/pkg/config"
 	"go-stock-prediction/pkg/logger"
 	"go-stock-prediction/pkg/service/crawler"
-	"go-stock-prediction/pkg/service/predict"
-	goldpredict "go-stock-prediction/pkg/service/predict/gold"
+	_ "go-stock-prediction/pkg/service/market/gold" // registers GOLD market
+	_ "go-stock-prediction/pkg/service/market/vn30" // registers VN30 market
+	_ "go-stock-prediction/pkg/service/predict"      // registers stock asset type via init()
+	"go-stock-prediction/pkg/service/predict/assettype"
+	_ "go-stock-prediction/pkg/service/predict/gold" // registers gold asset type via init()
 	"go-stock-prediction/pkg/store/repository"
 	grpcserver "go-stock-prediction/pkg/grpc/server"
 )
@@ -52,9 +55,12 @@ func main() {
 		}
 	}()
 
-	// Initialize prediction services and register cron jobs
-	go predict.Init()
-	go goldpredict.Init()
+	// Initialize all registered asset prediction types (stock, gold, and future types).
+	// To add a new prediction type: implement assettype.AssetPredictionType and import it here.
+	for _, t := range assettype.All() {
+		t := t
+		go t.Init()
+	}
 
 	// Wait for shutdown signal
 	signals := make(chan os.Signal, 1)

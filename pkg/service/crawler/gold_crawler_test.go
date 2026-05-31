@@ -163,7 +163,10 @@ func TestCrawlXAUUSD_EmptyResult_DetectedByValidation(t *testing.T) {
 
 	client := srv.Client()
 	req, _ := http.NewRequest(http.MethodGet, srv.URL, nil)
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("test server request failed: %v", err)
+	}
 	defer resp.Body.Close()
 
 	var result yahooChartResponse
@@ -184,7 +187,10 @@ func TestCrawlXAUUSD_ZeroPrice_DetectedByValidation(t *testing.T) {
 
 	client := srv.Client()
 	req, _ := http.NewRequest(http.MethodGet, srv.URL, nil)
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("test server request failed: %v", err)
+	}
 	defer resp.Body.Close()
 
 	var result yahooChartResponse
@@ -223,11 +229,14 @@ func TestCrawlXAUUSD_InvalidJSON_ReturnsParseError(t *testing.T) {
 
 	client := srv.Client()
 	req, _ := http.NewRequest(http.MethodGet, srv.URL, nil)
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("test server request failed: %v", err)
+	}
 	defer resp.Body.Close()
 
 	var result yahooChartResponse
-	err := json.NewDecoder(resp.Body).Decode(&result)
+	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err == nil {
 		t.Error("expected JSON parse error for invalid body, got nil")
 	}
@@ -629,11 +638,14 @@ func TestCrawlBTMC_InvalidJSON_ReturnsParseError(t *testing.T) {
 
 	client := srv.Client()
 	req, _ := http.NewRequest(http.MethodGet, srv.URL, nil)
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("test server request failed: %v", err)
+	}
 	defer resp.Body.Close()
 
 	var result btmcJSONResponse
-	err := json.NewDecoder(resp.Body).Decode(&result)
+	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err == nil {
 		t.Error("expected JSON decode error, got nil")
 	}
@@ -660,7 +672,10 @@ func TestCrawlBTMC_InvalidBuyPrice_SkipsRow(t *testing.T) {
 
 	client := srv.Client()
 	req, _ := http.NewRequest(http.MethodGet, srv.URL, nil)
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("test server request failed: %v", err)
+	}
 	defer resp.Body.Close()
 
 	var result btmcJSONResponse

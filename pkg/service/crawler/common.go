@@ -47,8 +47,8 @@ const (
 	VN30SymbolVTI = "VTI" // Vinh Tien Investment
 
 	// Energy & Oil Gas
-	VN30SymbolGAS = "GAS" // Khí Đại Dương
-	VN30SymbolGVR = "GVR" // Lọc hoá dầu Bình Sơn
+	VN30SymbolGAS = "GAS" // Tổng Công ty Khí Việt Nam
+	VN30SymbolGVR = "GVR" // Tập đoàn Cao su Việt Nam
 	VN30SymbolPLX = "PLX" // Xăng dầu Petrolimex
 	VN30SymbolPOW = "POW" // PetroVietnam Power
 
@@ -83,9 +83,9 @@ var VN30SymbolNames = map[string]string{
 	VN30SymbolBID: "Ngân hàng Đầu tư và Phát triển",
 	VN30SymbolBVH: "Bảo Việt Holdings",
 	VN30SymbolCTG: "Ngân hàng Công thương",
-	VN30SymbolFPT: "FPT Corporation",
-	VN30SymbolGAS: "Khí Đại Dương",
-	VN30SymbolGVR: "Lọc hoá dầu Bình Sơn",
+	VN30SymbolFPT: "Tập đoàn FPT",
+	VN30SymbolGAS: "Tổng Công ty Khí Việt Nam",
+	VN30SymbolGVR: "Tập đoàn Cao su Việt Nam",
 	VN30SymbolHDB: "Ngân hàng Phát triển TP.HCM",
 	VN30SymbolHPG: "Hoà Phát Group",
 	VN30SymbolMBB: "Ngân hàng Quân đội",
@@ -104,7 +104,7 @@ var VN30SymbolNames = map[string]string{
 	VN30SymbolVHM: "Vinhomes",
 	VN30SymbolVIC: "Vingroup",
 	VN30SymbolVJC: "VietJet Air",
-	VN30SymbolVNM: "Vinamilk",
+	VN30SymbolVNM: "Công ty Cổ phần Sữa Việt Nam",
 	VN30SymbolVPB: "Ngân hàng Việt Nam Thịnh vượng",
 	VN30SymbolVRE: "Vincom Retail",
 	VN30SymbolVTI: "Vinh Tien Investment",
