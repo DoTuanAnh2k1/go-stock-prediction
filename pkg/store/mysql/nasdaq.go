@@ -48,6 +48,25 @@ func (c *Client) GetNasdaqSymbols() ([]string, error) {
 	return symbols, err
 }
 
+// GetAllNasdaqPricesForSymbol returns all historical prices for a symbol, ordered DESC.
+func (c *Client) GetAllNasdaqPricesForSymbol(symbol string) ([]modelsdb.NasdaqPrice, error) {
+	var prices []modelsdb.NasdaqPrice
+	err := c.Db.Where("symbol = ?", symbol).Order("trading_date DESC").Find(&prices).Error
+	return prices, err
+}
+
+// BulkCreateNasdaqPredictions inserts multiple NASDAQ predictions using CreateInBatches.
+func (c *Client) BulkCreateNasdaqPredictions(preds []modelsdb.NasdaqPrediction) error {
+	return c.Db.CreateInBatches(preds, 200).Error
+}
+
+// DeleteNasdaqPredictionsBeforeDate hard-deletes all NASDAQ predictions whose target_date < before
+// and that already have an actual_price (i.e. backtest rows).
+func (c *Client) DeleteNasdaqPredictionsBeforeDate(before time.Time) error {
+	return c.Db.Where("target_date < ? AND actual_price IS NOT NULL", before).
+		Delete(&modelsdb.NasdaqPrediction{}).Error
+}
+
 // CreateNasdaqPrediction saves a new NASDAQ prediction record.
 func (c *Client) CreateNasdaqPrediction(p *modelsdb.NasdaqPrediction) error {
 	return c.Db.Create(p).Error

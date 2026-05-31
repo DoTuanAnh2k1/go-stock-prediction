@@ -11,20 +11,30 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// TriggerHistoricalBacktestHandler handles POST /api/trigger/historical-backtest
+// TriggerHistoricalBacktestHandler godoc
 //
-// Delegates the walk-forward backtest to the prediction microservice via gRPC.
-// Returns 409 if a backtest is already running (codes.Aborted from server).
-//
-// Optional query params:
-//
-//	train_window (int, default 30): minimum trading days before first prediction
-//	step_size    (int, default 6):  fold size (days between retraining)
+//	@Summary      Trigger walk-forward historical backtest
+//	@Description  Starts a walk-forward backtest in the background via the prediction service. Accepts optional query params: train_window (default 30), step_size (default 6), and market (one of "", "VN30", "GOLD", "NASDAQ100", "CRYPTO", "FUEL"). Returns 409 if a backtest is already running.
+//	@Tags         Triggers
+//	@Accept       json
+//	@Produce      json
+//	@Param        train_window  query     int     false  "Minimum data points before first prediction (default 30)"
+//	@Param        step_size     query     int     false  "Fold size — data points between retraining (default 6)"
+//	@Param        market        query     string  false  "Target market key: VN30, GOLD, NASDAQ100, CRYPTO, FUEL (default: all)"
+//	@Success      202           {object}  map[string]string
+//	@Failure      401           {object}  ResponseFailure
+//	@Failure      409           {object}  ResponseFailure
+//	@Failure      500           {object}  ResponseFailure
+//	@Failure      503           {object}  ResponseFailure
+//	@Security     BearerAuth
+//	@Router       /api/trigger/historical-backtest [post]
 func TriggerHistoricalBacktestHandler(w http.ResponseWriter, r *http.Request) {
 	trainWindow := queryInt(r, "train_window", 30)
 	stepSize := queryInt(r, "step_size", 6)
+	marketKey := r.URL.Query().Get("market")
 
-	logger.Logger.Infof("TriggerHistoricalBacktestHandler: requesting backtest, train_window=%d step_size=%d", trainWindow, stepSize)
+	logger.Logger.Infof("TriggerHistoricalBacktestHandler: requesting backtest, market=%q train_window=%d step_size=%d",
+		marketKey, trainWindow, stepSize)
 
 	client := requireGRPCClient(w)
 	if client == nil {
@@ -33,6 +43,7 @@ func TriggerHistoricalBacktestHandler(w http.ResponseWriter, r *http.Request) {
 	_, err := client.TriggerHistoricalBacktest(r.Context(), &pb.BacktestRequest{
 		TrainWindow: int32(trainWindow),
 		StepSize:    int32(stepSize),
+		MarketKey:   marketKey,
 	})
 	if err != nil {
 		st, ok := status.FromError(err)
@@ -45,9 +56,13 @@ func TriggerHistoricalBacktestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	msg := "Historical backtest running in background. Check app logs for progress."
+	if marketKey != "" {
+		msg = marketKey + " historical backtest running in background. Check app logs for progress."
+	}
 	ResponseSuccess(w, http.StatusAccepted, map[string]string{
 		"status":  "started",
-		"message": "Historical backtest running in background. Check app logs for progress.",
+		"message": msg,
 	})
 }
 

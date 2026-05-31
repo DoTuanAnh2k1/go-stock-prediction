@@ -79,10 +79,11 @@ function SortTh({ label, field, sortBy, sortDir, onSort, className }: {
 // ── Sub-nav tabs ──────────────────────────────────────────────────────────────
 function MarketTabs({ marketKey }: { marketKey: string }) {
   const base = '/markets/' + marketKey;
+  const overviewIcon = marketKey === 'gold' ? 'gold' : 'candles';
   return (
     <div className="market-tabs">
       <NavLink to={base} end className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name={marketKey === 'gold' ? 'gold' : 'candles'} size={14} />
+        <Icon name={overviewIcon} size={14} />
         Tổng quan
       </NavLink>
       <NavLink to={base + '/predictions'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
@@ -145,8 +146,11 @@ export default function MarketTraining() {
     }).finally(() => setLoading(false));
   }, [marketKey, page, sortBy, sortDir, algorithm]);
 
-  const isGold = marketKey === 'gold';
-  const marketLabel = isGold ? 'Vàng' : 'VN30';
+  const marketLabel = marketKey === 'gold' ? 'Vàng'
+    : marketKey === 'nasdaq100' ? 'NASDAQ 100'
+    : marketKey === 'crypto'    ? 'Crypto'
+    : marketKey === 'fuel'      ? 'Giá Xăng'
+    : 'VN30';
 
   return (
     <div className="content__inner fade">

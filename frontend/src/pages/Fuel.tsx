@@ -1,7 +1,33 @@
 import { useState, useEffect } from 'react';
+import { NavLink } from 'react-router-dom';
 import { Panel, KPI, Icon, Chg, Seg, ConfBar, vnsToast } from '../components/ui';
 import { LineChart } from '../components/charts';
 import { useAuth } from '../context/AuthContext';
+
+// ── Market tabs ───────────────────────────────────────────────────────────────
+function MarketTabs({ marketKey }: { marketKey: string }) {
+  const base = '/markets/' + marketKey;
+  return (
+    <div className="market-tabs">
+      <NavLink to={base} end className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
+        <Icon name="candles" size={14} />
+        Tổng quan
+      </NavLink>
+      <NavLink to={base + '/predictions'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
+        <Icon name="pulse" size={14} />
+        Dự đoán
+      </NavLink>
+      <NavLink to={base + '/detail'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
+        <Icon name="layers" size={14} />
+        Chi tiết
+      </NavLink>
+      <NavLink to={base + '/training'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
+        <Icon name="cpu" size={14} />
+        Huấn luyện
+      </NavLink>
+    </div>
+  );
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface FuelLatestItem {
@@ -203,6 +229,7 @@ export default function Fuel() {
   if (loading) {
     return (
       <div className="content__inner fade">
+        <MarketTabs marketKey="fuel" />
         <div className="grid grid--kpis section-gap">
           {[1, 2, 3, 4].map((i) => <KPI key={i} label="—" value="—" sub="Loading..." />)}
         </div>
@@ -216,6 +243,7 @@ export default function Fuel() {
 
   return (
     <div className="content__inner fade">
+      <MarketTabs marketKey="fuel" />
       {/* Info banner */}
       <div
         className="panel section-gap"

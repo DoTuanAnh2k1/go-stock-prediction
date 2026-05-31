@@ -575,7 +575,31 @@ export function fetchMarketPredictions(
   if (params.sort_dir)  p.set('sort_dir', params.sort_dir);
   if (params.algorithm) p.set('algorithm', params.algorithm);
   if (params.status)    p.set('status', params.status);
-  return fetchJSON('/markets/' + encodeURIComponent(marketKey) + '/predictions?' + p.toString())
+
+  // Route to the correct market-specific predictions endpoint
+  let endpoint: string;
+  switch (marketKey) {
+    case 'nasdaq100': endpoint = '/nasdaq/predictions';  break;
+    case 'crypto':    endpoint = '/crypto/predictions';  break;
+    case 'fuel':      endpoint = '/fuel/predictions';    break;
+    case 'gold':      endpoint = '/gold/predictions';    break;
+    default:          endpoint = '/predictions';         break; // vn30
+  }
+
+  return fetchJSON(endpoint + '?' + p.toString())
+    .then((res: any) => {
+      const data = Array.isArray(res) ? res : (res.data || res.predictions || res.items || []);
+      const total = res.total != null ? res.total : (Array.isArray(res) ? res.length : data.length);
+      const limit = params.limit || 20;
+      return {
+        market: marketKey,
+        data,
+        total,
+        page: res.page || params.page || 1,
+        limit,
+        total_pages: res.total_pages != null ? res.total_pages : Math.ceil(total / limit),
+      } as MarketPageResponse;
+    })
     .catch(() => ({ market: marketKey, data: [], total: 0, page: 1, limit: params.limit || 20, total_pages: 0 }));
 }
 
@@ -598,6 +622,20 @@ export function fetchMarketTraining(
   if (params.sort_by)   p.set('sort_by', params.sort_by);
   if (params.sort_dir)  p.set('sort_dir', params.sort_dir);
   if (params.algorithm) p.set('algorithm', params.algorithm);
-  return fetchJSON('/markets/' + encodeURIComponent(marketKey) + '/training?' + p.toString())
+  // Training history is a shared endpoint for all markets
+  return fetchJSON('/training/history?' + p.toString())
+    .then((res: any) => {
+      const data = Array.isArray(res) ? res : (res.data || res.items || []);
+      const total = res.total != null ? res.total : data.length;
+      const limit = params.limit || 20;
+      return {
+        market: marketKey,
+        data,
+        total,
+        page: res.page || params.page || 1,
+        limit,
+        total_pages: res.total_pages != null ? res.total_pages : Math.ceil(total / limit),
+      } as MarketPageResponse;
+    })
     .catch(() => ({ market: marketKey, data: [], total: 0, page: 1, limit: params.limit || 20, total_pages: 0 }));
 }

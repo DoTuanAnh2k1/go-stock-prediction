@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -14,7 +15,10 @@ import (
 	"go-stock-prediction/pkg/logger"
 	"go-stock-prediction/pkg/service/crawler"
 	"go-stock-prediction/pkg/service/predict"
+	cryptopredict "go-stock-prediction/pkg/service/predict/crypto"
+	fuelpredict "go-stock-prediction/pkg/service/predict/fuel"
 	goldpredict "go-stock-prediction/pkg/service/predict/gold"
+	nasdaqpredict "go-stock-prediction/pkg/service/predict/nasdaq"
 	"go-stock-prediction/pkg/service/predict/orchestrator"
 	pb "go-stock-prediction/proto/prediction"
 )
@@ -228,23 +232,42 @@ func (s *Server) TriggerGoldPredict(_ context.Context, _ *pb.Empty) (*pb.Trigger
 
 // TriggerHistoricalBacktest starts a walk-forward backtest in a goroutine.
 // Returns an error if a backtest is already running.
+// Dispatches to the correct market based on req.MarketKey:
+//
+//	""  / "VN30"   → stock walk-forward backtest
+//	"GOLD"         → gold walk-forward backtest
+//	"NASDAQ100"    → NASDAQ 100 walk-forward backtest
+//	"CRYPTO"       → crypto (BTC/ETH) walk-forward backtest
+//	"FUEL"         → Vietnamese fuel prices walk-forward backtest
+//
+// Legacy behaviour: trainWindow < 0 with empty market_key still routes to GOLD
+// to avoid breaking existing callers.
 func (s *Server) TriggerHistoricalBacktest(_ context.Context, req *pb.BacktestRequest) (*pb.TriggerResponse, error) {
 	trainWindow := int(req.GetTrainWindow())
 	stepSize := int(req.GetStepSize())
-	logger.Logger.Infof("[gRPC] TriggerHistoricalBacktest called (trainWindow=%d, stepSize=%d)", trainWindow, stepSize)
+	marketKey := strings.ToUpper(strings.TrimSpace(req.GetMarketKey()))
 
-	// trainWindow < 0 is the signal for gold historical backtest.
-	if trainWindow < 0 {
-		if !s.backtestRunning.CompareAndSwap(0, 1) {
-			return &pb.TriggerResponse{
-				Success: false,
-				Error:   "backtest already running",
-			}, status.Error(codes.Aborted, "backtest already running")
-		}
+	// Legacy signal: trainWindow < 0 with no market_key was the old way to request gold.
+	if trainWindow < 0 && marketKey == "" {
+		marketKey = "GOLD"
+		trainWindow = 0 // let gold backtest use its own default
+	}
+
+	logger.Logger.Infof("[gRPC] TriggerHistoricalBacktest called (market=%q, trainWindow=%d, stepSize=%d)",
+		marketKey, trainWindow, stepSize)
+
+	if !s.backtestRunning.CompareAndSwap(0, 1) {
+		return &pb.TriggerResponse{
+			Success: false,
+			Error:   "backtest already running",
+		}, status.Error(codes.Aborted, "backtest already running")
+	}
+
+	switch marketKey {
+	case "GOLD":
 		go func() {
 			defer s.backtestRunning.Store(0)
-			bgCtx := context.Background()
-			result, err := goldpredict.RunGoldHistoricalBacktest(bgCtx, 0, 0) // uses defaults
+			result, err := goldpredict.RunGoldHistoricalBacktest(context.Background(), trainWindow, stepSize)
 			if err != nil {
 				logger.Logger.Errorf("[gRPC] RunGoldHistoricalBacktest error: %v", err)
 				return
@@ -256,34 +279,71 @@ func (s *Server) TriggerHistoricalBacktest(_ context.Context, req *pb.BacktestRe
 			Success: true,
 			Message: "Gold historical backtest started in background",
 		}, nil
-	}
 
-	if !s.backtestRunning.CompareAndSwap(0, 1) {
+	case "NASDAQ100":
+		go func() {
+			defer s.backtestRunning.Store(0)
+			result, err := nasdaqpredict.RunNasdaqHistoricalBacktest(context.Background(), trainWindow, stepSize)
+			if err != nil {
+				logger.Logger.Errorf("[gRPC] RunNasdaqHistoricalBacktest error: %v", err)
+				return
+			}
+			logger.Logger.Infof("[gRPC] RunNasdaqHistoricalBacktest done: %d predictions, %d symbols in %dms",
+				result.TotalPredictions, result.StocksProcessed, result.DurationMs)
+		}()
 		return &pb.TriggerResponse{
-			Success: false,
-			Error:   "backtest already running",
-		}, status.Error(codes.Aborted, "backtest already running")
+			Success: true,
+			Message: "NASDAQ100 historical backtest started in background",
+		}, nil
+
+	case "CRYPTO":
+		go func() {
+			defer s.backtestRunning.Store(0)
+			result, err := cryptopredict.RunCryptoHistoricalBacktest(context.Background(), trainWindow, stepSize)
+			if err != nil {
+				logger.Logger.Errorf("[gRPC] RunCryptoHistoricalBacktest error: %v", err)
+				return
+			}
+			logger.Logger.Infof("[gRPC] RunCryptoHistoricalBacktest done: %d predictions, %d coins in %dms",
+				result.TotalPredictions, result.StocksProcessed, result.DurationMs)
+		}()
+		return &pb.TriggerResponse{
+			Success: true,
+			Message: "Crypto historical backtest started in background",
+		}, nil
+
+	case "FUEL":
+		go func() {
+			defer s.backtestRunning.Store(0)
+			result, err := fuelpredict.RunFuelHistoricalBacktest(context.Background(), trainWindow, stepSize)
+			if err != nil {
+				logger.Logger.Errorf("[gRPC] RunFuelHistoricalBacktest error: %v", err)
+				return
+			}
+			logger.Logger.Infof("[gRPC] RunFuelHistoricalBacktest done: %d predictions, %d products in %dms",
+				result.TotalPredictions, result.StocksProcessed, result.DurationMs)
+		}()
+		return &pb.TriggerResponse{
+			Success: true,
+			Message: "Fuel historical backtest started in background",
+		}, nil
+
+	default: // "" or "VN30" → stock backtest
+		go func() {
+			defer s.backtestRunning.Store(0)
+			result, err := predict.RunHistoricalBacktest(context.Background(), trainWindow, stepSize)
+			if err != nil {
+				logger.Logger.Errorf("[gRPC] RunHistoricalBacktest error: %v", err)
+				return
+			}
+			logger.Logger.Infof("[gRPC] RunHistoricalBacktest done: %d predictions, %d stocks, %d algos in %dms",
+				result.TotalPredictions, result.StocksProcessed, result.AlgorithmsRun, result.DurationMs)
+		}()
+		return &pb.TriggerResponse{
+			Success: true,
+			Message: "VN30 historical backtest started in background",
+		}, nil
 	}
-
-	go func() {
-		defer s.backtestRunning.Store(0)
-
-		bgCtx := context.Background()
-		result, err := predict.RunHistoricalBacktest(bgCtx, trainWindow, stepSize)
-		if err != nil {
-			logger.Logger.Errorf("[gRPC] RunHistoricalBacktest error: %v", err)
-			return
-		}
-		logger.Logger.Infof(
-			"[gRPC] RunHistoricalBacktest done: %d predictions, %d stocks, %d algos in %dms",
-			result.TotalPredictions, result.StocksProcessed, result.AlgorithmsRun, result.DurationMs,
-		)
-	}()
-
-	return &pb.TriggerResponse{
-		Success: true,
-		Message: "Historical backtest started in background",
-	}, nil
 }
 
 // TriggerStockCrawl crawls a single stock by symbol and saves it synchronously.

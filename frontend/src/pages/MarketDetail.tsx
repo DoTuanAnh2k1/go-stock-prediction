@@ -8,10 +8,11 @@ import { fetchMarketPredictions } from '../api';
 // ── Sub-nav tabs ──────────────────────────────────────────────────────────────
 function MarketTabs({ marketKey }: { marketKey: string }) {
   const base = '/markets/' + marketKey;
+  const overviewIcon = marketKey === 'gold' ? 'gold' : 'candles';
   return (
     <div className="market-tabs">
       <NavLink to={base} end className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name={marketKey === 'gold' ? 'gold' : 'candles'} size={14} />
+        <Icon name={overviewIcon} size={14} />
         Tổng quan
       </NavLink>
       <NavLink to={base + '/predictions'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
@@ -47,6 +48,29 @@ const GOLD_INSTRUMENTS = [
   { key: 'BTMC_NHAN', label: 'BTMC/Nhẫn tròn', search: 'nhan' },
 ];
 
+const NASDAQ_INSTRUMENTS = [
+  { key: 'QQQ',  label: 'QQQ'  },
+  { key: 'AAPL', label: 'AAPL' },
+  { key: 'MSFT', label: 'MSFT' },
+  { key: 'NVDA', label: 'NVDA' },
+  { key: 'GOOGL', label: 'GOOGL' },
+  { key: 'AMZN', label: 'AMZN' },
+  { key: 'META', label: 'META' },
+  { key: 'TSLA', label: 'TSLA' },
+];
+
+const CRYPTO_INSTRUMENTS = [
+  { key: 'bitcoin',  label: 'Bitcoin (BTC)'  },
+  { key: 'ethereum', label: 'Ethereum (ETH)' },
+];
+
+const FUEL_INSTRUMENTS = [
+  { key: 'ron95_iii', label: 'RON 95-III'  },
+  { key: 'e5_ron92',  label: 'E5 RON 92'   },
+  { key: 'do_005s',   label: 'Diesel'       },
+  { key: 'kerosene',  label: 'Dầu hỏa'     },
+];
+
 const PERIOD_OPTIONS = [
   { value: '30d', label: '30 ngày' },
   { value: '60d', label: '60 ngày' },
@@ -58,10 +82,17 @@ export default function MarketDetail() {
   const { marketKey = 'vn30' } = useParams<{ marketKey: string }>();
   const { data: D } = useData();
 
-  const isGold = marketKey === 'gold';
+  const isGold   = marketKey === 'gold';
+  const isNasdaq = marketKey === 'nasdaq100';
+  const isCrypto = marketKey === 'crypto';
+  const isFuel   = marketKey === 'fuel';
 
-  // Default symbol
-  const defaultSymbol = isGold ? 'XAU' : 'VCB';
+  // Default symbol per market
+  const defaultSymbol = isGold ? 'XAU'
+    : isNasdaq ? 'QQQ'
+    : isCrypto ? 'bitcoin'
+    : isFuel   ? 'ron95_iii'
+    : 'VCB';
 
   const [symbol, setSymbol] = useState(defaultSymbol);
   const [period, setPeriod] = useState('30d');
@@ -71,15 +102,19 @@ export default function MarketDetail() {
 
   // Reset symbol when market changes
   useEffect(() => {
-    setSymbol(isGold ? 'XAU' : 'VCB');
-  }, [isGold]);
+    setSymbol(
+      isGold ? 'XAU'
+      : isNasdaq ? 'QQQ'
+      : isCrypto ? 'bitcoin'
+      : isFuel   ? 'ron95_iii'
+      : 'VCB'
+    );
+  }, [marketKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Get search term for gold instruments
-  const goldSearch = isGold
+  // Get search term - gold uses a search alias, other markets use the key directly
+  const searchTerm = isGold
     ? (GOLD_INSTRUMENTS.find(g => g.key === symbol)?.search ?? symbol)
     : symbol;
-
-  const searchTerm = isGold ? goldSearch : symbol;
 
   // Fetch all predictions for the symbol (large limit, sorted asc)
   useEffect(() => {
@@ -154,11 +189,21 @@ export default function MarketDetail() {
 
   const fmtPrice = isGold
     ? (n: number) => n >= 1e6 ? (n / 1e6).toFixed(1) + 'tr' : n.toLocaleString('vi-VN')
+    : (isNasdaq || isCrypto)
+    ? (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : isFuel
+    ? (n: number) => { const p2 = n > 1000 ? n : n * 1000; return p2.toLocaleString('vi-VN') + ' đ'; }
     : (n: number) => n.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // Display label for the selected symbol
   const symbolLabel = isGold
     ? (GOLD_INSTRUMENTS.find(g => g.key === symbol)?.label ?? symbol)
+    : isNasdaq
+    ? (NASDAQ_INSTRUMENTS.find(i => i.key === symbol)?.label ?? symbol)
+    : isCrypto
+    ? (CRYPTO_INSTRUMENTS.find(i => i.key === symbol)?.label ?? symbol)
+    : isFuel
+    ? (FUEL_INSTRUMENTS.find(i => i.key === symbol)?.label ?? symbol)
     : symbol;
 
   // VN30 stock options (use D.stocks if available, else show just VCB as fallback)
@@ -175,21 +220,31 @@ export default function MarketDetail() {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <Icon name="filter" size={15} style={{ color: 'var(--text-3)' }} />
           {isGold ? (
-            <select
-              className="sel"
-              value={symbol}
-              onChange={e => setSymbol(e.target.value)}
-            >
+            <select className="sel" value={symbol} onChange={e => setSymbol(e.target.value)}>
               {GOLD_INSTRUMENTS.map(g => (
                 <option key={g.key} value={g.key}>{g.label}</option>
               ))}
             </select>
+          ) : isNasdaq ? (
+            <select className="sel" value={symbol} onChange={e => setSymbol(e.target.value)}>
+              {NASDAQ_INSTRUMENTS.map(i => (
+                <option key={i.key} value={i.key}>{i.label}</option>
+              ))}
+            </select>
+          ) : isCrypto ? (
+            <select className="sel" value={symbol} onChange={e => setSymbol(e.target.value)}>
+              {CRYPTO_INSTRUMENTS.map(i => (
+                <option key={i.key} value={i.key}>{i.label}</option>
+              ))}
+            </select>
+          ) : isFuel ? (
+            <select className="sel" value={symbol} onChange={e => setSymbol(e.target.value)}>
+              {FUEL_INSTRUMENTS.map(i => (
+                <option key={i.key} value={i.key}>{i.label}</option>
+              ))}
+            </select>
           ) : (
-            <select
-              className="sel"
-              value={symbol}
-              onChange={e => setSymbol(e.target.value)}
-            >
+            <select className="sel" value={symbol} onChange={e => setSymbol(e.target.value)}>
               {stockOptions.map(s => (
                 <option key={s.key} value={s.key}>{s.label}</option>
               ))}

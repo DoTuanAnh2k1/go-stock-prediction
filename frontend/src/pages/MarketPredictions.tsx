@@ -77,13 +77,22 @@ function SortTh({ label, field, sortBy, sortDir, onSort, className }: {
   );
 }
 
+// ── Fuel product labels ───────────────────────────────────────────────────────
+const FUEL_LABELS: Record<string, string> = {
+  ron95_iii: 'RON 95-III',
+  e5_ron92:  'E5 RON 92',
+  do_005s:   'Diesel',
+  kerosene:  'Dầu hỏa',
+};
+
 // ── Sub-nav tabs ──────────────────────────────────────────────────────────────
 function MarketTabs({ marketKey }: { marketKey: string }) {
   const base = '/markets/' + marketKey;
+  const overviewIcon = marketKey === 'gold' ? 'gold' : marketKey === 'crypto' ? 'candles' : 'candles';
   return (
     <div className="market-tabs">
       <NavLink to={base} end className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name={marketKey === 'gold' ? 'gold' : 'candles'} size={14} />
+        <Icon name={overviewIcon} size={14} />
         Tổng quan
       </NavLink>
       <NavLink to={base + '/predictions'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
@@ -176,8 +185,15 @@ export default function MarketPredictions() {
     }).finally(() => setLoading(false));
   }, [marketKey, page, debouncedSearch, sortBy, sortDir, algorithm, status]);
 
-  const isGold = marketKey === 'gold';
-  const marketLabel = isGold ? 'Vàng' : 'VN30';
+  const isGold    = marketKey === 'gold';
+  const isNasdaq  = marketKey === 'nasdaq100';
+  const isCrypto  = marketKey === 'crypto';
+  const isFuel    = marketKey === 'fuel';
+  const marketLabel = isGold ? 'Vàng'
+    : isNasdaq ? 'NASDAQ 100'
+    : isCrypto ? 'Crypto'
+    : isFuel   ? 'Giá Xăng'
+    : 'VN30';
 
   const FALLBACK_ALGOS = [
     { id: 'ema', short: 'EMA', name: 'EMA' },
@@ -261,6 +277,10 @@ export default function MarketPredictions() {
                           <SortTh label="Nguồn" field="source" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                           <th>Sản phẩm</th>
                         </>
+                      : isFuel
+                      ? <th>Sản phẩm</th>
+                      : isCrypto
+                      ? <SortTh label="Coin" field="symbol" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                       : <SortTh label="Mã" field="symbol" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                     }
                     <SortTh label="Giá dự đoán" field="predicted_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
@@ -279,7 +299,13 @@ export default function MarketPredictions() {
                     const act    = row.actual_price != null ? num(row.actual_price) : null;
                     const delta  = cur ? +(((pred - cur) / cur) * 100).toFixed(2) : 0;
                     const acc    = row.accuracy != null ? Math.round(num(row.accuracy) > 1 ? num(row.accuracy) : num(row.accuracy) * 100) : null;
-                    const fmtFn = isGold ? fmtGold : fmtPrice;
+                    const fmtFn = isGold
+                      ? fmtGold
+                      : (isNasdaq || isCrypto)
+                      ? (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                      : isFuel
+                      ? (n: number) => { const p2 = n > 1000 ? n : n * 1000; return p2.toLocaleString('vi-VN') + ' đ'; }
+                      : fmtPrice;
                     return (
                       <tr key={i}>
                         {isGold
@@ -287,6 +313,12 @@ export default function MarketPredictions() {
                               <td><div className="sym">{row.source || '—'}</div></td>
                               <td><span style={{ color: 'var(--text-2)', fontSize: 12 }}>{row.product_type || '—'}</span></td>
                             </>
+                          : isFuel
+                          ? <td><span style={{ color: 'var(--text-2)', fontSize: 12 }}>{FUEL_LABELS[row.product_type] || row.product_type || '—'}</span></td>
+                          : isCrypto
+                          ? <td><div className="sym">{(row.symbol || row.coin_id || '—').toUpperCase()}</div></td>
+                          : isNasdaq
+                          ? <td><div className="sym">{row.symbol || '—'}</div></td>
                           : <td>
                               <div className="sym">{(row.stock && row.stock.symbol) || row.symbol || '—'}</div>
                               <div className="co">{(row.stock && row.stock.company_name) || ''}</div>

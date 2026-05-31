@@ -13,6 +13,9 @@ type CryptoPriceStore interface {
 	GetLatestCryptoPrice(coinID string) (*modelsdb.CryptoPrice, error)
 	// GetCryptoCoins returns one representative record per distinct coinID.
 	GetCryptoCoins() ([]modelsdb.CryptoPrice, error)
+	// GetAllCryptoPricesForCoin returns all historical prices for a coinID, ordered DESC.
+	// Used by walk-forward backtest; caller must reverse to ASC before use.
+	GetAllCryptoPricesForCoin(coinID string) ([]modelsdb.CryptoPrice, error)
 }
 
 // CryptoPredictionStore handles persistence for cryptocurrency prediction records.
@@ -22,4 +25,8 @@ type CryptoPredictionStore interface {
 	GetLatestCryptoPredictions() ([]modelsdb.CryptoPrediction, error)
 	GetCryptoPredictionsByDateRange(coinID string, from, to time.Time) ([]modelsdb.CryptoPrediction, error)
 	GetCryptoPredictionsPage(page, limit int, search, algorithm, status, sortBy, sortDir string) ([]modelsdb.CryptoPrediction, int64, error)
+	// BulkCreateCryptoPredictions inserts multiple crypto predictions in batches.
+	BulkCreateCryptoPredictions(preds []modelsdb.CryptoPrediction) error
+	// DeleteCryptoPredictionsBeforeDate deletes all crypto predictions whose target_date < cutoff.
+	DeleteCryptoPredictionsBeforeDate(before time.Time) error
 }

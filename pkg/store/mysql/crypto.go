@@ -53,6 +53,25 @@ func (c *Client) GetCryptoCoins() ([]modelsdb.CryptoPrice, error) {
 	return coins, err
 }
 
+// GetAllCryptoPricesForCoin returns all historical prices for a coinID, ordered DESC.
+func (c *Client) GetAllCryptoPricesForCoin(coinID string) ([]modelsdb.CryptoPrice, error) {
+	var prices []modelsdb.CryptoPrice
+	err := c.Db.Where("coin_id = ?", coinID).Order("trading_date DESC").Find(&prices).Error
+	return prices, err
+}
+
+// BulkCreateCryptoPredictions inserts multiple crypto predictions using CreateInBatches.
+func (c *Client) BulkCreateCryptoPredictions(preds []modelsdb.CryptoPrediction) error {
+	return c.Db.CreateInBatches(preds, 200).Error
+}
+
+// DeleteCryptoPredictionsBeforeDate hard-deletes all crypto predictions whose target_date < before
+// and that already have an actual_price (i.e. backtest rows).
+func (c *Client) DeleteCryptoPredictionsBeforeDate(before time.Time) error {
+	return c.Db.Where("target_date < ? AND actual_price IS NOT NULL", before).
+		Delete(&modelsdb.CryptoPrediction{}).Error
+}
+
 // CreateCryptoPrediction saves a new cryptocurrency prediction record.
 func (c *Client) CreateCryptoPrediction(p *modelsdb.CryptoPrediction) error {
 	return c.Db.Create(p).Error

@@ -60,6 +60,25 @@ func (c *Client) GetFuelProducts() ([]string, error) {
 	return products, err
 }
 
+// GetAllFuelPricesForProduct returns all historical prices for a product type, ordered DESC.
+func (c *Client) GetAllFuelPricesForProduct(productType string) ([]modelsdb.FuelPrice, error) {
+	var prices []modelsdb.FuelPrice
+	err := c.Db.Where("product_type = ?", productType).Order("trading_date DESC").Find(&prices).Error
+	return prices, err
+}
+
+// BulkCreateFuelPredictions inserts multiple fuel predictions using CreateInBatches.
+func (c *Client) BulkCreateFuelPredictions(preds []modelsdb.FuelPrediction) error {
+	return c.Db.CreateInBatches(preds, 200).Error
+}
+
+// DeleteFuelPredictionsBeforeDate hard-deletes all fuel predictions whose target_date < before
+// and that already have an actual_price (i.e. backtest rows).
+func (c *Client) DeleteFuelPredictionsBeforeDate(before time.Time) error {
+	return c.Db.Where("target_date < ? AND actual_price IS NOT NULL", before).
+		Delete(&modelsdb.FuelPrediction{}).Error
+}
+
 // CreateFuelPrediction saves a new fuel prediction record.
 func (c *Client) CreateFuelPrediction(p *modelsdb.FuelPrediction) error {
 	return c.Db.Create(p).Error
