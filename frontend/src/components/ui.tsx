@@ -160,9 +160,9 @@ interface MarketDef {
 const MARKETS: MarketDef[] = [
   { key: 'vn30',     label: 'VN30',      icon: 'candles', color: 'var(--accent)' },
   { key: 'gold',     label: 'Vàng',      icon: 'gold',    color: 'var(--gold)'   },
-  { key: 'nasdaq100',label: 'NASDAQ 100',icon: 'nasdaq',  color: 'oklch(0.74 0.13 200)', selfContained: true },
-  { key: 'crypto',   label: 'Crypto',    icon: 'crypto',  color: '#F7931A',              selfContained: true },
-  { key: 'fuel',     label: 'Giá Xăng',  icon: 'fuel',    color: 'var(--up)',            selfContained: true },
+  { key: 'nasdaq100',label: 'NASDAQ 100',icon: 'nasdaq',  color: 'oklch(0.74 0.13 200)' },
+  { key: 'crypto',   label: 'Crypto',    icon: 'crypto',  color: '#F7931A'              },
+  { key: 'fuel',     label: 'Giá Xăng',  icon: 'fuel',    color: 'var(--up)'            },
 ];
 
 const MARKET_SUBS = [
@@ -227,9 +227,10 @@ export function Sidebar({ status }: { status: 'loading' | 'live' | 'demo' }) {
               </Link>
 
               {/* Sub-items — only render when expanded and market has sub-routes */}
-              {expanded && !m.comingSoon && !m.selfContained && MARKET_SUBS.map((sub) => {
+              {expanded && !m.comingSoon && MARKET_SUBS.map((sub) => {
                 const subPath = base + sub.path;
-                const subIcon = sub.path === '' ? (m.key === 'gold' ? 'gold' : 'candles') : sub.path === '/predictions' ? 'pulse' : 'cpu';
+                const overviewIcon = m.key === 'gold' ? 'gold' : m.key === 'nasdaq100' ? 'nasdaq' : m.key === 'crypto' ? 'crypto' : m.key === 'fuel' ? 'fuel' : 'candles';
+                const subIcon = sub.path === '' ? overviewIcon : sub.path === '/predictions' ? 'pulse' : 'cpu';
                 return (
                   <NavLink
                     key={sub.path}
