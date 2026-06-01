@@ -7,6 +7,7 @@ Conversion: strip the first field (seconds).
 from __future__ import annotations
 
 import threading
+import time
 from typing import Callable, Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -77,6 +78,20 @@ def parse_6field_cron(expr: str) -> dict:
     return dict(minute=minute, hour=hour, day=day, month=month, day_of_week=weekday)
 
 
+def _wait_for_db(max_retries: int = 10, delay: float = 3.0) -> None:
+    """Wait for DB to become available, retrying with backoff."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            repo.get_all_cron_schedules()
+            return
+        except Exception as exc:
+            if attempt == max_retries:
+                log.error("scheduler.db.unavailable", attempts=max_retries, error=str(exc))
+                raise
+            log.warning("scheduler.db.waiting", attempt=attempt, retry_in=delay, error=str(exc))
+            time.sleep(delay)
+
+
 def init_scheduler(job_functions: dict[str, Callable]) -> None:
     """Initialize APScheduler and register all jobs from DB."""
     global _scheduler, _job_functions
@@ -84,6 +99,9 @@ def init_scheduler(job_functions: dict[str, Callable]) -> None:
     _job_functions = job_functions
 
     _scheduler = BackgroundScheduler(timezone="Asia/Ho_Chi_Minh")
+
+    # Wait for DB to be ready before seeding/loading
+    _wait_for_db()
 
     # Seed default schedules to DB
     for job_key, job_name, cron_expr, enabled in DEFAULT_SCHEDULES:
