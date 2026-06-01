@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -19,7 +18,7 @@ class PredictionAlgorithm(ABC):
     """All prediction algorithms must implement this interface."""
 
     @abstractmethod
-    def predict(self, prices: list[float], volumes: Optional[list[float]] = None) -> PredictionResult:
+    def predict(self, prices: list[float], volumes: list[float] | None = None) -> PredictionResult:
         """Generate a prediction.
 
         Args:

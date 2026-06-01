@@ -41,6 +41,7 @@ ml = [
     "statsmodels>=0.14.0",
     "arch>=7.0.0",
     "lightgbm>=4.5.0",
+    "xgboost>=2.0.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -80,3 +81,7 @@ ignore = [
 "tests/unit/test_arima_garch.py" = ["E402"]
 "tests/unit/test_lstm.py" = ["E402"]
 "tests/unit/test_lightgbm_model.py" = ["E402"]
+"tests/unit/test_xgboost_model.py" = ["E402"]
+"tests/unit/test_sarima.py" = ["E402"]
+"tests/unit/test_egarch.py" = ["E402"]
+"tests/unit/test_gru.py" = ["E402"]

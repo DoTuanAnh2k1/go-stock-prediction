@@ -1,20 +1,28 @@
 """Repository layer — all DB queries go through this class."""
 from __future__ import annotations
 
-import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Optional
 
-from sqlalchemy import and_, or_, text
-from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.orm import Session
 
-from src.database.connection import session_scope, get_session
+from src.database.connection import get_session, session_scope
 from src.database.models import (
-    CronSchedule, CryptoPrice, CryptoPrediction, Exchange, FuelPrice,
-    FuelPrediction, GoldPrediction, GoldPrice, NasdaqPrediction,
-    NasdaqPrice, Prediction, Stock, StockPrice, SyncLog, TrainingLog,
+    CronSchedule,
+    CryptoPrediction,
+    CryptoPrice,
+    Exchange,
+    FuelPrediction,
+    FuelPrice,
+    GoldPrediction,
+    GoldPrice,
+    NasdaqPrediction,
+    NasdaqPrice,
+    Prediction,
+    Stock,
+    StockPrice,
+    SyncLog,
+    TrainingLog,
 )
 from src.utils.logger import get_logger
 
@@ -101,7 +109,7 @@ def get_vn30_stocks() -> list[Stock]:
         return session.query(Stock).all()
 
 
-def get_stock_by_symbol(symbol: str) -> Optional[Stock]:
+def get_stock_by_symbol(symbol: str) -> Stock | None:
     session = get_session()
     try:
         return session.query(Stock).filter_by(symbol=symbol).first()
@@ -155,8 +163,8 @@ def create_prediction(
     algorithm_name: str,
     prediction_date: datetime,
     target_date: datetime,
-    actual_price: Optional[Decimal] = None,
-    accuracy: Optional[Decimal] = None,
+    actual_price: Decimal | None = None,
+    accuracy: Decimal | None = None,
     status: str = "pending",
 ) -> None:
     with session_scope() as session:
@@ -277,8 +285,8 @@ def create_gold_prediction(
     algorithm_name: str,
     prediction_date: datetime,
     target_date: datetime,
-    actual_price: Optional[Decimal] = None,
-    accuracy: Optional[Decimal] = None,
+    actual_price: Decimal | None = None,
+    accuracy: Decimal | None = None,
     status: str = "pending",
 ) -> None:
     with session_scope() as session:
@@ -403,8 +411,8 @@ def create_nasdaq_prediction(
     algorithm_name: str,
     prediction_date: datetime,
     target_date: datetime,
-    actual_price: Optional[Decimal] = None,
-    accuracy: Optional[Decimal] = None,
+    actual_price: Decimal | None = None,
+    accuracy: Decimal | None = None,
     status: str = "pending",
 ) -> None:
     with session_scope() as session:
@@ -433,8 +441,8 @@ def upsert_crypto_price(
     symbol: str,
     trading_date,
     close_price: Decimal,
-    market_cap: Optional[Decimal],
-    volume_24h: Optional[Decimal],
+    market_cap: Decimal | None,
+    volume_24h: Decimal | None,
     currency: str = "USD",
 ) -> None:
     with session_scope() as session:
@@ -486,8 +494,8 @@ def create_crypto_prediction(
     algorithm_name: str,
     prediction_date: datetime,
     target_date: datetime,
-    actual_price: Optional[Decimal] = None,
-    accuracy: Optional[Decimal] = None,
+    actual_price: Decimal | None = None,
+    accuracy: Decimal | None = None,
     status: str = "pending",
 ) -> None:
     with session_scope() as session:
@@ -549,8 +557,8 @@ def create_fuel_prediction(
     algorithm_name: str,
     prediction_date: datetime,
     target_date: datetime,
-    actual_price: Optional[Decimal] = None,
-    accuracy: Optional[Decimal] = None,
+    actual_price: Decimal | None = None,
+    accuracy: Decimal | None = None,
     status: str = "pending",
 ) -> None:
     with session_scope() as session:
@@ -582,7 +590,7 @@ def get_all_cron_schedules() -> list[CronSchedule]:
         session.close()
 
 
-def get_cron_schedule(job_key: str) -> Optional[CronSchedule]:
+def get_cron_schedule(job_key: str) -> CronSchedule | None:
     session = get_session()
     try:
         return session.query(CronSchedule).filter_by(job_key=job_key).first()

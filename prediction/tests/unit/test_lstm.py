@@ -12,8 +12,7 @@ import pytest
 # Check PyTorch availability once at module level for skip markers
 torch = pytest.importorskip("torch", reason="PyTorch not installed — skipping LSTM tests")
 
-from src.algorithms.lstm import LSTMPredictor, MIN_DATA_POINTS
-
+from src.algorithms.lstm import MIN_DATA_POINTS, LSTMPredictor
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -61,7 +60,8 @@ class TestLSTMPredictor:
     def test_current_price_matches_last_price(self):
         prices = make_prices(200)
         result = self.algo.predict(prices)
-        assert result.current_price == pytest.approx(prices[-1], rel=1e-9)
+        # PyTorch converts prices to float32 tensors, so allow float32 precision loss
+        assert result.current_price == pytest.approx(prices[-1], rel=1e-4)
 
     def test_confidence_within_bounds(self):
         prices = make_prices(200)

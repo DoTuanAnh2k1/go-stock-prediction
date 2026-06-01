@@ -176,7 +176,6 @@ def test_predictions_in_db_after_trigger_stock(grpc_stub):
 
     # Verify predictions were written to DB
     try:
-        from src.database import repository as repo
         from src.database.connection import get_session
         from src.database.models import Prediction
 

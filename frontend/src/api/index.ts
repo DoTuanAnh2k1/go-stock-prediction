@@ -56,6 +56,12 @@ const ALGO_FALLBACK: Record<string, { short: string; cls: string; name: string }
   ensemble:      { short: 'ENS',   cls: 'ens',   name: 'Ensemble' },
   ens:           { short: 'ENS',   cls: 'ens',   name: 'Ensemble' },
   ema:           { short: 'EMA',   cls: 'ema',   name: 'Exponential Moving Average' },
+  sarima:        { short: 'SARM', cls: 'sarima', name: 'SARIMA' },
+  egarch:        { short: 'EGA',  cls: 'egarch', name: 'EGARCH' },
+  gru_nn:        { short: 'GRU',  cls: 'gru',    name: 'GRU Neural Network' },
+  gru:           { short: 'GRU',  cls: 'gru',    name: 'GRU Neural Network' },
+  random_forest: { short: 'RF',   cls: 'rf',     name: 'Random Forest' },
+  xgboost:       { short: 'XGB',  cls: 'xgb',    name: 'XGBoost' },
 };
 
 // Runtime algo map — starts as a copy of the fallback, gets enriched from
@@ -80,9 +86,14 @@ const ALGO_COLORS: string[] = [
   'oklch(0.72 0.14 300)', // purple (Ensemble)
   'oklch(0.75 0.15 30)',  // orange
   'oklch(0.70 0.18 260)', // violet
+  'oklch(0.72 0.18 50)',   // amber  (SARIMA)
+  'oklch(0.70 0.15 340)',  // rose   (EGARCH)
+  'oklch(0.74 0.16 220)',  // sky    (GRU)
+  'oklch(0.71 0.14 160)',  // emerald (Random Forest)
+  'oklch(0.73 0.17 280)',  // indigo (XGBoost)
 ];
 // Known ordering for stable color assignment across refreshes.
-const ALGO_ORDER = ['lstm_nn', 'arima_garch', 'moving_average', 'ema', 'ensemble'];
+const ALGO_ORDER = ['lstm_nn', 'arima_garch', 'moving_average', 'ema', 'ensemble', 'sarima', 'egarch', 'gru_nn', 'random_forest', 'xgboost'];
 function algoColor(key: string, idx: number): string {
   const canonical = ALGO_ORDER.indexOf(key);
   return ALGO_COLORS[canonical >= 0 ? canonical : idx % ALGO_COLORS.length];

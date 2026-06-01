@@ -17,7 +17,6 @@ Run:
 from __future__ import annotations
 
 import time
-from datetime import date
 
 import pytest
 import requests
@@ -475,6 +474,7 @@ class TestPerformanceBenchmarks:
     def test_concurrent_grpc_calls_dont_crash(self, grpc_stub):
         """Fire 5 simultaneous gRPC status calls — service must respond to all."""
         import threading
+
         from src.proto.prediction import prediction_pb2
 
         results = []

@@ -4,10 +4,8 @@ Port of the Go MovingAveragePredictor, translated to NumPy-vectorized operations
 """
 from __future__ import annotations
 
-import math
 import random
 import time
-from typing import Optional
 
 import numpy as np
 
@@ -27,7 +25,7 @@ class MovingAveragePredictor(PredictionAlgorithm):
     def get_key(self) -> str:
         return "moving_average"
 
-    def predict(self, prices: list[float], volumes: Optional[list[float]] = None) -> PredictionResult:
+    def predict(self, prices: list[float], volumes: list[float] | None = None) -> PredictionResult:
         if len(prices) < self.LONG_PERIOD:
             raise ValueError(f"Need at least {self.LONG_PERIOD} price points, got {len(prices)}")
 
@@ -53,7 +51,7 @@ class MovingAveragePredictor(PredictionAlgorithm):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _vwma(self, prices: np.ndarray, volumes: Optional[np.ndarray], period: int) -> float:
+    def _vwma(self, prices: np.ndarray, volumes: np.ndarray | None, period: int) -> float:
         if len(prices) < period:
             return float(np.mean(prices[-period:]))
         window_prices = prices[-period:]

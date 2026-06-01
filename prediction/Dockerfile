@@ -38,7 +38,7 @@ WORKDIR /app
 
 # Install Python dependencies (split for layer caching)
 COPY prediction/pyproject.toml pyproject.toml
-RUN pip install --no-cache-dir -e ".[dev]"
+RUN pip install --no-cache-dir -e ".[dev,ml]"
 
 # Copy generated proto files from builder stage
 COPY --from=proto-builder /app/src/proto src/proto/

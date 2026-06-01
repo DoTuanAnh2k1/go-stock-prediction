@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 import threading
-import time
 from concurrent import futures
-from typing import Optional
 
 import grpc
 
@@ -21,7 +19,7 @@ def _get_pb():
         from src.proto.prediction import prediction_pb2, prediction_pb2_grpc
     except ImportError:
         # Fallback path when running inside Docker (proto generated to /app/src/proto)
-        import sys, importlib
+        import importlib
         prediction_pb2 = importlib.import_module("src.proto.prediction.prediction_pb2")
         prediction_pb2_grpc = importlib.import_module("src.proto.prediction.prediction_pb2_grpc")
     return prediction_pb2, prediction_pb2_grpc
@@ -150,8 +148,8 @@ class PredictionServicer:
         pb2, _ = _get_pb()
         log.info("grpc.TriggerPredict")
         try:
-            from src.orchestrator.training import train_all_algorithms
             from src.orchestrator.runner import run_all_markets
+            from src.orchestrator.training import train_all_algorithms
             train_all_algorithms()
             total = run_all_markets()
             return pb2.TriggerResponse(success=True, message=f"Training and prediction completed: {total} predictions")
@@ -207,10 +205,11 @@ class PredictionServicer:
         symbol = request.symbol
         log.info("grpc.TriggerStockPredict", symbol=symbol)
         try:
-            from src.database import repository as repo
-            from src.algorithms.registry import build_algorithms
-            from decimal import Decimal
             from datetime import datetime, timedelta
+            from decimal import Decimal
+
+            from src.algorithms.registry import build_algorithms
+            from src.database import repository as repo
 
             stock = repo.get_stock_by_symbol(symbol)
             if not stock:
@@ -385,7 +384,7 @@ def _bg_backtest(train_window: int, step_size: int, market_key: str):
 # Server lifecycle
 # -------------------------------------------------------------------
 
-_grpc_server: Optional[grpc.Server] = None
+_grpc_server: grpc.Server | None = None
 
 
 def start_grpc_server(port: int) -> None:

@@ -32,6 +32,43 @@ func init() {
 		Config:      map[string]interface{}{"n_estimators": 200, "learning_rate": 0.05, "num_leaves": 31},
 	})
 	Register(AlgorithmDef{
+		Key:         "sarima",
+		DisplayName: "SARIMA",
+		Config: map[string]interface{}{
+			"order": "1,1,1", "seasonal_order": "1,0,1,5", "seasonal_period": 5,
+		},
+	})
+	Register(AlgorithmDef{
+		Key:         "egarch",
+		DisplayName: "EGARCH",
+		Config: map[string]interface{}{
+			"p": 1, "o": 1, "q": 1, "mean_model": "HARX",
+		},
+	})
+	Register(AlgorithmDef{
+		Key:         "gru_nn",
+		DisplayName: "GRU Neural Network",
+		Config: map[string]interface{}{
+			"epochs": 50, "learning_rate": 0.001, "hidden_layers": 2,
+			"hidden_size": 64, "sequence_length": 60, "dropout": 0.2,
+		},
+	})
+	Register(AlgorithmDef{
+		Key:         "random_forest",
+		DisplayName: "Random Forest",
+		Config: map[string]interface{}{
+			"n_estimators": 200, "max_depth": 8, "min_samples_leaf": 5,
+		},
+	})
+	Register(AlgorithmDef{
+		Key:         "xgboost",
+		DisplayName: "XGBoost",
+		Config: map[string]interface{}{
+			"n_estimators": 200, "learning_rate": 0.05, "max_depth": 5,
+			"subsample": 0.8, "colsample_bytree": 0.8,
+		},
+	})
+	Register(AlgorithmDef{
 		Key:         "ensemble",
 		DisplayName: "Ensemble",
 		Config:      map[string]interface{}{},

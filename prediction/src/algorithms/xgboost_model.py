@@ -1,6 +1,6 @@
-"""LightGBM prediction algorithm.
+"""XGBoost prediction algorithm.
 
-Features: lag returns (1-10 days), RSI, volume ratios, MA ratios.
+Features: lag returns (1-10 days), RSI(14), MA5 ratio, MA20 ratio, volume ratio.
 Target: next-day log return (regression).
 """
 from __future__ import annotations
@@ -10,35 +10,35 @@ import numpy as np
 from src.algorithms.base import PredictionAlgorithm, PredictionResult
 from src.utils.logger import get_logger
 
-log = get_logger("lightgbm")
+log = get_logger("xgboost")
 
 MIN_DATA_POINTS = 80  # need enough data to build lag features
 
 
-class LightGBMPredictor(PredictionAlgorithm):
-    """LightGBM-based return prediction with technical feature engineering."""
+class XGBoostPredictor(PredictionAlgorithm):
+    """XGBoost-based return prediction with technical feature engineering."""
 
     def get_name(self) -> str:
-        return "LightGBM"
+        return "XGBoost"
 
     def get_key(self) -> str:
-        return "lightgbm"
+        return "xgboost"
 
     def predict(self, prices: list[float], volumes: list[float] | None = None) -> PredictionResult:
         if len(prices) < MIN_DATA_POINTS:
-            raise ValueError(f"LightGBM needs {MIN_DATA_POINTS} points, got {len(prices)}")
+            raise ValueError(f"XGBoost needs {MIN_DATA_POINTS} points, got {len(prices)}")
 
         current = float(prices[-1])
         try:
             return self._train_and_predict(prices, volumes, current)
         except Exception as exc:
-            log.warning("lightgbm.fallback", error=str(exc))
+            log.warning("xgboost.fallback", error=str(exc))
             return self._ema_fallback(prices, current)
 
     def _train_and_predict(
         self, prices: list[float], volumes: list[float] | None, current: float
     ) -> PredictionResult:
-        import lightgbm as lgb
+        from xgboost import XGBRegressor
 
         arr = np.array(prices, dtype=float)
         vol_arr = np.array(volumes, dtype=float) if volumes and len(volumes) == len(prices) else None
@@ -55,25 +55,23 @@ class LightGBMPredictor(PredictionAlgorithm):
         X_tr, X_val = X_train[:split], X_train[split:]
         y_tr, y_val = y_train[:split], y_train[split:]
 
-        params = {
-            "objective": "regression",
-            "metric": "mae",
-            "learning_rate": 0.05,
-            "num_leaves": 15,
-            "min_data_in_leaf": 5,
-            "verbose": -1,
-            "n_estimators": 100,
-        }
-        model = lgb.LGBMRegressor(**params)
+        model = XGBRegressor(
+            n_estimators=200,
+            learning_rate=0.05,
+            max_depth=5,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            min_child_weight=5,
+            random_state=42,
+            verbosity=0,
+        )
 
         eval_set = [(X_val, y_val)] if len(X_val) > 0 else None
-        model.fit(
-            X_tr, y_tr,
-            eval_set=eval_set,
-            callbacks=[lgb.early_stopping(10, verbose=False), lgb.log_evaluation(-1)]
-            if eval_set
-            else [lgb.log_evaluation(-1)],
-        )
+        if eval_set:
+            model.set_params(early_stopping_rounds=10)
+            model.fit(X_tr, y_tr, eval_set=eval_set, verbose=False)
+        else:
+            model.fit(X_tr, y_tr, verbose=False)
 
         pred_return = float(model.predict(X_pred)[0])
 
@@ -81,7 +79,6 @@ class LightGBMPredictor(PredictionAlgorithm):
         max_change = current * 0.07
         predicted_price = max(current - max_change, min(current + max_change, predicted_price))
 
-        # Confidence based on abs of predicted return (smaller = more uncertain)
         confidence = max(0.3, min(0.9, 0.5 + abs(pred_return) * 5))
 
         return PredictionResult(
@@ -152,5 +149,5 @@ class LightGBMPredictor(PredictionAlgorithm):
             predicted_price=predicted,
             confidence=0.35,
             current_price=current,
-            algorithm_name="lightgbm",
+            algorithm_name="xgboost",
         )

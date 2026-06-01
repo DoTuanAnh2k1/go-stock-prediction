@@ -11,7 +11,6 @@ import pytest
 
 from src.algorithms.moving_average import MovingAveragePredictor
 
-
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------

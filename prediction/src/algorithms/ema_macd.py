@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import random
 import time
-from typing import Optional
 
 import numpy as np
 
@@ -27,7 +26,7 @@ class EMAMACDPredictor(PredictionAlgorithm):
     def get_key(self) -> str:
         return "ema"
 
-    def predict(self, prices: list[float], volumes: Optional[list[float]] = None) -> PredictionResult:
+    def predict(self, prices: list[float], volumes: list[float] | None = None) -> PredictionResult:
         if len(prices) < self.LONG_PERIOD:
             raise ValueError(f"Need at least {self.LONG_PERIOD} price points, got {len(prices)}")
 

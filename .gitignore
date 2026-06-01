@@ -53,4 +53,4 @@ __pycache__/
 
 # Go binaries (built artifacts)
 /api
-/prediction
+/prediction-server

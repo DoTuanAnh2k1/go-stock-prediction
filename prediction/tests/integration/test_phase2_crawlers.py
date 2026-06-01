@@ -12,8 +12,6 @@ Run:
 """
 from __future__ import annotations
 
-import time
-
 import pytest
 
 pytestmark = pytest.mark.integration
@@ -65,8 +63,8 @@ def test_vn30_data_in_db():
 
 def test_vn30_all_30_stocks_present():
     """All 30 VN30 stocks must be present in DB after crawl."""
-    from src.database import repository as repo
     from src.crawlers.vn30 import VN30_SYMBOLS
+    from src.database import repository as repo
 
     missing = []
     for symbol in VN30_SYMBOLS:
@@ -93,9 +91,8 @@ def test_trigger_gold_crawler_returns_response(grpc_stub):
 
 def test_gold_data_in_db():
     """After gold crawl, gold_prices must have XAU data."""
-    from src.database import repository as repo
-    from src.database.models import GoldPrice
     from src.database.connection import get_session
+    from src.database.models import GoldPrice
 
     session = get_session()
     try:
@@ -152,8 +149,8 @@ def test_nasdaq_data_in_db():
 
 def test_nasdaq_15_symbols_present():
     """All 15 configured NASDAQ symbols must be in DB."""
-    from src.database import repository as repo
     from src.crawlers.nasdaq import NASDAQ_SYMBOLS
+    from src.database import repository as repo
 
     db_symbols = set(repo.get_nasdaq_symbols())
     missing = [s for s in NASDAQ_SYMBOLS if s not in db_symbols]

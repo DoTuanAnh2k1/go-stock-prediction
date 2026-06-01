@@ -11,11 +11,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Callable
 
 from src.algorithms.registry import build_algorithms
-from src.crawlers.nasdaq import NASDAQ_SYMBOLS
 from src.crawlers.crypto import COINS as CRYPTO_COINS
+from src.crawlers.nasdaq import NASDAQ_SYMBOLS
 from src.database import repository as repo
 from src.utils.logger import get_logger
 

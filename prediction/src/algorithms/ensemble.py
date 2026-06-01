@@ -1,8 +1,6 @@
 """Ensemble prediction algorithm — weighted average of all base algorithms."""
 from __future__ import annotations
 
-from typing import Optional
-
 from src.algorithms.base import PredictionAlgorithm, PredictionResult
 from src.utils.logger import get_logger
 
@@ -23,7 +21,7 @@ class EnsemblePredictor(PredictionAlgorithm):
     def get_key(self) -> str:
         return "ensemble"
 
-    def predict(self, prices: list[float], volumes: Optional[list[float]] = None) -> PredictionResult:
+    def predict(self, prices: list[float], volumes: list[float] | None = None) -> PredictionResult:
         if not prices:
             raise ValueError("Empty price list")
 

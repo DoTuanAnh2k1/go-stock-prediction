@@ -7,7 +7,7 @@ from decimal import Decimal
 
 import requests
 
-from src.crawlers.base import BaseCrawler, DEFAULT_HEADERS
+from src.crawlers.base import DEFAULT_HEADERS, BaseCrawler
 from src.database import repository as repo
 from src.utils.logger import get_logger
 

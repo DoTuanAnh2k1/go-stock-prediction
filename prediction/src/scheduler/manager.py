@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -18,7 +18,7 @@ from src.utils.logger import get_logger
 
 log = get_logger("scheduler")
 
-_scheduler: Optional[BackgroundScheduler] = None
+_scheduler: BackgroundScheduler | None = None
 _job_functions: dict[str, Callable] = {}
 _lock = threading.Lock()
 

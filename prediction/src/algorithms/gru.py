@@ -1,6 +1,6 @@
-"""LSTM Neural Network prediction algorithm using PyTorch.
+"""GRU Neural Network prediction algorithm using PyTorch.
 
-A real 2-layer LSTM trained per inference (lightweight: 50 epochs).
+A real 2-layer GRU trained per inference (lightweight: 50 epochs).
 Handles graceful fallback to EMA if data is insufficient or training fails.
 """
 from __future__ import annotations
@@ -12,7 +12,7 @@ import numpy as np
 from src.algorithms.base import PredictionAlgorithm, PredictionResult
 from src.utils.logger import get_logger
 
-log = get_logger("lstm")
+log = get_logger("gru")
 
 SEQUENCE_LENGTH = 60
 HIDDEN_SIZE = 64
@@ -23,24 +23,23 @@ LR = 0.001
 MIN_DATA_POINTS = SEQUENCE_LENGTH + 10
 
 
-class LSTMPredictor(PredictionAlgorithm):
-    """PyTorch LSTM-based stock price predictor."""
+class GRUPredictor(PredictionAlgorithm):
+    """PyTorch GRU-based stock price predictor."""
 
     def get_name(self) -> str:
-        return "LSTM Neural Network"
+        return "GRU Neural Network"
 
     def get_key(self) -> str:
-        return "lstm_nn"
+        return "gru_nn"
 
     def predict(self, prices: list[float], volumes: list[float] | None = None) -> PredictionResult:
         if len(prices) < MIN_DATA_POINTS:
-            raise ValueError(f"LSTM needs at least {MIN_DATA_POINTS} points, got {len(prices)}")
+            raise ValueError(f"GRU needs at least {MIN_DATA_POINTS} points, got {len(prices)}")
 
         try:
             return self._train_and_predict(prices)
         except Exception as exc:
-            log.warning("lstm.fallback", error=str(exc))
-            # Fallback: simple exponential moving average
+            log.warning("gru.fallback", error=str(exc))
             return self._ema_fallback(prices)
 
     def _train_and_predict(self, prices: list[float]) -> PredictionResult:
@@ -71,10 +70,10 @@ class LSTMPredictor(PredictionAlgorithm):
         y_t = torch.tensor(np.array(y), dtype=torch.float32).unsqueeze(-1)  # (N, 1)
 
         # Model
-        class _LSTM(nn.Module):
+        class _GRU(nn.Module):
             def __init__(self):
                 super().__init__()
-                self.lstm = nn.LSTM(
+                self.gru = nn.GRU(
                     input_size=1,
                     hidden_size=HIDDEN_SIZE,
                     num_layers=NUM_LAYERS,
@@ -84,10 +83,10 @@ class LSTMPredictor(PredictionAlgorithm):
                 self.fc = nn.Linear(HIDDEN_SIZE, 1)
 
             def forward(self, x):
-                out, _ = self.lstm(x)
-                return self.fc(out[:, -1, :])
+                output, h_n = self.gru(x)
+                return self.fc(output[:, -1, :])
 
-        model = _LSTM()
+        model = _GRU()
         optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
         model.train()
@@ -129,7 +128,7 @@ class LSTMPredictor(PredictionAlgorithm):
 
     @staticmethod
     def _ema_fallback(prices: list[float]) -> PredictionResult:
-        """Simple EMA fallback when LSTM fails."""
+        """Simple EMA fallback when GRU fails."""
         arr = np.array(prices, dtype=float)
         current = float(arr[-1])
         period = min(26, len(arr))
@@ -145,5 +144,5 @@ class LSTMPredictor(PredictionAlgorithm):
             predicted_price=predicted,
             confidence=0.40,
             current_price=current,
-            algorithm_name="lstm_nn",
+            algorithm_name="gru_nn",
         )

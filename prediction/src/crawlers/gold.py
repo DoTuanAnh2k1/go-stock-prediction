@@ -1,16 +1,14 @@
 """Gold price crawler — XAU/USD, XAU/VND, BTMC, BTMH, vang.today, Phú Quý."""
 from __future__ import annotations
 
-import re
 import time
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 import requests
 from bs4 import BeautifulSoup
 
-from src.crawlers.base import BaseCrawler, DEFAULT_HEADERS, USER_AGENT
+from src.crawlers.base import DEFAULT_HEADERS, USER_AGENT, BaseCrawler
 from src.database import repository as repo
 from src.utils.logger import get_logger
 from src.utils.number_parser import safe_parse_vnd
@@ -138,7 +136,7 @@ class GoldCrawler(BaseCrawler):
     # XAU
     # -------------------------------------------------------------------
 
-    def _crawl_xau(self) -> tuple[Optional[dict], Optional[dict]]:
+    def _crawl_xau(self) -> tuple[dict | None, dict | None]:
         resp = self._session.get(YAHOO_GOLD_DAILY, timeout=self._timeout)
         resp.raise_for_status()
         data = resp.json()

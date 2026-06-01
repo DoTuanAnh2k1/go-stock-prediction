@@ -1,13 +1,20 @@
 """SQLAlchemy ORM models — mirrors the Go GORM structs exactly."""
 from __future__ import annotations
 
-from datetime import datetime, date
-from decimal import Decimal
-from typing import Optional
+from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger, Boolean, Column, DateTime, Date, ForeignKey, Index,
-    Integer, Numeric, String, Text, UniqueConstraint,
+    BigInteger,
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
