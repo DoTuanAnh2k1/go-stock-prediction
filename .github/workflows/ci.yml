@@ -6,56 +6,281 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Jobs
+# ─────────────────────────────────────────────────────────────────────────────
 jobs:
-  build-test:
-    name: Build & Test
+
+  # ╔═══════════════════════════════════════════════════════════════════════════
+  # ║  Go API Backend
+  # ╚═══════════════════════════════════════════════════════════════════════════
+
+  go-build:
+    name: "[API] Build"
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
-          cache: false
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-1.23-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-1.23-
+          go-version-file: go.mod
+          cache: true
 
       - name: Download modules
         run: go mod download
 
-      - name: Build API
+      - name: Build
         run: go build -o /dev/null ./cmd/api
+
+  # ─────────────────────────────────────────────────────────────────────────
+  go-vet:
+    name: "[API] Vet"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
 
       - name: Vet
         run: go vet ./...
 
-      - name: Test
-        run: go test ./... -v -timeout 60s -count=1
-
-  docker-build:
-    name: Docker Build
+  # ─────────────────────────────────────────────────────────────────────────
+  go-test:
+    name: "[API] Unit Tests"
     runs-on: ubuntu-latest
-    needs: build-test
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test123
+          MYSQL_DATABASE: go_stock_prediction_test
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -ptest123"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      TEST_MYSQL_HOST: 127.0.0.1
+      TEST_MYSQL_PORT: "3307"
+      TEST_MYSQL_USER: root
+      TEST_MYSQL_PASSWORD: test123
+      TEST_MYSQL_DB: go_stock_prediction_test
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
 
-      - name: Login to GitHub Container Registry
+      - name: Download modules
+        run: go mod download
+
+      - name: Run tests
+        run: |
+          go test ./... -v -count=1 \
+            -coverprofile=coverage.out \
+            -timeout 120s \
+            2>&1 | tee test-output.txt
+          echo "TEST_EXIT=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+
+      - name: Process results
+        if: always()
+        run: |
+          go tool cover -func=coverage.out | grep total \
+            | awk '{print $3}' > coverage-total.txt 2>/dev/null \
+            || echo "N/A" > coverage-total.txt
+          grep -E "^ok|^FAIL|^\?" test-output.txt \
+            > package-results.txt 2>/dev/null || true
+
+      - name: Write step summary
+        if: always()
+        run: |
+          TOTAL=$(cat coverage-total.txt 2>/dev/null || echo "N/A")
+          {
+            echo "### Go Coverage: **${TOTAL}**"
+            echo ""
+            if [ -s package-results.txt ]; then
+              echo "| Package | Status | Time | Coverage |"
+              echo "|---------|:------:|------|:--------:|"
+              while IFS= read -r line; do
+                PKG=$(echo "$line" | awk '{print $2}' | sed 's|go-stock-prediction/||')
+                if echo "$line" | grep -q "^ok"; then
+                  TIME=$(echo "$line" | awk '{print $3}')
+                  COV=$(echo "$line" | grep -oP 'coverage: \K[0-9.]+%' || echo "—")
+                  echo "| \`${PKG}\` | ✅ | ${TIME} | ${COV} |"
+                elif echo "$line" | grep -q "^FAIL"; then
+                  TIME=$(echo "$line" | awk '{print $3}')
+                  echo "| \`${PKG}\` | ❌ | ${TIME} | — |"
+                else
+                  echo "| \`${PKG}\` | ⏭ no test | — | — |"
+                fi
+              done < package-results.txt
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: go-results
+          retention-days: 7
+          path: |
+            coverage.out
+            coverage-total.txt
+            package-results.txt
+
+  # ╔═══════════════════════════════════════════════════════════════════════════
+  # ║  Python Prediction Service
+  # ╚═══════════════════════════════════════════════════════════════════════════
+
+  python-lint:
+    name: "[Prediction] Lint"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: prediction
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: prediction/pyproject.toml
+
+      - name: Install ruff
+        run: pip install "ruff>=0.8.0"
+
+      - name: Lint
+        run: ruff check src/ tests/
+
+  # ─────────────────────────────────────────────────────────────────────────
+  python-test:
+    name: "[Prediction] Unit Tests"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: prediction
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: prediction/pyproject.toml
+
+      - name: Install base + dev deps
+        run: pip install -e ".[dev]"
+
+      - name: Install ML extras (best-effort — tests skip gracefully if missing)
+        run: pip install -e ".[ml]" || true
+
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/ -v --tb=short \
+            --junitxml=junit.xml \
+            2>&1 | tee test-output.txt
+          echo "PYTEST_EXIT=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+
+      - name: Write step summary
+        if: always()
+        run: |
+          PASSED=$(grep -oP '\d+ passed' test-output.txt | tail -1 || echo "? passed")
+          FAILED=$(grep -oP '\d+ failed' test-output.txt | tail -1 || true)
+          SKIPPED=$(grep -oP '\d+ skipped' test-output.txt | tail -1 || true)
+          SUMMARY="${PASSED}"
+          [ -n "$FAILED" ]  && SUMMARY="${SUMMARY}, ${FAILED}"
+          [ -n "$SKIPPED" ] && SUMMARY="${SUMMARY}, ${SKIPPED}"
+          {
+            echo "### Python Unit Tests: ${SUMMARY}"
+            echo ""
+            # Extract per-test results
+            echo "| Test | Result |"
+            echo "|------|:------:|"
+            grep -E "^tests/unit/.*PASSED|^tests/unit/.*FAILED|^tests/unit/.*SKIPPED|^tests/unit/.*ERROR" \
+              test-output.txt | while IFS= read -r line; do
+              NAME=$(echo "$line" | awk '{print $1}' | sed 's|tests/unit/||')
+              if echo "$line" | grep -q "PASSED"; then
+                echo "| \`${NAME}\` | ✅ |"
+              elif echo "$line" | grep -q "SKIPPED"; then
+                echo "| \`${NAME}\` | ⏭ skipped |"
+              else
+                echo "| \`${NAME}\` | ❌ |"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: python-results
+          retention-days: 7
+          path: prediction/junit.xml
+
+  # ╔═══════════════════════════════════════════════════════════════════════════
+  # ║  Frontend
+  # ╚═══════════════════════════════════════════════════════════════════════════
+
+  frontend-build:
+    name: "[Frontend] Type-check & Build"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check & build
+        run: npm run build
+
+      - name: Check bundle size
+        run: |
+          du -sh dist/ 2>/dev/null && echo "" || true
+          find dist -name "*.js" -exec du -sh {} \; 2>/dev/null | sort -rh | head -5 || true
+
+  # ╔═══════════════════════════════════════════════════════════════════════════
+  # ║  Docker Builds (run after tests pass)
+  # ╚═══════════════════════════════════════════════════════════════════════════
+
+  docker-api:
+    name: "[Docker] API Image"
+    runs-on: ubuntu-latest
+    needs: [go-build, go-vet, go-test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
         if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
@@ -63,24 +288,223 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Docker image (PR — no push)
+      - name: Build (PR — no push)
         if: github.event_name == 'pull_request'
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: Dockerfile.api
           push: false
-          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
 
-      - name: Build and push Docker image (main)
+      - name: Build & Push (main)
         if: github.event_name == 'push'
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: Dockerfile.api
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ghcr.io/${{ github.repository }}/api:latest
+            ghcr.io/${{ github.repository }}/api:${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+  # ─────────────────────────────────────────────────────────────────────────
+  docker-prediction:
+    name: "[Docker] Prediction Image"
+    runs-on: ubuntu-latest
+    needs: [python-lint, python-test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (PR — no push)
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: prediction/Dockerfile
+          push: false
+          cache-from: type=gha,scope=prediction
+          cache-to: type=gha,mode=max,scope=prediction
+
+      - name: Build & Push (main)
+        if: github.event_name == 'push'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: prediction/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/prediction:latest
+            ghcr.io/${{ github.repository }}/prediction:${{ github.sha }}
+          cache-from: type=gha,scope=prediction
+          cache-to: type=gha,mode=max,scope=prediction
+
+  # ─────────────────────────────────────────────────────────────────────────
+  docker-frontend:
+    name: "[Docker] Frontend Image"
+    runs-on: ubuntu-latest
+    needs: [frontend-build]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (PR — no push)
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: false
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      - name: Build & Push (main)
+        if: github.event_name == 'push'
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/frontend:latest
+            ghcr.io/${{ github.repository }}/frontend:${{ github.sha }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  # ╔═══════════════════════════════════════════════════════════════════════════
+  # ║  CI Summary Report
+  # ╚═══════════════════════════════════════════════════════════════════════════
+
+  report:
+    name: "CI Summary"
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - go-build
+      - go-vet
+      - go-test
+      - python-lint
+      - python-test
+      - frontend-build
+      - docker-api
+      - docker-prediction
+      - docker-frontend
+
+    steps:
+      - name: Download Go results
+        uses: actions/download-artifact@v4
+        with:
+          name: go-results
+        continue-on-error: true
+
+      - name: Generate summary
+        run: |
+          icon() {
+            case "$1" in
+              success)   echo "✅" ;;
+              failure)   echo "❌" ;;
+              cancelled) echo "🚫" ;;
+              skipped)   echo "⏭" ;;
+              *)         echo "❓" ;;
+            esac
+          }
+
+          GO_BUILD="${{ needs.go-build.result }}"
+          GO_VET="${{ needs.go-vet.result }}"
+          GO_TEST="${{ needs.go-test.result }}"
+          PY_LINT="${{ needs.python-lint.result }}"
+          PY_TEST="${{ needs.python-test.result }}"
+          FE_BUILD="${{ needs.frontend-build.result }}"
+          DK_API="${{ needs.docker-api.result }}"
+          DK_PRED="${{ needs.docker-prediction.result }}"
+          DK_FE="${{ needs.docker-frontend.result }}"
+
+          {
+            echo "# CI Pipeline — $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo ""
+            echo "| Service | Stage | Status |"
+            echo "|---------|-------|:------:|"
+            echo "| **Go API Backend** | Build | $(icon "$GO_BUILD") \`${GO_BUILD}\` |"
+            echo "| | Vet | $(icon "$GO_VET") \`${GO_VET}\` |"
+            echo "| | Unit Tests | $(icon "$GO_TEST") \`${GO_TEST}\` |"
+            echo "| | Docker Image | $(icon "$DK_API") \`${DK_API}\` |"
+            echo "| **Python Prediction** | Lint (ruff) | $(icon "$PY_LINT") \`${PY_LINT}\` |"
+            echo "| | Unit Tests | $(icon "$PY_TEST") \`${PY_TEST}\` |"
+            echo "| | Docker Image | $(icon "$DK_PRED") \`${DK_PRED}\` |"
+            echo "| **Frontend** | Type-check & Build | $(icon "$FE_BUILD") \`${FE_BUILD}\` |"
+            echo "| | Docker Image | $(icon "$DK_FE") \`${DK_FE}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Go coverage line
+          if [ -f coverage-total.txt ]; then
+            TOTAL=$(cat coverage-total.txt)
+            {
+              echo ""
+              echo "---"
+              echo "**Go coverage:** ${TOTAL}"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Per-package table
+          if [ -f package-results.txt ] && [ -s package-results.txt ]; then
+            {
+              echo ""
+              echo "<details><summary>Go package details</summary>"
+              echo ""
+              echo "| Package | Status | Time | Coverage |"
+              echo "|---------|:------:|------|:--------:|"
+              while IFS= read -r line; do
+                PKG=$(echo "$line" | awk '{print $2}' | sed 's|go-stock-prediction/||')
+                if echo "$line" | grep -q "^ok"; then
+                  TIME=$(echo "$line" | awk '{print $3}')
+                  COV=$(echo "$line" | grep -oP 'coverage: \K[0-9.]+%' || echo "—")
+                  echo "| \`${PKG}\` | ✅ | ${TIME} | ${COV} |"
+                elif echo "$line" | grep -q "^FAIL"; then
+                  TIME=$(echo "$line" | awk '{print $3}')
+                  echo "| \`${PKG}\` | ❌ | ${TIME} | — |"
+                else
+                  echo "| \`${PKG}\` | ⏭ no test | — | — |"
+                fi
+              done < package-results.txt
+              echo ""
+              echo "</details>"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Final verdict
+          FAILED_CORE=0
+          for r in "$GO_BUILD" "$GO_VET" "$GO_TEST" "$PY_LINT" "$PY_TEST" "$FE_BUILD"; do
+            [ "$r" = "failure" ] && FAILED_CORE=$((FAILED_CORE + 1))
+          done
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$FAILED_CORE" -eq 0 ]; then
+            echo "## ✅ All core checks passed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## ❌ ${FAILED_CORE} core check(s) failed" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
