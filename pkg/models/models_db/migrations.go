@@ -19,4 +19,6 @@ var AllModels = []interface{}{
 	&CryptoPrediction{},
 	&FuelPrice{},
 	&FuelPrediction{},
+	&SP500Price{},
+	&SP500Prediction{},
 }
