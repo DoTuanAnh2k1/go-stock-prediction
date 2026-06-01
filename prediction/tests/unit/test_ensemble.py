@@ -11,10 +11,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.algorithms.base import PredictionAlgorithm, PredictionResult
+from src.algorithms.ema_macd import EMAMACDPredictor
 from src.algorithms.ensemble import EnsemblePredictor
 from src.algorithms.moving_average import MovingAveragePredictor
-from src.algorithms.ema_macd import EMAMACDPredictor
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -166,10 +165,6 @@ class TestEnsembleWithRealAlgorithms:
         prices = make_prices(200)
         ma = MovingAveragePredictor()
         ema = EMAMACDPredictor()
-
-        ma_result = ma.predict(prices)
-        ema_result = ema.predict(prices)
-        expected_avg = (ma_result.predicted_price + ema_result.predicted_price) / 2
 
         ensemble = EnsemblePredictor([ma, ema])
         result = ensemble.predict(prices)

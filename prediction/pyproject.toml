@@ -63,4 +63,20 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
-ignore = ["E501", "B008", "B017", "SIM117"]
+ignore = [
+    "E501",   # line too long — handled by formatter
+    "B008",   # function call in default arg
+    "B017",   # blind except
+    "B905",   # zip() without strict= — not always appropriate
+    "SIM105", # contextlib.suppress style preference
+    "SIM108", # ternary operator style preference
+    "SIM117", # nested with
+]
+
+[tool.ruff.lint.per-file-ignores]
+# main.py uses intentional ordered imports with side-effects between them
+"src/main.py" = ["E402"]
+# test files import after pytest.importorskip() which must come first
+"tests/unit/test_arima_garch.py" = ["E402"]
+"tests/unit/test_lstm.py" = ["E402"]
+"tests/unit/test_lightgbm_model.py" = ["E402"]

@@ -5,7 +5,6 @@ import threading
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Optional
 
 from src.algorithms.registry import build_algorithms
 from src.database import repository as repo
@@ -17,7 +16,7 @@ _lock = threading.Lock()
 
 # Training state
 _is_training = False
-_last_trained: Optional[datetime] = None
+_last_trained: datetime | None = None
 _progress = 0.0
 _current_phase = "idle"
 _done_algorithms = 0
@@ -324,7 +323,6 @@ def _walk_forward_prices(prices_asc: list, algos: dict, train_window: int, step_
     MAX_HISTORY = 270
     total = 0
     n = len(prices_asc)
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
     for key, algo in algos.items():
         batch = []
@@ -459,7 +457,6 @@ def _backtest_gold(algos: dict, train_window: int, step_size: int) -> tuple[int,
                         accuracy = max(Decimal("0"), Decimal("1") - abs(actual - predicted) / actual)
                         accuracy = accuracy.quantize(Decimal("0.0001"))
                         status = "confirmed" if float(accuracy) >= 0.70 else "wrong"
-                        from src.database.models import GoldPrediction
                         batch.append(dict(
                             source=source, product_type=product_type,
                             predicted_price=predicted, current_price=Decimal(str(price_floats[window_end - 1])).quantize(Decimal("0.01")),

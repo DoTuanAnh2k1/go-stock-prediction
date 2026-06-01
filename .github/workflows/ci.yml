@@ -280,34 +280,12 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Login to GHCR
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build (PR — no push)
-        if: github.event_name == 'pull_request'
+      - name: Build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: Dockerfile.api
           push: false
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
-
-      - name: Build & Push (main)
-        if: github.event_name == 'push'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile.api
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/api:latest
-            ghcr.io/${{ github.repository }}/api:${{ github.sha }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
 
@@ -322,34 +300,12 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Login to GHCR
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build (PR — no push)
-        if: github.event_name == 'pull_request'
+      - name: Build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: prediction/Dockerfile
           push: false
-          cache-from: type=gha,scope=prediction
-          cache-to: type=gha,mode=max,scope=prediction
-
-      - name: Build & Push (main)
-        if: github.event_name == 'push'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: prediction/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/prediction:latest
-            ghcr.io/${{ github.repository }}/prediction:${{ github.sha }}
           cache-from: type=gha,scope=prediction
           cache-to: type=gha,mode=max,scope=prediction
 
@@ -364,34 +320,12 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Login to GHCR
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build (PR — no push)
-        if: github.event_name == 'pull_request'
+      - name: Build
         uses: docker/build-push-action@v5
         with:
           context: frontend
           file: frontend/Dockerfile
           push: false
-          cache-from: type=gha,scope=frontend
-          cache-to: type=gha,mode=max,scope=frontend
-
-      - name: Build & Push (main)
-        if: github.event_name == 'push'
-        uses: docker/build-push-action@v5
-        with:
-          context: frontend
-          file: frontend/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/frontend:latest
-            ghcr.io/${{ github.repository }}/frontend:${{ github.sha }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
