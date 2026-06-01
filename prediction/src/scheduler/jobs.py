@@ -83,6 +83,16 @@ def job_daily_reconcile() -> None:
         log.error("job.reconcile.error", error=str(exc))
 
 
+def job_crawl_sp500() -> None:
+    from src.crawlers.sp500 import SP500Crawler
+    try:
+        crawler = SP500Crawler()
+        saved = crawler.crawl()
+        log.info("job.sp500.done", saved=saved)
+    except Exception as exc:
+        log.error("job.sp500.error", error=str(exc))
+
+
 # Job registry — maps job_key → callable
 JOB_FUNCTIONS = {
     "crawler_stock": job_crawl_vn30,
@@ -90,6 +100,7 @@ JOB_FUNCTIONS = {
     "crawler_nasdaq": job_crawl_nasdaq,
     "crawler_crypto": job_crawl_crypto,
     "crawler_fuel": job_crawl_fuel,
+    "crawler_sp500": job_crawl_sp500,
     "weekly_training": job_weekly_training,
     "daily_prediction": job_daily_prediction,
     "daily_reconcile": job_daily_reconcile,

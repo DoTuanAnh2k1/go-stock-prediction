@@ -54,6 +54,10 @@ service PredictionService {
   // Fuel (Giá Xăng VN)
   rpc TriggerFuelCrawler(Empty) returns (TriggerResponse);
   rpc TriggerFuelPredict(Empty) returns (TriggerResponse);
+
+  // S&P 500
+  rpc TriggerSP500Crawler(Empty) returns (TriggerResponse);
+  rpc TriggerSP500Predict(Empty) returns (TriggerResponse);
 }
 
 message Empty {}
@@ -82,7 +86,7 @@ message StockHistoryRequest {
 message BacktestRequest {
   int32 train_window = 1;
   int32 step_size = 2;
-  string market_key = 3; // "" or "VN30" = stock backtest, "GOLD" = gold, "NASDAQ100", "CRYPTO", "FUEL"
+  string market_key = 3; // "" or "VN30" = stock backtest, "GOLD", "NASDAQ100", "CRYPTO", "FUEL", "SP500", "ALL" = all markets
 }
 
 message StockRequest {

@@ -37,6 +37,8 @@ const (
 	PredictionService_TriggerCryptoPredict_FullMethodName      = "/prediction.PredictionService/TriggerCryptoPredict"
 	PredictionService_TriggerFuelCrawler_FullMethodName        = "/prediction.PredictionService/TriggerFuelCrawler"
 	PredictionService_TriggerFuelPredict_FullMethodName        = "/prediction.PredictionService/TriggerFuelPredict"
+	PredictionService_TriggerSP500Crawler_FullMethodName       = "/prediction.PredictionService/TriggerSP500Crawler"
+	PredictionService_TriggerSP500Predict_FullMethodName       = "/prediction.PredictionService/TriggerSP500Predict"
 )
 
 // PredictionServiceClient is the client API for PredictionService service.
@@ -79,6 +81,9 @@ type PredictionServiceClient interface {
 	// Fuel (Giá Xăng VN)
 	TriggerFuelCrawler(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
 	TriggerFuelPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
+	// S&P 500
+	TriggerSP500Crawler(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
+	TriggerSP500Predict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
 }
 
 type predictionServiceClient struct {
@@ -269,6 +274,26 @@ func (c *predictionServiceClient) TriggerFuelPredict(ctx context.Context, in *Em
 	return out, nil
 }
 
+func (c *predictionServiceClient) TriggerSP500Crawler(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TriggerResponse)
+	err := c.cc.Invoke(ctx, PredictionService_TriggerSP500Crawler_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *predictionServiceClient) TriggerSP500Predict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TriggerResponse)
+	err := c.cc.Invoke(ctx, PredictionService_TriggerSP500Predict_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PredictionServiceServer is the server API for PredictionService service.
 // All implementations must embed UnimplementedPredictionServiceServer
 // for forward compatibility.
@@ -309,6 +334,9 @@ type PredictionServiceServer interface {
 	// Fuel (Giá Xăng VN)
 	TriggerFuelCrawler(context.Context, *Empty) (*TriggerResponse, error)
 	TriggerFuelPredict(context.Context, *Empty) (*TriggerResponse, error)
+	// S&P 500
+	TriggerSP500Crawler(context.Context, *Empty) (*TriggerResponse, error)
+	TriggerSP500Predict(context.Context, *Empty) (*TriggerResponse, error)
 	mustEmbedUnimplementedPredictionServiceServer()
 }
 
@@ -372,6 +400,12 @@ func (UnimplementedPredictionServiceServer) TriggerFuelCrawler(context.Context, 
 }
 func (UnimplementedPredictionServiceServer) TriggerFuelPredict(context.Context, *Empty) (*TriggerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TriggerFuelPredict not implemented")
+}
+func (UnimplementedPredictionServiceServer) TriggerSP500Crawler(context.Context, *Empty) (*TriggerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TriggerSP500Crawler not implemented")
+}
+func (UnimplementedPredictionServiceServer) TriggerSP500Predict(context.Context, *Empty) (*TriggerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TriggerSP500Predict not implemented")
 }
 func (UnimplementedPredictionServiceServer) mustEmbedUnimplementedPredictionServiceServer() {}
 func (UnimplementedPredictionServiceServer) testEmbeddedByValue()                           {}
@@ -718,6 +752,42 @@ func _PredictionService_TriggerFuelPredict_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PredictionService_TriggerSP500Crawler_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PredictionServiceServer).TriggerSP500Crawler(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PredictionService_TriggerSP500Crawler_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PredictionServiceServer).TriggerSP500Crawler(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PredictionService_TriggerSP500Predict_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PredictionServiceServer).TriggerSP500Predict(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PredictionService_TriggerSP500Predict_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PredictionServiceServer).TriggerSP500Predict(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PredictionService_ServiceDesc is the grpc.ServiceDesc for PredictionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -796,6 +866,14 @@ var PredictionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TriggerFuelPredict",
 			Handler:    _PredictionService_TriggerFuelPredict_Handler,
+		},
+		{
+			MethodName: "TriggerSP500Crawler",
+			Handler:    _PredictionService_TriggerSP500Crawler_Handler,
+		},
+		{
+			MethodName: "TriggerSP500Predict",
+			Handler:    _PredictionService_TriggerSP500Predict_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

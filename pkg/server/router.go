@@ -120,6 +120,8 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("POST /api/trigger/crypto-predict", AuthRequired(TriggerCryptoPredictHandler))
 	mux.HandleFunc("POST /api/trigger/fuel-crawler", AuthRequired(TriggerFuelCrawlerHandler))
 	mux.HandleFunc("POST /api/trigger/fuel-predict", AuthRequired(TriggerFuelPredictHandler))
+	mux.HandleFunc("POST /api/trigger/sp500-crawler", AuthRequired(TriggerSP500CrawlerHandler))
+	mux.HandleFunc("POST /api/trigger/sp500-predict", AuthRequired(TriggerSP500PredictHandler))
 
 	// User management APIs (admin only)
 	mux.HandleFunc("GET /api/users", ListUsersHandler)
@@ -219,4 +221,6 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  POST /api/trigger/crypto-predict")
 	logger.Logger.Info("  POST /api/trigger/fuel-crawler")
 	logger.Logger.Info("  POST /api/trigger/fuel-predict")
+	logger.Logger.Info("  POST /api/trigger/sp500-crawler")
+	logger.Logger.Info("  POST /api/trigger/sp500-predict")
 }

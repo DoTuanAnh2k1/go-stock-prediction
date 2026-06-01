@@ -19,6 +19,8 @@ from src.database.models import (
     NasdaqPrediction,
     NasdaqPrice,
     Prediction,
+    SP500Prediction,
+    SP500Price,
     Stock,
     StockPrice,
     SyncLog,
@@ -565,6 +567,106 @@ def create_fuel_prediction(
         session.add(
             FuelPrediction(
                 product_type=product_type,
+                predicted_price=predicted_price,
+                current_price=current_price,
+                confidence=confidence,
+                algorithm_name=algorithm_name,
+                prediction_date=prediction_date,
+                target_date=target_date,
+                actual_price=actual_price,
+                accuracy=accuracy,
+                status=status,
+            )
+        )
+
+
+# ---------------------------------------------------------------------------
+# S&P 500
+# ---------------------------------------------------------------------------
+
+def upsert_sp500_price(
+    symbol: str,
+    trading_date,
+    open_price: Decimal,
+    high_price: Decimal,
+    low_price: Decimal,
+    close_price: Decimal,
+    volume: int,
+    currency: str = "USD",
+) -> None:
+    with session_scope() as session:
+        existing = (
+            session.query(SP500Price)
+            .filter_by(symbol=symbol, trading_date=trading_date)
+            .first()
+        )
+        if existing:
+            existing.open_price = open_price
+            existing.high_price = high_price
+            existing.low_price = low_price
+            existing.close_price = close_price
+            existing.volume = volume
+            existing.updated_at = datetime.utcnow()
+        else:
+            session.add(
+                SP500Price(
+                    symbol=symbol,
+                    trading_date=trading_date,
+                    open_price=open_price,
+                    high_price=high_price,
+                    low_price=low_price,
+                    close_price=close_price,
+                    volume=volume,
+                    currency=currency,
+                )
+            )
+
+
+def get_sp500_prices_asc(symbol: str, limit: int = 270) -> list[SP500Price]:
+    session = get_session()
+    try:
+        rows = (
+            session.query(SP500Price)
+            .filter(SP500Price.symbol == symbol, SP500Price.deleted_at.is_(None))
+            .order_by(SP500Price.trading_date.desc())
+            .limit(limit)
+            .all()
+        )
+        return list(reversed(rows))
+    finally:
+        session.close()
+
+
+def get_sp500_symbols() -> list[str]:
+    session = get_session()
+    try:
+        rows = (
+            session.query(SP500Price.symbol)
+            .filter(SP500Price.deleted_at.is_(None))
+            .distinct()
+            .all()
+        )
+        return [r.symbol for r in rows]
+    finally:
+        session.close()
+
+
+def create_sp500_prediction(
+    symbol: str,
+    predicted_price: Decimal,
+    current_price: Decimal,
+    confidence: Decimal,
+    algorithm_name: str,
+    prediction_date: datetime,
+    target_date: datetime,
+    actual_price: Decimal | None = None,
+    accuracy: Decimal | None = None,
+    status: str = "pending",
+) -> None:
+    with session_scope() as session:
+        session.add(
+            SP500Prediction(
+                symbol=symbol,
                 predicted_price=predicted_price,
                 current_price=current_price,
                 confidence=confidence,

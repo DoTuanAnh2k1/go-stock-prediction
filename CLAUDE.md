@@ -2,11 +2,11 @@
 
 ## Tổng quan dự án
 
-Hệ thống dự đoán giá cổ phiếu Việt Nam. Thu thập dữ liệu từ nhiều nguồn (VN30, Gold SJC/XAU, NASDAQ, Crypto, Fuel), chạy 6 thuật toán ML (Moving Average, EMA, LSTM PyTorch, ARIMA-GARCH, LightGBM, Ensemble), và hiển thị kết quả qua web dashboard.
+Hệ thống dự đoán giá cổ phiếu Việt Nam. Thu thập dữ liệu từ nhiều nguồn (VN30, Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, S&P 500, Fuel), chạy 6 thuật toán ML (Moving Average, EMA, LSTM PyTorch, ARIMA-GARCH, LightGBM, Ensemble), và hiển thị kết quả qua web dashboard.
 
 **Kiến trúc hiện tại: microservice (2 service + nginx)**
 - **API Backend** (`cmd/api`) — Go HTTP trên `:8118`, phục vụ toàn bộ `/api/*`. Gọi Prediction Service qua gRPC để trigger crawler/training; đọc DB trực tiếp cho các query dữ liệu.
-- **Prediction Service** (`prediction/`) — **Python** gRPC trên `:8119`. Xử lý crawling (VN30, Gold, NASDAQ, Crypto, Fuel), 6 thuật toán ML, training, APScheduler cron jobs.
+- **Prediction Service** (`prediction/`) — **Python** gRPC trên `:8119`. Xử lý crawling (VN30, Gold, NASDAQ, Crypto BTC/ETH/SOL, S&P 500, Fuel), 6 thuật toán ML, training, APScheduler cron jobs.
 - **Nginx** — Reverse proxy trên `:80`, forward tất cả request về API Backend.
 
 
@@ -73,6 +73,7 @@ pkg/server/api_trigger_gold_history.go  # POST /api/trigger/gold-history (→ gR
 pkg/server/api_trigger_reconcile.go     # POST /api/trigger/reconcile (→ gRPC TriggerReconcile)
 pkg/server/api_trigger_stock_history.go # POST /api/trigger/stock-history (→ gRPC TriggerStockHistory)
 pkg/server/api_trigger_historical_backtest.go # POST /api/trigger/historical-backtest (→ gRPC TriggerHistoricalBacktest, trả 202, 409 nếu đang chạy)
+pkg/server/api_trigger_sp500.go         # POST /api/trigger/sp500-crawler (→ gRPC TriggerSP500Crawler), POST /api/trigger/sp500-predict (→ gRPC TriggerSP500Predict)
 pkg/server/api_auth.go                  # POST /api/auth/login (DB + bcrypt), GET /api/auth/me — JWT authentication
 pkg/server/api_users.go                 # GET/POST /api/users, DELETE /api/users/{id} — quản lý user (admin only)
 pkg/server/api_schedules.go             # GET /api/schedules, PUT /api/schedules/{key} — quản lý lịch cron động
@@ -131,13 +132,14 @@ prediction/
 │   │   ├── vn30.py                     # VNDirect API — 30 stocks HOSE
 │   │   ├── gold.py                     # Yahoo Finance XAU + BTMC API + Phú Quý
 │   │   ├── nasdaq.py                   # Yahoo Finance — 15 NASDAQ symbols
-│   │   ├── crypto.py                   # CoinGecko — BTC/ETH
+│   │   ├── crypto.py                   # CoinGecko — BTC/ETH/SOL
+│   │   ├── sp500.py                    # Yahoo Finance — 16 S&P 500 symbols (SPY, QQQ, JPM, BAC, GS, JNJ, UNH, PFE, PG, KO, WMT, XOM, CVX, V, MA)
 │   │   └── fuel.py                     # giaxanghomnay.com/api/pvdate + /api/chart
 │   ├── scheduler/
 │   │   ├── manager.py                  # APScheduler + DB-backed CronSchedule; poll mỗi 60s để phát hiện thay đổi
 │   │   └── jobs.py                     # Định nghĩa tất cả jobs (crawlers + predictions + training + reconcile)
 │   ├── orchestrator/
-│   │   └── runner.py                   # RunAllMarkets(ctx), RunForMarket(ctx, key)
+│   │   └── runner.py                   # run_all_markets() — VN30/GOLD/NASDAQ100/CRYPTO/FUEL/SP500; run_for_market(key)
 │   └── utils/
 │       ├── logger.py                   # structlog config
 │       ├── timezone.py                 # Asia/Ho_Chi_Minh helpers
@@ -269,7 +271,7 @@ Các bước bắt buộc:
 ## Database
 
 - **ORM:** GORM v2
-- **Tables chính:** `exchanges`, `stocks`, `stock_prices`, `predictions`, `sync_logs`, `gold_prices`, `training_logs`, `users`, `cron_schedules`
+- **Tables chính:** `exchanges`, `stocks`, `stock_prices`, `predictions`, `sync_logs`, `gold_prices`, `training_logs`, `users`, `cron_schedules`, `sp500_prices`, `sp500_predictions`
 - **Auto-migrate:** Chạy khi start app qua `models_db/migrations.go`
 - **Schema đầy đủ:** `database.sql` ở root
 
@@ -284,7 +286,8 @@ Khi lần đầu startup, `seedCronSchedules()` trong `pkg/server/api_schedules.
 | `reconcile_daily` | `0 0 6 * * *` | Reconcile dự đoán với giá thực tế |
 | `gold_crawler_daily` | `0 0 10 * * *` | Crawl giá vàng SJC và XAU/USD |
 | `crawler_daily` | `0 0 12 * * *` | Crawl dữ liệu giá cổ phiếu (VN30) |
-| `predict_daily` | `0 0 18 * * *` | Chạy dự đoán cho TẤT CẢ markets qua `orchestrator.RunAllMarkets()` |
+| `crawler_sp500` | `0 0 12 * * *` | Crawl dữ liệu giá S&P 500 (Yahoo Finance) |
+| `predict_daily` | `0 0 18 * * *` | Chạy dự đoán cho TẤT CẢ markets qua `orchestrator.run_all_markets()` — bao gồm SP500 |
 | `train_weekly` | `0 0 9 * * SUN` | Huấn luyện mô hình |
 | `db_backup_daily` | `0 0 2 * * *` | Backup database (mysqldump → `BACKUP_DIR`) — hiện chạy trong Python service |
 | `backup_cleanup_daily` | `0 0 3 * * *` | Xóa backup cũ hơn 7 ngày trong `BACKUP_DIR` — hiện chạy trong Python service |
@@ -402,7 +405,9 @@ Tất cả trigger endpoint đều yêu cầu JWT authentication (`Authorization
 | `POST` | `/api/trigger/gold-predict` | Dự đoán vàng (background) — yêu cầu JWT |
 | `POST` | `/api/trigger/reconcile` | Reconcile dự đoán với giá thực tế — yêu cầu JWT |
 | `POST` | `/api/trigger/stock-history` | Crawl lịch sử stock (background) — body JSON `{"days":365}` — yêu cầu JWT |
-| `POST` | `/api/trigger/historical-backtest` | Walk-forward backtest (background) — query: `?train_window=30&step_size=6`; trả 202; 409 nếu đang chạy — yêu cầu JWT |
+| `POST` | `/api/trigger/historical-backtest` | Walk-forward backtest (background) — query: `?train_window=30&step_size=6&market_key=VN30\|GOLD\|NASDAQ100\|CRYPTO\|FUEL\|SP500\|ALL`; trả 202; 409 nếu đang chạy — yêu cầu JWT |
+| `POST` | `/api/trigger/sp500-crawler` | Crawl S&P 500 (background) — yêu cầu JWT |
+| `POST` | `/api/trigger/sp500-predict` | Dự đoán S&P 500 (background) — yêu cầu JWT |
 
 ## Trigger thủ công qua API
 
@@ -444,6 +449,15 @@ curl -X POST http://localhost:8118/api/trigger/stock-history -H "Authorization: 
 # Chạy historical backtest (query params, không phải body)
 curl -X POST "http://localhost:8118/api/trigger/historical-backtest?train_window=30&step_size=6" -H "Authorization: Bearer $TOKEN"
 
+# Crawl S&P 500 ngay
+curl -X POST http://localhost:8118/api/trigger/sp500-crawler -H "Authorization: Bearer $TOKEN"
+
+# Chạy dự đoán S&P 500 ngay
+curl -X POST http://localhost:8118/api/trigger/sp500-predict -H "Authorization: Bearer $TOKEN"
+
+# Backtest tất cả markets
+curl -X POST "http://localhost:8118/api/trigger/historical-backtest?train_window=30&step_size=6&market_key=ALL" -H "Authorization: Bearer $TOKEN"
+
 # Crawl và dự đoán một mã cụ thể
 curl -X POST http://localhost:8118/api/stocks/VCB/crawl
 curl -X POST http://localhost:8118/api/stocks/VCB/predict
@@ -472,9 +486,11 @@ curl -X PUT http://localhost:8118/api/schedules/crawler_daily \
 | `TriggerStockHistory` | `StockHistoryRequest` | `TriggerResponse` | Crawl lịch sử stock trong background — field `days` |
 | `TriggerGoldHistory` | `Empty` | `TriggerResponse` | Import lịch sử XAU trong background |
 | `TriggerGoldPredict` | `Empty` | `TriggerResponse` | Dự đoán vàng trong background |
-| `TriggerHistoricalBacktest` | `BacktestRequest` | `TriggerResponse` | Walk-forward backtest trong background — concurrency guard |
+| `TriggerHistoricalBacktest` | `BacktestRequest` | `TriggerResponse` | Walk-forward backtest trong background — concurrency guard; `market_key`: `""` hoặc `"VN30"`, `"GOLD"`, `"NASDAQ100"`, `"CRYPTO"`, `"FUEL"`, `"SP500"`, `"ALL"` |
 | `TriggerStockCrawl` | `StockRequest` | `StockCrawlResponse` | Crawl và lưu một mã cổ phiếu đồng bộ |
 | `TriggerStockPredict` | `StockRequest` | `StockPredictResponse` | Dự đoán tất cả thuật toán cho một mã đồng bộ |
+| `TriggerSP500Crawler` | `Empty` | `TriggerResponse` | Crawl S&P 500 trong background |
+| `TriggerSP500Predict` | `Empty` | `TriggerResponse` | Dự đoán S&P 500 trong background |
 | `GetTrainingStatus` | `Empty` | `TrainingStatusResponse` | Trạng thái training: `is_training`, `progress`, `phase`, `total/done algorithms` |
 
 ## Test

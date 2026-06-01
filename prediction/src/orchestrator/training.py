@@ -310,6 +310,24 @@ def run_historical_backtest(train_window: int, step_size: int, market_key: str =
         total_preds, items_processed = _backtest_crypto(algos, train_window, step_size)
     elif mk == "FUEL":
         total_preds, items_processed = _backtest_fuel(algos, train_window, step_size)
+    elif mk == "SP500":
+        total_preds, items_processed = _backtest_sp500(algos, train_window, step_size)
+    elif mk == "ALL":
+        for _mkey, _fn in [
+            ("VN30",      lambda: _backtest_vn30(algos, train_window, step_size)),
+            ("GOLD",      lambda: _backtest_gold(algos, train_window, step_size)),
+            ("NASDAQ100", lambda: _backtest_nasdaq(algos, train_window, step_size)),
+            ("CRYPTO",    lambda: _backtest_crypto(algos, train_window, step_size)),
+            ("FUEL",      lambda: _backtest_fuel(algos, train_window, step_size)),
+            ("SP500",     lambda: _backtest_sp500(algos, train_window, step_size)),
+        ]:
+            try:
+                preds, items = _fn()
+                total_preds += preds
+                items_processed += items
+                log.info("backtest.market_done", market=_mkey, predictions=preds, items=items)
+            except Exception as exc:
+                log.error("backtest.market_failed", market=_mkey, error=str(exc))
 
     duration_ms = int((datetime.utcnow() - started_at).total_seconds() * 1000)
     log.info("backtest.done", market=mk, predictions=total_preds, items=items_processed, duration_ms=duration_ms)
@@ -634,6 +652,58 @@ def _bulk_fuel_predictions(batch: list) -> None:
     from src.database.models import FuelPrediction
     with session_scope() as session:
         session.bulk_save_objects([FuelPrediction(**r) for r in batch])
+
+
+def _backtest_sp500(algos: dict, train_window: int, step_size: int) -> tuple[int, int]:
+    from src.crawlers.sp500 import SP500_SYMBOLS
+    symbols = repo.get_sp500_symbols() or SP500_SYMBOLS
+    total = 0
+    items = 0
+    for symbol in symbols:
+        prices_asc = repo.get_sp500_prices_asc(symbol, limit=500)
+        if len(prices_asc) < train_window + 1:
+            continue
+        items += 1
+        price_floats = [float(p.close_price) for p in prices_asc]
+        dates = [p.trading_date for p in prices_asc]
+        n = len(price_floats)
+        for key, algo in algos.items():
+            batch = []
+            for window_end in range(train_window, n, step_size):
+                hist_end = min(window_end, 270)
+                price_list = price_floats[window_end - hist_end:window_end]
+                for t in range(window_end, min(window_end + step_size, n)):
+                    try:
+                        result = algo.predict(price_list)
+                        actual = Decimal(str(price_floats[t])).quantize(Decimal("0.0001"))
+                        predicted = Decimal(str(result.predicted_price)).quantize(Decimal("0.0001"))
+                        accuracy = max(Decimal("0"), Decimal("1") - abs(actual - predicted) / actual)
+                        accuracy = accuracy.quantize(Decimal("0.0001"))
+                        status = "confirmed" if float(accuracy) >= 0.70 else "wrong"
+                        batch.append(dict(
+                            symbol=symbol, predicted_price=predicted,
+                            current_price=Decimal(str(price_floats[window_end - 1])).quantize(Decimal("0.0001")),
+                            confidence=Decimal(str(round(result.confidence, 4))), algorithm_name=key,
+                            prediction_date=dates[window_end - 1], target_date=dates[t],
+                            actual_price=actual, accuracy=accuracy, status=status,
+                        ))
+                        if len(batch) >= 200:
+                            _bulk_sp500_predictions(batch)
+                            total += len(batch)
+                            batch = []
+                    except Exception:
+                        pass
+            if batch:
+                _bulk_sp500_predictions(batch)
+                total += len(batch)
+    return total, items
+
+
+def _bulk_sp500_predictions(batch: list) -> None:
+    from src.database.connection import session_scope
+    from src.database.models import SP500Prediction
+    with session_scope() as session:
+        session.bulk_save_objects([SP500Prediction(**r) for r in batch])
 
 
 FUEL_PRODUCTS = ["ron95_iii", "e5_ron92", "do_005s", "kerosene"]

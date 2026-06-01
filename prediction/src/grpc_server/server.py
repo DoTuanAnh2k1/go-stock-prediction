@@ -93,6 +93,18 @@ class PredictionServicer:
         threading.Thread(target=_bg_predict_fuel, daemon=True).start()
         return pb2.TriggerResponse(success=True, message="Fuel prediction started in background")
 
+    def TriggerSP500Crawler(self, request, context):
+        pb2, _ = _get_pb()
+        log.info("grpc.TriggerSP500Crawler")
+        threading.Thread(target=_bg_crawl_sp500, daemon=True).start()
+        return pb2.TriggerResponse(success=True, message="S&P 500 crawler started in background")
+
+    def TriggerSP500Predict(self, request, context):
+        pb2, _ = _get_pb()
+        log.info("grpc.TriggerSP500Predict")
+        threading.Thread(target=_bg_predict_sp500, daemon=True).start()
+        return pb2.TriggerResponse(success=True, message="S&P 500 prediction started in background")
+
     # -------------------------------------------------------------------
     # Backtest (background with concurrency guard)
     # -------------------------------------------------------------------
@@ -367,6 +379,24 @@ def _bg_predict_fuel():
         log.info("bg.predict_fuel.done", count=n)
     except Exception as exc:
         log.error("bg.predict_fuel.error", error=str(exc))
+
+
+def _bg_crawl_sp500():
+    try:
+        from src.crawlers.sp500 import SP500Crawler
+        saved = SP500Crawler().crawl()
+        log.info("bg.sp500.done", saved=saved)
+    except Exception as exc:
+        log.error("bg.sp500.error", error=str(exc))
+
+
+def _bg_predict_sp500():
+    try:
+        from src.orchestrator.runner import run_for_market
+        n = run_for_market("SP500")
+        log.info("bg.predict_sp500.done", count=n)
+    except Exception as exc:
+        log.error("bg.predict_sp500.error", error=str(exc))
 
 
 def _bg_backtest(train_window: int, step_size: int, market_key: str):

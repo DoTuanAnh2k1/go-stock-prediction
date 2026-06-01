@@ -459,12 +459,21 @@ export default function Settings() {
         <div style={{ padding: '4px 0', fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
           Kích hoạt tác vụ ngay lập tức (chạy nền, không chờ lịch cron)
         </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
+          <TriggerBtn label="Crawl VN30"    endpoint="crawler"        icon="candles" />
+          <TriggerBtn label="Crawl Vàng"    endpoint="gold-crawler"   icon="gold"    />
+          <TriggerBtn label="Crawl NASDAQ"  endpoint="nasdaq-crawler" icon="nasdaq"  />
+          <TriggerBtn label="Crawl Crypto"  endpoint="crypto-crawler" icon="crypto"  />
+          <TriggerBtn label="Crawl Xăng"    endpoint="fuel-crawler"   icon="fuel"    />
+        </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-          <TriggerBtn label="Crawl VN30"  endpoint="crawler"      icon="candles" />
-          <TriggerBtn label="Crawl Vàng"  endpoint="gold-crawler" icon="gold"    />
-          <TriggerBtn label="Huấn luyện"  endpoint="train"        icon="cpu"     />
-          <TriggerBtn label="Dự đoán"     endpoint="predict"      icon="pulse"   />
-          <TriggerBtn label="Reconcile"   endpoint="reconcile"    icon="refresh" />
+          <TriggerBtn label="Dự đoán Vàng"   endpoint="gold-predict"   icon="gold"    />
+          <TriggerBtn label="Dự đoán NASDAQ" endpoint="nasdaq-predict" icon="nasdaq"  />
+          <TriggerBtn label="Dự đoán Crypto" endpoint="crypto-predict" icon="crypto"  />
+          <TriggerBtn label="Dự đoán Xăng"   endpoint="fuel-predict"   icon="fuel"    />
+          <TriggerBtn label="Dự đoán (tất cả)" endpoint="predict"      icon="pulse"   />
+          <TriggerBtn label="Huấn luyện"     endpoint="train"          icon="cpu"     />
+          <TriggerBtn label="Reconcile"      endpoint="reconcile"      icon="refresh" />
         </div>
       </Panel>
     </div>

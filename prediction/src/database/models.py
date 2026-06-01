@@ -179,6 +179,46 @@ class NasdaqPrediction(Base):
     deleted_at = Column(DateTime)
 
 
+class SP500Price(Base):
+    __tablename__ = "sp500_prices"
+    __table_args__ = (
+        UniqueConstraint("symbol", "trading_date", name="idx_sp500_symbol_date"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    symbol = Column(String(10), nullable=False)
+    company_name = Column(String(200))
+    open_price = Column(Numeric(15, 4))
+    high_price = Column(Numeric(15, 4))
+    low_price = Column(Numeric(15, 4))
+    close_price = Column(Numeric(15, 4), nullable=False)
+    volume = Column(BigInteger)
+    trading_date = Column(Date, nullable=False)
+    currency = Column(String(3), nullable=False, default="USD")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column(DateTime)
+
+
+class SP500Prediction(Base):
+    __tablename__ = "sp500_predictions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    symbol = Column(String(10), nullable=False)
+    algorithm_name = Column(String(100), nullable=False)
+    predicted_price = Column(Numeric(15, 4), nullable=False)
+    current_price = Column(Numeric(15, 4), nullable=False)
+    confidence = Column(Numeric(5, 4))
+    prediction_date = Column(DateTime, nullable=False)
+    target_date = Column(DateTime, nullable=False)
+    actual_price = Column(Numeric(15, 4))
+    accuracy = Column(Numeric(5, 4))
+    status = Column(String(20), default="pending")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column(DateTime)
+
+
 class CryptoPrice(Base):
     __tablename__ = "crypto_prices"
     __table_args__ = (

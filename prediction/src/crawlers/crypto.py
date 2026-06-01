@@ -15,7 +15,7 @@ log = get_logger("crawler.crypto")
 
 COINGECKO_SIMPLE_PRICE = (
     "https://api.coingecko.com/api/v3/simple/price"
-    "?ids=bitcoin,ethereum&vs_currencies=usd"
+    "?ids=bitcoin,ethereum,solana&vs_currencies=usd"
     "&include_market_cap=true&include_24hr_vol=true"
 )
 COINGECKO_HISTORY = (
@@ -27,6 +27,7 @@ REQUEST_DELAY = 3  # 3s between coins for free tier rate limit
 COINS = [
     ("bitcoin", "BTC"),
     ("ethereum", "ETH"),
+    ("solana", "SOL"),
 ]
 
 
