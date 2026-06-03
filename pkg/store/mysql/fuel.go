@@ -116,10 +116,26 @@ func (c *Client) GetLatestFuelPredictions() ([]modelsdb.FuelPrediction, error) {
 	return preds, err
 }
 
+// GetLatestConfirmedFuelPredictions returns the most recent CONFIRMED prediction
+// (actual_price IS NOT NULL) per (product_type, algorithm_name).
+// Uses MAX(id) to avoid duplicates when multiple rows share the same prediction_date.
+func (c *Client) GetLatestConfirmedFuelPredictions() ([]modelsdb.FuelPrediction, error) {
+	var preds []modelsdb.FuelPrediction
+	subQuery := c.Db.Model(&modelsdb.FuelPrediction{}).
+		Select("MAX(id) as max_id").
+		Where("actual_price IS NOT NULL").
+		Group("product_type, algorithm_name")
+	err := c.Db.
+		Joins("JOIN (?) as latest ON latest.max_id = fuel_predictions.id", subQuery).
+		Where("fuel_predictions.deleted_at IS NULL").
+		Find(&preds).Error
+	return preds, err
+}
+
 // GetFuelPredictionsByDateRange returns fuel predictions for a product type within a date range.
 func (c *Client) GetFuelPredictionsByDateRange(productType string, from, to time.Time) ([]modelsdb.FuelPrediction, error) {
 	var preds []modelsdb.FuelPrediction
-	query := c.Db.Where("prediction_date BETWEEN ? AND ?", from, to).Order("prediction_date DESC")
+	query := c.Db.Where("target_date BETWEEN ? AND ?", from, to).Order("target_date DESC")
 	if productType != "" {
 		query = query.Where("product_type = ?", productType)
 	}

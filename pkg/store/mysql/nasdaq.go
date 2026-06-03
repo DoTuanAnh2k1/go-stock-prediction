@@ -104,10 +104,26 @@ func (c *Client) GetLatestNasdaqPredictions() ([]modelsdb.NasdaqPrediction, erro
 	return preds, err
 }
 
+// GetLatestConfirmedNasdaqPredictions returns the most recent CONFIRMED prediction
+// (actual_price IS NOT NULL) per (symbol, algorithm_name).
+// Uses MAX(id) to avoid duplicates when multiple rows share the same prediction_date.
+func (c *Client) GetLatestConfirmedNasdaqPredictions() ([]modelsdb.NasdaqPrediction, error) {
+	var preds []modelsdb.NasdaqPrediction
+	subQuery := c.Db.Model(&modelsdb.NasdaqPrediction{}).
+		Select("MAX(id) as max_id").
+		Where("actual_price IS NOT NULL").
+		Group("symbol, algorithm_name")
+	err := c.Db.
+		Joins("JOIN (?) as latest ON latest.max_id = nasdaq_predictions.id", subQuery).
+		Where("nasdaq_predictions.deleted_at IS NULL").
+		Find(&preds).Error
+	return preds, err
+}
+
 // GetNasdaqPredictionsByDateRange returns NASDAQ predictions for a symbol within a date range.
 func (c *Client) GetNasdaqPredictionsByDateRange(symbol string, from, to time.Time) ([]modelsdb.NasdaqPrediction, error) {
 	var preds []modelsdb.NasdaqPrediction
-	query := c.Db.Where("prediction_date BETWEEN ? AND ?", from, to).Order("prediction_date DESC")
+	query := c.Db.Where("target_date BETWEEN ? AND ?", from, to).Order("target_date DESC")
 	if symbol != "" {
 		query = query.Where("symbol = ?", symbol)
 	}

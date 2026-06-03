@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { Panel, KPI, Seg, Icon, Chg, ConfBar } from '../components/ui';
 import { Sparkline, LineChart, BarChart, HBars, Donut } from '../components/charts';
@@ -45,10 +46,10 @@ export default function Dashboard() {
           {index.series.length > 0
             ? <LineChart
                 series={[{ name: idx === 'vnindex' ? 'VN-Index' : 'VN30', data: index.series, color: 'var(--accent)' }]}
-                labels={index.series.map((_, i) => i % 8 === 0 ? `${9 + Math.floor(i / 7)}h` : '')}
-                height={260} area yFmt={(v) => v.toFixed(0)} valueFmt={(v) => fmt.price(v)} padL={52}
+                labels={index.series.map((_, i) => `${9 + Math.floor(i / 7)}h`)}
+                height={580} area yFmt={(v) => v.toFixed(0)} valueFmt={(v) => fmt.price(v)} padL={52}
               />
-            : <div className="empty" style={{ height: 260, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            : <div className="empty" style={{ height: 580, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
                 <p>Chưa có dữ liệu chỉ số</p>
               </div>
@@ -164,11 +165,86 @@ export default function Dashboard() {
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
                 <p>Chưa có dữ liệu</p>
               </div>
-            : <BarChart data={D.dailyCounts.values} labels={D.dailyCounts.labels} height={210} color="var(--accent)" valueFmt={(v) => v + ' dự đoán'} />
+            : <BarChart data={D.dailyCounts.values} labels={D.dailyCounts.labels} height={500} color="var(--accent)" valueFmt={(v) => v + ' dự đoán'} />
           }
         </Panel>
       </div>
+
+      <TopSimulationBots />
     </div>
+  );
+}
+
+// ── Top Simulation Bots widget ───────────────────────────────────────────────
+
+interface SimBot {
+  rank: number;
+  bot_id: string;
+  display_name: string;
+  total_return_pct: number;
+  market: string;
+}
+
+function TopSimulationBots() {
+  const [bots, setBots] = useState<SimBot[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/simulation/leaderboard?limit=3', { headers: { Accept: 'application/json' } })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (d && Array.isArray(d.leaderboard)) {
+          setBots(d.leaderboard.slice(0, 3));
+        }
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  if (!loaded) return null;
+
+  return (
+    <Panel
+      title="Top Simulation Bots"
+      sub="3 bots hiệu suất cao nhất"
+      className="section-gap"
+      tools={
+        <Link to="/simulation" style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+          Xem tất cả →
+        </Link>
+      }
+      style={{ paddingBottom: 4 }}
+    >
+      {bots.length === 0 ? (
+        <div className="empty" style={{ padding: '24px 0' }}>
+          <div className="empty__icon"><Icon name="layers" size={16} /></div>
+          <p style={{ fontSize: 12 }}>Chưa có dữ liệu simulation. <Link to="/simulation" style={{ color: 'var(--accent)' }}>Chạy backtest</Link></p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {bots.map((b, i) => (
+            <Link
+              key={b.bot_id}
+              to={'/simulation/' + b.bot_id}
+              style={{ textDecoration: 'none', color: 'inherit' }}
+            >
+              <div className="lrow" style={{ cursor: 'pointer' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 16, minWidth: 28, color: i === 0 ? 'var(--gold)' : 'var(--text-3)' }}>
+                  #{b.rank}
+                </span>
+                <div className="lrow__main">
+                  <div className="lrow__sym" style={{ fontSize: 13 }}>{b.display_name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{b.market}</div>
+                </div>
+                <div className="lrow__rt">
+                  <Chg pct={b.total_return_pct} />
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </Panel>
   );
 }
 

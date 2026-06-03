@@ -32,6 +32,9 @@ type DatabaseStore interface {
 	CryptoPredictionStore
 	FuelPriceStore
 	FuelPredictionStore
+	SP500PriceStore
+	SP500PredictionStore
+	SimulationStore
 }
 
 // CronScheduleStore - interface cho cron schedule operations

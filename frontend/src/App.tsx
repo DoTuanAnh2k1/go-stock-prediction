@@ -12,6 +12,7 @@ import Training from './pages/Training';
 import Gold from './pages/Gold';
 import Crypto from './pages/Crypto';
 import Nasdaq from './pages/Nasdaq';
+import SP500 from './pages/SP500';
 import Fuel from './pages/Fuel';
 import Guide from './pages/Guide';
 import MarketPredictions from './pages/MarketPredictions';
@@ -19,6 +20,8 @@ import MarketTraining from './pages/MarketTraining';
 import MarketDetail from './pages/MarketDetail';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
+import Simulation from './pages/Simulation';
+import SimulationBot from './pages/SimulationBot';
 
 const TWEAK_DEFAULTS = {
   accent: '#5B8DEF',
@@ -77,7 +80,12 @@ function AppInner() {
 
             <Route path="/markets/crypto" element={<ErrorBoundary><Crypto /></ErrorBoundary>} />
             <Route path="/markets/nasdaq100" element={<ErrorBoundary><Nasdaq /></ErrorBoundary>} />
+            <Route path="/markets/sp500" element={<ErrorBoundary><SP500 /></ErrorBoundary>} />
             <Route path="/markets/fuel" element={<ErrorBoundary><Fuel /></ErrorBoundary>} />
+
+            {/* ── Simulation ───────────────────────────────────── */}
+            <Route path="/simulation" element={<ErrorBoundary><Simulation /></ErrorBoundary>} />
+            <Route path="/simulation/:botId" element={<ErrorBoundary><SimulationBot /></ErrorBoundary>} />
 
             {/* ── Support ──────────────────────────────────────── */}
             <Route path="/guide" element={<ErrorBoundary><Guide /></ErrorBoundary>} />

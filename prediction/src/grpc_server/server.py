@@ -286,6 +286,27 @@ class PredictionServicer:
             log.error("grpc.GetTrainingStatus.error", error=str(exc))
             return pb2.TrainingStatusResponse(is_training=False, current_phase="error")
 
+    def TriggerSimulationBacktest(self, request, context):
+        pb2, _ = _get_pb()
+        bot_id = request.bot_id or ""
+        start_date_str = request.start_date or "2024-01-01"
+        end_date_str = request.end_date or ""
+        log.info("grpc.TriggerSimulationBacktest", bot_id=bot_id,
+                 start=start_date_str, end=end_date_str)
+        threading.Thread(
+            target=_bg_simulation_backtest,
+            args=(bot_id, start_date_str, end_date_str),
+            daemon=True
+        ).start()
+        msg = f"Simulation backtest started for bot_id={bot_id or 'ALL'}"
+        return pb2.TriggerResponse(success=True, message=msg)
+
+    def TriggerSimulationLiveStep(self, request, context):
+        pb2, _ = _get_pb()
+        log.info("grpc.TriggerSimulationLiveStep")
+        threading.Thread(target=_bg_simulation_live_step, daemon=True).start()
+        return pb2.TriggerResponse(success=True, message="Simulation live step started")
+
 
 # -------------------------------------------------------------------
 # Background worker functions
@@ -408,6 +429,29 @@ def _bg_backtest(train_window: int, step_size: int, market_key: str):
         log.error("bg.backtest.error", error=str(exc))
     finally:
         _backtest_running.clear()
+
+
+def _bg_simulation_backtest(bot_id: str, start_date_str: str, end_date_str: str):
+    from datetime import date, datetime
+    from src.simulation.engine import SimulationEngine
+    try:
+        start = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        end = datetime.strptime(end_date_str, "%Y-%m-%d").date() if end_date_str else date.today()
+        engine = SimulationEngine()
+        if bot_id:
+            engine.run_backtest(bot_id, start, end)
+        else:
+            engine.run_all_bots_backtest(start, end)
+    except Exception as exc:
+        log.error("sim.backtest.error", error=str(exc))
+
+
+def _bg_simulation_live_step():
+    from src.simulation.engine import SimulationEngine
+    try:
+        SimulationEngine().run_live_step()
+    except Exception as exc:
+        log.error("sim.live_step.error", error=str(exc))
 
 
 # -------------------------------------------------------------------

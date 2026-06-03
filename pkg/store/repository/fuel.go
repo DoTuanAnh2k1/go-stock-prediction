@@ -29,4 +29,7 @@ type FuelPredictionStore interface {
 	BulkCreateFuelPredictions(preds []modelsdb.FuelPrediction) error
 	// DeleteFuelPredictionsBeforeDate deletes all fuel predictions whose target_date < cutoff.
 	DeleteFuelPredictionsBeforeDate(before time.Time) error
+	// GetLatestConfirmedFuelPredictions returns the most recent confirmed prediction
+	// (actual_price IS NOT NULL) per (product_type, algorithm_name).
+	GetLatestConfirmedFuelPredictions() ([]modelsdb.FuelPrediction, error)
 }

@@ -38,6 +38,7 @@ type NasdaqPrediction struct {
 	TargetDate     time.Time        `gorm:"not null;index" json:"target_date"`
 	ActualPrice    *decimal.Decimal `gorm:"type:decimal(15,4)" json:"actual_price,omitempty"`
 	Accuracy       *decimal.Decimal `gorm:"type:decimal(5,4)" json:"accuracy,omitempty"`
+	Status         string           `gorm:"type:varchar(20);default:'pending'" json:"status"`
 	CreatedAt      time.Time        `json:"created_at"`
 	UpdatedAt      time.Time        `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt   `gorm:"index" json:"deleted_at,omitempty"`

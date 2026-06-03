@@ -30,6 +30,9 @@ type GoldPredictionStore interface {
 	DeleteGoldPredictionsBeforeDate(cutoff time.Time) error
 	// BulkCreateGoldPredictions inserts multiple gold predictions in batches.
 	BulkCreateGoldPredictions(preds []modelsdb.GoldPrediction) error
+	// GetLatestConfirmedGoldPredictions returns the most recent confirmed prediction
+	// (actual_price IS NOT NULL) per (source, product_type, algorithm_name).
+	GetLatestConfirmedGoldPredictions() ([]modelsdb.GoldPrediction, error)
 }
 
 type MacroIndicatorStore interface {

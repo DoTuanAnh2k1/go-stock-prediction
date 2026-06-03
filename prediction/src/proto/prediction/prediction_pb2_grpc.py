@@ -136,6 +136,16 @@ class PredictionServiceStub(object):
                 request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
                 response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
                 _registered_method=True)
+        self.TriggerSimulationBacktest = channel.unary_unary(
+                '/prediction.PredictionService/TriggerSimulationBacktest',
+                request_serializer=prediction_dot_prediction__pb2.SimulationRequest.SerializeToString,
+                response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
+                _registered_method=True)
+        self.TriggerSimulationLiveStep = channel.unary_unary(
+                '/prediction.PredictionService/TriggerSimulationLiveStep',
+                request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
+                response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
+                _registered_method=True)
 
 
 class PredictionServiceServicer(object):
@@ -279,6 +289,19 @@ class PredictionServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def TriggerSimulationBacktest(self, request, context):
+        """Trading Simulation
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def TriggerSimulationLiveStep(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_PredictionServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -379,6 +402,16 @@ def add_PredictionServiceServicer_to_server(servicer, server):
             ),
             'TriggerSP500Predict': grpc.unary_unary_rpc_method_handler(
                     servicer.TriggerSP500Predict,
+                    request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
+                    response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
+            ),
+            'TriggerSimulationBacktest': grpc.unary_unary_rpc_method_handler(
+                    servicer.TriggerSimulationBacktest,
+                    request_deserializer=prediction_dot_prediction__pb2.SimulationRequest.FromString,
+                    response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
+            ),
+            'TriggerSimulationLiveStep': grpc.unary_unary_rpc_method_handler(
+                    servicer.TriggerSimulationLiveStep,
                     request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
                     response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
             ),
@@ -923,6 +956,60 @@ class PredictionService(object):
             request,
             target,
             '/prediction.PredictionService/TriggerSP500Predict',
+            prediction_dot_prediction__pb2.Empty.SerializeToString,
+            prediction_dot_prediction__pb2.TriggerResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def TriggerSimulationBacktest(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/prediction.PredictionService/TriggerSimulationBacktest',
+            prediction_dot_prediction__pb2.SimulationRequest.SerializeToString,
+            prediction_dot_prediction__pb2.TriggerResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def TriggerSimulationLiveStep(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/prediction.PredictionService/TriggerSimulationLiveStep',
             prediction_dot_prediction__pb2.Empty.SerializeToString,
             prediction_dot_prediction__pb2.TriggerResponse.FromString,
             options,

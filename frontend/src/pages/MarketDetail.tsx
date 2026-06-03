@@ -287,7 +287,7 @@ export default function MarketDetail() {
             <LineChart
               series={series}
               labels={chartLabels}
-              height={320}
+              height={560}
               yFmt={fmtPrice}
               valueFmt={fmtPrice}
             />

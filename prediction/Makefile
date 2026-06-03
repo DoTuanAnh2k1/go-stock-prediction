@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 # Run from prediction/ directory.
 
-.PHONY: help proto install run lint test-unit test-integration test-phase1 test-phase2 test-phase3 test-phase4 test-phase5 clean
+.PHONY: help proto install run lint test-unit test-integration test-phase1 test-phase2 test-phase3 test-phase4 test-phase5 test-simulation clean
 
 # Default target
 help:
@@ -19,6 +19,7 @@ help:
 	@echo "  make test-phase3       Run Phase 3 algorithm unit + prediction integration tests"
 	@echo "  make test-phase4       Run Phase 4 training + scheduler integration tests"
 	@echo "  make test-phase5       Run Phase 5 full regression + performance benchmarks"
+	@echo "  make test-simulation   Run trading simulation tests (unit + integration)"
 	@echo "  make clean             Remove generated proto files and __pycache__"
 
 # ---------------------------------------------------------------------------
@@ -70,6 +71,9 @@ test-phase4:
 test-phase5:
 	docker cp tests/integration/test_phase5_full_regression.py prediction_service:/app/tests/integration/
 	docker exec prediction_service python -m pytest tests/integration/test_phase5_full_regression.py -v
+
+test-simulation:
+	docker exec prediction_service python -m pytest tests/unit/test_simulation_portfolio.py tests/unit/test_simulation_metrics.py tests/unit/test_simulation_signal.py tests/integration/test_phase5_simulation.py -v
 
 # ---------------------------------------------------------------------------
 # Clean

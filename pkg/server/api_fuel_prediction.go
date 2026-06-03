@@ -66,6 +66,43 @@ func GetFuelPredictionsLatest(w http.ResponseWriter, r *http.Request) {
 	ResponseSuccess(w, http.StatusOK, fuelPredictionsResponse{Data: items, Total: len(items)})
 }
 
+// GetFuelPredictionsLatestResults godoc
+//
+//	@Summary      Get latest confirmed fuel prediction results
+//	@Description  Returns the most recent confirmed prediction (actual_price IS NOT NULL) per (product_type, algorithm) combination
+//	@Tags         Fuel Predictions
+//	@Produce      json
+//	@Success      200  {object}  fuelPredictionsResponse
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/fuel/predictions/latest-results [get]
+func GetFuelPredictionsLatestResults(w http.ResponseWriter, r *http.Request) {
+	store := repository.GetSingleton()
+	preds, err := store.GetLatestConfirmedFuelPredictions()
+	if err != nil {
+		logger.Logger.Errorf("[api/fuel/predictions/latest-results] Failed: %v", err)
+		ResponseError(w, http.StatusInternalServerError, "Failed to get latest confirmed fuel predictions")
+		return
+	}
+
+	items := make([]fuelPredictionItem, 0, len(preds))
+	for _, p := range preds {
+		items = append(items, fuelPredictionItem{
+			ID:             p.ID,
+			ProductType:    p.ProductType,
+			AlgorithmName:  p.AlgorithmName,
+			PredictedPrice: p.PredictedPrice,
+			CurrentPrice:   p.CurrentPrice,
+			Confidence:     p.Confidence,
+			PredictionDate: p.PredictionDate.Format("2006-01-02"),
+			TargetDate:     p.TargetDate.Format("2006-01-02"),
+			ActualPrice:    p.ActualPrice,
+			Accuracy:       p.Accuracy,
+		})
+	}
+
+	ResponseSuccess(w, http.StatusOK, fuelPredictionsResponse{Data: items, Total: len(items)})
+}
+
 type fuelPredictionChartPoint struct {
 	Date           string           `json:"date"`
 	PredictedPrice decimal.Decimal  `json:"predicted_price"`
@@ -129,7 +166,7 @@ func GetFuelPredictionsChart(w http.ResponseWriter, r *http.Request) {
 	for i := len(filtered) - 1; i >= 0; i-- {
 		p := filtered[i]
 		data = append(data, fuelPredictionChartPoint{
-			Date:           p.PredictionDate.Format("2006-01-02"),
+			Date:           p.TargetDate.Format("2006-01-02"),
 			PredictedPrice: p.PredictedPrice,
 			ActualPrice:    p.ActualPrice,
 			Confidence:     p.Confidence,

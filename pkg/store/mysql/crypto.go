@@ -96,14 +96,32 @@ func (c *Client) GetCryptoPredictions(coinID, algorithm string, limit int) ([]mo
 }
 
 // GetLatestCryptoPredictions returns the most recent prediction per (coin_id, algorithm_name).
+// Uses MAX(id) to avoid duplicates when multiple rows share the same prediction_date.
 func (c *Client) GetLatestCryptoPredictions() ([]modelsdb.CryptoPrediction, error) {
 	var preds []modelsdb.CryptoPrediction
 	subQuery := c.Db.Model(&modelsdb.CryptoPrediction{}).
-		Select("coin_id, algorithm_name, MAX(prediction_date) as max_date").
+		Select("MAX(id) as max_id").
 		Group("coin_id, algorithm_name")
 
 	err := c.Db.
-		Joins("JOIN (?) as latest ON latest.coin_id = crypto_predictions.coin_id AND latest.algorithm_name = crypto_predictions.algorithm_name AND latest.max_date = crypto_predictions.prediction_date", subQuery).
+		Joins("JOIN (?) as latest ON latest.max_id = crypto_predictions.id", subQuery).
+		Where("crypto_predictions.deleted_at IS NULL").
+		Find(&preds).Error
+	return preds, err
+}
+
+// GetLatestConfirmedCryptoPredictions returns the most recent CONFIRMED prediction
+// (actual_price IS NOT NULL) per (coin_id, algorithm_name).
+// Uses MAX(id) to avoid duplicates when multiple rows share the same prediction_date.
+func (c *Client) GetLatestConfirmedCryptoPredictions() ([]modelsdb.CryptoPrediction, error) {
+	var preds []modelsdb.CryptoPrediction
+	subQuery := c.Db.Model(&modelsdb.CryptoPrediction{}).
+		Select("MAX(id) as max_id").
+		Where("actual_price IS NOT NULL").
+		Group("coin_id, algorithm_name")
+
+	err := c.Db.
+		Joins("JOIN (?) as latest ON latest.max_id = crypto_predictions.id", subQuery).
 		Where("crypto_predictions.deleted_at IS NULL").
 		Find(&preds).Error
 	return preds, err
@@ -112,7 +130,7 @@ func (c *Client) GetLatestCryptoPredictions() ([]modelsdb.CryptoPrediction, erro
 // GetCryptoPredictionsByDateRange returns crypto predictions for a coinID within a date range.
 func (c *Client) GetCryptoPredictionsByDateRange(coinID string, from, to time.Time) ([]modelsdb.CryptoPrediction, error) {
 	var preds []modelsdb.CryptoPrediction
-	query := c.Db.Where("prediction_date BETWEEN ? AND ?", from, to).Order("prediction_date DESC")
+	query := c.Db.Where("target_date BETWEEN ? AND ?", from, to).Order("target_date DESC")
 	if coinID != "" {
 		query = query.Where("coin_id = ?", coinID)
 	}

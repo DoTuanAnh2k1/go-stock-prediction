@@ -23,6 +23,9 @@ type CryptoPredictionStore interface {
 	CreateCryptoPrediction(p *modelsdb.CryptoPrediction) error
 	GetCryptoPredictions(coinID, algorithm string, limit int) ([]modelsdb.CryptoPrediction, error)
 	GetLatestCryptoPredictions() ([]modelsdb.CryptoPrediction, error)
+	// GetLatestConfirmedCryptoPredictions returns the most recent CONFIRMED prediction
+	// (actual_price IS NOT NULL) per (coin_id, algorithm_name).
+	GetLatestConfirmedCryptoPredictions() ([]modelsdb.CryptoPrediction, error)
 	GetCryptoPredictionsByDateRange(coinID string, from, to time.Time) ([]modelsdb.CryptoPrediction, error)
 	GetCryptoPredictionsPage(page, limit int, search, algorithm, status, sortBy, sortDir string) ([]modelsdb.CryptoPrediction, int64, error)
 	// BulkCreateCryptoPredictions inserts multiple crypto predictions in batches.

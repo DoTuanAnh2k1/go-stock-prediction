@@ -32,6 +32,7 @@ const I: Record<string, React.ReactNode> = {
   clock:     <><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></>,
   layers:    <><polygon points="12 2 22 8.5 12 15 2 8.5"/><polyline points="2 15.5 12 22 22 15.5"/></>,
   crypto:    <><circle cx="12" cy="12" r="9"/><path d="M9 8h4.5a2.5 2.5 0 0 1 0 5H9"/><path d="M9 13h5a2.5 2.5 0 0 1 0 5H9"/><line x1="9" y1="8" x2="9" y2="18"/><line x1="11" y1="6" x2="11" y2="8"/><line x1="13" y1="18" x2="13" y2="20"/></>,
+  trophy:    <><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></>,
 };
 
 export function Icon({ name, size = 18, sw = 1.7, style, ...p }: { name: string; size?: number; sw?: number; style?: React.CSSProperties; [key: string]: any }) {
@@ -161,6 +162,7 @@ const MARKETS: MarketDef[] = [
   { key: 'vn30',     label: 'VN30',      icon: 'candles', color: 'var(--accent)' },
   { key: 'gold',     label: 'Vàng',      icon: 'gold',    color: 'var(--gold)'   },
   { key: 'nasdaq100',label: 'NASDAQ 100',icon: 'nasdaq',  color: 'oklch(0.74 0.13 200)' },
+  { key: 'sp500',    label: 'S&P 500',   icon: 'nasdaq',  color: 'oklch(0.72 0.15 145)' },
   { key: 'crypto',   label: 'Crypto',    icon: 'crypto',  color: '#F7931A'              },
   { key: 'fuel',     label: 'Giá Xăng',  icon: 'fuel',    color: 'var(--up)'            },
 ];
@@ -177,9 +179,11 @@ const NAV: NavItem[] = [
   { id: 'vn30',      path: '/markets/vn30',      label: 'VN30',      icon: 'candles' },
   { id: 'gold',      path: '/markets/gold',      label: 'Vàng',      icon: 'gold'    },
   { id: 'nasdaq100', path: '/markets/nasdaq100', label: 'NASDAQ',    icon: 'nasdaq'  },
+  { id: 'sp500',     path: '/markets/sp500',     label: 'S&P 500',   icon: 'nasdaq'  },
   { id: 'crypto',    path: '/markets/crypto',    label: 'Crypto',    icon: 'crypto'  },
-  { id: 'fuel',      path: '/markets/fuel',      label: 'Xăng',      icon: 'fuel'    },
-  { id: 'guide',     path: '/guide',             label: 'Hướng dẫn', icon: 'book'    },
+  { id: 'fuel',       path: '/markets/fuel',  label: 'Xăng',        icon: 'fuel'    },
+  { id: 'simulation', path: '/simulation',    label: 'Leaderboard', icon: 'trophy'  },
+  { id: 'guide',      path: '/guide',         label: 'Hướng dẫn',   icon: 'book'    },
 ];
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -249,6 +253,12 @@ export function Sidebar({ status }: { status: 'loading' | 'live' | 'demo' }) {
             </React.Fragment>
           );
         })}
+
+        {/* Simulation section */}
+        <div className="nav__label">Simulation</div>
+        <NavLink to="/simulation" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
+          <Icon name="trophy" size={17} /><span>Leaderboard</span>
+        </NavLink>
 
         {/* Support section */}
         <div className="nav__label">Hỗ trợ</div>
@@ -321,6 +331,7 @@ const TITLES: Record<string, [string, string]> = {
   '/markets/crypto':           ['Cryptocurrency',        'CRYPTO'],
   '/markets/nasdaq100':        ['NASDAQ 100',            'NASDAQ 100 · US EQUITIES'],
   '/markets/fuel':             ['Giá Xăng Dầu',          'FUEL · VIETNAM'],
+  '/simulation':               ['Simulation Leaderboard', 'SIMULATION · LEADERBOARD'],
   '/guide':                    ['Hướng dẫn sử dụng',     'USER GUIDE'],
   '/settings':                 ['Cài đặt',               'SETTINGS'],
   '/admin/users':              ['Quản lý người dùng',    'ADMIN · USERS'],

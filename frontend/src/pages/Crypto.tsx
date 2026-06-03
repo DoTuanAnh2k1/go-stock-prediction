@@ -54,6 +54,9 @@ interface PredictionItem {
   predicted_price: number;
   confidence: number;
   prediction_date: string;
+  target_date?: string;
+  actual_price?: number | null;
+  accuracy?: number | null;
 }
 
 interface PredChartData {
@@ -144,6 +147,7 @@ function Legend({ items }: { items: [string, string][] }) {
 const COINS = [
   { id: 'bitcoin',  label: 'Bitcoin',  symbol: 'BTC', color: '#F7931A' },
   { id: 'ethereum', label: 'Ethereum', symbol: 'ETH', color: '#627EEA' },
+  { id: 'solana',   label: 'Solana',   symbol: 'SOL', color: '#9945FF' },
 ];
 
 export default function Crypto() {
@@ -154,7 +158,10 @@ export default function Crypto() {
   const [days, setDays] = useState('90');
   const [chart, setChart] = useState<ChartData>({ dates: [], prices: [] });
   const [preds, setPreds] = useState<PredictionItem[]>([]);
+  const [confirmedResults, setConfirmedResults] = useState<PredictionItem[]>([]);
   const [predChart, setPredChart] = useState<PredChartData>({ labels: [], actual: [], pred: [] });
+  const [predChartCoin, setPredChartCoin] = useState<string>('bitcoin');
+  const [predChartAlgo, setPredChartAlgo] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [chartLoading, setChartLoading] = useState(false);
 
@@ -164,7 +171,8 @@ export default function Crypto() {
     Promise.allSettled([
       apiFetch('/api/crypto/latest'),
       apiFetch('/api/crypto/predictions/latest'),
-    ]).then(([latestRes, predsRes]) => {
+      apiFetch('/api/crypto/predictions/latest-results'),
+    ]).then(([latestRes, predsRes, confirmedRes]) => {
       if (latestRes.status === 'fulfilled' && latestRes.value) {
         const raw = Array.isArray(latestRes.value) ? latestRes.value
           : Array.isArray(latestRes.value?.data) ? latestRes.value.data : [];
@@ -175,26 +183,34 @@ export default function Crypto() {
           : Array.isArray(predsRes.value?.data) ? predsRes.value.data : [];
         setPreds(raw);
       }
+      if (confirmedRes.status === 'fulfilled' && confirmedRes.value) {
+        const raw = Array.isArray(confirmedRes.value) ? confirmedRes.value
+          : Array.isArray(confirmedRes.value?.data) ? confirmedRes.value.data : [];
+        setConfirmedResults(raw);
+      }
       setLoading(false);
     });
   }, []);
 
-  // Load chart when coin or days changes
+  // Load price chart when coin or days changes
   useEffect(() => {
     setChartLoading(true);
-    Promise.allSettled([
-      apiFetch(`/api/crypto/chart?coin=${encodeURIComponent(activeCoin)}&days=${days}`),
-      apiFetch(`/api/crypto/predictions/chart?coin=${encodeURIComponent(activeCoin)}&days=${days}`),
-    ]).then(([chartRes, predChartRes]) => {
-      if (chartRes.status === 'fulfilled' && chartRes.value) {
-        const v = chartRes.value;
+    apiFetch(`/api/crypto/chart?coin=${encodeURIComponent(activeCoin)}&days=${days}`)
+      .then((v: any) => {
         setChart({
           dates: Array.isArray(v.dates) ? v.dates : [],
           prices: Array.isArray(v.prices) ? v.prices.map(num) : [],
         });
-      }
-      if (predChartRes.status === 'fulfilled' && predChartRes.value) {
-        const v = predChartRes.value;
+      })
+      .catch(() => {})
+      .finally(() => setChartLoading(false));
+  }, [activeCoin, days]);
+
+  // Load prediction vs actual chart when predChartCoin or predChartAlgo or days changes
+  useEffect(() => {
+    const algoParam = predChartAlgo ? `&algorithm=${encodeURIComponent(predChartAlgo)}` : '';
+    apiFetch(`/api/crypto/predictions/chart?coin=${encodeURIComponent(predChartCoin)}&days=${days}${algoParam}`)
+      .then((v: any) => {
         const list = Array.isArray(v) ? v : Array.isArray(v?.data) ? v.data : [];
         if (list.length > 0) {
           setPredChart({
@@ -208,17 +224,30 @@ export default function Crypto() {
             actual: Array.isArray(v.actual) ? v.actual.map((x: any) => x != null ? num(x) : null) : [],
             pred: Array.isArray(v.pred) ? v.pred.map((x: any) => x != null ? num(x) : null) : [],
           });
+        } else {
+          setPredChart({ labels: [], actual: [], pred: [] });
         }
-      }
-      setChartLoading(false);
-    });
-  }, [activeCoin, days]);
+      })
+      .catch(() => setPredChart({ labels: [], actual: [], pred: [] }));
+  }, [predChartCoin, predChartAlgo, days]);
 
   const activeCoinDef = COINS.find((c) => c.id === activeCoin) || COINS[0];
-  const n = parseInt(days);
-  const chartLabels = chart.dates.map((d, i) =>
-    i % Math.ceil(n / 7) === 0 ? ddmm(d) : ''
-  );
+  const predChartCoinDef = COINS.find((c) => c.id === predChartCoin) || COINS[0];
+  const chartLabels = chart.dates.map(ddmm);
+
+  // Deduplicate predictions: keep only the first occurrence per (coin + algorithm)
+  const dedupPreds = (() => {
+    const seen = new Set<string>();
+    return preds.filter((p) => {
+      const key = (p.coin_id || p.symbol || '') + '|' + p.algorithm_name;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  })();
+
+  // Collect unique algorithm names from confirmed results for the filter dropdown
+  const confirmedAlgos = Array.from(new Set(confirmedResults.map((r) => r.algorithm_name))).sort();
 
   // Build KPI items: prefer BTC and ETH, then others
   const kpiCoins = (() => {
@@ -368,7 +397,7 @@ export default function Crypto() {
         })()}
 
         {chartLoading ? (
-          <div className="empty" style={{ height: 300, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="refresh" size={18} /></div>
             <p>Đang tải biểu đồ...</p>
           </div>
@@ -376,24 +405,24 @@ export default function Crypto() {
           <LineChart
             series={[{ name: activeCoinDef.label, data: chart.prices, color: activeCoinDef.color }]}
             labels={chartLabels}
-            height={300}
+            height={540}
             area
             yFmt={fmtCryptoShort}
             valueFmt={fmtCrypto}
             padL={70}
           />
         ) : (
-          <div className="empty" style={{ height: 300, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
             <p>Chưa có dữ liệu biểu đồ. Hãy thu thập dữ liệu trước.</p>
           </div>
         )}
       </Panel>
 
-      {/* Predictions + Prediction chart */}
+      {/* Predictions + Latest confirmed results */}
       <div className="grid grid--halves section-gap">
         <Panel title="Dự đoán Crypto phiên mai" flush>
-          {preds.length === 0 ? (
+          {dedupPreds.length === 0 ? (
             <div className="empty">
               <div className="empty__icon"><Icon name="layers" size={18} /></div>
               <p>Chưa có dự đoán. Hãy chạy dự đoán trước.</p>
@@ -412,7 +441,7 @@ export default function Crypto() {
                   </tr>
                 </thead>
                 <tbody>
-                  {preds.map((p, i) => {
+                  {dedupPreds.map((p, i) => {
                     const cur = num(p.current_price);
                     const pred = num(p.predicted_price);
                     const deltaPct = cur ? +((pred - cur) / cur * 100).toFixed(2) : 0;
@@ -437,33 +466,143 @@ export default function Crypto() {
           )}
         </Panel>
 
-        <Panel
-          title="Dự đoán vs Thực tế"
-          sub={activeCoinDef.label + ' · Ensemble'}
-        >
-          {predChart.labels.length > 0 ? (
-            <>
-              <LineChart
-                series={[
-                  { name: 'Thực tế', data: predChart.actual, color: 'var(--text-2)', w: 1.8 },
-                  { name: 'Dự đoán', data: predChart.pred, color: activeCoinDef.color, dash: '5 4', w: 2 },
-                ]}
-                labels={predChart.labels.map((l, i) => i % 5 === 0 ? l : '')}
-                height={236}
-                yFmt={fmtCryptoShort}
-                valueFmt={fmtCrypto}
-                padL={70}
-              />
-              <Legend items={[['Thực tế', 'var(--text-2)'], ['Dự đoán', activeCoinDef.color]]} />
-            </>
+        <Panel title="Kết quả dự đoán gần nhất" flush>
+          {confirmedResults.length === 0 ? (
+            <div className="empty">
+              <div className="empty__icon"><Icon name="pulse" size={18} /></div>
+              <p>Chưa có kết quả đã xác nhận. Kết quả sẽ xuất hiện sau khi dự đoán được đối chiếu với giá thực tế.</p>
+            </div>
           ) : (
-            <div className="empty" style={{ height: 236, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div className="empty__icon"><Icon name="layers" size={18} /></div>
-              <p>Chưa có dữ liệu so sánh dự đoán</p>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Coin</th>
+                    <th className="c">TT</th>
+                    <th className="r">Dự đoán</th>
+                    <th className="r">Thực tế</th>
+                    <th className="r">Lệch</th>
+                    <th className="r">Độ CX</th>
+                    <th className="c">Ngày</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {confirmedResults.map((r, i) => {
+                    const predicted = num(r.predicted_price);
+                    const actual = num(r.actual_price ?? 0);
+                    const deviationPct = actual ? +((predicted - actual) / actual * 100).toFixed(2) : 0;
+                    const absDeviation = Math.abs(deviationPct);
+                    const deviationColor = absDeviation < 3
+                      ? 'var(--up)'
+                      : absDeviation < 5
+                        ? 'oklch(0.78 0.18 80)'
+                        : 'var(--dn)';
+                    let acc = r.accuracy != null ? num(r.accuracy) : null;
+                    if (acc != null && acc > 0 && acc <= 1) acc = Math.round(acc * 100);
+                    const accColor = acc == null ? 'var(--text-3)'
+                      : acc >= 95 ? 'var(--up)'
+                      : acc >= 80 ? 'oklch(0.78 0.18 80)'
+                      : 'var(--dn)';
+                    const { short, cls } = algoShort(r.algorithm_name);
+                    const sym = r.symbol || r.coin_id || '—';
+                    return (
+                      <tr key={i}>
+                        <td className="sym" style={{ fontSize: 12.5 }}>{sym.toUpperCase()}</td>
+                        <td className="c"><span className={`algo algo--${cls}`}>{short}</span></td>
+                        <td className="r num" style={{ fontWeight: 600, fontSize: 12 }}>{fmtCrypto(predicted)}</td>
+                        <td className="r num" style={{ color: 'var(--text-2)', fontSize: 12 }}>
+                          {r.actual_price != null ? fmtCrypto(actual) : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                        </td>
+                        <td className="r num" style={{ color: deviationColor, fontSize: 12, fontWeight: 500 }}>
+                          {r.actual_price != null
+                            ? (deviationPct >= 0 ? '+' : '') + deviationPct.toFixed(2) + '%'
+                            : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                        </td>
+                        <td className="r">
+                          {acc != null
+                            ? <span style={{ color: accColor, fontWeight: 600, fontSize: 12 }}>{acc}%</span>
+                            : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                        </td>
+                        <td className="c num" style={{ color: 'var(--text-3)', fontSize: 12 }}>
+                          {ddmm(r.prediction_date)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </Panel>
       </div>
+
+      {/* Prediction vs Actual chart — full width */}
+      <Panel
+        title="Dự đoán vs Thực tế"
+        sub={predChartCoinDef.label + ' · ' + (predChartAlgo ? algoShort(predChartAlgo).short : 'Tất cả thuật toán')}
+        className="section-gap"
+        tools={
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* Coin selector tabs */}
+            <div className="chips" style={{ margin: 0 }}>
+              {COINS.map((c) => (
+                <button
+                  key={c.id}
+                  className={`chip${predChartCoin === c.id ? ' active' : ''}`}
+                  style={{ fontSize: 12, padding: '3px 10px' }}
+                  onClick={() => setPredChartCoin(c.id)}
+                >
+                  {c.symbol}
+                </button>
+              ))}
+            </div>
+            {/* Algorithm filter */}
+            {confirmedAlgos.length > 0 && (
+              <select
+                className="select-sm"
+                value={predChartAlgo}
+                onChange={(e) => setPredChartAlgo(e.target.value)}
+                style={{
+                  fontSize: 12,
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface-2)',
+                  color: 'var(--text-1)',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="">Tất cả thuật toán</option>
+                {confirmedAlgos.map((algo) => (
+                  <option key={algo} value={algo}>{algoShort(algo).short} ({algo})</option>
+                ))}
+              </select>
+            )}
+          </div>
+        }
+      >
+        {predChart.labels.length > 0 ? (
+          <>
+            <LineChart
+              series={[
+                { name: 'Thực tế', data: predChart.actual, color: 'var(--text-2)', w: 1.8 },
+                { name: 'Dự đoán', data: predChart.pred, color: predChartCoinDef.color, dash: '5 4', w: 2 },
+              ]}
+              labels={predChart.labels}
+              height={540}
+              yFmt={fmtCryptoShort}
+              valueFmt={fmtCrypto}
+              padL={70}
+            />
+            <Legend items={[['Thực tế', 'var(--text-2)'], ['Dự đoán', predChartCoinDef.color]]} />
+          </>
+        ) : (
+          <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div className="empty__icon"><Icon name="layers" size={18} /></div>
+            <p>Chưa có dữ liệu so sánh dự đoán cho {predChartCoinDef.label}</p>
+          </div>
+        )}
+      </Panel>
 
       {/* Market info table */}
       <div className="sec-head section-gap"><h2>Thông tin thị trường Crypto</h2><div className="line"></div></div>

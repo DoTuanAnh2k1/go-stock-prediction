@@ -1,0 +1,385 @@
+"""SimulationEngine — orchestrates backtest and live simulation."""
+from __future__ import annotations
+
+import threading
+from datetime import date, timedelta, datetime
+from decimal import Decimal
+from typing import Optional
+
+import sqlalchemy
+
+from src.database.connection import session_scope
+from src.database.models import SimBot, SimSession, SimTrade, SimPortfolioSnapshot
+from src.simulation.bot import TradingBot, BotConfig
+from src.utils.logger import get_logger
+
+log = get_logger("simulation.engine")
+
+_backtest_lock = threading.Lock()
+
+# Normalize orchestrator market keys → bot market field values
+_MARKET_KEY_NORM: dict[str, str] = {
+    "NASDAQ100": "NASDAQ",
+}
+
+
+def _get_simulation_dates(market: str, algorithm: str, start_date: date, end_date: date) -> list[date]:
+    """Get all dates that have predictions for this market/algorithm in the given range."""
+    market_to_table = {
+        "VN30": "predictions",
+        "GOLD": "gold_predictions",
+        "NASDAQ": "nasdaq_predictions",
+        "SP500": "sp500_predictions",
+        "CRYPTO": "crypto_predictions",
+        "FUEL": "fuel_predictions",
+    }
+    table = market_to_table.get(market, "predictions")
+
+    start_dt = datetime.combine(start_date, datetime.min.time())
+    end_dt = datetime.combine(end_date, datetime.max.time())
+
+    with session_scope() as session:
+        result = session.execute(
+            sqlalchemy.text(f"""
+                SELECT DISTINCT DATE(prediction_date) as pred_date
+                FROM {table}
+                WHERE algorithm_name = :algo
+                  AND prediction_date BETWEEN :d_start AND :d_end
+                ORDER BY pred_date ASC
+            """),
+            {"algo": algorithm, "d_start": start_dt, "d_end": end_dt}
+        ).fetchall()
+
+        return [r[0] for r in result if r[0] is not None]
+
+
+class SimulationEngine:
+    """Runs backtest or live simulation for trading bots."""
+
+    def run_backtest(self, bot_id: str, start_date: date, end_date: date) -> dict:
+        """
+        Walk-forward backtest: iterate over each day with predictions,
+        run bot.step(), persist trades and snapshots.
+        Returns summary dict.
+        """
+        with session_scope() as session:
+            db_bot = session.query(SimBot).filter(SimBot.id == bot_id).first()
+            if not db_bot:
+                raise ValueError(f"Bot {bot_id!r} not found")
+
+            config = BotConfig(
+                bot_id=db_bot.id,
+                market=db_bot.market,
+                algorithm=db_bot.algorithm,
+                initial_capital=float(db_bot.initial_capital),
+                buy_threshold=float(db_bot.buy_threshold),
+                sell_threshold=float(db_bot.sell_threshold),
+                min_confidence=float(db_bot.min_confidence),
+                stop_loss=float(db_bot.stop_loss),
+                take_profit=float(db_bot.take_profit),
+                max_position_pct=float(db_bot.max_position_pct),
+                max_positions=int(db_bot.max_positions),
+            )
+
+        bot = TradingBot(config)
+
+        # Create simulation session
+        session_obj = SimSession(
+            bot_id=bot_id,
+            start_date=start_date,
+            end_date=None,
+            status="running",
+            mode="backtest",
+        )
+        with session_scope() as session:
+            session.add(session_obj)
+            session.flush()
+            session_id = session_obj.id
+            session.commit()
+
+        log.info("sim.backtest.start", bot_id=bot_id, start=str(start_date), end=str(end_date))
+
+        try:
+            sim_dates = _get_simulation_dates(config.market, config.algorithm, start_date, end_date)
+
+            if not sim_dates:
+                log.warning("sim.backtest.no_data", bot_id=bot_id)
+                self._finalize_session(session_id, end_date, "completed")
+                return {"bot_id": bot_id, "session_id": session_id, "total_days": 0}
+
+            for sim_date in sim_dates:
+                trades = bot.step(sim_date)
+
+                # Persist trades
+                with session_scope() as session:
+                    for trade in trades:
+                        db_trade = SimTrade(
+                            session_id=session_id,
+                            bot_id=bot_id,
+                            symbol=trade.symbol,
+                            action=trade.action,
+                            quantity=Decimal(str(round(trade.quantity, 6))),
+                            price=Decimal(str(round(trade.price, 4))),
+                            trade_value=Decimal(str(round(trade.trade_value, 2))),
+                            signal_strength=Decimal(str(round(trade.signal_strength, 4))) if trade.signal_strength is not None else None,
+                            confidence=Decimal(str(round(trade.confidence, 3))) if trade.confidence is not None else None,
+                            trade_date=sim_date,
+                            close_reason=trade.close_reason,
+                            entry_trade_id=trade.entry_trade_id,
+                            pnl=Decimal(str(round(trade.pnl, 2))) if trade.pnl is not None else None,
+                            pnl_pct=Decimal(str(round(trade.pnl_pct, 4))) if trade.pnl_pct is not None else None,
+                        )
+                        session.add(db_trade)
+                        session.flush()
+                    session.commit()
+
+                # Daily snapshot
+                snap = bot.get_snapshot(sim_date)
+                with session_scope() as session:
+                    db_snap = SimPortfolioSnapshot(
+                        session_id=session_id,
+                        bot_id=bot_id,
+                        snapshot_date=snap["snapshot_date"],
+                        cash_balance=Decimal(str(round(snap["cash_balance"], 2))),
+                        positions_value=Decimal(str(round(snap["positions_value"], 2))),
+                        total_value=Decimal(str(round(snap["total_value"], 2))),
+                        total_return_pct=Decimal(str(round(snap["total_return_pct"], 4))),
+                        open_positions=snap["open_positions"],
+                    )
+                    session.merge(db_snap)  # Use merge to handle unique constraint
+                    session.commit()
+
+            self._finalize_session(session_id, end_date, "completed")
+            log.info("sim.backtest.done", bot_id=bot_id, session_id=session_id, days=len(sim_dates))
+
+            # Log KPIs after backtest completes
+            try:
+                from src.simulation.metrics import PerformanceMetrics
+
+                with session_scope() as session:
+                    snaps = (
+                        session.query(SimPortfolioSnapshot)
+                        .filter(SimPortfolioSnapshot.session_id == session_id)
+                        .order_by(SimPortfolioSnapshot.snapshot_date.asc())
+                        .all()
+                    )
+                    sell_rows = (
+                        session.query(SimTrade)
+                        .filter(
+                            SimTrade.session_id == session_id,
+                            SimTrade.action == "SELL",
+                        )
+                        .all()
+                    )
+                    # Build entry_date lookup: entry_trade_id → trade_date of the BUY
+                    entry_ids = [
+                        t.entry_trade_id for t in sell_rows if t.entry_trade_id is not None
+                    ]
+                    entry_date_map: dict[int, date] = {}
+                    if entry_ids:
+                        buy_rows = (
+                            session.query(SimTrade.id, SimTrade.trade_date)
+                            .filter(SimTrade.id.in_(entry_ids))
+                            .all()
+                        )
+                        entry_date_map = {r.id: r.trade_date for r in buy_rows}
+
+                    snap_dicts = [
+                        {
+                            "snapshot_date": s.snapshot_date,
+                            "total_value": float(s.total_value),
+                            "total_return_pct": float(s.total_return_pct or 0),
+                        }
+                        for s in snaps
+                    ]
+                    trade_dicts = [
+                        {
+                            "pnl": float(t.pnl) if t.pnl is not None else None,
+                            "pnl_pct": float(t.pnl_pct) if t.pnl_pct is not None else None,
+                            "trade_date": t.trade_date,
+                            "entry_date": entry_date_map.get(t.entry_trade_id)
+                            if t.entry_trade_id is not None
+                            else None,
+                        }
+                        for t in sell_rows
+                    ]
+
+                with session_scope() as session:
+                    db_bot = session.query(SimBot).filter(SimBot.id == bot_id).first()
+                    initial = float(db_bot.initial_capital) if db_bot else 0.0
+
+                kpis = PerformanceMetrics.compute(snap_dicts, trade_dicts, initial)
+                log.info(
+                    "sim.backtest.kpis",
+                    bot_id=bot_id,
+                    session_id=session_id,
+                    total_return_pct=round(kpis.total_return_pct, 2),
+                    sharpe=round(kpis.sharpe_ratio, 3),
+                    max_dd=round(kpis.max_drawdown_pct, 2),
+                    win_rate=round(kpis.win_rate_pct, 1),
+                    total_trades=kpis.total_trades,
+                )
+            except Exception as kpi_exc:
+                log.warning("sim.backtest.kpis_failed", bot_id=bot_id, error=str(kpi_exc))
+
+            return {"bot_id": bot_id, "session_id": session_id, "total_days": len(sim_dates)}
+
+        except Exception as exc:
+            log.error("sim.backtest.error", bot_id=bot_id, error=str(exc))
+            self._finalize_session(session_id, end_date, "paused")
+            raise
+
+    def _finalize_session(self, session_id: int, end_date: date, status: str):
+        with session_scope() as session:
+            s = session.query(SimSession).filter(SimSession.id == session_id).first()
+            if s:
+                s.status = status
+                s.end_date = end_date
+                session.commit()
+
+    def run_all_bots_backtest(self, start_date: date, end_date: date) -> int:
+        """Backtest all active bots sequentially. Returns count of completed."""
+        with session_scope() as session:
+            bots = session.query(SimBot).filter(SimBot.is_active == True).all()
+            bot_ids = [b.id for b in bots]
+
+        completed = 0
+        for bot_id in bot_ids:
+            try:
+                self.run_backtest(bot_id, start_date, end_date)
+                completed += 1
+            except Exception as exc:
+                log.error("sim.all_bots.bot_failed", bot_id=bot_id, error=str(exc))
+
+        log.info("sim.all_bots.done", total=len(bot_ids), completed=completed)
+        return completed
+
+    def run_live_step_for_market(self, market_key: str) -> None:
+        """Run one live simulation step for all active bots of a specific market.
+
+        Called immediately after predictions for that market are written to DB.
+        market_key can be orchestrator keys like "NASDAQ100" — will be normalized.
+        """
+        normalized = _MARKET_KEY_NORM.get(market_key.upper(), market_key.upper())
+        from datetime import date as date_type
+        today = date_type.today()
+
+        with session_scope() as session:
+            bots = session.query(SimBot).filter(
+                SimBot.is_active == True,
+                SimBot.market == normalized,
+            ).all()
+            bot_configs = []
+            for db_bot in bots:
+                bot_configs.append((db_bot.id, BotConfig(
+                    bot_id=db_bot.id,
+                    market=db_bot.market,
+                    algorithm=db_bot.algorithm,
+                    initial_capital=float(db_bot.initial_capital),
+                    buy_threshold=float(db_bot.buy_threshold),
+                    sell_threshold=float(db_bot.sell_threshold),
+                    min_confidence=float(db_bot.min_confidence),
+                    stop_loss=float(db_bot.stop_loss),
+                    take_profit=float(db_bot.take_profit),
+                    max_position_pct=float(db_bot.max_position_pct),
+                    max_positions=int(db_bot.max_positions),
+                )))
+
+        if not bot_configs:
+            log.debug("sim.live_step.no_bots", market=normalized)
+            return
+
+        log.info("sim.live_step.market_start", market=normalized, bots=len(bot_configs))
+        self._run_bot_steps(bot_configs, today)
+        log.info("sim.live_step.market_done", market=normalized)
+
+    def _run_bot_steps(self, bot_configs: list, today) -> None:
+        """Execute one simulation step for a list of (bot_id, BotConfig) pairs."""
+        for bot_id, config in bot_configs:
+            try:
+                with session_scope() as session:
+                    live_session = session.query(SimSession).filter(
+                        SimSession.bot_id == bot_id,
+                        SimSession.mode == "live",
+                        SimSession.status == "running",
+                    ).order_by(SimSession.id.desc()).first()
+
+                    if not live_session:
+                        live_session = SimSession(
+                            bot_id=bot_id,
+                            start_date=today,
+                            status="running",
+                            mode="live",
+                        )
+                        session.add(live_session)
+                        session.flush()
+                    session_id = live_session.id
+                    session.commit()
+
+                bot = TradingBot(config)
+                trades = bot.step(today)
+
+                with session_scope() as session:
+                    for trade in trades:
+                        db_trade = SimTrade(
+                            session_id=session_id,
+                            bot_id=bot_id,
+                            symbol=trade.symbol,
+                            action=trade.action,
+                            quantity=Decimal(str(round(trade.quantity, 6))),
+                            price=Decimal(str(round(trade.price, 4))),
+                            trade_value=Decimal(str(round(trade.trade_value, 2))),
+                            signal_strength=Decimal(str(round(trade.signal_strength, 4))) if trade.signal_strength is not None else None,
+                            confidence=Decimal(str(round(trade.confidence, 3))) if trade.confidence is not None else None,
+                            trade_date=today,
+                            close_reason=trade.close_reason,
+                            pnl=Decimal(str(round(trade.pnl, 2))) if trade.pnl is not None else None,
+                            pnl_pct=Decimal(str(round(trade.pnl_pct, 4))) if trade.pnl_pct is not None else None,
+                        )
+                        session.add(db_trade)
+                    session.commit()
+
+                snap = bot.get_snapshot(today)
+                with session_scope() as session:
+                    db_snap = SimPortfolioSnapshot(
+                        session_id=session_id,
+                        bot_id=bot_id,
+                        snapshot_date=snap["snapshot_date"],
+                        cash_balance=Decimal(str(round(snap["cash_balance"], 2))),
+                        positions_value=Decimal(str(round(snap["positions_value"], 2))),
+                        total_value=Decimal(str(round(snap["total_value"], 2))),
+                        total_return_pct=Decimal(str(round(snap["total_return_pct"], 4))),
+                        open_positions=snap["open_positions"],
+                    )
+                    session.merge(db_snap)
+                    session.commit()
+
+            except Exception as exc:
+                log.error("sim.live_step.bot_error", bot_id=bot_id, error=str(exc))
+
+    def run_live_step(self):
+        """Called by fallback cron — runs one simulation step for ALL active bots."""
+        from datetime import date as date_type
+        today = date_type.today()
+
+        with session_scope() as session:
+            bots = session.query(SimBot).filter(SimBot.is_active == True).all()
+            bot_configs = []
+            for db_bot in bots:
+                bot_configs.append((db_bot.id, BotConfig(
+                    bot_id=db_bot.id,
+                    market=db_bot.market,
+                    algorithm=db_bot.algorithm,
+                    initial_capital=float(db_bot.initial_capital),
+                    buy_threshold=float(db_bot.buy_threshold),
+                    sell_threshold=float(db_bot.sell_threshold),
+                    min_confidence=float(db_bot.min_confidence),
+                    stop_loss=float(db_bot.stop_loss),
+                    take_profit=float(db_bot.take_profit),
+                    max_position_pct=float(db_bot.max_position_pct),
+                    max_positions=int(db_bot.max_positions),
+                )))
+
+        log.info("sim.live_step.all_start", bots=len(bot_configs))
+        self._run_bot_steps(bot_configs, today)
+        log.info("sim.live_step.all_done")

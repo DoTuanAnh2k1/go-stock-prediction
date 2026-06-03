@@ -58,6 +58,10 @@ service PredictionService {
   // S&P 500
   rpc TriggerSP500Crawler(Empty) returns (TriggerResponse);
   rpc TriggerSP500Predict(Empty) returns (TriggerResponse);
+
+  // Trading Simulation
+  rpc TriggerSimulationBacktest(SimulationRequest) returns (TriggerResponse);
+  rpc TriggerSimulationLiveStep(Empty) returns (TriggerResponse);
 }
 
 message Empty {}
@@ -115,4 +119,10 @@ message TrainingStatusResponse {
   string current_phase = 4;
   int32 total_algorithms = 5;
   int32 done_algorithms = 6;
+}
+
+message SimulationRequest {
+  string bot_id = 1;     // "" = all bots
+  string start_date = 2; // "2024-01-01"
+  string end_date = 3;   // "" = today
 }

@@ -28,4 +28,7 @@ type NasdaqPredictionStore interface {
 	BulkCreateNasdaqPredictions(preds []modelsdb.NasdaqPrediction) error
 	// DeleteNasdaqPredictionsBeforeDate deletes all NASDAQ predictions whose target_date < cutoff.
 	DeleteNasdaqPredictionsBeforeDate(before time.Time) error
+	// GetLatestConfirmedNasdaqPredictions returns the most recent confirmed prediction
+	// (actual_price IS NOT NULL) per (symbol, algorithm_name).
+	GetLatestConfirmedNasdaqPredictions() ([]modelsdb.NasdaqPrediction, error)
 }

@@ -121,6 +121,44 @@ func GetLatestGoldPredictions(w http.ResponseWriter, r *http.Request) {
 	ResponseSuccess(w, http.StatusOK, goldPredictionsResponse{Data: items, Total: len(items)})
 }
 
+// GetGoldPredictionsLatestResults godoc
+//
+//	@Summary      Get latest confirmed gold prediction results
+//	@Description  Returns the most recent confirmed prediction (actual_price IS NOT NULL) per (source, product_type, algorithm) combination
+//	@Tags         Gold Predictions
+//	@Produce      json
+//	@Success      200  {object}  goldPredictionsResponse
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/gold/predictions/latest-results [get]
+func GetGoldPredictionsLatestResults(w http.ResponseWriter, r *http.Request) {
+	store := repository.GetSingleton()
+	preds, err := store.GetLatestConfirmedGoldPredictions()
+	if err != nil {
+		logger.Logger.Errorf("[api/gold/predictions/latest-results] Failed: %v", err)
+		ResponseError(w, http.StatusInternalServerError, "Failed to get latest confirmed gold predictions")
+		return
+	}
+
+	items := make([]goldPredictionItem, 0, len(preds))
+	for _, p := range preds {
+		items = append(items, goldPredictionItem{
+			ID:             p.ID,
+			Source:         p.Source,
+			ProductType:    p.ProductType,
+			AlgorithmName:  p.AlgorithmName,
+			PredictedPrice: p.PredictedPrice,
+			CurrentPrice:   p.CurrentPrice,
+			Confidence:     p.Confidence,
+			PredictionDate: p.PredictionDate.Format("2006-01-02"),
+			TargetDate:     p.TargetDate.Format("2006-01-02"),
+			ActualPrice:    p.ActualPrice,
+			Accuracy:       p.Accuracy,
+		})
+	}
+
+	ResponseSuccess(w, http.StatusOK, goldPredictionsResponse{Data: items, Total: len(items)})
+}
+
 type goldPredictionChartPoint struct {
 	Date           string          `json:"date"`
 	PredictedPrice decimal.Decimal `json:"predicted_price"`
@@ -186,7 +224,7 @@ func GetGoldPredictionChart(w http.ResponseWriter, r *http.Request) {
 	for i := len(filtered) - 1; i >= 0; i-- {
 		p := filtered[i]
 		data = append(data, goldPredictionChartPoint{
-			Date:           p.PredictionDate.Format("2006-01-02"),
+			Date:           p.TargetDate.Format("2006-01-02"),
 			PredictedPrice: p.PredictedPrice,
 			ActualPrice:    p.ActualPrice,
 			Confidence:     p.Confidence,

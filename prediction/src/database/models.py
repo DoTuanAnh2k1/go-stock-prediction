@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
@@ -348,3 +349,74 @@ class User(Base):
     username = Column(String(50), nullable=False, unique=True)
     password_hash = Column(Text, nullable=False)
     role = Column(String(191), nullable=False, default="user")
+
+
+class SimBot(Base):
+    __tablename__ = "sim_bots"
+
+    id = Column(String(50), primary_key=True)
+    market = Column(String(20), nullable=False, index=True)
+    algorithm = Column(String(50), nullable=False)
+    display_name = Column(String(100), nullable=False)
+    initial_capital = Column(Numeric(20, 2), nullable=False)
+    currency = Column(String(5), nullable=False)
+    buy_threshold = Column(Numeric(5, 2), default=Decimal("1.50"))
+    sell_threshold = Column(Numeric(5, 2), default=Decimal("1.00"))
+    min_confidence = Column(Numeric(4, 2), default=Decimal("0.60"))
+    stop_loss = Column(Numeric(5, 2), default=Decimal("5.00"))
+    take_profit = Column(Numeric(5, 2), default=Decimal("8.00"))
+    max_position_pct = Column(Numeric(5, 2), default=Decimal("15.00"))
+    max_positions = Column(Integer, default=5)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SimSession(Base):
+    __tablename__ = "sim_sessions"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    bot_id = Column(String(50), nullable=False, index=True)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date)
+    status = Column(String(20), default="running")  # running, completed, paused
+    mode = Column(String(20), default="backtest")   # backtest, live
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SimTrade(Base):
+    __tablename__ = "sim_trades"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    session_id = Column(BigInteger, nullable=False, index=True)
+    bot_id = Column(String(50), nullable=False, index=True)
+    symbol = Column(String(20), nullable=False)
+    action = Column(String(5), nullable=False)      # BUY, SELL
+    quantity = Column(Numeric(20, 6), nullable=False)
+    price = Column(Numeric(20, 4), nullable=False)
+    trade_value = Column(Numeric(20, 2), nullable=False)
+    signal_strength = Column(Numeric(8, 4))
+    confidence = Column(Numeric(4, 3))
+    trade_date = Column(Date, nullable=False, index=True)
+    close_reason = Column(String(20))               # signal, stop_loss, take_profit
+    entry_trade_id = Column(BigInteger)
+    pnl = Column(Numeric(20, 2))
+    pnl_pct = Column(Numeric(8, 4))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SimPortfolioSnapshot(Base):
+    __tablename__ = "sim_portfolio_snapshots"
+    __table_args__ = (
+        UniqueConstraint("session_id", "snapshot_date", name="uk_sim_snap"),
+    )
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    session_id = Column(BigInteger, nullable=False, index=True)
+    bot_id = Column(String(50), nullable=False)
+    snapshot_date = Column(Date, nullable=False)
+    cash_balance = Column(Numeric(20, 2), nullable=False)
+    positions_value = Column(Numeric(20, 2), nullable=False)
+    total_value = Column(Numeric(20, 2), nullable=False)
+    total_return_pct = Column(Numeric(8, 4))
+    open_positions = Column(Integer, default=0)

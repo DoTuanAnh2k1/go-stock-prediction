@@ -48,10 +48,26 @@ func (c *Client) GetLatestGoldPredictions() ([]modelsdb.GoldPrediction, error) {
 	return preds, err
 }
 
+// GetLatestConfirmedGoldPredictions returns the most recent CONFIRMED prediction
+// (actual_price IS NOT NULL) per (source, product_type, algorithm_name).
+// Uses MAX(id) to avoid duplicates when multiple rows share the same prediction_date.
+func (c *Client) GetLatestConfirmedGoldPredictions() ([]modelsdb.GoldPrediction, error) {
+	var preds []modelsdb.GoldPrediction
+	subQuery := c.Db.Model(&modelsdb.GoldPrediction{}).
+		Select("MAX(id) as max_id").
+		Where("actual_price IS NOT NULL").
+		Group("source, product_type, algorithm_name")
+	err := c.Db.
+		Joins("JOIN (?) as latest ON latest.max_id = gold_predictions.id", subQuery).
+		Where("gold_predictions.deleted_at IS NULL").
+		Find(&preds).Error
+	return preds, err
+}
+
 // GetGoldPredictionsByDateRange returns gold predictions within a date range.
 func (c *Client) GetGoldPredictionsByDateRange(source, productType string, from, to time.Time) ([]modelsdb.GoldPrediction, error) {
 	var preds []modelsdb.GoldPrediction
-	query := c.Db.Where("prediction_date BETWEEN ? AND ?", from, to).Order("prediction_date DESC")
+	query := c.Db.Where("target_date BETWEEN ? AND ?", from, to).Order("target_date DESC")
 	if source != "" {
 		query = query.Where("source = ?", source)
 	}

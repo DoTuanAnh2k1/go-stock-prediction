@@ -279,8 +279,8 @@ function StockDrawer({ s, onClose, predictions, fmt }: { s: StockItem; onClose: 
           <Seg options={[{ value: '7', label: '7 phiên' }, { value: '30', label: '30 phiên' }]} value={range} onChange={setRange} />
           <div style={{ marginTop: 12 }}>
             {hist.length > 0
-              ? <LineChart series={[{ name: s.sym, data: hist, color: s.chgPct >= 0 ? 'var(--up)' : 'var(--down)' }]} labels={hist.map((_, i) => i % 5 === 0 ? `${i + 1}` : '')} height={220} area valueFmt={(v) => fmt.price(v)} />
-              : <div className="empty" style={{ height: 220, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              ? <LineChart series={[{ name: s.sym, data: hist, color: s.chgPct >= 0 ? 'var(--up)' : 'var(--down)' }]} labels={hist.map((_, i) => `${i + 1}`)} height={520} area valueFmt={(v) => fmt.price(v)} />
+              : <div className="empty" style={{ height: 520, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   <div className="empty__icon"><Icon name="layers" size={18} /></div>
                   <p>Chưa có lịch sử giá</p>
                 </div>

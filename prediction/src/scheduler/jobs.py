@@ -93,6 +93,70 @@ def job_crawl_sp500() -> None:
         log.error("job.sp500.error", error=str(exc))
 
 
+def job_gold_predict() -> None:
+    from src.orchestrator.runner import run_for_market
+    try:
+        count = run_for_market("GOLD")
+        log.info("job.gold_predict.done", count=count)
+    except Exception as exc:
+        log.error("job.gold_predict.error", error=str(exc))
+
+
+def job_simulation_daily() -> None:
+    from src.simulation.engine import SimulationEngine
+    try:
+        engine = SimulationEngine()
+        engine.run_live_step()
+        log.info("job.simulation.done")
+    except Exception as exc:
+        log.error("job.simulation.error", error=str(exc))
+
+
+def job_predict_vn30() -> None:
+    from src.orchestrator.runner import run_for_market
+    try:
+        count = run_for_market("VN30")
+        log.info("job.predict_vn30.done", count=count)
+    except Exception as exc:
+        log.error("job.predict_vn30.error", error=str(exc))
+
+
+def job_predict_nasdaq() -> None:
+    from src.orchestrator.runner import run_for_market
+    try:
+        count = run_for_market("NASDAQ100")
+        log.info("job.predict_nasdaq.done", count=count)
+    except Exception as exc:
+        log.error("job.predict_nasdaq.error", error=str(exc))
+
+
+def job_predict_crypto() -> None:
+    from src.orchestrator.runner import run_for_market
+    try:
+        count = run_for_market("CRYPTO")
+        log.info("job.predict_crypto.done", count=count)
+    except Exception as exc:
+        log.error("job.predict_crypto.error", error=str(exc))
+
+
+def job_predict_fuel() -> None:
+    from src.orchestrator.runner import run_for_market
+    try:
+        count = run_for_market("FUEL")
+        log.info("job.predict_fuel.done", count=count)
+    except Exception as exc:
+        log.error("job.predict_fuel.error", error=str(exc))
+
+
+def job_predict_sp500() -> None:
+    from src.orchestrator.runner import run_for_market
+    try:
+        count = run_for_market("SP500")
+        log.info("job.predict_sp500.done", count=count)
+    except Exception as exc:
+        log.error("job.predict_sp500.error", error=str(exc))
+
+
 # Job registry — maps job_key → callable
 JOB_FUNCTIONS = {
     "crawler_stock": job_crawl_vn30,
@@ -104,4 +168,11 @@ JOB_FUNCTIONS = {
     "weekly_training": job_weekly_training,
     "daily_prediction": job_daily_prediction,
     "daily_reconcile": job_daily_reconcile,
+    "gold_predict": job_gold_predict,
+    "simulation_daily": job_simulation_daily,
+    "predict_vn30": job_predict_vn30,
+    "predict_nasdaq": job_predict_nasdaq,
+    "predict_crypto": job_predict_crypto,
+    "predict_fuel": job_predict_fuel,
+    "predict_sp500": job_predict_sp500,
 }

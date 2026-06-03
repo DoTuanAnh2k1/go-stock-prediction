@@ -50,19 +50,22 @@ def run_for_market(market_key: str) -> int:
     algos = build_algorithms()
 
     if mk in ("VN30", ""):
-        return _predict_vn30(algos)
+        count = _predict_vn30(algos)
     elif mk == "GOLD":
-        return _predict_gold(algos)
+        count = _predict_gold(algos)
     elif mk == "NASDAQ100":
-        return _predict_nasdaq(algos)
+        count = _predict_nasdaq(algos)
     elif mk == "CRYPTO":
-        return _predict_crypto(algos)
+        count = _predict_crypto(algos)
     elif mk == "FUEL":
-        return _predict_fuel(algos)
+        count = _predict_fuel(algos)
     elif mk == "SP500":
-        return _predict_sp500(algos)
+        count = _predict_sp500(algos)
     else:
         raise ValueError(f"Unknown market key: {market_key!r}")
+
+    _trigger_sim_step(mk)
+    return count
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +104,7 @@ def _predict_vn30(algos: dict) -> int:
                 )
                 count += 1
             except Exception as exc:
-                log.debug("predict.vn30.algo_failed", symbol=stock.symbol, algo=key, error=str(exc))
+                log.warning("predict.vn30.algo_failed", symbol=stock.symbol, algo=key, error=str(exc))
 
     log.info("predict.vn30.done", count=count)
     return count
@@ -138,7 +141,7 @@ def _predict_gold(algos: dict) -> int:
                 )
                 count += 1
             except Exception as exc:
-                log.debug("predict.gold.algo_failed", source=source, product_type=product_type, algo=key, error=str(exc))
+                log.warning("predict.gold.algo_failed", source=source, product_type=product_type, algo=key, error=str(exc))
 
     log.info("predict.gold.done", count=count)
     return count
@@ -176,7 +179,7 @@ def _predict_nasdaq(algos: dict) -> int:
                 )
                 count += 1
             except Exception as exc:
-                log.debug("predict.nasdaq.algo_failed", symbol=symbol, algo=key, error=str(exc))
+                log.warning("predict.nasdaq.algo_failed", symbol=symbol, algo=key, error=str(exc))
 
     log.info("predict.nasdaq.done", count=count)
     return count
@@ -213,7 +216,7 @@ def _predict_crypto(algos: dict) -> int:
                 )
                 count += 1
             except Exception as exc:
-                log.debug("predict.crypto.algo_failed", coin=coin_id, algo=key, error=str(exc))
+                log.warning("predict.crypto.algo_failed", coin=coin_id, algo=key, error=str(exc))
 
     log.info("predict.crypto.done", count=count)
     return count
@@ -249,7 +252,7 @@ def _predict_fuel(algos: dict) -> int:
                 )
                 count += 1
             except Exception as exc:
-                log.debug("predict.fuel.algo_failed", product=product_type, algo=key, error=str(exc))
+                log.warning("predict.fuel.algo_failed", product=product_type, algo=key, error=str(exc))
 
     log.info("predict.fuel.done", count=count)
     return count
@@ -287,7 +290,16 @@ def _predict_sp500(algos: dict) -> int:
                 )
                 count += 1
             except Exception as exc:
-                log.debug("predict.sp500.algo_failed", symbol=symbol, algo=key, error=str(exc))
+                log.warning("predict.sp500.algo_failed", symbol=symbol, algo=key, error=str(exc))
 
     log.info("predict.sp500.done", count=count)
     return count
+
+
+def _trigger_sim_step(market_key: str) -> None:
+    """Trigger simulation step for bots of this market after predictions complete."""
+    try:
+        from src.simulation.engine import SimulationEngine
+        SimulationEngine().run_live_step_for_market(market_key)
+    except Exception as exc:
+        log.warning("orchestrator.sim_step_failed", market=market_key, error=str(exc))

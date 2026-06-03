@@ -83,6 +83,14 @@ def _startup_sync():
     except Exception as exc:
         log.warning("startup.sync.vn30.error", error=str(exc))
 
+    # Seed simulation bots
+    try:
+        from src.simulation.seeder import seed_bots
+        inserted = seed_bots()
+        log.info("startup.sync.sim_bots.done", inserted=inserted)
+    except Exception as exc:
+        log.warning("startup.sync.sim_bots.error", error=str(exc))
+
 
 threading.Thread(target=_startup_sync, daemon=True).start()
 

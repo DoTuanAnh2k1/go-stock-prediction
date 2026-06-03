@@ -7,10 +7,85 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from src.algorithms.registry import build_algorithms
+from src.crawlers.crypto import COINS as CRYPTO_COINS
+from src.crawlers.nasdaq import NASDAQ_SYMBOLS
+from src.crawlers.sp500 import SP500_SYMBOLS
 from src.database import repository as repo
 from src.utils.logger import get_logger
 
 log = get_logger("training")
+
+GOLD_INSTRUMENTS = [("XAU", "spot"), ("BTMC", "sjc"), ("BTMC", "nhan_tron")]
+FUEL_PRODUCTS = ["ron95_iii", "e5_ron92", "do_005s", "kerosene"]
+
+
+def _collect_all_training_series() -> list[tuple[list[float], list[float], str]]:
+    """Collect (price_list, vol_list, market_label) for all markets."""
+    series = []
+
+    # VN30
+    for stock in repo.get_vn30_stocks():
+        prices = repo.get_stock_prices_asc(stock.id, limit=200)
+        if len(prices) >= 20:
+            series.append((
+                [float(p.close_price) for p in prices],
+                [float(p.volume or 0) for p in prices],
+                f"vn30/{stock.symbol}",
+            ))
+
+    # GOLD
+    for source, product_type in GOLD_INSTRUMENTS:
+        prices = repo.get_gold_prices_asc(source, product_type, limit=200)
+        if len(prices) >= 20:
+            series.append((
+                [float(p.buy_price) for p in prices],
+                [],
+                f"gold/{source}/{product_type}",
+            ))
+
+    # NASDAQ
+    symbols = repo.get_nasdaq_symbols() or NASDAQ_SYMBOLS
+    for symbol in symbols:
+        prices = repo.get_nasdaq_prices_asc(symbol, limit=200)
+        if len(prices) >= 20:
+            series.append((
+                [float(p.close_price) for p in prices],
+                [float(p.volume or 0) for p in prices],
+                f"nasdaq/{symbol}",
+            ))
+
+    # CRYPTO
+    for coin_id, symbol in CRYPTO_COINS:
+        prices = repo.get_crypto_prices_asc(coin_id, limit=200)
+        if len(prices) >= 20:
+            series.append((
+                [float(p.close_price) for p in prices],
+                [],
+                f"crypto/{symbol}",
+            ))
+
+    # FUEL
+    for product_type in FUEL_PRODUCTS:
+        prices = repo.get_fuel_prices_asc(product_type, limit=200)
+        if len(prices) >= 20:
+            series.append((
+                [float(p.price) for p in prices],
+                [],
+                f"fuel/{product_type}",
+            ))
+
+    # SP500
+    sp_symbols = repo.get_sp500_symbols() or SP500_SYMBOLS
+    for symbol in sp_symbols:
+        prices = repo.get_sp500_prices_asc(symbol, limit=200)
+        if len(prices) >= 20:
+            series.append((
+                [float(p.close_price) for p in prices],
+                [float(p.volume or 0) for p in prices],
+                f"sp500/{symbol}",
+            ))
+
+    return series
 
 _lock = threading.Lock()
 
@@ -68,29 +143,28 @@ def train_all_algorithms() -> tuple[bool, str]:
     started_at = datetime.utcnow()
 
     try:
-        stocks = repo.get_vn30_stocks()
+        all_series = _collect_all_training_series()
         total_success = 0
         total_error = 0
+
+        log.info("training.start", series=len(all_series), algorithms=len(algos))
 
         for idx, (key, algo) in enumerate(algos.items()):
             with _lock:
                 _current_phase = f"Training {key} ({idx+1}/{len(algos)})"
                 _progress = idx / len(algos) * 100
 
-            log.info("training.algo.start", algo=key, stocks=len(stocks))
+            log.info("training.algo.start", algo=key, series=len(all_series))
             success = 0
             error = 0
             algo_started = datetime.utcnow()
 
-            for stock in stocks:
-                prices_asc = repo.get_stock_prices_asc(stock.id, limit=200)
-                if len(prices_asc) < 20:
-                    error += 1
-                    continue
+            for price_list, vol_list, label in all_series:
                 try:
-                    price_list = [float(p.close_price) for p in prices_asc]
-                    vol_list = [float(p.volume or 0) for p in prices_asc]
-                    algo.predict(price_list, vol_list)
+                    if vol_list:
+                        algo.predict(price_list, vol_list)
+                    else:
+                        algo.predict(price_list)
                     success += 1
                 except Exception:
                     error += 1
@@ -102,8 +176,8 @@ def train_all_algorithms() -> tuple[bool, str]:
                 repo.create_training_log(
                     session_id=session_id,
                     algorithm_name=key,
-                    market_key="vn30",
-                    total_stocks=len(stocks),
+                    market_key="all",
+                    total_stocks=len(all_series),
                     success_count=success,
                     error_count=error,
                     accuracy=accuracy,
@@ -163,19 +237,16 @@ def train_single_algorithm(algorithm_name: str) -> tuple[bool, str]:
     started_at = datetime.utcnow()
 
     try:
-        stocks = repo.get_vn30_stocks()
+        all_series = _collect_all_training_series()
         success = 0
         error = 0
 
-        for stock in stocks:
-            prices_asc = repo.get_stock_prices_asc(stock.id, limit=200)
-            if len(prices_asc) < 20:
-                error += 1
-                continue
+        for price_list, vol_list, label in all_series:
             try:
-                price_list = [float(p.close_price) for p in prices_asc]
-                vol_list = [float(p.volume or 0) for p in prices_asc]
-                algo.predict(price_list, vol_list)
+                if vol_list:
+                    algo.predict(price_list, vol_list)
+                else:
+                    algo.predict(price_list)
                 success += 1
             except Exception:
                 error += 1
@@ -186,8 +257,8 @@ def train_single_algorithm(algorithm_name: str) -> tuple[bool, str]:
         repo.create_training_log(
             session_id=session_id,
             algorithm_name=algorithm_name,
-            market_key="vn30",
-            total_stocks=len(stocks),
+            market_key="all",
+            total_stocks=len(all_series),
             success_count=success,
             error_count=error,
             accuracy=accuracy,

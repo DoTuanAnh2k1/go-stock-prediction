@@ -44,8 +44,8 @@ services:
       MYSQL_USER: root
       MYSQL_PASSWORD: 123
       MYSQL_DB_NAME: go_stock_prediction
-      MYSQL_DEBUG: "false"
-      LOG_LEVEL: INFO
+      MYSQL_DEBUG: "true"
+      LOG_LEVEL: DEBUG
     networks:
       - app-network
 
@@ -70,9 +70,9 @@ services:
       MYSQL_USER: root
       MYSQL_PASSWORD: 123
       MYSQL_DB_NAME: go_stock_prediction
-      MYSQL_DEBUG: "false"
-      LOG_LEVEL: INFO
-      DB_LOG_LEVEL: INFO
+      MYSQL_DEBUG: "true"
+      LOG_LEVEL: DEBUG
+      DB_LOG_LEVEL: DEBUG
       API_KEY: ""
       ADMIN_USERNAME: "admin"
       ADMIN_PASSWORD: "admin123"

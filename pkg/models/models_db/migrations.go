@@ -21,4 +21,8 @@ var AllModels = []interface{}{
 	&FuelPrediction{},
 	&SP500Price{},
 	&SP500Prediction{},
+	&SimBot{},
+	&SimSession{},
+	&SimTrade{},
+	&SimPortfolioSnapshot{},
 }

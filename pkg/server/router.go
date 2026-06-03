@@ -61,6 +61,7 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("/api/gold/chart", GetGoldChart)
 
 	// Gold prediction APIs
+	mux.HandleFunc("/api/gold/predictions/latest-results", GetGoldPredictionsLatestResults)
 	mux.HandleFunc("/api/gold/predictions/latest", GetLatestGoldPredictions)
 	mux.HandleFunc("/api/gold/predictions/chart", GetGoldPredictionChart)
 	mux.HandleFunc("/api/gold/predictions", GetGoldPredictions)
@@ -71,6 +72,7 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("/api/nasdaq/chart", GetNasdaqChart)
 
 	// NASDAQ prediction APIs
+	mux.HandleFunc("/api/nasdaq/predictions/latest-results", GetNasdaqPredictionsLatestResults)
 	mux.HandleFunc("/api/nasdaq/predictions/latest", GetNasdaqPredictionsLatest)
 	mux.HandleFunc("/api/nasdaq/predictions/chart", GetNasdaqPredictionsChart)
 	mux.HandleFunc("/api/nasdaq/predictions", GetNasdaqPredictions)
@@ -81,6 +83,7 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("/api/crypto/chart", GetCryptoChart)
 
 	// Crypto prediction APIs
+	mux.HandleFunc("/api/crypto/predictions/latest-results", GetCryptoPredictionsLatestResults)
 	mux.HandleFunc("/api/crypto/predictions/latest", GetCryptoPredictionsLatest)
 	mux.HandleFunc("/api/crypto/predictions/chart", GetCryptoPredictionsChart)
 	mux.HandleFunc("/api/crypto/predictions", GetCryptoPredictions)
@@ -91,9 +94,21 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("/api/fuel/chart", GetFuelChart)
 
 	// Fuel prediction APIs
+	mux.HandleFunc("/api/fuel/predictions/latest-results", GetFuelPredictionsLatestResults)
 	mux.HandleFunc("/api/fuel/predictions/latest", GetFuelPredictionsLatest)
 	mux.HandleFunc("/api/fuel/predictions/chart", GetFuelPredictionsChart)
 	mux.HandleFunc("/api/fuel/predictions", GetFuelPredictions)
+
+	// S&P 500 data APIs
+	mux.HandleFunc("/api/sp500/latest", GetSP500Latest)
+	mux.HandleFunc("/api/sp500/prices", GetSP500Prices)
+	mux.HandleFunc("/api/sp500/chart", GetSP500Chart)
+
+	// S&P 500 prediction APIs
+	mux.HandleFunc("/api/sp500/predictions/latest-results", GetSP500PredictionsLatestResults)
+	mux.HandleFunc("/api/sp500/predictions/latest", GetSP500PredictionsLatest)
+	mux.HandleFunc("/api/sp500/predictions/chart", GetSP500PredictionsChart)
+	mux.HandleFunc("/api/sp500/predictions", GetSP500Predictions)
 
 	// Market-level paginated APIs
 	mux.HandleFunc("/api/markets/{key}/predictions", GetMarketPredictions)
@@ -131,6 +146,22 @@ func addHandler() *http.ServeMux {
 	// Cron schedule APIs (require JWT authentication)
 	mux.HandleFunc("GET /api/schedules", AuthRequired(GetSchedulesHandler))
 	mux.HandleFunc("PUT /api/schedules/{key}", AuthRequired(UpdateScheduleHandler))
+
+	// Simulation APIs (data endpoints are public; trigger/config endpoints require JWT)
+	mux.HandleFunc("GET /api/simulation/leaderboard", GetSimLeaderboard)
+	mux.HandleFunc("GET /api/simulation/bots", GetSimBots)
+	mux.HandleFunc("GET /api/simulation/bots/{id}/trades", GetSimBotTrades)
+	mux.HandleFunc("GET /api/simulation/bots/{id}/chart", GetSimBotChart)
+	mux.HandleFunc("PUT /api/simulation/bots/{id}/config", AuthRequired(UpdateSimBotConfig))
+	mux.HandleFunc("POST /api/simulation/bots/{id}/toggle", AuthRequired(ToggleSimBot))
+	mux.HandleFunc("POST /api/simulation/bots/{id}/run", AuthRequired(TriggerSimBotRun))
+	mux.HandleFunc("POST /api/simulation/run-all", AuthRequired(TriggerSimRunAll))
+	// GET /api/simulation/bots/{id} must come last (catch-all for bot detail)
+	mux.HandleFunc("GET /api/simulation/bots/", GetSimBot)
+
+	// Trigger simulation
+	mux.HandleFunc("POST /api/trigger/simulation-backtest", AuthRequired(TriggerSimulationBacktestHandler))
+	mux.HandleFunc("POST /api/trigger/simulation-live-step", AuthRequired(TriggerSimulationLiveStepHandler))
 
 	return mux
 }
@@ -175,6 +206,7 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  GET  /api/gold/latest")
 	logger.Logger.Info("  GET  /api/gold/prices")
 	logger.Logger.Info("  GET  /api/gold/chart")
+	logger.Logger.Info("  GET  /api/gold/predictions/latest-results")
 	logger.Logger.Info("  GET  /api/gold/predictions/latest")
 	logger.Logger.Info("  GET  /api/gold/predictions/chart")
 	logger.Logger.Info("  GET  /api/gold/predictions")
@@ -200,18 +232,21 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  GET  /api/nasdaq/latest")
 	logger.Logger.Info("  GET  /api/nasdaq/prices")
 	logger.Logger.Info("  GET  /api/nasdaq/chart")
+	logger.Logger.Info("  GET  /api/nasdaq/predictions/latest-results")
 	logger.Logger.Info("  GET  /api/nasdaq/predictions/latest")
 	logger.Logger.Info("  GET  /api/nasdaq/predictions/chart")
 	logger.Logger.Info("  GET  /api/nasdaq/predictions")
 	logger.Logger.Info("  GET  /api/crypto/latest")
 	logger.Logger.Info("  GET  /api/crypto/prices")
 	logger.Logger.Info("  GET  /api/crypto/chart")
+	logger.Logger.Info("  GET  /api/crypto/predictions/latest-results")
 	logger.Logger.Info("  GET  /api/crypto/predictions/latest")
 	logger.Logger.Info("  GET  /api/crypto/predictions/chart")
 	logger.Logger.Info("  GET  /api/crypto/predictions")
 	logger.Logger.Info("  GET  /api/fuel/latest")
 	logger.Logger.Info("  GET  /api/fuel/prices")
 	logger.Logger.Info("  GET  /api/fuel/chart")
+	logger.Logger.Info("  GET  /api/fuel/predictions/latest-results")
 	logger.Logger.Info("  GET  /api/fuel/predictions/latest")
 	logger.Logger.Info("  GET  /api/fuel/predictions/chart")
 	logger.Logger.Info("  GET  /api/fuel/predictions")
@@ -223,4 +258,22 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  POST /api/trigger/fuel-predict")
 	logger.Logger.Info("  POST /api/trigger/sp500-crawler")
 	logger.Logger.Info("  POST /api/trigger/sp500-predict")
+	logger.Logger.Info("  GET  /api/sp500/latest")
+	logger.Logger.Info("  GET  /api/sp500/prices")
+	logger.Logger.Info("  GET  /api/sp500/chart")
+	logger.Logger.Info("  GET  /api/sp500/predictions/latest-results")
+	logger.Logger.Info("  GET  /api/sp500/predictions/latest")
+	logger.Logger.Info("  GET  /api/sp500/predictions/chart")
+	logger.Logger.Info("  GET  /api/sp500/predictions")
+	logger.Logger.Info("  GET  /api/simulation/leaderboard")
+	logger.Logger.Info("  GET  /api/simulation/bots")
+	logger.Logger.Info("  GET  /api/simulation/bots/{id}")
+	logger.Logger.Info("  GET  /api/simulation/bots/{id}/trades")
+	logger.Logger.Info("  GET  /api/simulation/bots/{id}/chart")
+	logger.Logger.Info("  PUT  /api/simulation/bots/{id}/config")
+	logger.Logger.Info("  POST /api/simulation/bots/{id}/toggle")
+	logger.Logger.Info("  POST /api/simulation/bots/{id}/run")
+	logger.Logger.Info("  POST /api/simulation/run-all")
+	logger.Logger.Info("  POST /api/trigger/simulation-backtest")
+	logger.Logger.Info("  POST /api/trigger/simulation-live-step")
 }

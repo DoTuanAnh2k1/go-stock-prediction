@@ -142,7 +142,7 @@ export default function Predictions() {
             : <>
                 <LineChart
                   series={D.accTrend.series.map((s) => ({ name: s.name, data: s.data, color: s.color }))}
-                  labels={D.accTrend.labels} height={236} yFmt={(v) => v.toFixed(0) + '%'} valueFmt={(v) => v.toFixed(1) + '%'}
+                  labels={D.accTrend.labels} height={540} yFmt={(v) => v.toFixed(0) + '%'} valueFmt={(v) => v.toFixed(1) + '%'}
                 />
                 <Legend items={D.accTrend.series.map((s) => [s.name, s.color] as [string, string])} />
               </>
@@ -196,12 +196,12 @@ export default function Predictions() {
             </select>
           }>
           {compareLoading
-            ? <div className="empty" style={{ height: 240, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            ? <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
                 <p>Đang tải...</p>
               </div>
             : (!compareData || compareData.labels.length === 0)
-              ? <div className="empty" style={{ height: 240, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              ? <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   <div className="empty__icon"><Icon name="layers" size={18} /></div>
                   <p>Chưa có dữ liệu so sánh</p>
                 </div>
@@ -211,7 +211,7 @@ export default function Predictions() {
                       { name: 'Thực tế', data: compareData.actual, color: 'var(--text-2)', w: 1.8 },
                       { name: 'Dự đoán', data: compareData.pred, color: 'var(--accent)', dash: '5 4', w: 2 },
                     ]}
-                    labels={compareData.labels} height={240} valueFmt={(v) => fmt.price(v)}
+                    labels={compareData.labels} height={540} valueFmt={(v) => fmt.price(v)}
                   />
                   <Legend items={[['Thực tế', 'var(--text-2)'], ['Dự đoán', 'var(--accent)']]} />
                 </>
@@ -220,12 +220,12 @@ export default function Predictions() {
 
         <Panel title="Phân bố sai số" sub="độ tin cậy × |sai số|">
           {scatterPts.length === 0
-            ? <div className="empty" style={{ height: 220, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            ? <div className="empty" style={{ height: 520, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
                 <p>Chưa có dữ liệu phân tích</p>
               </div>
             : <>
-                <Scatter points={scatterPts} height={220} xLabel="Độ tin cậy (%)" />
+                <Scatter points={scatterPts} height={520} xLabel="Độ tin cậy (%)" />
                 <Legend items={D.accTrend.series.map((s) => [s.name, s.color] as [string, string])} />
               </>
           }

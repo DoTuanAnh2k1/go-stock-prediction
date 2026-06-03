@@ -135,6 +135,8 @@ func seedCronSchedules(store repository.DatabaseStore) {
 		{JobKey: "train_weekly", JobName: "Weekly Model Training", CronExpression: "0 0 9 * * SUN", Enabled: true},
 		{JobKey: "reconcile_daily", JobName: "Daily Reconcile", CronExpression: "0 0 6 * * *", Enabled: true},
 		{JobKey: "gold_crawler_daily", JobName: "Daily Gold Crawler", CronExpression: "0 0 10 * * *", Enabled: true},
+		{JobKey: "gold_predict_daily", JobName: "Daily Gold Prediction", CronExpression: "0 0 11 * * *", Enabled: true},
+		{JobKey: "simulation_daily", JobName: "Daily Simulation Step", CronExpression: "0 0 19 * * *", Enabled: true},
 	}
 	for i := range defaults {
 		existing, err := store.GetCronScheduleByKey(defaults[i].JobKey)

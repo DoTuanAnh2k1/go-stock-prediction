@@ -26,12 +26,19 @@ _lock = threading.Lock()
 # Default schedules (mirrors Go constants)
 DEFAULT_SCHEDULES = [
     ("crawler_stock", "Crawl cổ phiếu VN30 (hàng ngày)", "0 0 12 * * *", True),
-    ("crawler_gold", "Crawl giá vàng (mỗi giờ)", "0 0 */1 * * *", True),
+    ("crawler_sp500", "Crawl S&P 500 (12PM hàng ngày)", "0 0 12 * * *", True),
+    ("crawler_gold", "Crawl giá vàng (10AM hàng ngày)", "0 0 10 * * *", True),
+    ("gold_predict", "Dự đoán vàng (11AM hàng ngày)", "0 0 11 * * *", True),
     ("crawler_nasdaq", "Crawl NASDAQ (ngày thường 10:30PM)", "0 30 22 * * 1-5", True),
     ("crawler_crypto", "Crawl Crypto (mỗi 4 giờ)", "0 0 */4 * * *", True),
     ("crawler_fuel", "Crawl giá xăng (9PM hàng ngày)", "0 0 21 * * *", True),
     ("weekly_training", "Huấn luyện mô hình (Chủ nhật 9AM)", "0 0 9 * * 0", True),
-    ("daily_prediction", "Dự đoán tất cả thị trường (mỗi giờ)", "0 0 */1 * * *", True),
+    ("daily_prediction", "Dự đoán tất cả thị trường (mỗi giờ)", "0 0 */1 * * *", False),
+    ("predict_vn30",   "Dự đoán VN30 (3PM ngày thường)",          "0 0 15 * * 1-5",  True),
+    ("predict_nasdaq", "Dự đoán NASDAQ (11:30PM ngày thường)",     "0 30 23 * * 1-5", True),
+    ("predict_crypto", "Dự đoán Crypto (mỗi 6 tiếng)",             "0 0 */6 * * *",   True),
+    ("predict_fuel",   "Dự đoán Fuel (10PM hàng ngày)",            "0 0 22 * * *",    True),
+    ("predict_sp500",  "Dự đoán S&P 500 (1PM ngày thường)",        "0 0 13 * * 1-5",  True),
     ("daily_reconcile", "Reconcile dự đoán (6AM hàng ngày)", "0 0 6 * * *", True),
 ]
 

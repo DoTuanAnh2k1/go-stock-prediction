@@ -68,6 +68,44 @@ func GetCryptoPredictionsLatest(w http.ResponseWriter, r *http.Request) {
 	ResponseSuccess(w, http.StatusOK, cryptoPredictionsResponse{Data: items, Total: len(items)})
 }
 
+// GetCryptoPredictionsLatestResults godoc
+//
+//	@Summary      Get latest confirmed crypto prediction results
+//	@Description  Returns the most recent confirmed prediction (actual_price IS NOT NULL) per (coin_id, algorithm) combination, showing how predictions performed
+//	@Tags         Crypto Predictions
+//	@Produce      json
+//	@Success      200  {object}  cryptoPredictionsResponse
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/crypto/predictions/latest-results [get]
+func GetCryptoPredictionsLatestResults(w http.ResponseWriter, r *http.Request) {
+	store := repository.GetSingleton()
+	preds, err := store.GetLatestConfirmedCryptoPredictions()
+	if err != nil {
+		logger.Logger.Errorf("[api/crypto/predictions/latest-results] Failed: %v", err)
+		ResponseError(w, http.StatusInternalServerError, "Failed to get latest confirmed crypto predictions")
+		return
+	}
+
+	items := make([]cryptoPredictionItem, 0, len(preds))
+	for _, p := range preds {
+		items = append(items, cryptoPredictionItem{
+			ID:             p.ID,
+			CoinID:         p.CoinID,
+			Symbol:         p.Symbol,
+			AlgorithmName:  p.AlgorithmName,
+			PredictedPrice: p.PredictedPrice,
+			CurrentPrice:   p.CurrentPrice,
+			Confidence:     p.Confidence,
+			PredictionDate: p.PredictionDate.Format("2006-01-02"),
+			TargetDate:     p.TargetDate.Format("2006-01-02"),
+			ActualPrice:    p.ActualPrice,
+			Accuracy:       p.Accuracy,
+		})
+	}
+
+	ResponseSuccess(w, http.StatusOK, cryptoPredictionsResponse{Data: items, Total: len(items)})
+}
+
 type cryptoPredictionChartPoint struct {
 	Date           string           `json:"date"`
 	PredictedPrice decimal.Decimal  `json:"predicted_price"`
@@ -131,7 +169,7 @@ func GetCryptoPredictionsChart(w http.ResponseWriter, r *http.Request) {
 	for i := len(filtered) - 1; i >= 0; i-- {
 		p := filtered[i]
 		data = append(data, cryptoPredictionChartPoint{
-			Date:           p.PredictionDate.Format("2006-01-02"),
+			Date:           p.TargetDate.Format("2006-01-02"),
 			PredictedPrice: p.PredictedPrice,
 			ActualPrice:    p.ActualPrice,
 			Confidence:     p.Confidence,

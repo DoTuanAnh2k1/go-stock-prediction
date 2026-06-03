@@ -111,9 +111,9 @@ export function Sparkline({ data, w = 120, h = 34, color, fill = true, strokeW =
 }
 
 // ── LineChart ─────────────────────────────────────────────────────────────────
-export function LineChart({ series, labels, height = 280, yFmt, valueFmt, area = false, showGrid = true, padL = 46 }: LineChartProps) {
+export function LineChart({ series, labels, height = 620, yFmt, valueFmt, area = false, showGrid = true, padL = 46 }: LineChartProps) {
   const ref = useRef<SVGSVGElement>(null);
-  const [hover, setHover] = useState<{ idx: number; cx: number; cy: number } | null>(null);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const W = 800, H = height;
   const padR = 14, padT = 14, padB = 26;
   const all = series.flatMap((s) => (s.data || []).filter((v): v is number => v != null));
@@ -134,14 +134,40 @@ export function LineChart({ series, labels, height = 280, yFmt, valueFmt, area =
     if (!ref.current) return;
     const r = ref.current.getBoundingClientRect();
     const px = ((e.clientX - r.left) / r.width) * W;
-    let idx = Math.round(((px - padL) / (W - padL - padR)) * (n - 1));
-    idx = Math.max(0, Math.min(n - 1, idx));
-    setHover({ idx, cx: e.clientX, cy: r.top });
+    const idx = Math.max(0, Math.min(n - 1, Math.round(((px - padL) / (W - padL - padR)) * (n - 1))));
+    setHoverIdx(idx);
+  }
+
+  // Tooltip x as % of SVG width (viewBox fraction), clamped so tooltip stays inside chart
+  const tipPct = hoverIdx != null ? Math.min(Math.max(x(hoverIdx) / W * 100, 8), 88) : 0;
+
+  // Max/min markers — primary series only
+  const s0data = (series[0]?.data || []) as (number | null)[];
+  const validPts = s0data.map((v, i) => v != null ? { v: v, i } : null).filter((p): p is { v: number; i: number } => p !== null);
+  const maxPt = validPts.length ? validPts.reduce((a, b) => a.v > b.v ? a : b) : null;
+  const minPt = validPts.length ? validPts.reduce((a, b) => a.v < b.v ? a : b) : null;
+  const showMinPt = minPt && maxPt && minPt.i !== maxPt.i;
+
+  function markerLabel(idx: number, val: number, color: string, above: boolean) {
+    const cx = x(idx), cy = y(val), label = fmtV(val);
+    const anchor = cx < padL + 60 ? 'start' : cx > W - 90 ? 'end' : 'middle';
+    const ly = above
+      ? (cy < padT + 16 ? cy + 16 : cy - 7)
+      : (cy > H - padB - 20 ? cy - 7 : cy + 16);
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r="3.5" fill={color} stroke="var(--surface)" strokeWidth="1.5" />
+        <text x={cx} y={ly} textAnchor={anchor} fontSize="9.5" fontWeight="600" fill={color}
+          fontFamily="var(--font-mono)" paintOrder="stroke" stroke="var(--surface)" strokeWidth="3" strokeLinejoin="round">
+          {label}
+        </text>
+      </g>
+    );
   }
 
   return (
     <div style={{ position: 'relative' }}>
-      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width="100%" height={H} onMouseMove={move} onMouseLeave={() => setHover(null)} style={{ display: 'block', overflow: 'visible' }}>
+      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" onMouseMove={move} onMouseLeave={() => setHoverIdx(null)} style={{ display: 'block', overflow: 'visible' }}>
         <defs>
           {series.map((s, si) => (
             <linearGradient key={si} id={`lg${si}`} x1="0" y1="0" x2="0" y2="1">
@@ -177,23 +203,39 @@ export function LineChart({ series, labels, height = 280, yFmt, valueFmt, area =
             </g>
           );
         })}
-        {hover && (
+        {maxPt && markerLabel(maxPt.i, maxPt.v, 'var(--up)', true)}
+        {showMinPt && minPt && markerLabel(minPt.i, minPt.v, 'var(--down)', false)}
+        {hoverIdx != null && (
           <g>
-            <line x1={x(hover.idx)} x2={x(hover.idx)} y1={padT} y2={H - padB} stroke="var(--border-strong)" strokeWidth="1" />
-            {series.map((s, si) => s.data[hover.idx] != null && (
-              <circle key={si} cx={x(hover.idx)} cy={y(s.data[hover.idx] as number)} r="3.5" fill="var(--surface)" stroke={s.color} strokeWidth="2" />
+            <line x1={x(hoverIdx)} x2={x(hoverIdx)} y1={padT} y2={H - padB} stroke="var(--border-strong)" strokeWidth="1" />
+            {series.map((s, si) => s.data[hoverIdx] != null && (
+              <circle key={si} cx={x(hoverIdx)} cy={y(s.data[hoverIdx] as number)} r="3.5" fill="var(--surface)" stroke={s.color} strokeWidth="2" />
             ))}
           </g>
         )}
       </svg>
-      {hover && (
-        <div className="cht-tip" style={{ left: hover.cx, top: hover.cy + 14 }}>
-          <div className="cht-tip__t">{labels[hover.idx]}</div>
-          {series.map((s, si) => s.data[hover.idx] != null && (
+      {hoverIdx != null && (
+        <div style={{
+          position: 'absolute',
+          left: tipPct + '%',
+          top: 0,
+          transform: 'translateX(-50%)',
+          pointerEvents: 'none',
+          zIndex: 50,
+          background: 'var(--bg-2)',
+          border: '1px solid var(--border-strong)',
+          padding: '7px 10px',
+          fontSize: '11.5px',
+          fontFamily: 'var(--font-mono)',
+          boxShadow: '0 8px 24px oklch(0 0 0 / 0.35)',
+          whiteSpace: 'nowrap',
+        }}>
+          <div style={{ color: 'var(--text-3)', fontSize: 10, marginBottom: 2 }}>{labels[hoverIdx]}</div>
+          {series.map((s, si) => s.data[hoverIdx] != null && (
             <div key={si} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <span style={{ width: 8, height: 2, background: s.color, display: 'inline-block' }}></span>
               <span style={{ color: 'var(--text-3)' }}>{s.name}</span>
-              <span style={{ marginLeft: 'auto', color: 'var(--text)' }}>{fmtV(s.data[hover.idx] as number)}</span>
+              <span style={{ marginLeft: 'auto', paddingLeft: 12, color: 'var(--text)' }}>{fmtV(s.data[hoverIdx] as number)}</span>
             </div>
           ))}
         </div>
@@ -203,7 +245,7 @@ export function LineChart({ series, labels, height = 280, yFmt, valueFmt, area =
 }
 
 // ── BarChart ──────────────────────────────────────────────────────────────────
-export function BarChart({ data, labels, color = 'var(--accent)', height = 260, yFmt, valueFmt, colorByValue = false }: BarChartProps) {
+export function BarChart({ data, labels, color = 'var(--accent)', height = 580, yFmt, valueFmt, colorByValue = false }: BarChartProps) {
   const ref = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<{ i: number; cx: number; cy: number } | null>(null);
   const W = 800, H = height, padL = 40, padR = 12, padT = 12, padB = 26;
@@ -220,7 +262,7 @@ export function BarChart({ data, labels, color = 'var(--accent)', height = 260, 
   const yTicks = Array.from({ length: 5 }, (_, i) => lo + (i / 4) * (hi - lo));
   return (
     <div style={{ position: 'relative' }}>
-      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: 'block', overflow: 'visible' }}>
+      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible' }}>
         {yTicks.map((t, i) => (
           <g key={i}>
             <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="var(--grid-line)" />
@@ -236,7 +278,7 @@ export function BarChart({ data, labels, color = 'var(--accent)', height = 260, 
               onMouseEnter={() => {
                 if (!ref.current) return;
                 const r = ref.current.getBoundingClientRect();
-                setHover({ i, cx: r.left + (padL + bw * (i + 0.5)) / W * r.width, cy: r.top + yy });
+                setHover({ i, cx: (padL + bw * (i + 0.5)) / W * r.width, cy: yy / H * r.height });
               }}
               onMouseLeave={() => setHover(null)}>
               <rect x={padL + bw * i + bw * 0.18} y={yy} width={bw * 0.64} height={Math.max(1, hh)} fill={c} opacity={hover && hover.i === i ? 1 : 0.82} />
@@ -246,7 +288,7 @@ export function BarChart({ data, labels, color = 'var(--accent)', height = 260, 
         })}
       </svg>
       {hover && (
-        <div className="cht-tip" style={{ left: hover.cx, top: hover.cy }}>
+        <div className="cht-tip" style={{ position: 'absolute', left: hover.cx, top: hover.cy }}>
           <div className="cht-tip__t">{labels[hover.i]}</div>
           <div style={{ color: 'var(--text)' }}>{fmtV(data[hover.i])}</div>
         </div>
@@ -275,7 +317,7 @@ export function HBars({ items, max = 100, suffix = '%' }: HBarsProps) {
 }
 
 // ── Scatter ───────────────────────────────────────────────────────────────────
-export function Scatter({ points, height = 320, xLabel }: ScatterProps) {
+export function Scatter({ points, height = 680, xLabel }: ScatterProps) {
   const ref = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   const W = 800, H = height, padL = 44, padR = 14, padT = 14, padB = 34;
@@ -291,7 +333,7 @@ export function Scatter({ points, height = 320, xLabel }: ScatterProps) {
   const xTicks = Array.from({ length: 5 }, (_, i) => xlo + (i / 4) * (xhi - xlo));
   return (
     <div style={{ position: 'relative' }}>
-      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: 'block', overflow: 'visible' }}>
+      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible' }}>
         {yTicks.map((t, i) => (
           <g key={i}>
             <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="var(--grid-line)" />

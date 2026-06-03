@@ -1,9 +1,49 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { Panel, KPI, Icon, Chg, Seg, ConfBar } from '../components/ui';
 import { Sparkline, LineChart } from '../components/charts';
 import { crawlGold, predictGold, goldBacktest } from '../api';
 import { vnsToast } from '../components/ui';
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function num(x: any): number {
+  const n = typeof x === 'number' ? x : parseFloat(x);
+  return isFinite(n) ? n : 0;
+}
+
+function ddmm(s: string): string {
+  if (!s) return '';
+  try {
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s.slice(0, 10);
+    return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2);
+  } catch {
+    return s.slice(0, 10);
+  }
+}
+
+function algoShort(name: string): { short: string; cls: string } {
+  const map: Record<string, { short: string; cls: string }> = {
+    lstm_nn: { short: 'LSTM', cls: 'lstm' },
+    lstm: { short: 'LSTM', cls: 'lstm' },
+    arima_garch: { short: 'ARIMA', cls: 'arima' },
+    moving_average: { short: 'MA', cls: 'ma' },
+    ema: { short: 'EMA', cls: 'ema' },
+    ensemble: { short: 'ENS', cls: 'ens' },
+  };
+  return map[(name || '').toLowerCase()] || { short: (name || '?').slice(0, 5).toUpperCase(), cls: 'unknown' };
+}
+
+interface GoldConfirmedItem {
+  symbol?: string;
+  source?: string;
+  product_type?: string;
+  algorithm_name: string;
+  predicted_price: number;
+  actual_price?: number | null;
+  accuracy?: number | null;
+  prediction_date: string;
+}
 
 function Legend({ items }: { items: [string, string][] }) {
   return (
@@ -23,6 +63,19 @@ export default function Gold() {
   const srcs = D.goldSources || [];
   const [active, setActive] = useState<string | null>(null);
   const [days, setDays] = useState('180');
+  const [confirmedResults, setConfirmedResults] = useState<GoldConfirmedItem[]>([]);
+
+  useEffect(() => {
+    fetch('/api/gold/predictions/latest-results', { headers: { Accept: 'application/json' } })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data) {
+          const raw = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
+          setConfirmedResults(raw);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const src = srcs.find((g) => g.id === active) || srcs[0] || null;
   const isOz = src ? src.unit === 'oz' : false;
@@ -104,14 +157,11 @@ export default function Gold() {
           ? <LineChart
               series={[{ name: src!.name, data: hist, color: 'var(--gold)' }]}
               labels={histLabels.length
-                ? histLabels.map((l, i) => {
-                    if (i % Math.ceil(n / 7) !== 0) return '';
-                    const p = l.slice(5).split('-'); return p[1] + '/' + p[0];
-                  })
-                : hist.map((_, i) => i % Math.ceil(n / 7) === 0 ? `${i + 1}` : '')}
-              height={300} area yFmt={fmtGold} valueFmt={fmtFull} padL={58}
+                ? histLabels.map((l) => { const p = l.slice(5).split('-'); return p[1] + '/' + p[0]; })
+                : hist.map((_, i) => `${i + 1}`)}
+              height={540} area yFmt={fmtGold} valueFmt={fmtFull} padL={58}
             />
-          : <div className="empty" style={{ height: 300, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          : <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div className="empty__icon"><Icon name="layers" size={18} /></div>
               <p>Chưa có lịch sử giá vàng. Bấm thu thập để lấy data.</p>
             </div>
@@ -189,26 +239,99 @@ export default function Gold() {
           }
         </Panel>
 
-        <Panel title="Dự đoán vs Thực tế" sub="BTMC SJC · Ensemble">
-          {D.goldPredActual && D.goldPredActual.labels.length > 0
-            ? <>
-                <LineChart
-                  series={[
-                    { name: 'Thực tế', data: D.goldPredActual.actual, color: 'var(--text-2)', w: 1.8 },
-                    { name: 'Dự đoán', data: D.goldPredActual.pred, color: 'var(--gold)', dash: '5 4', w: 2 },
-                  ]}
-                  labels={D.goldPredActual.labels.map((l, i) => i % 5 === 0 ? l : '')}
-                  height={236} yFmt={(v) => (v / 1e6).toFixed(1) + 'tr'} valueFmt={(v) => fmt.vnd(Math.round(v))} padL={50}
-                />
-                <Legend items={[['Thực tế', 'var(--text-2)'], ['Dự đoán', 'var(--gold)']]} />
-              </>
-            : <div className="empty" style={{ height: 236, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <div className="empty__icon"><Icon name="layers" size={18} /></div>
-                <p>Chưa có dữ liệu so sánh dự đoán</p>
-              </div>
-          }
+        <Panel title="Kết quả dự đoán gần nhất" flush>
+          {confirmedResults.length === 0 ? (
+            <div className="empty">
+              <div className="empty__icon"><Icon name="pulse" size={18} /></div>
+              <p>Chưa có kết quả đã xác nhận. Kết quả sẽ xuất hiện sau khi dự đoán được đối chiếu với giá thực tế.</p>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Nguồn</th>
+                    <th className="c">TT</th>
+                    <th className="r">Dự đoán</th>
+                    <th className="r">Thực tế</th>
+                    <th className="r">Lệch</th>
+                    <th className="r">Độ CX</th>
+                    <th className="c">Ngày</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {confirmedResults.map((r, i) => {
+                    const isOzRow = (r.source || r.symbol || '').toLowerCase().includes('xau') ||
+                      (r.product_type || '').toLowerCase().includes('xau');
+                    const predicted = num(r.predicted_price);
+                    const actual = num(r.actual_price ?? 0);
+                    const fmtPrice = (v: number) => isOzRow ? '$' + v.toFixed(0) : fmt.vnd(Math.round(v));
+                    const deviationPct = actual ? +((predicted - actual) / actual * 100).toFixed(2) : 0;
+                    const absDeviation = Math.abs(deviationPct);
+                    const deviationColor = absDeviation < 3
+                      ? 'var(--up)'
+                      : absDeviation < 5
+                        ? 'oklch(0.78 0.18 80)'
+                        : 'var(--dn)';
+                    let acc = r.accuracy != null ? num(r.accuracy) : null;
+                    if (acc != null && acc > 0 && acc <= 1) acc = Math.round(acc * 100);
+                    const accColor = acc == null ? 'var(--text-3)'
+                      : acc >= 95 ? 'var(--up)'
+                      : acc >= 80 ? 'oklch(0.78 0.18 80)'
+                      : 'var(--dn)';
+                    const { short, cls } = algoShort(r.algorithm_name);
+                    const label = r.source || r.symbol || r.product_type || '—';
+                    return (
+                      <tr key={i}>
+                        <td className="sym" style={{ fontSize: 12.5 }}>{label}</td>
+                        <td className="c"><span className={`algo algo--${cls}`}>{short}</span></td>
+                        <td className="r num" style={{ fontWeight: 600, fontSize: 12 }}>{fmtPrice(predicted)}</td>
+                        <td className="r num" style={{ color: 'var(--text-2)', fontSize: 12 }}>
+                          {r.actual_price != null ? fmtPrice(actual) : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                        </td>
+                        <td className="r num" style={{ color: deviationColor, fontSize: 12, fontWeight: 500 }}>
+                          {r.actual_price != null
+                            ? (deviationPct >= 0 ? '+' : '') + deviationPct.toFixed(2) + '%'
+                            : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                        </td>
+                        <td className="r">
+                          {acc != null
+                            ? <span style={{ color: accColor, fontWeight: 600, fontSize: 12 }}>{acc}%</span>
+                            : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                        </td>
+                        <td className="c num" style={{ color: 'var(--text-3)', fontSize: 12 }}>
+                          {ddmm(r.prediction_date)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Panel>
       </div>
+
+      {/* Prediction vs Actual chart — full width */}
+      <Panel title="Dự đoán vs Thực tế" sub="BTMC SJC · Ensemble" className="section-gap">
+        {D.goldPredActual && D.goldPredActual.labels.length > 0
+          ? <>
+              <LineChart
+                series={[
+                  { name: 'Thực tế', data: D.goldPredActual.actual, color: 'var(--text-2)', w: 1.8 },
+                  { name: 'Dự đoán', data: D.goldPredActual.pred, color: 'var(--gold)', dash: '5 4', w: 2 },
+                ]}
+                labels={D.goldPredActual.labels}
+                height={540} yFmt={(v) => (v / 1e6).toFixed(1) + 'tr'} valueFmt={(v) => fmt.vnd(Math.round(v))} padL={50}
+              />
+              <Legend items={[['Thực tế', 'var(--text-2)'], ['Dự đoán', 'var(--gold)']]} />
+            </>
+          : <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div className="empty__icon"><Icon name="layers" size={18} /></div>
+              <p>Chưa có dữ liệu so sánh dự đoán</p>
+            </div>
+        }
+      </Panel>
 
       <Panel title="Chi tiết SJC 1 Lượng" sub="10 ngày gần nhất" flush style={{ paddingBottom: 8 }}
         tools={<button className="btn btn--sm btn--ghost"><Icon name="refresh" size={13} />Làm mới</button>}>
