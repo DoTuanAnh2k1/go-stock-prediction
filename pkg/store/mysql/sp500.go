@@ -104,14 +104,13 @@ func (c *Client) GetLatestSP500Predictions() ([]modelsdb.SP500Prediction, error)
 	return preds, err
 }
 
-// GetLatestConfirmedSP500Predictions returns the most recent CONFIRMED prediction
-// (actual_price IS NOT NULL) per (symbol, algorithm_name).
+// GetLatestConfirmedSP500Predictions returns the most recent prediction
+// per (symbol, algorithm_name), regardless of status.
 // Uses MAX(id) to avoid duplicates when multiple rows share the same prediction_date.
 func (c *Client) GetLatestConfirmedSP500Predictions() ([]modelsdb.SP500Prediction, error) {
 	var preds []modelsdb.SP500Prediction
 	subQuery := c.Db.Model(&modelsdb.SP500Prediction{}).
 		Select("MAX(id) as max_id").
-		Where("actual_price IS NOT NULL").
 		Group("symbol, algorithm_name")
 	err := c.Db.
 		Joins("JOIN (?) as latest ON latest.max_id = sp500_predictions.id", subQuery).

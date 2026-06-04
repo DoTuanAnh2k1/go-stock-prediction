@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from src.algorithms.registry import build_algorithms
+from src.algorithms.registry import build_algorithms, set_algos_for_market
 from src.crawlers.crypto import COINS as CRYPTO_COINS
 from src.crawlers.nasdaq import NASDAQ_SYMBOLS
 from src.crawlers.sp500 import SP500_SYMBOLS
@@ -87,6 +87,85 @@ def _collect_all_training_series() -> list[tuple[list[float], list[float], str]]
 
     return series
 
+
+def _collect_series_for_market(mk: str) -> list[tuple[list[float], list[float], str]]:
+    """Collect (price_list, vol_list, label) for a single market.
+
+    Args:
+        mk: Market key in UPPER case — one of VN30, GOLD, NASDAQ100, CRYPTO, FUEL, SP500.
+
+    Returns:
+        List of (price_list, vol_list, label) tuples where price_list is ASC order.
+    """
+    series: list[tuple[list[float], list[float], str]] = []
+
+    if mk == "VN30":
+        for stock in repo.get_vn30_stocks():
+            prices = repo.get_stock_prices_asc(stock.id, limit=200)
+            if len(prices) >= 20:
+                series.append((
+                    [float(p.close_price) for p in prices],
+                    [float(p.volume or 0) for p in prices],
+                    f"vn30/{stock.symbol}",
+                ))
+
+    elif mk == "GOLD":
+        for source, product_type in GOLD_INSTRUMENTS:
+            prices = repo.get_gold_prices_asc(source, product_type, limit=200)
+            if len(prices) >= 20:
+                series.append((
+                    [float(p.buy_price) for p in prices],
+                    [],
+                    f"gold/{source}/{product_type}",
+                ))
+
+    elif mk == "NASDAQ100":
+        symbols = repo.get_nasdaq_symbols() or NASDAQ_SYMBOLS
+        for symbol in symbols:
+            prices = repo.get_nasdaq_prices_asc(symbol, limit=200)
+            if len(prices) >= 20:
+                series.append((
+                    [float(p.close_price) for p in prices],
+                    [float(p.volume or 0) for p in prices],
+                    f"nasdaq/{symbol}",
+                ))
+
+    elif mk == "CRYPTO":
+        for coin_id, symbol in CRYPTO_COINS:
+            prices = repo.get_crypto_prices_asc(coin_id, limit=200)
+            if len(prices) >= 20:
+                series.append((
+                    [float(p.close_price) for p in prices],
+                    [],
+                    f"crypto/{symbol}",
+                ))
+
+    elif mk == "FUEL":
+        for product_type in FUEL_PRODUCTS:
+            prices = repo.get_fuel_prices_asc(product_type, limit=200)
+            if len(prices) >= 20:
+                series.append((
+                    [float(p.price) for p in prices],
+                    [],
+                    f"fuel/{product_type}",
+                ))
+
+    elif mk == "SP500":
+        sp_symbols = repo.get_sp500_symbols() or SP500_SYMBOLS
+        for symbol in sp_symbols:
+            prices = repo.get_sp500_prices_asc(symbol, limit=200)
+            if len(prices) >= 20:
+                series.append((
+                    [float(p.close_price) for p in prices],
+                    [float(p.volume or 0) for p in prices],
+                    f"sp500/{symbol}",
+                ))
+
+    else:
+        log.warning("training.market.unknown", market=mk)
+
+    return series
+
 _lock = threading.Lock()
 
 # Training state
@@ -118,9 +197,95 @@ def get_training_status() -> dict:
         }
 
 
-def train_all_algorithms() -> tuple[bool, str]:
-    """Train all algorithms. Returns (success, session_id).
+def train_for_market(market_key: str) -> tuple[bool, str]:
+    """Train all algorithms for a specific market. Returns (success, session_id).
 
+    Builds fresh algorithm instances for the market, calls algo.train_batch()
+    once per algorithm with ALL price series for that market combined. This ensures
+    stateful algorithms (LSTM, GRU, LightGBM, RandomForest, XGBoost) build a single
+    model from the full dataset rather than overwriting with each series.
+
+    Trained instances are stored in the registry so subsequent predict() calls
+    run inference-only.
+    """
+    mk = market_key.upper()
+    session_id = str(uuid.uuid4())
+    started_at = datetime.utcnow()
+
+    series = _collect_series_for_market(mk)
+    if not series:
+        log.warning("training.market.no_data", market=mk)
+        return False, session_id
+
+    # Build fresh instances exclusively for this market
+    algos = build_algorithms(market_key=mk)
+
+    # Convert to (prices, volumes) tuples — drop label
+    series_data = [
+        (price_list, vol_list if vol_list else None)
+        for price_list, vol_list, _label in series
+    ]
+
+    total_success = 0
+    total_error = 0
+
+    log.info("training.market.start", market=mk, series=len(series), algorithms=len(algos))
+
+    for key, algo in algos.items():
+        algo_started = datetime.utcnow()
+        try:
+            algo.train_batch(series_data)
+            success = len(series_data)
+            error = 0
+        except Exception as exc:
+            log.warning("training.market.algo.failed", market=mk, algo=key, error=str(exc))
+            success = 0
+            error = len(series_data)
+
+        duration_ms = int((datetime.utcnow() - algo_started).total_seconds() * 1000)
+        accuracy = Decimal(str(round(success / max(1, success + error), 4)))
+
+        try:
+            repo.create_training_log(
+                session_id=session_id,
+                algorithm_name=key,
+                market_key=mk.lower(),
+                total_stocks=len(series),
+                success_count=success,
+                error_count=error,
+                accuracy=accuracy,
+                duration_ms=duration_ms,
+                started_at=algo_started,
+                completed_at=datetime.utcnow(),
+            )
+        except Exception as exc:
+            log.warning("training.log.failed", error=str(exc))
+
+        total_success += success
+        total_error += error
+        log.info("training.market.algo.done", market=mk, algo=key, trained=algo.is_trained())
+
+    # Persist trained instances in the registry
+    set_algos_for_market(mk, algos)
+
+    try:
+        repo.create_sync_log(
+            source=f"ML Training ({mk})",
+            success_count=total_success,
+            error_count=total_error,
+            duration_ms=int((datetime.utcnow() - started_at).total_seconds() * 1000),
+        )
+    except Exception as exc:
+        log.warning("training.sync_log.failed", error=str(exc))
+
+    log.info("training.market.done", market=mk, success=total_success, error=total_error)
+    return True, session_id
+
+
+def train_all_algorithms() -> tuple[bool, str]:
+    """Train all algorithms for all markets. Returns (success, session_id).
+
+    Iterates over every known market and calls train_for_market() for each.
     This runs synchronously (for cron jobs). For manual trigger, caller
     should run in a background thread.
     """
@@ -134,71 +299,45 @@ def train_all_algorithms() -> tuple[bool, str]:
         _current_phase = "Initializing"
         _done_algorithms = 0
 
-    algos = build_algorithms()
-
-    with _lock:
-        _total_algorithms = len(algos)
-
+    markets = ["VN30", "GOLD", "NASDAQ100", "CRYPTO", "FUEL", "SP500"]
     session_id = str(uuid.uuid4())
     started_at = datetime.utcnow()
 
+    # Update total algorithm count for status reporting
     try:
-        all_series = _collect_all_training_series()
-        total_success = 0
-        total_error = 0
+        sample_algos = build_algorithms()
+        with _lock:
+            _total_algorithms = len(sample_algos) * len(markets)
+    except Exception:
+        with _lock:
+            _total_algorithms = len(markets)
 
-        log.info("training.start", series=len(all_series), algorithms=len(algos))
+    total_success = 0
+    total_error = 0
 
-        for idx, (key, algo) in enumerate(algos.items()):
+    try:
+        for idx, mk in enumerate(markets):
             with _lock:
-                _current_phase = f"Training {key} ({idx+1}/{len(algos)})"
-                _progress = idx / len(algos) * 100
+                _current_phase = f"Training {mk} ({idx+1}/{len(markets)})"
+                _progress = idx / len(markets) * 100
 
-            log.info("training.algo.start", algo=key, series=len(all_series))
-            success = 0
-            error = 0
-            algo_started = datetime.utcnow()
-
-            for price_list, vol_list, label in all_series:
-                try:
-                    if vol_list:
-                        algo.predict(price_list, vol_list)
-                    else:
-                        algo.predict(price_list)
-                    success += 1
-                except Exception:
-                    error += 1
-
-            duration_ms = int((datetime.utcnow() - algo_started).total_seconds() * 1000)
-            accuracy = Decimal(str(round(success / max(1, success + error), 4)))
-
+            log.info("training.market.begin", market=mk)
             try:
-                repo.create_training_log(
-                    session_id=session_id,
-                    algorithm_name=key,
-                    market_key="all",
-                    total_stocks=len(all_series),
-                    success_count=success,
-                    error_count=error,
-                    accuracy=accuracy,
-                    duration_ms=duration_ms,
-                    started_at=algo_started,
-                    completed_at=datetime.utcnow(),
-                )
+                success, _sid = train_for_market(mk)
+                if success:
+                    total_success += 1
+                else:
+                    total_error += 1
             except Exception as exc:
-                log.warning("training.log.failed", error=str(exc))
-
-            total_success += success
-            total_error += error
+                log.error("training.market.error", market=mk, error=str(exc))
+                total_error += 1
 
             with _lock:
-                _done_algorithms = idx + 1
-                _progress = _done_algorithms / len(algos) * 100
-
-            log.info("training.algo.done", algo=key, success=success, error=error)
+                _done_algorithms = (idx + 1)
+                _progress = _done_algorithms / len(markets) * 100
 
         repo.create_sync_log(
-            source="ML Training",
+            source="ML Training (ALL)",
             success_count=total_success,
             error_count=total_error,
             duration_ms=int((datetime.utcnow() - started_at).total_seconds() * 1000),
@@ -238,18 +377,21 @@ def train_single_algorithm(algorithm_name: str) -> tuple[bool, str]:
 
     try:
         all_series = _collect_all_training_series()
-        success = 0
-        error = 0
 
-        for price_list, vol_list, label in all_series:
-            try:
-                if vol_list:
-                    algo.predict(price_list, vol_list)
-                else:
-                    algo.predict(price_list)
-                success += 1
-            except Exception:
-                error += 1
+        # Convert to (prices, volumes) tuples — drop label
+        series_data = [
+            (price_list, vol_list if vol_list else None)
+            for price_list, vol_list, _label in all_series
+        ]
+
+        try:
+            algo.train_batch(series_data)
+            success = len(series_data)
+            error = 0
+        except Exception as exc:
+            log.warning("training.single.algo.failed", algo=algorithm_name, error=str(exc))
+            success = 0
+            error = len(series_data)
 
         duration_ms = int((datetime.utcnow() - started_at).total_seconds() * 1000)
         accuracy = Decimal(str(round(success / max(1, success + error), 4)))
@@ -258,7 +400,7 @@ def train_single_algorithm(algorithm_name: str) -> tuple[bool, str]:
             session_id=session_id,
             algorithm_name=algorithm_name,
             market_key="all",
-            total_stocks=len(all_series),
+            total_stocks=len(series_data),
             success_count=success,
             error_count=error,
             accuracy=accuracy,

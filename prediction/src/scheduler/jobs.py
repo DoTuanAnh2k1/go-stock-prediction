@@ -1,59 +1,81 @@
 """Cron job definitions registered with the scheduler."""
 from __future__ import annotations
 
+from typing import Callable
+
 from src.utils.logger import get_logger
 
 log = get_logger("jobs")
 
+# Crawl counter per market — triggers retraining every 10 crawls
+_crawl_counts: dict[str, int] = {}
+
+
+def _run_pipeline(market_key: str, crawl_fn: Callable) -> None:
+    """Crawl → [train every 10th crawl] → predict pipeline.
+
+    Steps:
+    1. Run crawl_fn() to fetch and persist new data.
+    2. Increment per-market crawl counter; on every 10th crawl, trigger
+       train_for_market() to rebuild models from the latest data.
+    3. Run run_for_market() to generate fresh predictions.
+
+    Aborts the full pipeline if crawl fails (no point predicting stale data).
+    """
+    # Step 1: Crawl
+    try:
+        saved = crawl_fn()
+        log.info("pipeline.crawl.done", market=market_key, saved=saved)
+    except Exception as exc:
+        log.error("pipeline.crawl.error", market=market_key, error=str(exc))
+        return  # Abort if crawl fails
+
+    # Step 2: Increment counter and train every 10th crawl
+    _crawl_counts[market_key] = _crawl_counts.get(market_key, 0) + 1
+    crawl_num = _crawl_counts[market_key]
+    log.info("pipeline.crawl_count", market=market_key, count=crawl_num)
+
+    if crawl_num % 10 == 0:
+        log.info("pipeline.training.start", market=market_key, crawl=crawl_num)
+        try:
+            from src.orchestrator.training import train_for_market
+            success, sid = train_for_market(market_key)
+            log.info("pipeline.training.done", market=market_key, success=success, session_id=sid)
+        except Exception as exc:
+            log.warning("pipeline.training.error", market=market_key, error=str(exc))
+
+    # Step 3: Predict (run_for_market also triggers sim step internally)
+    try:
+        from src.orchestrator.runner import run_for_market
+        n = run_for_market(market_key)
+        log.info("pipeline.predict.done", market=market_key, predictions=n)
+    except Exception as exc:
+        log.error("pipeline.predict.error", market=market_key, error=str(exc))
+
 
 def job_crawl_vn30() -> None:
     from src.crawlers.vn30 import VN30Crawler
-    try:
-        crawler = VN30Crawler()
-        saved = crawler.crawl()
-        log.info("job.vn30.done", saved=saved)
-    except Exception as exc:
-        log.error("job.vn30.error", error=str(exc))
+    _run_pipeline("VN30", lambda: VN30Crawler().crawl())
 
 
 def job_crawl_gold() -> None:
     from src.crawlers.gold import GoldCrawler
-    try:
-        crawler = GoldCrawler()
-        saved = crawler.crawl()
-        log.info("job.gold.done", saved=saved)
-    except Exception as exc:
-        log.error("job.gold.error", error=str(exc))
+    _run_pipeline("GOLD", lambda: GoldCrawler().crawl())
 
 
 def job_crawl_nasdaq() -> None:
     from src.crawlers.nasdaq import NasdaqCrawler
-    try:
-        crawler = NasdaqCrawler()
-        saved = crawler.crawl()
-        log.info("job.nasdaq.done", saved=saved)
-    except Exception as exc:
-        log.error("job.nasdaq.error", error=str(exc))
+    _run_pipeline("NASDAQ100", lambda: NasdaqCrawler().crawl())
 
 
 def job_crawl_crypto() -> None:
     from src.crawlers.crypto import CryptoCrawler
-    try:
-        crawler = CryptoCrawler()
-        saved = crawler.crawl()
-        log.info("job.crypto.done", saved=saved)
-    except Exception as exc:
-        log.error("job.crypto.error", error=str(exc))
+    _run_pipeline("CRYPTO", lambda: CryptoCrawler().crawl())
 
 
 def job_crawl_fuel() -> None:
     from src.crawlers.fuel import FuelCrawler
-    try:
-        crawler = FuelCrawler()
-        saved = crawler.crawl()
-        log.info("job.fuel.done", saved=saved)
-    except Exception as exc:
-        log.error("job.fuel.error", error=str(exc))
+    _run_pipeline("FUEL", lambda: FuelCrawler().crawl())
 
 
 def job_weekly_training() -> None:
@@ -85,12 +107,7 @@ def job_daily_reconcile() -> None:
 
 def job_crawl_sp500() -> None:
     from src.crawlers.sp500 import SP500Crawler
-    try:
-        crawler = SP500Crawler()
-        saved = crawler.crawl()
-        log.info("job.sp500.done", saved=saved)
-    except Exception as exc:
-        log.error("job.sp500.error", error=str(exc))
+    _run_pipeline("SP500", lambda: SP500Crawler().crawl())
 
 
 def job_gold_predict() -> None:
@@ -157,6 +174,64 @@ def job_predict_sp500() -> None:
         log.error("job.predict_sp500.error", error=str(exc))
 
 
+# ---------------------------------------------------------------------------
+# Per-market training jobs
+# ---------------------------------------------------------------------------
+
+def job_train_vn30() -> None:
+    from src.orchestrator.training import train_for_market
+    try:
+        success, sid = train_for_market("VN30")
+        log.info("job.train_vn30.done", success=success, session_id=sid)
+    except Exception as exc:
+        log.error("job.train_vn30.error", error=str(exc))
+
+
+def job_train_gold() -> None:
+    from src.orchestrator.training import train_for_market
+    try:
+        success, sid = train_for_market("GOLD")
+        log.info("job.train_gold.done", success=success, session_id=sid)
+    except Exception as exc:
+        log.error("job.train_gold.error", error=str(exc))
+
+
+def job_train_nasdaq() -> None:
+    from src.orchestrator.training import train_for_market
+    try:
+        success, sid = train_for_market("NASDAQ100")
+        log.info("job.train_nasdaq.done", success=success, session_id=sid)
+    except Exception as exc:
+        log.error("job.train_nasdaq.error", error=str(exc))
+
+
+def job_train_crypto() -> None:
+    from src.orchestrator.training import train_for_market
+    try:
+        success, sid = train_for_market("CRYPTO")
+        log.info("job.train_crypto.done", success=success, session_id=sid)
+    except Exception as exc:
+        log.error("job.train_crypto.error", error=str(exc))
+
+
+def job_train_fuel() -> None:
+    from src.orchestrator.training import train_for_market
+    try:
+        success, sid = train_for_market("FUEL")
+        log.info("job.train_fuel.done", success=success, session_id=sid)
+    except Exception as exc:
+        log.error("job.train_fuel.error", error=str(exc))
+
+
+def job_train_sp500() -> None:
+    from src.orchestrator.training import train_for_market
+    try:
+        success, sid = train_for_market("SP500")
+        log.info("job.train_sp500.done", success=success, session_id=sid)
+    except Exception as exc:
+        log.error("job.train_sp500.error", error=str(exc))
+
+
 # Job registry — maps job_key → callable
 JOB_FUNCTIONS = {
     "crawler_stock": job_crawl_vn30,
@@ -175,4 +250,11 @@ JOB_FUNCTIONS = {
     "predict_crypto": job_predict_crypto,
     "predict_fuel": job_predict_fuel,
     "predict_sp500": job_predict_sp500,
+    # Per-market training jobs
+    "train_vn30": job_train_vn30,
+    "train_gold": job_train_gold,
+    "train_nasdaq": job_train_nasdaq,
+    "train_crypto": job_train_crypto,
+    "train_fuel": job_train_fuel,
+    "train_sp500": job_train_sp500,
 }

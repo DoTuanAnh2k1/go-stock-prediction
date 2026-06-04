@@ -110,14 +110,13 @@ func (c *Client) GetLatestCryptoPredictions() ([]modelsdb.CryptoPrediction, erro
 	return preds, err
 }
 
-// GetLatestConfirmedCryptoPredictions returns the most recent CONFIRMED prediction
-// (actual_price IS NOT NULL) per (coin_id, algorithm_name).
+// GetLatestConfirmedCryptoPredictions returns the most recent prediction
+// per (coin_id, algorithm_name), regardless of status.
 // Uses MAX(id) to avoid duplicates when multiple rows share the same prediction_date.
 func (c *Client) GetLatestConfirmedCryptoPredictions() ([]modelsdb.CryptoPrediction, error) {
 	var preds []modelsdb.CryptoPrediction
 	subQuery := c.Db.Model(&modelsdb.CryptoPrediction{}).
 		Select("MAX(id) as max_id").
-		Where("actual_price IS NOT NULL").
 		Group("coin_id, algorithm_name")
 
 	err := c.Db.

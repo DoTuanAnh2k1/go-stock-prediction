@@ -62,7 +62,71 @@ interface PredictionItem {
 interface PredChartData {
   labels: string[];
   actual: (number | null)[];
-  pred: (number | null)[];
+  predSeries: { key: string; data: (number | null)[] }[];
+}
+
+const ALGO_COLORS: Record<string, string> = {
+  lstm_nn:        'oklch(0.74 0.13 200)',
+  lstm:           'oklch(0.74 0.13 200)',
+  arima_garch:    'var(--gold)',
+  arima:          'var(--gold)',
+  moving_average: 'var(--up)',
+  ema:            'oklch(0.72 0.18 150)',
+  ema_macd:       'oklch(0.72 0.18 150)',
+  lightgbm:       'oklch(0.75 0.16 30)',
+  random_forest:  'oklch(0.72 0.14 270)',
+  xgboost:        'oklch(0.73 0.17 350)',
+  gru:            'oklch(0.72 0.15 240)',
+  ensemble:       'oklch(0.72 0.14 300)',
+};
+const FALLBACK_COLORS = ['var(--accent)', 'oklch(0.72 0.14 300)', 'var(--gold)', 'oklch(0.72 0.18 150)', 'var(--up)'];
+function algoColor(key: string, idx: number): string {
+  return ALGO_COLORS[key.toLowerCase()] || FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
+}
+const ALGO_DISPLAY: Record<string, string> = {
+  lstm_nn: 'LSTM', lstm: 'LSTM', arima_garch: 'ARIMA', arima: 'ARIMA',
+  moving_average: 'MA', ema: 'EMA', ema_macd: 'EMA/MACD',
+  lightgbm: 'LightGBM', random_forest: 'RF', xgboost: 'XGBoost',
+  gru: 'GRU', ensemble: 'Ensemble',
+};
+function algoDisplayName(key: string): string {
+  return ALGO_DISPLAY[key.toLowerCase()] || key;
+}
+function buildMultiAlgoData(
+  list: any[],
+  dateField: string,
+  actualField: string,
+  predField: string,
+  algoField: string,
+  fmtDate: (s: string) => string,
+): { labels: string[]; actual: (number | null)[]; predSeries: { key: string; data: (number | null)[] }[] } {
+  const sorted = [...list].sort((a, b) => (a[dateField] || '') < (b[dateField] || '') ? -1 : 1);
+  const uniqueDates: string[] = [];
+  const dateIndex = new Map<string, number>();
+  for (const it of sorted) {
+    const d = it[dateField] || '';
+    if (!dateIndex.has(d)) { dateIndex.set(d, uniqueDates.length); uniqueDates.push(d); }
+  }
+  const n = uniqueDates.length;
+  const actual: (number | null)[] = new Array(n).fill(null);
+  for (const it of sorted) {
+    const idx = dateIndex.get(it[dateField] || '');
+    if (idx !== undefined && actual[idx] === null && it[actualField] != null) {
+      const v = parseFloat(it[actualField]);
+      actual[idx] = isFinite(v) ? v : null;
+    }
+  }
+  const algoMap = new Map<string, (number | null)[]>();
+  for (const it of sorted) {
+    const key = (it[algoField] || 'unknown').toLowerCase();
+    if (!algoMap.has(key)) algoMap.set(key, new Array(n).fill(null));
+    const idx = dateIndex.get(it[dateField] || '');
+    if (idx !== undefined && it[predField] != null) {
+      const v = parseFloat(it[predField]);
+      algoMap.get(key)![idx] = isFinite(v) ? v : null;
+    }
+  }
+  return { labels: uniqueDates.map(fmtDate), actual, predSeries: Array.from(algoMap.entries()).map(([key, data]) => ({ key, data })) };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -159,7 +223,7 @@ export default function Crypto() {
   const [chart, setChart] = useState<ChartData>({ dates: [], prices: [] });
   const [preds, setPreds] = useState<PredictionItem[]>([]);
   const [confirmedResults, setConfirmedResults] = useState<PredictionItem[]>([]);
-  const [predChart, setPredChart] = useState<PredChartData>({ labels: [], actual: [], pred: [] });
+  const [predChart, setPredChart] = useState<PredChartData>({ labels: [], actual: [], predSeries: [] });
   const [predChartCoin, setPredChartCoin] = useState<string>('bitcoin');
   const [predChartAlgo, setPredChartAlgo] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -213,22 +277,12 @@ export default function Crypto() {
       .then((v: any) => {
         const list = Array.isArray(v) ? v : Array.isArray(v?.data) ? v.data : [];
         if (list.length > 0) {
-          setPredChart({
-            labels: list.map((d: any) => ddmm(d.date || d.prediction_date || '')),
-            actual: list.map((d: any) => d.actual_price != null ? num(d.actual_price) : null),
-            pred: list.map((d: any) => d.predicted_price != null ? num(d.predicted_price) : null),
-          });
-        } else if (v.labels) {
-          setPredChart({
-            labels: Array.isArray(v.labels) ? v.labels.map(ddmm) : [],
-            actual: Array.isArray(v.actual) ? v.actual.map((x: any) => x != null ? num(x) : null) : [],
-            pred: Array.isArray(v.pred) ? v.pred.map((x: any) => x != null ? num(x) : null) : [],
-          });
+          setPredChart(buildMultiAlgoData(list, 'date', 'actual_price', 'predicted_price', 'algorithm_name', ddmm));
         } else {
-          setPredChart({ labels: [], actual: [], pred: [] });
+          setPredChart({ labels: [], actual: [], predSeries: [] });
         }
       })
-      .catch(() => setPredChart({ labels: [], actual: [], pred: [] }));
+      .catch(() => setPredChart({ labels: [], actual: [], predSeries: [] }));
   }, [predChartCoin, predChartAlgo, days]);
 
   const activeCoinDef = COINS.find((c) => c.id === activeCoin) || COINS[0];
@@ -581,12 +635,18 @@ export default function Crypto() {
           </div>
         }
       >
-        {predChart.labels.length > 0 ? (
+        {predChart.labels.length > 0 && (predChart.predSeries.length > 0 || predChart.actual.some((v) => v != null)) ? (
           <>
             <LineChart
               series={[
                 { name: 'Thực tế', data: predChart.actual, color: 'var(--text-2)', w: 1.8 },
-                { name: 'Dự đoán', data: predChart.pred, color: predChartCoinDef.color, dash: '5 4', w: 2 },
+                ...predChart.predSeries.map((ps, i) => ({
+                  name: algoDisplayName(ps.key),
+                  data: ps.data,
+                  color: algoColor(ps.key, i),
+                  dash: '5 4',
+                  w: 1.6,
+                })),
               ]}
               labels={predChart.labels}
               height={540}
@@ -594,7 +654,10 @@ export default function Crypto() {
               valueFmt={fmtCrypto}
               padL={70}
             />
-            <Legend items={[['Thực tế', 'var(--text-2)'], ['Dự đoán', predChartCoinDef.color]]} />
+            <Legend items={[
+              ['Thực tế', 'var(--text-2)'],
+              ...predChart.predSeries.map((ps, i) => [algoDisplayName(ps.key), algoColor(ps.key, i)] as [string, string]),
+            ]} />
           </>
         ) : (
           <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>

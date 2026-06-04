@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from src.algorithms.registry import build_algorithms
+from src.algorithms.registry import get_algos_for_market
 from src.crawlers.crypto import COINS as CRYPTO_COINS
 from src.crawlers.nasdaq import NASDAQ_SYMBOLS
 from src.crawlers.sp500 import SP500_SYMBOLS
@@ -47,7 +47,7 @@ def run_all_markets() -> int:
 def run_for_market(market_key: str) -> int:
     """Run predictions for a single market. Returns prediction count."""
     mk = market_key.upper()
-    algos = build_algorithms()
+    algos = get_algos_for_market(mk)
 
     if mk in ("VN30", ""):
         count = _predict_vn30(algos)

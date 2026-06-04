@@ -3,6 +3,71 @@ import { useData } from '../context/DataContext';
 import { Panel, KPI, Icon, Chg, Seg, ConfBar } from '../components/ui';
 import { LineChart, HBars, Scatter } from '../components/charts';
 
+// ── Color/name helpers ─────────────────────────────────────────────────────────
+const ALGO_COLORS: Record<string, string> = {
+  lstm_nn:        'oklch(0.74 0.13 200)',
+  lstm:           'oklch(0.74 0.13 200)',
+  arima_garch:    'var(--gold)',
+  arima:          'var(--gold)',
+  moving_average: 'var(--up)',
+  ema:            'oklch(0.72 0.18 150)',
+  ema_macd:       'oklch(0.72 0.18 150)',
+  lightgbm:       'oklch(0.75 0.16 30)',
+  random_forest:  'oklch(0.72 0.14 270)',
+  xgboost:        'oklch(0.73 0.17 350)',
+  gru:            'oklch(0.72 0.15 240)',
+  ensemble:       'oklch(0.72 0.14 300)',
+};
+const FALLBACK_COLORS = ['var(--accent)', 'oklch(0.72 0.14 300)', 'var(--gold)', 'oklch(0.72 0.18 150)', 'var(--up)'];
+function algoColor(key: string, idx: number): string {
+  return ALGO_COLORS[key.toLowerCase()] || FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
+}
+const ALGO_DISPLAY: Record<string, string> = {
+  lstm_nn: 'LSTM', lstm: 'LSTM', arima_garch: 'ARIMA', arima: 'ARIMA',
+  moving_average: 'MA', ema: 'EMA', ema_macd: 'EMA/MACD',
+  lightgbm: 'LightGBM', random_forest: 'RF', xgboost: 'XGBoost',
+  gru: 'GRU', ensemble: 'Ensemble',
+};
+function algoDisplayName(key: string): string {
+  return ALGO_DISPLAY[key.toLowerCase()] || key;
+}
+function buildMultiAlgoData(
+  list: any[],
+  dateField: string,
+  actualField: string,
+  predField: string,
+  algoField: string,
+  fmtDate: (s: string) => string,
+): { labels: string[]; actual: (number | null)[]; predSeries: { key: string; data: (number | null)[] }[] } {
+  const sorted = [...list].sort((a, b) => (a[dateField] || '') < (b[dateField] || '') ? -1 : 1);
+  const uniqueDates: string[] = [];
+  const dateIndex = new Map<string, number>();
+  for (const it of sorted) {
+    const d = it[dateField] || '';
+    if (!dateIndex.has(d)) { dateIndex.set(d, uniqueDates.length); uniqueDates.push(d); }
+  }
+  const n = uniqueDates.length;
+  const actual: (number | null)[] = new Array(n).fill(null);
+  for (const it of sorted) {
+    const idx = dateIndex.get(it[dateField] || '');
+    if (idx !== undefined && actual[idx] === null && it[actualField] != null) {
+      const v = parseFloat(it[actualField]);
+      actual[idx] = isFinite(v) ? v : null;
+    }
+  }
+  const algoMap = new Map<string, (number | null)[]>();
+  for (const it of sorted) {
+    const key = (it[algoField] || 'unknown').toLowerCase();
+    if (!algoMap.has(key)) algoMap.set(key, new Array(n).fill(null));
+    const idx = dateIndex.get(it[dateField] || '');
+    if (idx !== undefined && it[predField] != null) {
+      const v = parseFloat(it[predField]);
+      algoMap.get(key)![idx] = isFinite(v) ? v : null;
+    }
+  }
+  return { labels: uniqueDates.map(fmtDate), actual, predSeries: Array.from(algoMap.entries()).map(([key, data]) => ({ key, data })) };
+}
+
 export default function Predictions() {
   const { data: D } = useData();
   const { fmt } = D;
@@ -23,7 +88,7 @@ export default function Predictions() {
   const effectiveSym = compareSym || (D.stocks[0] ? D.stocks[0].sym : '');
 
   // ── Compare chart: real API ──────────────────────────────────────────────────
-  const [compareData, setCompareData] = useState<{ labels: string[]; actual: (number | null)[]; pred: (number | null)[] } | null>(null);
+  const [compareData, setCompareData] = useState<{ labels: string[]; actual: (number | null)[]; predSeries: { key: string; data: (number | null)[] }[] } | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
 
   useEffect(() => {
@@ -34,7 +99,6 @@ export default function Predictions() {
       .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function(res: any) {
         const raw: any[] = Array.isArray(res.data) ? res.data : [];
-        const ordered = raw.slice().reverse();
         const ddmm = function(s: string) {
           try {
             const d = new Date(s);
@@ -42,11 +106,7 @@ export default function Predictions() {
             return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2);
           } catch (_e) { return s ? s.slice(0, 10) : ''; }
         };
-        setCompareData({
-          labels: ordered.map(function(it) { return ddmm(it.date || ''); }),
-          actual: ordered.map(function(it) { const n = parseFloat(it.actual); return isFinite(n) ? n : null; }),
-          pred:   ordered.map(function(it) { const n = parseFloat(it.predicted); return isFinite(n) ? n : null; }),
-        });
+        setCompareData(buildMultiAlgoData(raw, 'date', 'actual', 'predicted', 'algorithm', ddmm));
       })
       .catch(function() { setCompareData(null); })
       .finally(function() { setCompareLoading(false); });
@@ -209,11 +269,20 @@ export default function Predictions() {
                   <LineChart
                     series={[
                       { name: 'Thực tế', data: compareData.actual, color: 'var(--text-2)', w: 1.8 },
-                      { name: 'Dự đoán', data: compareData.pred, color: 'var(--accent)', dash: '5 4', w: 2 },
+                      ...compareData.predSeries.map((ps, i) => ({
+                        name: algoDisplayName(ps.key),
+                        data: ps.data,
+                        color: algoColor(ps.key, i),
+                        dash: '5 4',
+                        w: 1.6,
+                      })),
                     ]}
                     labels={compareData.labels} height={540} valueFmt={(v) => fmt.price(v)}
                   />
-                  <Legend items={[['Thực tế', 'var(--text-2)'], ['Dự đoán', 'var(--accent)']]} />
+                  <Legend items={[
+                    ['Thực tế', 'var(--text-2)'],
+                    ...compareData.predSeries.map((ps, i) => [algoDisplayName(ps.key), algoColor(ps.key, i)] as [string, string]),
+                  ]} />
                 </>
           }
         </Panel>

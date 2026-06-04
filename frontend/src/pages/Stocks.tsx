@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useData } from '../context/DataContext';
-import { Panel, KPI, Icon, Chg, Seg } from '../components/ui';
+import { Panel, KPI, Icon, Chg, Seg, vnsToast } from '../components/ui';
 import { Sparkline, LineChart } from '../components/charts';
 import { fetchMarketPage } from '../api';
+import { useAuth } from '../context/AuthContext';
 import type { StockItem, MoverItem } from '../types';
 
 function toStockItems(stocks: any[]): StockItem[] {
@@ -22,9 +23,18 @@ function toStockItems(stocks: any[]): StockItem[] {
   }));
 }
 
+function getToken(): string {
+  return localStorage.getItem('vns_token') || '';
+}
+async function authPost(path: string): Promise<boolean> {
+  const res = await fetch(path, { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` } });
+  return res.ok;
+}
+
 export default function Stocks() {
   const { data: D } = useData();
   const { fmt } = D;
+  const { isLoggedIn } = useAuth();
   const [q, setQ] = useState('');
   const [sector, setSector] = useState('');
   const [sortBy, setSortBy] = useState<'price' | 'change_percent'>('change_percent');
@@ -34,8 +44,35 @@ export default function Stocks() {
   const [meta, setMeta] = useState({ total: 0, page: 1, pageSize: 10, totalPages: 1 });
   const [loading, setLoading] = useState(false);
   const [sel, setSel] = useState<StockItem | null>(null);
+  const [activeSym, setActiveSym] = useState<string | null>(null);
+  const [chartDays, setChartDays] = useState('90');
+  const [stockChart, setStockChart] = useState<{ dates: string[]; prices: number[] }>({ dates: [], prices: [] });
+  const [chartLoading, setChartLoading] = useState(false);
 
   const sectors = [...new Set(D.stocks.map((s) => s.sector))].filter(Boolean);
+
+  useEffect(() => {
+    if (D.stocks.length > 0 && !activeSym) {
+      setActiveSym(D.stocks[0].sym);
+    }
+  }, [D.stocks]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!activeSym) return;
+    setChartLoading(true);
+    fetch(`/api/stocks/${encodeURIComponent(activeSym)}/history?days=${chartDays}`)
+      .then(r => r.json())
+      .then(v => {
+        const priceData: any[] = v?.price_data || [];
+        const reversed = [...priceData].reverse();
+        setStockChart({
+          dates: reversed.map((p) => (p.trading_date || '').slice(0, 10)),
+          prices: reversed.map((p) => parseFloat(p.close_price) || 0),
+        });
+      })
+      .catch(() => setStockChart({ dates: [], prices: [] }))
+      .finally(() => setChartLoading(false));
+  }, [activeSym, chartDays]);
 
   const doFetch = useCallback((pg: number, sb: string, sd: boolean, searchQ: string, sec: string) => {
     setLoading(true);
@@ -126,6 +163,104 @@ export default function Stocks() {
             {meta.total > 0 ? meta.total + ' mã' : (loading ? '...' : D.stocks.length + ' mã')}
           </span>
         </div>
+      </Panel>
+
+      {/* Price chart */}
+      <Panel
+        title="Biểu đồ giá VN30"
+        dot={activeSym || '—'}
+        className="section-gap"
+        tools={
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Seg
+              options={[
+                { value: '30', label: '30N' },
+                { value: '90', label: '90N' },
+                { value: '180', label: '180N' },
+              ]}
+              value={chartDays}
+              onChange={setChartDays}
+            />
+            {isLoggedIn && (
+              <>
+                <button
+                  className="btn btn--sm"
+                  onClick={() =>
+                    authPost('/api/trigger/crawler').then((ok) =>
+                      vnsToast(ok ? 'Đã gửi yêu cầu thu thập VN30' : 'Không thể gửi yêu cầu thu thập')
+                    )
+                  }
+                >
+                  <Icon name="download" size={13} />Thu thập
+                </button>
+                <button
+                  className="btn btn--sm"
+                  style={{ background: 'var(--accent)', borderColor: 'var(--accent)', color: '#fff' }}
+                  onClick={() =>
+                    authPost('/api/trigger/predict').then((ok) =>
+                      vnsToast(ok ? 'Đã gửi yêu cầu chạy dự đoán VN30' : 'Không thể gửi yêu cầu dự đoán')
+                    )
+                  }
+                >
+                  <Icon name="play" size={13} />Dự đoán
+                </button>
+              </>
+            )}
+          </div>
+        }
+      >
+        {/* Symbol selector chips */}
+        {D.stocks.length > 0 && (
+          <div className="chips" style={{ marginBottom: 16 }}>
+            {D.stocks.map((s) => (
+              <button
+                key={s.sym}
+                className={`chip ${activeSym === s.sym ? 'active' : ''}`}
+                onClick={() => setActiveSym(s.sym)}
+              >
+                {s.sym}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {activeSym && (() => {
+          const cur = D.stocks.find((s) => s.sym === activeSym);
+          return cur ? (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 10 }}>
+              <span className="num" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-1px' }}>
+                {fmt.price(cur.price)}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>nghìn đ / cp</span>
+              <Chg pct={cur.chgPct} abs={cur.change} />
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+                VN30 · {cur.sym}
+              </span>
+            </div>
+          ) : null;
+        })()}
+
+        {chartLoading ? (
+          <div className="empty" style={{ height: 400, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div className="empty__icon"><Icon name="refresh" size={18} /></div>
+            <p>Đang tải biểu đồ...</p>
+          </div>
+        ) : stockChart.prices.length > 0 ? (
+          <LineChart
+            series={[{ name: activeSym || 'Giá', data: stockChart.prices, color: 'var(--accent)' }]}
+            labels={stockChart.dates}
+            height={400}
+            area
+            yFmt={(v) => v.toFixed(1)}
+            valueFmt={(v) => fmt.price(v)}
+            padL={52}
+          />
+        ) : (
+          <div className="empty" style={{ height: 400, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div className="empty__icon"><Icon name="layers" size={18} /></div>
+            <p>Chưa có dữ liệu biểu đồ. Hãy thu thập dữ liệu trước.</p>
+          </div>
+        )}
       </Panel>
 
       <Panel title="Bảng giá cổ phiếu" sub="cập nhật cuối 15:00" flush className="section-gap"

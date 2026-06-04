@@ -105,6 +105,7 @@ func GetFuelPredictionsLatestResults(w http.ResponseWriter, r *http.Request) {
 
 type fuelPredictionChartPoint struct {
 	Date           string           `json:"date"`
+	AlgorithmName  string           `json:"algorithm_name"`
 	PredictedPrice decimal.Decimal  `json:"predicted_price"`
 	ActualPrice    *decimal.Decimal `json:"actual_price"`
 	Confidence     decimal.Decimal  `json:"confidence"`
@@ -167,6 +168,7 @@ func GetFuelPredictionsChart(w http.ResponseWriter, r *http.Request) {
 		p := filtered[i]
 		data = append(data, fuelPredictionChartPoint{
 			Date:           p.TargetDate.Format("2006-01-02"),
+			AlgorithmName:  p.AlgorithmName,
 			PredictedPrice: p.PredictedPrice,
 			ActualPrice:    p.ActualPrice,
 			Confidence:     p.Confidence,

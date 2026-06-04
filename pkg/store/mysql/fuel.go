@@ -116,14 +116,13 @@ func (c *Client) GetLatestFuelPredictions() ([]modelsdb.FuelPrediction, error) {
 	return preds, err
 }
 
-// GetLatestConfirmedFuelPredictions returns the most recent CONFIRMED prediction
-// (actual_price IS NOT NULL) per (product_type, algorithm_name).
+// GetLatestConfirmedFuelPredictions returns the most recent prediction
+// per (product_type, algorithm_name), regardless of status.
 // Uses MAX(id) to avoid duplicates when multiple rows share the same prediction_date.
 func (c *Client) GetLatestConfirmedFuelPredictions() ([]modelsdb.FuelPrediction, error) {
 	var preds []modelsdb.FuelPrediction
 	subQuery := c.Db.Model(&modelsdb.FuelPrediction{}).
 		Select("MAX(id) as max_id").
-		Where("actual_price IS NOT NULL").
 		Group("product_type, algorithm_name")
 	err := c.Db.
 		Joins("JOIN (?) as latest ON latest.max_id = fuel_predictions.id", subQuery).

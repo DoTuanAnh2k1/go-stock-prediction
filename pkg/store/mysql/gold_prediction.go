@@ -48,14 +48,13 @@ func (c *Client) GetLatestGoldPredictions() ([]modelsdb.GoldPrediction, error) {
 	return preds, err
 }
 
-// GetLatestConfirmedGoldPredictions returns the most recent CONFIRMED prediction
-// (actual_price IS NOT NULL) per (source, product_type, algorithm_name).
+// GetLatestConfirmedGoldPredictions returns the most recent prediction
+// per (source, product_type, algorithm_name), regardless of status.
 // Uses MAX(id) to avoid duplicates when multiple rows share the same prediction_date.
 func (c *Client) GetLatestConfirmedGoldPredictions() ([]modelsdb.GoldPrediction, error) {
 	var preds []modelsdb.GoldPrediction
 	subQuery := c.Db.Model(&modelsdb.GoldPrediction{}).
 		Select("MAX(id) as max_id").
-		Where("actual_price IS NOT NULL").
 		Group("source, product_type, algorithm_name")
 	err := c.Db.
 		Joins("JOIN (?) as latest ON latest.max_id = gold_predictions.id", subQuery).

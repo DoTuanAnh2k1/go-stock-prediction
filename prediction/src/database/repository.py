@@ -704,7 +704,12 @@ def upsert_cron_schedule(job_key: str, job_name: str, cron_expression: str, enab
     with session_scope() as session:
         existing = session.query(CronSchedule).filter_by(job_key=job_key).first()
         if existing:
-            # Don't overwrite user changes — only seed if not present
+            # If code default changed to enabled=True but DB still has False (from old seeding),
+            # auto-enable so the job isn't silently dead after code upgrades.
+            # User can still disable via Settings UI after startup.
+            if enabled and not existing.enabled:
+                existing.enabled = True
+                existing.updated_at = datetime.utcnow()
             return
         session.add(
             CronSchedule(

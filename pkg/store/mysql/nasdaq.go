@@ -104,14 +104,13 @@ func (c *Client) GetLatestNasdaqPredictions() ([]modelsdb.NasdaqPrediction, erro
 	return preds, err
 }
 
-// GetLatestConfirmedNasdaqPredictions returns the most recent CONFIRMED prediction
-// (actual_price IS NOT NULL) per (symbol, algorithm_name).
+// GetLatestConfirmedNasdaqPredictions returns the most recent prediction
+// per (symbol, algorithm_name), regardless of status.
 // Uses MAX(id) to avoid duplicates when multiple rows share the same prediction_date.
 func (c *Client) GetLatestConfirmedNasdaqPredictions() ([]modelsdb.NasdaqPrediction, error) {
 	var preds []modelsdb.NasdaqPrediction
 	subQuery := c.Db.Model(&modelsdb.NasdaqPrediction{}).
 		Select("MAX(id) as max_id").
-		Where("actual_price IS NOT NULL").
 		Group("symbol, algorithm_name")
 	err := c.Db.
 		Joins("JOIN (?) as latest ON latest.max_id = nasdaq_predictions.id", subQuery).

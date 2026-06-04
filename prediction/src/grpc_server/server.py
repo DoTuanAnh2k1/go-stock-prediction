@@ -156,18 +156,11 @@ class PredictionServicer:
             return pb2.TriggerResponse(success=False, error=str(exc))
 
     def TriggerPredict(self, request, context):
-        """Runs training + all market predictions synchronously."""
+        """Runs all market predictions in background (training is separate via TriggerTrain)."""
         pb2, _ = _get_pb()
         log.info("grpc.TriggerPredict")
-        try:
-            from src.orchestrator.runner import run_all_markets
-            from src.orchestrator.training import train_all_algorithms
-            train_all_algorithms()
-            total = run_all_markets()
-            return pb2.TriggerResponse(success=True, message=f"Training and prediction completed: {total} predictions")
-        except Exception as exc:
-            log.error("grpc.TriggerPredict.error", error=str(exc))
-            return pb2.TriggerResponse(success=False, error=str(exc))
+        threading.Thread(target=_bg_predict_all, daemon=True).start()
+        return pb2.TriggerResponse(success=True, message="Prediction started in background for all markets")
 
     def TriggerTrain(self, request, context):
         pb2, _ = _get_pb()
@@ -418,6 +411,15 @@ def _bg_predict_sp500():
         log.info("bg.predict_sp500.done", count=n)
     except Exception as exc:
         log.error("bg.predict_sp500.error", error=str(exc))
+
+
+def _bg_predict_all():
+    try:
+        from src.orchestrator.runner import run_all_markets
+        total = run_all_markets()
+        log.info("bg.predict_all.done", count=total)
+    except Exception as exc:
+        log.error("bg.predict_all.error", error=str(exc))
 
 
 def _bg_backtest(train_window: int, step_size: int, market_key: str):

@@ -40,3 +40,24 @@ class PredictionAlgorithm(ABC):
     def get_accuracy(self) -> float:
         """Return the last computed backtest accuracy. Override if tracked."""
         return 0.0
+
+    def train(self, prices: list[float], volumes: list[float] | None = None) -> None:
+        """Pre-train and cache model on training data. No-op for stateless algorithms."""
+
+    def train_batch(self, series: "list[tuple[list[float], list[float] | None]]") -> None:
+        """Train on multiple price series at once. Override for stateful algorithms.
+
+        Args:
+            series: List of (prices, volumes) tuples where prices is ASC order.
+                    volumes may be None for markets without volume data.
+
+        Default implementation falls back to calling train() on each series individually.
+        Override this method for stateful algorithms that should build a single combined
+        model from all series instead of overwriting the model each iteration.
+        """
+        for prices, volumes in series:
+            self.train(prices, volumes)
+
+    def is_trained(self) -> bool:
+        """Return True if this instance has a cached trained model."""
+        return False
