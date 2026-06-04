@@ -4,6 +4,7 @@ import { Panel, KPI, Icon, Chg, Seg, vnsToast } from '../components/ui';
 import { Sparkline, LineChart } from '../components/charts';
 import { fetchMarketPage } from '../api';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LangContext';
 import type { StockItem, MoverItem } from '../types';
 
 function toStockItems(stocks: any[]): StockItem[] {
@@ -35,6 +36,7 @@ export default function Stocks() {
   const { data: D } = useData();
   const { fmt } = D;
   const { isLoggedIn } = useAuth();
+  const { t } = useLanguage();
   const [q, setQ] = useState('');
   const [sector, setSector] = useState('');
   const [sortBy, setSortBy] = useState<'price' | 'change_percent'>('change_percent');
@@ -140,23 +142,23 @@ export default function Stocks() {
     <div className="content__inner fade">
       <div className="grid grid--kpis section-gap">
         <KPI label="VN30-Index" value={vn30Val ? fmt.price(vn30Val) : '—'} chgPct={D.indices.vn30.chgPct} chgAbs={D.indices.vn30.chg} spark={D.indices.vn30.series.slice(-22)} />
-        <KPI label="Số mã" value={D.stocks.length ? D.stocks.length + ' mã' : '—'} sub="đã tải" />
-        <KPI label="Tăng / Giảm" value={D.stocks.length ? D.stocks.filter((s) => s.chgPct > 0).length + ' / ' + D.stocks.filter((s) => s.chgPct < 0).length : '— / —'} sub="trên tổng số mã" />
-        <KPI label="Thanh khoản" value={D.indices.vnindex.vol ? fmt.compact(D.indices.vnindex.vol * 1e6) : '—'} sub="cổ phiếu khớp lệnh" />
+        <KPI label={t.stocks.upDown} value={D.stocks.length ? D.stocks.length + ' ' + t.stocks.symbolsLoaded : '—'} sub={t.stocks.symbolsLoaded} />
+        <KPI label={t.stocks.upDown} value={D.stocks.length ? D.stocks.filter((s) => s.chgPct > 0).length + ' / ' + D.stocks.filter((s) => s.chgPct < 0).length : '— / —'} sub={t.stocks.overTotal} />
+        <KPI label={t.dashboard.liquidity} value={D.indices.vnindex.vol ? fmt.compact(D.indices.vnindex.vol * 1e6) : '—'} sub={t.dashboard.stocksMatched} />
       </div>
 
       <Panel className="section-gap">
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <div className="search" style={{ width: 280 }}>
             <Icon name="search" size={15} />
-            <input placeholder="Tìm mã CK (VD: VCB, FPT...)" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input placeholder={t.stocks.searchPlaceholder} value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <select className="sel" value={sector} onChange={(e) => handleSector(e.target.value)}>
-            <option value="">Tất cả ngành</option>
+            <option value="">{t.stocks.allSectors}</option>
             {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           <select className="sel" defaultValue="">
-            <option value="">Tất cả sàn</option>
+            <option value="">{t.stocks.allExchanges}</option>
             <option>HOSE</option><option>HNX</option><option>UPCOM</option>
           </select>
           <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
@@ -167,16 +169,16 @@ export default function Stocks() {
 
       {/* Price chart */}
       <Panel
-        title="Biểu đồ giá VN30"
+        title={t.stocks.priceChart}
         dot={activeSym || '—'}
         className="section-gap"
         tools={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Seg
               options={[
-                { value: '30', label: '30N' },
-                { value: '90', label: '90N' },
-                { value: '180', label: '180N' },
+                { value: '30', label: t.dateRange.d30 },
+                { value: '90', label: t.dateRange.d90 },
+                { value: '180', label: t.dateRange.d180 },
               ]}
               value={chartDays}
               onChange={setChartDays}
@@ -187,22 +189,22 @@ export default function Stocks() {
                   className="btn btn--sm"
                   onClick={() =>
                     authPost('/api/trigger/crawler').then((ok) =>
-                      vnsToast(ok ? 'Đã gửi yêu cầu thu thập VN30' : 'Không thể gửi yêu cầu thu thập')
+                      vnsToast(ok ? t.stocks.collectRequest : t.stocks.collectFail)
                     )
                   }
                 >
-                  <Icon name="download" size={13} />Thu thập
+                  <Icon name="download" size={13} />{t.common.collect}
                 </button>
                 <button
                   className="btn btn--sm"
                   style={{ background: 'var(--accent)', borderColor: 'var(--accent)', color: '#fff' }}
                   onClick={() =>
                     authPost('/api/trigger/predict').then((ok) =>
-                      vnsToast(ok ? 'Đã gửi yêu cầu chạy dự đoán VN30' : 'Không thể gửi yêu cầu dự đoán')
+                      vnsToast(ok ? t.stocks.predictRequest : t.stocks.predictFail)
                     )
                   }
                 >
-                  <Icon name="play" size={13} />Dự đoán
+                  <Icon name="play" size={13} />{t.common.predict}
                 </button>
               </>
             )}
@@ -231,7 +233,7 @@ export default function Stocks() {
               <span className="num" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-1px' }}>
                 {fmt.price(cur.price)}
               </span>
-              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>nghìn đ / cp</span>
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{t.stocks.thousandVnd}</span>
               <Chg pct={cur.chgPct} abs={cur.change} />
               <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
                 VN30 · {cur.sym}
@@ -243,7 +245,7 @@ export default function Stocks() {
         {chartLoading ? (
           <div className="empty" style={{ height: 400, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="refresh" size={18} /></div>
-            <p>Đang tải biểu đồ...</p>
+            <p>{t.stocks.loadingChart}</p>
           </div>
         ) : stockChart.prices.length > 0 ? (
           <LineChart
@@ -258,31 +260,31 @@ export default function Stocks() {
         ) : (
           <div className="empty" style={{ height: 400, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Chưa có dữ liệu biểu đồ. Hãy thu thập dữ liệu trước.</p>
+            <p>{t.stocks.noChartData}</p>
           </div>
         )}
       </Panel>
 
-      <Panel title="Bảng giá cổ phiếu" sub="cập nhật cuối 15:00" flush className="section-gap"
-        tools={<button className="btn btn--sm btn--ghost"><Icon name="refresh" size={13} />Làm mới</button>}>
+      <Panel title={t.stocks.priceTable} sub={t.stocks.updatedAt} flush className="section-gap"
+        tools={<button className="btn btn--sm btn--ghost"><Icon name="refresh" size={13} />{t.common.refresh}</button>}>
         {loading && pagedStocks.length === 0
-          ? <div className="empty"><p>Đang tải...</p></div>
+          ? <div className="empty"><p>{t.stocks.loadingData}</p></div>
           : pagedStocks.length === 0
             ? <div className="empty">
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
-                <p>Chưa có dữ liệu cổ phiếu. Hãy bấm crawl để lấy data.</p>
+                <p>{t.stocks.noStockData}</p>
               </div>
             : <div style={{ overflowX: 'auto' }}>
                 <table className="tbl">
                   <thead><tr>
-                    <th className="l">Mã</th>
-                    <th>Ngành</th>
-                    {sortHead('price', 'Giá')}
-                    <th className="r">Δ</th>
-                    {sortHead('change_percent', '±%')}
-                    <th className="r">KL (M)</th>
-                    <th className="r">GT (Ngàn tỷ)</th>
-                    <th className="c">7 phiên</th>
+                    <th className="l">{t.stocks.colSymbol}</th>
+                    <th>{t.stocks.colSector}</th>
+                    {sortHead('price', t.stocks.colPrice)}
+                    <th className="r">{t.stocks.colDelta}</th>
+                    {sortHead('change_percent', t.stocks.colChangePct)}
+                    <th className="r">{t.stocks.colVolume}</th>
+                    <th className="r">{t.stocks.colValue}</th>
+                    <th className="c">{t.stocks.col7Sessions}</th>
                     <th className="c"></th>
                   </tr></thead>
                   <tbody>
@@ -324,26 +326,26 @@ export default function Stocks() {
               onClick={() => handlePage(page + 1)}
             >→</button>
             <span style={{ fontSize: 12, color: 'var(--text-3)', marginLeft: 8 }}>
-              {meta.total} mã tổng
+              {meta.total} {t.stocks.totalSymbols}
             </span>
           </div>
         )}
       </Panel>
 
       <div className="grid grid--halves section-gap">
-        <MoverPanel title="Tăng mạnh nhất" icon="arrowUp" items={D.gainers} direction="up" fmt={fmt} />
-        <MoverPanel title="Giảm mạnh nhất" icon="arrowDown" items={D.losers} direction="down" fmt={fmt} />
+        <MoverPanel title={t.stocks.biggestGainers} icon="arrowUp" items={D.gainers} direction="up" fmt={fmt} />
+        <MoverPanel title={t.stocks.biggestLosers} icon="arrowDown" items={D.losers} direction="down" fmt={fmt} />
       </div>
 
       {D.active.length > 0 && (
-        <Panel title="Giao dịch nhiều nhất" sub="theo khối lượng" flush style={{ paddingBottom: 8 }}>
+        <Panel title={t.stocks.mostActive} sub={t.stocks.byVolume} flush style={{ paddingBottom: 8 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
             {D.active.map((s, i) => (
               <div key={s.sym} className="lrow clickable" style={{ borderRight: i % 3 !== 2 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }} onClick={() => setSel(s as any)}>
                 <span className="badge badge--muted" style={{ minWidth: 22, justifyContent: 'center' }}>{i + 1}</span>
                 <div className="lrow__main">
                   <div className="lrow__sym">{s.sym}</div>
-                  <div className="lrow__sub">{s.volume.toFixed(1)}M cp</div>
+                  <div className="lrow__sub">{s.volume.toFixed(1)}M {t.stocks.shares}</div>
                 </div>
                 <div className="lrow__rt">
                   <div className="num" style={{ fontWeight: 600 }}>{fmt.price(s.price)}</div>
@@ -361,13 +363,14 @@ export default function Stocks() {
 }
 
 function MoverPanel({ title, icon, items, direction, fmt }: { title: string; icon: string; items: MoverItem[]; direction: 'up' | 'down'; fmt: any }) {
+  const { t } = useLanguage();
   return (
     <Panel title={title} flush
       tools={<Icon name={icon} size={15} style={{ color: direction === 'up' ? 'var(--up)' : 'var(--down)' }} />}>
       {items.length === 0
         ? <div className="empty">
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Chưa có dữ liệu</p>
+            <p>{t.stocks.noData}</p>
           </div>
         : items.map((s) => (
           <div key={s.sym} className="lrow">
@@ -388,6 +391,7 @@ function MoverPanel({ title, icon, items, direction, fmt }: { title: string; ico
 }
 
 function StockDrawer({ s, onClose, predictions, fmt }: { s: StockItem; onClose: () => void; predictions: any[]; fmt: any }) {
+  const { t } = useLanguage();
   const [range, setRange] = useState('30');
   const n = range === '7' ? 7 : 30;
   const hist = (s.hist || []).slice(-n);
@@ -411,13 +415,13 @@ function StockDrawer({ s, onClose, predictions, fmt }: { s: StockItem; onClose: 
             <span className="num" style={{ fontSize: 34, fontWeight: 600, letterSpacing: '-1.5px' }}>{fmt.price(s.price)}</span>
             <div><Chg pct={s.chgPct} abs={s.change} /></div>
           </div>
-          <Seg options={[{ value: '7', label: '7 phiên' }, { value: '30', label: '30 phiên' }]} value={range} onChange={setRange} />
+          <Seg options={[{ value: '7', label: t.dateRange.d7 }, { value: '30', label: t.dateRange.d30 }]} value={range} onChange={setRange} />
           <div style={{ marginTop: 12 }}>
             {hist.length > 0
               ? <LineChart series={[{ name: s.sym, data: hist, color: s.chgPct >= 0 ? 'var(--up)' : 'var(--down)' }]} labels={hist.map((_, i) => `${i + 1}`)} height={520} area valueFmt={(v) => fmt.price(v)} />
               : <div className="empty" style={{ height: 520, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   <div className="empty__icon"><Icon name="layers" size={18} /></div>
-                  <p>Chưa có lịch sử giá</p>
+                  <p>{t.stocks.noHistPrice}</p>
                 </div>
             }
           </div>
@@ -431,12 +435,12 @@ function StockDrawer({ s, onClose, predictions, fmt }: { s: StockItem; onClose: 
           </div>
           {pred && (
             <div style={{ marginTop: 16 }}>
-              <div className="sec-head" style={{ margin: '0 0 10px' }}><h2>Dự đoán phiên kế</h2><div className="line"></div></div>
+              <div className="sec-head" style={{ margin: '0 0 10px' }}><h2>{t.stocks.nextSessionPred}</h2><div className="line"></div></div>
               <div className="panel" style={{ padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   <span className={`algo algo--${pred.algoCls}`}>{pred.algoShort}</span>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Giá dự đoán {pred.target}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{t.stocks.predPrice} {pred.target}</div>
                     <div className="num" style={{ fontSize: 20, fontWeight: 600 }}>{fmt.price(pred.pred)}</div>
                   </div>
                   <div style={{ marginLeft: 'auto', textAlign: 'right' }}>

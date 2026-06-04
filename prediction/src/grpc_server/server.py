@@ -230,7 +230,7 @@ class PredictionServicer:
             price_list = [float(p.close_price) for p in prices_asc]
             vol_list = [float(p.volume or 0) for p in prices_asc]
             current = price_list[-1]
-            now = datetime.utcnow()
+            now = datetime.now()
             target = now + timedelta(days=1)
 
             algos = build_algorithms()

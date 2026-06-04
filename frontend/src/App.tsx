@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useData } from './context/DataContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LangProvider, useLanguage } from './context/LangContext';
 import { Sidebar, Topbar, Ticker, MobNav, ErrorBoundary } from './components/ui';
 import { TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakSlider, TweakToggle, useTweaks } from './components/tweaks-panel';
 import { LoginModal } from './components/LoginModal';
@@ -33,11 +34,23 @@ const TWEAK_DEFAULTS = {
 function AppInner() {
   const { status } = useData();
   const { user, logout } = useAuth();
+  const { t: tr } = useLanguage();
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [theme, setTheme] = useState<'dark' | 'light'>(
     () => (localStorage.getItem('vns_theme') as 'dark' | 'light') || 'dark'
   );
   const [showLogin, setShowLogin] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem('vns_sidebar') === '1'
+  );
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(c => {
+      const next = !c;
+      localStorage.setItem('vns_sidebar', next ? '1' : '0');
+      return next;
+    });
+  };
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -52,8 +65,8 @@ function AppInner() {
   }, [t.accent, t.density, t.fontScale]);
 
   return (
-    <div className="app">
-      <Sidebar status={status} />
+    <div className={`app${sidebarCollapsed ? ' app--sidebar-collapsed' : ''}`}>
+      <Sidebar status={status} collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
       <div className="main">
         {t.ticker && <Ticker />}
         <Topbar
@@ -106,16 +119,16 @@ function AppInner() {
         </div>
       </div>
       <TweaksPanel title="Tweaks">
-        <TweakSection label="Giao diện" />
-        <TweakColor label="Màu nhấn" value={t.accent}
+        <TweakSection label={tr.tweaks.interface} />
+        <TweakColor label={tr.tweaks.accentColor} value={t.accent}
           options={['#5B8DEF', '#2FB57C', '#C9A23F', '#8B7CF0', '#E0856B', '#4AA8C0']}
           onChange={(v) => setTweak('accent', v as string)} />
-        <TweakRadio label="Mật độ" value={t.density}
+        <TweakRadio label={tr.tweaks.density} value={t.density}
           options={['compact', 'regular', 'comfy']}
           onChange={(v) => setTweak('density', v)} />
-        <TweakSlider label="Cỡ chữ" value={t.fontScale} min={90} max={115} step={5} unit="%"
+        <TweakSlider label={tr.tweaks.fontSize} value={t.fontScale} min={90} max={115} step={5} unit="%"
           onChange={(v) => setTweak('fontScale', v)} />
-        <TweakToggle label="Thanh ticker" value={t.ticker}
+        <TweakToggle label={tr.tweaks.ticker} value={t.ticker}
           onChange={(v) => setTweak('ticker', v)} />
       </TweaksPanel>
       <MobNav />
@@ -127,7 +140,9 @@ function AppInner() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppInner />
+      <LangProvider>
+        <AppInner />
+      </LangProvider>
     </AuthProvider>
   );
 }

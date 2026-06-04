@@ -3,6 +3,7 @@ import { useParams, NavLink } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { Panel, Icon } from '../components/ui';
 import { fetchMarketTraining } from '../api';
+import { useLanguage } from '../context/LangContext';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function fmtDatetime(s: any): string {
@@ -30,6 +31,7 @@ function fmtDuration(ms: number): string {
 
 // ── Pagination ────────────────────────────────────────────────────────────────
 function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  const { t } = useLanguage();
   if (totalPages <= 1) return null;
   const pages: (number | '...')[] = [];
   if (totalPages <= 7) {
@@ -45,7 +47,7 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
     <div className="pagination">
       <button className="pagination__btn" disabled={page <= 1} onClick={() => onChange(page - 1)}>
         <Icon name="caretDown" size={13} style={{ transform: 'rotate(90deg)' }} />
-        Trước
+        {t.marketTraining.prevPage}
       </button>
       {pages.map((p, i) =>
         p === '...'
@@ -53,7 +55,7 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
           : <button key={p} className={`pagination__btn ${p === page ? 'active' : ''}`} onClick={() => onChange(p as number)}>{p}</button>
       )}
       <button className="pagination__btn" disabled={page >= totalPages} onClick={() => onChange(page + 1)}>
-        Tiếp
+        {t.marketTraining.nextPage}
         <Icon name="caretDown" size={13} style={{ transform: 'rotate(-90deg)' }} />
       </button>
     </div>
@@ -78,25 +80,26 @@ function SortTh({ label, field, sortBy, sortDir, onSort, className }: {
 
 // ── Sub-nav tabs ──────────────────────────────────────────────────────────────
 function MarketTabs({ marketKey }: { marketKey: string }) {
+  const { t } = useLanguage();
   const base = '/markets/' + marketKey;
   const overviewIcon = marketKey === 'gold' ? 'gold' : 'candles';
   return (
     <div className="market-tabs">
       <NavLink to={base} end className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name={overviewIcon} size={14} />
-        Tổng quan
+        {t.marketTabs.overview}
       </NavLink>
       <NavLink to={base + '/predictions'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="pulse" size={14} />
-        Dự đoán
+        {t.marketTabs.predictions}
       </NavLink>
       <NavLink to={base + '/detail'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="layers" size={14} />
-        Chi tiết
+        {t.marketTabs.detail}
       </NavLink>
       <NavLink to={base + '/training'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="cpu" size={14} />
-        Huấn luyện
+        {t.marketTabs.training}
       </NavLink>
     </div>
   );
@@ -106,6 +109,7 @@ function MarketTabs({ marketKey }: { marketKey: string }) {
 export default function MarketTraining() {
   const { marketKey = 'vn30' } = useParams<{ marketKey: string }>();
   const { data: D } = useData();
+  const { t } = useLanguage();
 
   const [page, setPage]             = useState(1);
   const limit                       = 20;
@@ -141,7 +145,7 @@ export default function MarketTraining() {
       setTotal(res.total || 0);
       setTotalPages(res.total_pages || 0);
     }).catch((e) => {
-      setError('Không thể tải dữ liệu: ' + (e?.message || 'Lỗi không xác định'));
+      setError(t.marketTraining.cannotLoad + ': ' + (e?.message || t.marketTraining.unknownError));
       setRows([]);
     }).finally(() => setLoading(false));
   }, [marketKey, page, sortBy, sortDir, algorithm]);
@@ -161,11 +165,11 @@ export default function MarketTraining() {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <Icon name="filter" size={15} style={{ color: 'var(--text-3)' }} />
           <select className="sel" value={algorithm} onChange={(e) => { setAlgorithm(e.target.value); setPage(1); }}>
-            <option value="">Tất cả thuật toán</option>
+            <option value="">{t.marketTraining.allAlgos}</option>
             {D.algos.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
           <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-            {total > 0 ? total.toLocaleString() + ' phiên' : ''}
+            {total > 0 ? total.toLocaleString() + ' ' + t.marketTraining.sessions : ''}
           </span>
         </div>
       </Panel>
@@ -181,20 +185,20 @@ export default function MarketTraining() {
           {rows.length === 0 && !loading && !error
             ? <div className="empty" style={{ padding: '60px 20px' }}>
                 <div className="empty__icon"><Icon name="cpu" size={18} /></div>
-                <p>Chưa có lịch sử huấn luyện {marketLabel}</p>
+                <p>{t.marketTraining.noTrainingHistory} {marketLabel}</p>
               </div>
             : <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Session ID</th>
-                    <th>Thuật toán</th>
-                    <SortTh label="Tổng" field="total_count" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
-                    <SortTh label="Thành công" field="success_count" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
-                    <SortTh label="Lỗi" field="error_count" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
-                    <SortTh label="Độ chính xác" field="accuracy" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
-                    <SortTh label="Thời gian" field="duration_ms" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
-                    <SortTh label="Bắt đầu" field="started_at" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
-                    <SortTh label="Hoàn thành" field="completed_at" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
+                    <th>{t.marketTraining.colSession}</th>
+                    <th>{t.marketTraining.colAlgo}</th>
+                    <SortTh label={t.marketTraining.colTotal} field="total_count" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
+                    <SortTh label={t.marketTraining.colSuccess} field="success_count" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
+                    <SortTh label={t.marketTraining.colError} field="error_count" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
+                    <SortTh label={t.marketTraining.colAccuracy} field="accuracy" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
+                    <SortTh label={t.marketTraining.colDuration} field="duration_ms" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
+                    <SortTh label={t.marketTraining.colStarted} field="started_at" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
+                    <SortTh label={t.marketTraining.colCompleted} field="completed_at" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
                   </tr>
                 </thead>
                 <tbody>

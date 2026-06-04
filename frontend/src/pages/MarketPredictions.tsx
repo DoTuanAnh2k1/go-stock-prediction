@@ -3,6 +3,7 @@ import { useParams, NavLink } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { Panel, Icon, Chg, ConfBar } from '../components/ui';
 import { fetchMarketPredictions } from '../api';
+import { useLanguage } from '../context/LangContext';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function ddmm(s: any): string {
@@ -31,6 +32,7 @@ function fmtGold(n: number): string {
 
 // ── Pagination ────────────────────────────────────────────────────────────────
 function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  const { t } = useLanguage();
   if (totalPages <= 1) return null;
   const pages: (number | '...')[] = [];
   if (totalPages <= 7) {
@@ -46,7 +48,7 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
     <div className="pagination">
       <button className="pagination__btn" disabled={page <= 1} onClick={() => onChange(page - 1)}>
         <Icon name="caretDown" size={13} style={{ transform: 'rotate(90deg)' }} />
-        Trước
+        {t.marketPredictions.prevPage}
       </button>
       {pages.map((p, i) =>
         p === '...'
@@ -54,7 +56,7 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
           : <button key={p} className={`pagination__btn ${p === page ? 'active' : ''}`} onClick={() => onChange(p as number)}>{p}</button>
       )}
       <button className="pagination__btn" disabled={page >= totalPages} onClick={() => onChange(page + 1)}>
-        Tiếp
+        {t.marketPredictions.nextPage}
         <Icon name="caretDown" size={13} style={{ transform: 'rotate(-90deg)' }} />
       </button>
     </div>
@@ -87,25 +89,26 @@ const FUEL_LABELS: Record<string, string> = {
 
 // ── Sub-nav tabs ──────────────────────────────────────────────────────────────
 function MarketTabs({ marketKey }: { marketKey: string }) {
+  const { t } = useLanguage();
   const base = '/markets/' + marketKey;
   const overviewIcon = marketKey === 'gold' ? 'gold' : marketKey === 'crypto' ? 'candles' : 'candles';
   return (
     <div className="market-tabs">
       <NavLink to={base} end className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name={overviewIcon} size={14} />
-        Tổng quan
+        {t.marketTabs.overview}
       </NavLink>
       <NavLink to={base + '/predictions'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="pulse" size={14} />
-        Dự đoán
+        {t.marketTabs.predictions}
       </NavLink>
       <NavLink to={base + '/detail'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="layers" size={14} />
-        Chi tiết
+        {t.marketTabs.detail}
       </NavLink>
       <NavLink to={base + '/training'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="cpu" size={14} />
-        Huấn luyện
+        {t.marketTabs.training}
       </NavLink>
     </div>
   );
@@ -113,13 +116,14 @@ function MarketTabs({ marketKey }: { marketKey: string }) {
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 function StatusBadge({ status, acc }: { status?: string; acc?: number }) {
+  const { t } = useLanguage();
   if (status === 'pending' || (!status && acc == null)) {
-    return <span className="badge badge--muted">Đang chờ</span>;
+    return <span className="badge badge--muted">{t.marketPredictions.badgePending}</span>;
   }
   if (status === 'confirmed' || acc != null) {
     const a = acc || 0;
     const cls = a > 85 ? 'badge--up' : a > 72 ? 'badge--accent' : 'badge--down';
-    const label = a > 85 ? 'Chính xác' : a > 72 ? 'Gần đúng' : 'Sai lệch';
+    const label = a > 85 ? t.marketPredictions.badgeAccurate : a > 72 ? t.marketPredictions.badgeNear : t.marketPredictions.badgeDeviated;
     return <span className={`badge ${cls}`}>{label}</span>;
   }
   return <span className="badge badge--muted">{status || '—'}</span>;
@@ -129,6 +133,7 @@ function StatusBadge({ status, acc }: { status?: string; acc?: number }) {
 export default function MarketPredictions() {
   const { marketKey = 'vn30' } = useParams<{ marketKey: string }>();
   const { data: D } = useData();
+  const { t } = useLanguage();
 
   const [page, setPage]             = useState(1);
   const limit                       = 20;
@@ -180,7 +185,7 @@ export default function MarketPredictions() {
       setTotal(res.total || 0);
       setTotalPages(res.total_pages || 0);
     }).catch((e) => {
-      setError('Không thể tải dữ liệu: ' + (e?.message || 'Lỗi không xác định'));
+      setError(t.marketPredictions.cannotLoad + ': ' + (e?.message || t.marketPredictions.unknownError));
       setRows([]);
     }).finally(() => setLoading(false));
   }, [marketKey, page, debouncedSearch, sortBy, sortDir, algorithm, status]);
@@ -240,18 +245,18 @@ export default function MarketPredictions() {
           <div className="search" style={{ width: 220 }}>
             <Icon name="search" size={14} />
             <input
-              placeholder="Tìm kiếm..."
+              placeholder={t.marketPredictions.searchPlaceholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <select className="sel" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
-            <option value="">Tất cả trạng thái</option>
-            <option value="pending">Đang chờ</option>
-            <option value="confirmed">Đã xác nhận</option>
+            <option value="">{t.marketPredictions.allStatuses}</option>
+            <option value="pending">{t.marketPredictions.statusPending}</option>
+            <option value="confirmed">{t.marketPredictions.statusConfirmed}</option>
           </select>
           <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-            {total > 0 ? total.toLocaleString() + ' bản ghi' : ''}
+            {total > 0 ? total.toLocaleString() + ' ' + t.marketPredictions.records : ''}
           </span>
         </div>
       </Panel>
@@ -267,29 +272,29 @@ export default function MarketPredictions() {
           {rows.length === 0 && !loading && !error
             ? <div className="empty" style={{ padding: '60px 20px' }}>
                 <div className="empty__icon"><Icon name="pulse" size={18} /></div>
-                <p>Chưa có dữ liệu dự đoán {marketLabel}</p>
+                <p>{t.marketPredictions.noPredData} {marketLabel}</p>
               </div>
             : <table className="tbl">
                 <thead>
                   <tr>
                     {isGold
                       ? <>
-                          <SortTh label="Nguồn" field="source" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-                          <th>Sản phẩm</th>
+                          <SortTh label={t.marketPredictions.colSource} field="source" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                          <th>{t.marketPredictions.colProduct}</th>
                         </>
                       : isFuel
-                      ? <th>Sản phẩm</th>
+                      ? <th>{t.marketPredictions.colProduct}</th>
                       : isCrypto
-                      ? <SortTh label="Coin" field="symbol" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-                      : <SortTh label="Mã" field="symbol" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                      ? <SortTh label={t.marketPredictions.colCoin} field="symbol" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                      : <SortTh label={t.marketPredictions.colSymbol} field="symbol" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                     }
-                    <SortTh label="Giá dự đoán" field="predicted_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
-                    <SortTh label="Giá thực tế" field="actual_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
-                    <th className="r">Δ dự đoán</th>
-                    <SortTh label="Độ tin cậy" field="confidence" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
-                    <SortTh label="Độ chính xác" field="accuracy" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
-                    <th className="c">Trạng thái</th>
-                    <SortTh label="Ngày dự đoán" field="prediction_date" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
+                    <SortTh label={t.marketPredictions.colPredPrice} field="predicted_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
+                    <SortTh label={t.marketPredictions.colActualPrice} field="actual_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
+                    <th className="r">{t.marketPredictions.colDelta}</th>
+                    <SortTh label={t.marketPredictions.colConfidence} field="confidence" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
+                    <SortTh label={t.marketPredictions.colAccuracy} field="accuracy" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
+                    <th className="c">{t.marketPredictions.colStatus}</th>
+                    <SortTh label={t.marketPredictions.colPredDate} field="prediction_date" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="r" />
                   </tr>
                 </thead>
                 <tbody>

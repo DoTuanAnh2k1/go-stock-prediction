@@ -3,27 +3,29 @@ import { NavLink } from 'react-router-dom';
 import { Panel, KPI, Icon, Chg, Seg, ConfBar, vnsToast } from '../components/ui';
 import { LineChart } from '../components/charts';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LangContext';
 
 // ── Market tabs ───────────────────────────────────────────────────────────────
 function MarketTabs({ marketKey }: { marketKey: string }) {
+  const { t } = useLanguage();
   const base = '/markets/' + marketKey;
   return (
     <div className="market-tabs">
       <NavLink to={base} end className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="candles" size={14} />
-        Tổng quan
+        {t.marketTabs.overview}
       </NavLink>
       <NavLink to={base + '/predictions'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="pulse" size={14} />
-        Dự đoán
+        {t.marketTabs.predictions}
       </NavLink>
       <NavLink to={base + '/detail'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="layers" size={14} />
-        Chi tiết
+        {t.marketTabs.detail}
       </NavLink>
       <NavLink to={base + '/training'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="cpu" size={14} />
-        Huấn luyện
+        {t.marketTabs.training}
       </NavLink>
     </div>
   );
@@ -176,6 +178,21 @@ function ddmm(s: string): string {
   }
 }
 
+function fmtDT(s: string): string {
+  if (!s) return '—';
+  try {
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s.slice(0, 16).replace('T', ' ');
+    const dd = ('0' + d.getDate()).slice(-2);
+    const mm = ('0' + (d.getMonth() + 1)).slice(-2);
+    const hh = ('0' + d.getHours()).slice(-2);
+    const mi = ('0' + d.getMinutes()).slice(-2);
+    return `${dd}/${mm} ${hh}:${mi}`;
+  } catch {
+    return s.slice(0, 16).replace('T', ' ');
+  }
+}
+
 function algoShort(name: string): { short: string; cls: string } {
   const map: Record<string, { short: string; cls: string }> = {
     lstm_nn: { short: 'LSTM', cls: 'lstm' },
@@ -212,6 +229,7 @@ const KPI_PRODUCTS = PRODUCTS.map((p) => p.id);
 
 export default function Fuel() {
   const { isLoggedIn } = useAuth();
+  const { t } = useLanguage();
 
   const [latest, setLatest] = useState<FuelLatestItem[]>([]);
   const [activeProduct, setActiveProduct] = useState<string>('ron95_iii');
@@ -222,6 +240,10 @@ export default function Fuel() {
   const [predChart, setPredChart] = useState<PredChartData>({ labels: [], actual: [], predSeries: [] });
   const [loading, setLoading] = useState(true);
   const [chartLoading, setChartLoading] = useState(false);
+  const [predProduct, setPredProduct] = useState('');
+  const [confirmedProduct, setConfirmedProduct] = useState('');
+  const [predPage, setPredPage] = useState(0);
+  const [confirmedPage, setConfirmedPage] = useState(0);
 
   // Load initial data
   useEffect(() => {
@@ -283,6 +305,14 @@ export default function Fuel() {
   const labelEvery = Math.max(1, Math.ceil(n / 8));
   const chartLabels = chart.dates.map(ddmm);
 
+  const PAGE_SIZE = 10;
+  const filteredPreds = predProduct ? preds.filter((p) => p.product_type === predProduct) : preds;
+  const predPageCount = Math.ceil(filteredPreds.length / PAGE_SIZE);
+  const predPagedItems = filteredPreds.slice(predPage * PAGE_SIZE, (predPage + 1) * PAGE_SIZE);
+  const filteredConfirmed = confirmedProduct ? confirmedResults.filter((r) => r.product_type === confirmedProduct) : confirmedResults;
+  const confirmedPageCount = Math.ceil(filteredConfirmed.length / PAGE_SIZE);
+  const confirmedPagedItems = filteredConfirmed.slice(confirmedPage * PAGE_SIZE, (confirmedPage + 1) * PAGE_SIZE);
+
   // KPI cards: one per defined product
   const kpiItems = (() => {
     const byProduct = new Map(latest.map((p) => [p.product_type, p]));
@@ -296,11 +326,11 @@ export default function Fuel() {
       <div className="content__inner fade">
         <MarketTabs marketKey="fuel" />
         <div className="grid grid--kpis section-gap">
-          {[1, 2, 3, 4].map((i) => <KPI key={i} label="—" value="—" sub="Loading..." />)}
+          {[1, 2, 3, 4].map((i) => <KPI key={i} label="—" value="—" sub={t.common.loading} />)}
         </div>
         <div className="empty section-gap">
           <div className="empty__icon"><Icon name="layers" size={18} /></div>
-          <p>Đang tải dữ liệu giá xăng...</p>
+          <p>{t.fuel.loadingData}</p>
         </div>
       </div>
     );
@@ -321,7 +351,7 @@ export default function Fuel() {
         <div className="panel__body" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px' }}>
           <Icon name="clock" size={16} style={{ color: 'var(--gold)', flexShrink: 0 }} />
           <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
-            Giá xăng điều chỉnh theo chu kỳ ~7 ngày (quyết định của Bộ Công Thương). Dữ liệu thưa hơn thị trường chứng khoán — khoảng 52 chu kỳ/năm.
+            {t.fuel.infoBanner}
           </span>
         </div>
       </div>
@@ -333,7 +363,7 @@ export default function Fuel() {
             key={def.id}
             label={def.short}
             value={item ? fmtFuelPrice(num(item.price)) : 'N/A'}
-            sub={item ? (item.trading_date?.slice(0, 10) || '—') : 'Chưa có dữ liệu'}
+            sub={item ? fmtDT(item.trading_date) : t.fuel.noDataKpi}
             chgPct={item?.change_percent != null ? num(item.change_percent) : undefined}
             sparkColor={def.color}
           />
@@ -342,16 +372,18 @@ export default function Fuel() {
 
       {/* Price chart */}
       <Panel
-        title="Biểu đồ giá xăng dầu"
+        title={t.fuel.priceChart}
         dot={activeProductDef.label}
         className="section-gap"
         tools={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Seg
               options={[
-                { value: '90', label: '90N' },
-                { value: '180', label: '180N' },
-                { value: '365', label: '1N' },
+                { value: '7', label: t.dateRange.d7 },
+                { value: '30', label: t.dateRange.d30 },
+                { value: '90', label: t.dateRange.d90 },
+                { value: '180', label: t.dateRange.d180 },
+                { value: '365', label: t.dateRange.d365 },
               ]}
               value={days}
               onChange={setDays}
@@ -362,22 +394,22 @@ export default function Fuel() {
                   className="btn btn--sm"
                   onClick={() =>
                     authPost('/api/trigger/fuel-crawler').then((ok) =>
-                      vnsToast(ok ? 'Đã gửi yêu cầu thu thập giá xăng' : 'Không thể gửi yêu cầu thu thập')
+                      vnsToast(ok ? t.fuel.collectRequest : t.fuel.collectFail)
                     )
                   }
                 >
-                  <Icon name="download" size={13} />Thu thập
+                  <Icon name="download" size={13} />{t.common.collect}
                 </button>
                 <button
                   className="btn btn--sm"
                   style={{ background: 'var(--up)', borderColor: 'var(--up)', color: '#fff' }}
                   onClick={() =>
                     authPost('/api/trigger/fuel-predict').then((ok) =>
-                      vnsToast(ok ? 'Đã gửi yêu cầu chạy dự đoán giá xăng' : 'Không thể gửi yêu cầu dự đoán')
+                      vnsToast(ok ? t.fuel.predictRequest : t.fuel.predictFail)
                     )
                   }
                 >
-                  <Icon name="play" size={13} />Dự đoán
+                  <Icon name="play" size={13} />{t.common.predict}
                 </button>
               </>
             )}
@@ -405,10 +437,10 @@ export default function Fuel() {
               <span className="num" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-1px' }}>
                 {fmtFuelPrice(num(cur.price))}
               </span>
-              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>/ lít</span>
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{t.fuel.perLiter}</span>
               {cur.change_percent != null && <Chg pct={num(cur.change_percent)} />}
               <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-                {cur.trading_date?.slice(0, 10) || '—'}
+                {fmtDT(cur.trading_date)}
               </span>
             </div>
           ) : null;
@@ -417,7 +449,7 @@ export default function Fuel() {
         {chartLoading ? (
           <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="refresh" size={18} /></div>
-            <p>Đang tải biểu đồ...</p>
+            <p>{t.common.loadingChart}</p>
           </div>
         ) : chart.prices.length > 0 ? (
           <LineChart
@@ -432,34 +464,41 @@ export default function Fuel() {
         ) : (
           <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Chưa có dữ liệu biểu đồ. Hãy thu thập dữ liệu trước.</p>
+            <p>{t.fuel.noChartData}</p>
           </div>
         )}
       </Panel>
 
       {/* Predictions + Confirmed results */}
       <div className="grid grid--halves section-gap">
-        <Panel title="Dự đoán giá xăng kỳ tới" flush>
-          {preds.length === 0 ? (
+        <Panel title={t.fuel.tomorrowPred} flush tools={
+          <div className="chips" style={{ margin: 0 }}>
+            <button className={`chip${predProduct === '' ? ' active' : ''}`} style={{ fontSize: 12, padding: '3px 10px' }} onClick={() => { setPredProduct(''); setPredPage(0); }}>{t.fuel.allProducts}</button>
+            {PRODUCTS.map((prod) => (
+              <button key={prod.id} className={`chip${predProduct === prod.id ? ' active' : ''}`} style={{ fontSize: 12, padding: '3px 10px' }} onClick={() => { setPredProduct(prod.id); setPredPage(0); }}>{prod.short}</button>
+            ))}
+          </div>
+        }>
+          {filteredPreds.length === 0 ? (
             <div className="empty">
               <div className="empty__icon"><Icon name="layers" size={18} /></div>
-              <p>Chưa có dự đoán. Hãy chạy dự đoán trước.</p>
+              <p>{preds.length === 0 ? t.common.noPredictions : t.fuel.noDataForProduct}</p>
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Sản phẩm</th>
-                    <th className="c">TT</th>
-                    <th className="r">Hiện tại</th>
-                    <th className="r">Dự đoán</th>
+                    <th>{t.common.product}</th>
+                    <th className="c">{t.common.status}</th>
+                    <th className="r">{t.common.current}</th>
+                    <th className="r">{t.common.predicted}</th>
                     <th className="r">±%</th>
-                    <th className="r">Tin cậy</th>
+                    <th className="r">{t.common.confidence}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {preds.map((p, i) => {
+                  {predPagedItems.map((p, i) => {
                     const cur = num(p.current_price);
                     const pred = num(p.predicted_price);
                     const deltaPct = cur ? +((pred - cur) / cur * 100).toFixed(2) : 0;
@@ -481,32 +520,46 @@ export default function Fuel() {
                   })}
                 </tbody>
               </table>
+              {predPageCount > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, padding: '10px 16px', borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-2)' }}>
+                  <button className="btn btn--sm" disabled={predPage === 0} onClick={() => setPredPage((p) => p - 1)} style={{ minWidth: 28, padding: '2px 8px' }}>‹</button>
+                  <span>{predPage + 1} / {predPageCount}</span>
+                  <button className="btn btn--sm" disabled={predPage >= predPageCount - 1} onClick={() => setPredPage((p) => p + 1)} style={{ minWidth: 28, padding: '2px 8px' }}>›</button>
+                </div>
+              )}
             </div>
           )}
         </Panel>
 
-        <Panel title="Kết quả dự đoán gần nhất" flush>
-          {confirmedResults.length === 0 ? (
+        <Panel title={t.common.latestPredResults} flush tools={
+          <div className="chips" style={{ margin: 0 }}>
+            <button className={`chip${confirmedProduct === '' ? ' active' : ''}`} style={{ fontSize: 12, padding: '3px 10px' }} onClick={() => { setConfirmedProduct(''); setConfirmedPage(0); }}>{t.fuel.allProducts}</button>
+            {PRODUCTS.map((prod) => (
+              <button key={prod.id} className={`chip${confirmedProduct === prod.id ? ' active' : ''}`} style={{ fontSize: 12, padding: '3px 10px' }} onClick={() => { setConfirmedProduct(prod.id); setConfirmedPage(0); }}>{prod.short}</button>
+            ))}
+          </div>
+        }>
+          {filteredConfirmed.length === 0 ? (
             <div className="empty">
               <div className="empty__icon"><Icon name="pulse" size={18} /></div>
-              <p>Chưa có kết quả đã xác nhận. Kết quả sẽ xuất hiện sau khi dự đoán được đối chiếu với giá thực tế.</p>
+              <p>{confirmedResults.length === 0 ? t.common.noConfirmedResults : t.fuel.noConfirmedForProduct}</p>
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Sản phẩm</th>
-                    <th className="c">TT</th>
-                    <th className="r">Dự đoán</th>
-                    <th className="r">Thực tế</th>
-                    <th className="r">Lệch</th>
-                    <th className="r">Độ CX</th>
-                    <th className="c">Ngày</th>
+                    <th>{t.common.product}</th>
+                    <th className="c">{t.common.status}</th>
+                    <th className="r">{t.common.predicted}</th>
+                    <th className="r">{t.common.actual}</th>
+                    <th className="r">{t.common.deviation}</th>
+                    <th className="r">{t.common.accuracy}</th>
+                    <th className="c">{t.common.date}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {confirmedResults.map((r, i) => {
+                  {confirmedPagedItems.map((r, i) => {
                     const predicted = num(r.predicted_price);
                     const actual = num(r.actual_price ?? 0);
                     const deviationPct = actual ? +((predicted - actual) / actual * 100).toFixed(2) : 0;
@@ -544,25 +597,34 @@ export default function Fuel() {
                             : <span style={{ color: 'var(--text-3)' }}>—</span>}
                         </td>
                         <td className="c num" style={{ color: 'var(--text-3)', fontSize: 12 }}>
-                          {ddmm(r.prediction_date)}
+                          {fmtDT(r.prediction_date)}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+              {confirmedPageCount > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, padding: '10px 16px', borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-2)' }}>
+                  <button className="btn btn--sm" disabled={confirmedPage === 0} onClick={() => setConfirmedPage((p) => p - 1)} style={{ minWidth: 28, padding: '2px 8px' }}>‹</button>
+                  <span>{confirmedPage + 1} / {confirmedPageCount}</span>
+                  <button className="btn btn--sm" disabled={confirmedPage >= confirmedPageCount - 1} onClick={() => setConfirmedPage((p) => p + 1)} style={{ minWidth: 28, padding: '2px 8px' }}>›</button>
+                </div>
+              )}
             </div>
           )}
         </Panel>
       </div>
 
       {/* Prediction vs Actual chart — full width */}
-      <Panel title="Dự đoán vs Thực tế" sub={activeProductDef.label + ' · Tất cả thuật toán'} className="section-gap">
+      <Panel title={t.common.predVsActual} sub={activeProductDef.label + ' · ' + t.common.allAlgos} className="section-gap"
+        tools={<Seg options={[{ value: '7', label: t.dateRange.d7 }, { value: '30', label: t.dateRange.d30 }, { value: '90', label: t.dateRange.d90 }, { value: '180', label: t.dateRange.d180 }, { value: '365', label: t.dateRange.d365 }]} value={days} onChange={setDays} />}
+      >
         {predChart.labels.length > 0 && (predChart.predSeries.length > 0 || predChart.actual.some((v) => v != null)) ? (
           <>
             <LineChart
               series={[
-                { name: 'Thực tế', data: predChart.actual, color: 'var(--text-2)', w: 1.8 },
+                { name: t.common.actual, data: predChart.actual, color: 'var(--text-2)', w: 1.8 },
                 ...predChart.predSeries.map((ps, i) => ({
                   name: algoDisplayName(ps.key),
                   data: ps.data,
@@ -578,35 +640,35 @@ export default function Fuel() {
               padL={54}
             />
             <Legend items={[
-              ['Thực tế', 'var(--text-2)'],
+              [t.common.actual, 'var(--text-2)'],
               ...predChart.predSeries.map((ps, i) => [algoDisplayName(ps.key), algoColor(ps.key, i)] as [string, string]),
             ]} />
           </>
         ) : (
           <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Chưa có dữ liệu so sánh dự đoán</p>
+            <p>{t.common.noCompareData}</p>
           </div>
         )}
       </Panel>
 
       {/* Current prices table */}
-      <div className="sec-head section-gap"><h2>Bảng giá xăng dầu hiện tại</h2><div className="line"></div></div>
+      <div className="sec-head section-gap"><h2>{t.fuel.priceTable}</h2><div className="line"></div></div>
       <Panel flush className="section-gap">
         {latest.length === 0 ? (
           <div className="empty">
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Chưa có dữ liệu. Hãy thu thập dữ liệu trước.</p>
+            <p>{t.common.noDataCollect}</p>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Sản phẩm</th>
-                  <th className="r">Giá bán lẻ (VND/lít)</th>
+                  <th>{t.fuel.colProduct}</th>
+                  <th className="r">{t.fuel.colRetailPrice}</th>
                   <th className="r">±%</th>
-                  <th className="c">Ngày điều chỉnh</th>
+                  <th className="c">{t.fuel.colAdjustDate}</th>
                 </tr>
               </thead>
               <tbody>
@@ -624,7 +686,7 @@ export default function Fuel() {
                           : <span style={{ color: 'var(--text-3)' }}>—</span>}
                       </td>
                       <td className="c num" style={{ color: 'var(--text-3)', fontSize: 12 }}>
-                        {p.trading_date ? p.trading_date.slice(0, 10) : '—'}
+                        {fmtDT(p.trading_date)}
                       </td>
                     </tr>
                   );

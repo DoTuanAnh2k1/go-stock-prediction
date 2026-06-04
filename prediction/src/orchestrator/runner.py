@@ -76,7 +76,7 @@ def _predict_vn30(algos: dict) -> int:
     stocks = repo.get_vn30_stocks()
     log.info("predict.vn30.start", stocks=len(stocks), algorithms=len(algos))
     count = 0
-    now = datetime.utcnow()
+    now = datetime.now()
     target = now + timedelta(days=1)
 
     for stock in stocks:
@@ -113,7 +113,7 @@ def _predict_vn30(algos: dict) -> int:
 def _predict_gold(algos: dict) -> int:
     log.info("predict.gold.start", instruments=len(GOLD_INSTRUMENTS), algorithms=len(algos))
     count = 0
-    now = datetime.utcnow()
+    now = datetime.now()
     target = now + timedelta(days=1)
 
     for source, product_type in GOLD_INSTRUMENTS:
@@ -151,7 +151,7 @@ def _predict_nasdaq(algos: dict) -> int:
     symbols = repo.get_nasdaq_symbols() or NASDAQ_SYMBOLS
     log.info("predict.nasdaq.start", symbols=len(symbols), algorithms=len(algos))
     count = 0
-    now = datetime.utcnow()
+    now = datetime.now()
     target = now + timedelta(days=1)
 
     for symbol in symbols:
@@ -188,7 +188,7 @@ def _predict_nasdaq(algos: dict) -> int:
 def _predict_crypto(algos: dict) -> int:
     log.info("predict.crypto.start", coins=len(CRYPTO_COINS), algorithms=len(algos))
     count = 0
-    now = datetime.utcnow()
+    now = datetime.now()
     target = now + timedelta(days=1)
 
     for coin_id, symbol in CRYPTO_COINS:
@@ -225,7 +225,7 @@ def _predict_crypto(algos: dict) -> int:
 def _predict_fuel(algos: dict) -> int:
     log.info("predict.fuel.start", products=len(FUEL_PRODUCTS), algorithms=len(algos))
     count = 0
-    now = datetime.utcnow()
+    now = datetime.now()
     target = now + timedelta(days=1)
 
     for product_type in FUEL_PRODUCTS:
@@ -262,7 +262,7 @@ def _predict_sp500(algos: dict) -> int:
     symbols = repo.get_sp500_symbols() or SP500_SYMBOLS
     log.info("predict.sp500.start", symbols=len(symbols), algorithms=len(algos))
     count = 0
-    now = datetime.utcnow()
+    now = datetime.now()
     target = now + timedelta(days=1)
 
     for symbol in symbols:

@@ -106,6 +106,7 @@ func (c *Client) GetLatestCryptoPredictions() ([]modelsdb.CryptoPrediction, erro
 	err := c.Db.
 		Joins("JOIN (?) as latest ON latest.max_id = crypto_predictions.id", subQuery).
 		Where("crypto_predictions.deleted_at IS NULL").
+		Order("crypto_predictions.prediction_date DESC").
 		Find(&preds).Error
 	return preds, err
 }
@@ -122,6 +123,7 @@ func (c *Client) GetLatestConfirmedCryptoPredictions() ([]modelsdb.CryptoPredict
 	err := c.Db.
 		Joins("JOIN (?) as latest ON latest.max_id = crypto_predictions.id", subQuery).
 		Where("crypto_predictions.deleted_at IS NULL").
+		Order("crypto_predictions.prediction_date DESC").
 		Find(&preds).Error
 	return preds, err
 }

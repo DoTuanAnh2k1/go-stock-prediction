@@ -3,27 +3,29 @@ import { NavLink } from 'react-router-dom';
 import { Panel, KPI, Icon, Chg, Seg, ConfBar, vnsToast } from '../components/ui';
 import { LineChart } from '../components/charts';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LangContext';
 
 // ── Market tabs ───────────────────────────────────────────────────────────────
 function MarketTabs({ marketKey }: { marketKey: string }) {
+  const { t } = useLanguage();
   const base = '/markets/' + marketKey;
   return (
     <div className="market-tabs">
       <NavLink to={base} end className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="candles" size={14} />
-        Tổng quan
+        {t.marketTabs.overview}
       </NavLink>
       <NavLink to={base + '/predictions'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="pulse" size={14} />
-        Dự đoán
+        {t.marketTabs.predictions}
       </NavLink>
       <NavLink to={base + '/detail'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="layers" size={14} />
-        Chi tiết
+        {t.marketTabs.detail}
       </NavLink>
       <NavLink to={base + '/training'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="cpu" size={14} />
-        Huấn luyện
+        {t.marketTabs.training}
       </NavLink>
     </div>
   );
@@ -170,6 +172,21 @@ function ddmm(s: string): string {
   }
 }
 
+function fmtDT(s: string): string {
+  if (!s) return '—';
+  try {
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s.slice(0, 16).replace('T', ' ');
+    const dd = ('0' + d.getDate()).slice(-2);
+    const mm = ('0' + (d.getMonth() + 1)).slice(-2);
+    const hh = ('0' + d.getHours()).slice(-2);
+    const mi = ('0' + d.getMinutes()).slice(-2);
+    return `${dd}/${mm} ${hh}:${mi}`;
+  } catch {
+    return s.slice(0, 16).replace('T', ' ');
+  }
+}
+
 function algoShort(name: string): { short: string; cls: string } {
   const map: Record<string, { short: string; cls: string }> = {
     lstm_nn: { short: 'LSTM', cls: 'lstm' },
@@ -196,9 +213,25 @@ function Legend({ items }: { items: [string, string][] }) {
 
 // ── Top symbols to show as KPI cards ─────────────────────────────────────────
 const KPI_SYMBOLS = ['SPY', 'QQQ', 'JPM', 'XOM'];
+const PRED_PER_PAGE = 30;
+
+function TablePager({ total, page, perPage, onChange }: { total: number; page: number; perPage: number; onChange: (p: number) => void }) {
+  const totalPages = Math.ceil(total / perPage);
+  if (totalPages <= 1) return null;
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-3)' }}>
+      <span>{(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} / {total}</span>
+      <div style={{ display: 'flex', gap: 4 }}>
+        <button className="btn btn--sm btn--ghost" disabled={page <= 1} onClick={() => onChange(page - 1)}>←</button>
+        <button className="btn btn--sm btn--ghost" disabled={page >= totalPages} onClick={() => onChange(page + 1)}>→</button>
+      </div>
+    </div>
+  );
+}
 
 export default function SP500() {
   const { isLoggedIn } = useAuth();
+  const { t } = useLanguage();
 
   // State
   const [latest, setLatest] = useState<SP500LatestItem[]>([]);
@@ -210,6 +243,10 @@ export default function SP500() {
   const [predChart, setPredChart] = useState<PredChartData>({ labels: [], actual: [], predSeries: [] });
   const [loading, setLoading] = useState(true);
   const [chartLoading, setChartLoading] = useState(false);
+  const [predPage, setPredPage] = useState(1);
+  const [confirmedPage, setConfirmedPage] = useState(1);
+  const [predSym, setPredSym] = useState('');
+  const [confirmedSym, setConfirmedSym] = useState('');
 
   // Load initial data
   useEffect(() => {
@@ -290,16 +327,21 @@ export default function SP500() {
   const n = parseInt(days);
   const chartLabels = chart.dates.map(ddmm);
 
+  const predSymbols = Array.from(new Set(preds.map((p) => p.symbol).filter(Boolean))).sort() as string[];
+  const filteredPreds = predSym ? preds.filter((p) => p.symbol === predSym) : preds;
+  const confirmedSymbols = Array.from(new Set(confirmedResults.map((r) => r.symbol).filter(Boolean))).sort() as string[];
+  const filteredConfirmed = confirmedSym ? confirmedResults.filter((r) => r.symbol === confirmedSym) : confirmedResults;
+
   if (loading) {
     return (
       <div className="content__inner fade">
         <MarketTabs marketKey="sp500" />
         <div className="grid grid--kpis section-gap">
-          {[1, 2, 3, 4].map((i) => <KPI key={i} label="—" value="—" sub="Loading..." />)}
+          {[1, 2, 3, 4].map((i) => <KPI key={i} label="—" value="—" sub={t.common.loading} />)}
         </div>
         <div className="empty section-gap">
           <div className="empty__icon"><Icon name="layers" size={18} /></div>
-          <p>Đang tải dữ liệu S&P 500...</p>
+          <p>{t.sp500.loadingData}</p>
         </div>
       </div>
     );
@@ -312,14 +354,14 @@ export default function SP500() {
       <div className="grid grid--kpis section-gap">
         {kpiItems.length === 0
           ? [1, 2, 3, 4].map((i) => (
-              <KPI key={i} label="—" value="N/A" sub="Chưa có dữ liệu" />
+              <KPI key={i} label="—" value="N/A" sub={t.sp500.noDataKpi} />
             ))
           : kpiItems.map((s) => (
               <KPI
                 key={s.symbol}
                 label={s.symbol}
                 value={fmtUSD(num(s.close_price))}
-                sub={s.trading_date ? s.trading_date.slice(0, 10) : '—'}
+                sub={fmtDT(s.trading_date)}
                 chgPct={s.change_percent != null ? num(s.change_percent) : undefined}
                 sparkColor="var(--accent)"
               />
@@ -329,16 +371,18 @@ export default function SP500() {
 
       {/* Price chart */}
       <Panel
-        title="Biểu đồ giá S&P 500"
+        title={t.sp500.priceChart}
         dot={activeSym || '—'}
         className="section-gap"
         tools={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Seg
               options={[
-                { value: '30', label: '30N' },
-                { value: '90', label: '90N' },
-                { value: '180', label: '180N' },
+                { value: '1', label: t.dateRange.today },
+                { value: '7', label: t.dateRange.d7 },
+                { value: '30', label: t.dateRange.d30 },
+                { value: '90', label: t.dateRange.d90 },
+                { value: '180', label: t.dateRange.d180 },
               ]}
               value={days}
               onChange={setDays}
@@ -349,22 +393,22 @@ export default function SP500() {
                   className="btn btn--sm"
                   onClick={() =>
                     authPost('/api/trigger/sp500-crawler').then((ok) =>
-                      vnsToast(ok ? 'Đã gửi yêu cầu thu thập S&P 500' : 'Không thể gửi yêu cầu thu thập')
+                      vnsToast(ok ? t.sp500.collectRequest : t.sp500.collectFail)
                     )
                   }
                 >
-                  <Icon name="download" size={13} />Thu thập
+                  <Icon name="download" size={13} />{t.common.collect}
                 </button>
                 <button
                   className="btn btn--sm"
                   style={{ background: 'var(--accent)', borderColor: 'var(--accent)', color: '#fff' }}
                   onClick={() =>
                     authPost('/api/trigger/sp500-predict').then((ok) =>
-                      vnsToast(ok ? 'Đã gửi yêu cầu chạy dự đoán S&P 500' : 'Không thể gửi yêu cầu dự đoán')
+                      vnsToast(ok ? t.sp500.predictRequest : t.sp500.predictFail)
                     )
                   }
                 >
-                  <Icon name="play" size={13} />Dự đoán
+                  <Icon name="play" size={13} />{t.common.predict}
                 </button>
               </>
             )}
@@ -396,7 +440,7 @@ export default function SP500() {
               <span style={{ fontSize: 12, color: 'var(--text-3)' }}>USD / share</span>
               {cur.change_percent != null && <Chg pct={num(cur.change_percent)} />}
               <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-                S&P 500 · {cur.trading_date ? cur.trading_date.slice(0, 10) : '—'}
+                S&P 500 · {fmtDT(cur.trading_date)}
               </span>
             </div>
           ) : null;
@@ -405,7 +449,7 @@ export default function SP500() {
         {chartLoading ? (
           <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="refresh" size={18} /></div>
-            <p>Đang tải biểu đồ...</p>
+            <p>{t.common.loadingChart}</p>
           </div>
         ) : chart.prices.length > 0 ? (
           <LineChart
@@ -420,34 +464,43 @@ export default function SP500() {
         ) : (
           <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Chưa có dữ liệu biểu đồ. Hãy thu thập dữ liệu trước.</p>
+            <p>{t.sp500.noChartData}</p>
           </div>
         )}
       </Panel>
 
       {/* Predictions + Confirmed results */}
       <div className="grid grid--halves section-gap">
-        <Panel title="Dự đoán S&P 500 phiên mai" flush>
-          {preds.length === 0 ? (
+        <Panel title={t.sp500.tomorrowPred} flush tools={
+          predSymbols.length > 0 && (
+            <select value={predSym} onChange={(e) => { setPredSym(e.target.value); setPredPage(1); }}
+              style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)', cursor: 'pointer' }}>
+              <option value="">{t.common.allSymbols}</option>
+              {predSymbols.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )
+        }>
+          {filteredPreds.length === 0 ? (
             <div className="empty">
               <div className="empty__icon"><Icon name="layers" size={18} /></div>
-              <p>Chưa có dự đoán. Hãy chạy dự đoán trước.</p>
+              <p>{preds.length === 0 ? t.common.noPredictions : t.sp500.noDataForSymbol}</p>
             </div>
           ) : (
+            <>
             <div style={{ overflowX: 'auto' }}>
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Mã</th>
-                    <th className="c">TT</th>
-                    <th className="r">Hiện tại</th>
-                    <th className="r">Dự đoán</th>
+                    <th>{t.common.symbol}</th>
+                    <th className="c">{t.common.status}</th>
+                    <th className="r">{t.common.current}</th>
+                    <th className="r">{t.common.predicted}</th>
                     <th className="r">±%</th>
-                    <th className="r">Tin cậy</th>
+                    <th className="r">{t.common.confidence}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {preds.map((p, i) => {
+                  {filteredPreds.slice((predPage - 1) * PRED_PER_PAGE, predPage * PRED_PER_PAGE).map((p, i) => {
                     const cur = num(p.current_price);
                     const pred = num(p.predicted_price);
                     const deltaPct = cur ? +((pred - cur) / cur * 100).toFixed(2) : 0;
@@ -468,31 +521,42 @@ export default function SP500() {
                 </tbody>
               </table>
             </div>
+            <TablePager total={filteredPreds.length} page={predPage} perPage={PRED_PER_PAGE} onChange={setPredPage} />
+            </>
           )}
         </Panel>
 
-        <Panel title="Kết quả dự đoán gần nhất" flush>
-          {confirmedResults.length === 0 ? (
+        <Panel title={t.common.latestPredResults} flush tools={
+          confirmedSymbols.length > 0 && (
+            <select value={confirmedSym} onChange={(e) => { setConfirmedSym(e.target.value); setConfirmedPage(1); }}
+              style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)', cursor: 'pointer' }}>
+              <option value="">{t.common.allSymbols}</option>
+              {confirmedSymbols.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )
+        }>
+          {filteredConfirmed.length === 0 ? (
             <div className="empty">
               <div className="empty__icon"><Icon name="pulse" size={18} /></div>
-              <p>Chưa có kết quả đã xác nhận. Kết quả sẽ xuất hiện sau khi dự đoán được đối chiếu với giá thực tế.</p>
+              <p>{t.sp500.noConfirmed}</p>
             </div>
           ) : (
+            <>
             <div style={{ overflowX: 'auto' }}>
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Mã</th>
-                    <th className="c">TT</th>
-                    <th className="r">Dự đoán</th>
-                    <th className="r">Thực tế</th>
-                    <th className="r">Lệch</th>
-                    <th className="r">Độ CX</th>
-                    <th className="c">Ngày</th>
+                    <th>{t.common.symbol}</th>
+                    <th className="c">{t.common.status}</th>
+                    <th className="r">{t.common.predicted}</th>
+                    <th className="r">{t.common.actual}</th>
+                    <th className="r">{t.common.deviation}</th>
+                    <th className="r">{t.common.accuracy}</th>
+                    <th className="c">{t.common.date}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {confirmedResults.map((r, i) => {
+                  {filteredConfirmed.slice((confirmedPage - 1) * PRED_PER_PAGE, confirmedPage * PRED_PER_PAGE).map((r, i) => {
                     const predicted = num(r.predicted_price);
                     const actual = num(r.actual_price ?? 0);
                     const deviationPct = actual ? +((predicted - actual) / actual * 100).toFixed(2) : 0;
@@ -528,7 +592,7 @@ export default function SP500() {
                             : <span style={{ color: 'var(--text-3)' }}>—</span>}
                         </td>
                         <td className="c num" style={{ color: 'var(--text-3)', fontSize: 12 }}>
-                          {ddmm(r.prediction_date)}
+                          {fmtDT(r.prediction_date)}
                         </td>
                       </tr>
                     );
@@ -536,17 +600,21 @@ export default function SP500() {
                 </tbody>
               </table>
             </div>
+            <TablePager total={filteredConfirmed.length} page={confirmedPage} perPage={PRED_PER_PAGE} onChange={setConfirmedPage} />
+            </>
           )}
         </Panel>
       </div>
 
       {/* Prediction vs Actual chart — full width */}
-      <Panel title="Dự đoán vs Thực tế" sub={activeSym ? activeSym + ' · Tất cả thuật toán' : 'S&P 500'} className="section-gap">
+      <Panel title={t.common.predVsActual} sub={activeSym ? activeSym + ' · ' + t.common.allAlgos : 'S&P 500'} className="section-gap"
+        tools={<Seg options={[{ value: '1', label: t.dateRange.today }, { value: '7', label: t.dateRange.d7 }, { value: '30', label: t.dateRange.d30 }, { value: '90', label: t.dateRange.d90 }, { value: '180', label: t.dateRange.d180 }]} value={days} onChange={setDays} />}
+      >
         {predChart.labels.length > 0 && (predChart.predSeries.length > 0 || predChart.actual.some((v) => v != null)) ? (
           <>
             <LineChart
               series={[
-                { name: 'Thực tế', data: predChart.actual, color: 'var(--text-2)', w: 1.8 },
+                { name: t.common.actual, data: predChart.actual, color: 'var(--text-2)', w: 1.8 },
                 ...predChart.predSeries.map((ps, i) => ({
                   name: algoDisplayName(ps.key),
                   data: ps.data,
@@ -562,35 +630,35 @@ export default function SP500() {
               padL={58}
             />
             <Legend items={[
-              ['Thực tế', 'var(--text-2)'],
+              [t.common.actual, 'var(--text-2)'],
               ...predChart.predSeries.map((ps, i) => [algoDisplayName(ps.key), algoColor(ps.key, i)] as [string, string]),
             ]} />
           </>
         ) : (
           <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Chưa có dữ liệu so sánh dự đoán</p>
+            <p>{t.common.noCompareData}</p>
           </div>
         )}
       </Panel>
 
       {/* Latest prices table */}
-      <div className="sec-head section-gap"><h2>Bảng giá S&P 500</h2><div className="line"></div></div>
+      <div className="sec-head section-gap"><h2>{t.sp500.priceTable}</h2><div className="line"></div></div>
       <Panel flush className="section-gap">
         {latest.length === 0 ? (
           <div className="empty">
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Chưa có dữ liệu. Hãy thu thập dữ liệu trước.</p>
+            <p>{t.common.noDataCollect}</p>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Mã</th>
-                  <th className="r">Giá đóng (USD)</th>
+                  <th>{t.common.symbol}</th>
+                  <th className="r">USD</th>
                   <th className="r">±%</th>
-                  <th className="c">Ngày</th>
+                  <th className="c">{t.common.date}</th>
                 </tr>
               </thead>
               <tbody>
@@ -604,7 +672,7 @@ export default function SP500() {
                         : <span style={{ color: 'var(--text-3)' }}>—</span>}
                     </td>
                     <td className="c num" style={{ color: 'var(--text-3)', fontSize: 12 }}>
-                      {s.trading_date ? s.trading_date.slice(0, 10) : '—'}
+                      {fmtDT(s.trading_date)}
                     </td>
                   </tr>
                 ))}

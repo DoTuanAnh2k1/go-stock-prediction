@@ -100,6 +100,7 @@ func (c *Client) GetLatestSP500Predictions() ([]modelsdb.SP500Prediction, error)
 	err := c.Db.
 		Joins("JOIN (?) as latest ON latest.symbol = sp500_predictions.symbol AND latest.algorithm_name = sp500_predictions.algorithm_name AND latest.max_date = sp500_predictions.prediction_date", subQuery).
 		Where("sp500_predictions.deleted_at IS NULL").
+		Order("sp500_predictions.prediction_date DESC").
 		Find(&preds).Error
 	return preds, err
 }
@@ -115,6 +116,7 @@ func (c *Client) GetLatestConfirmedSP500Predictions() ([]modelsdb.SP500Predictio
 	err := c.Db.
 		Joins("JOIN (?) as latest ON latest.max_id = sp500_predictions.id", subQuery).
 		Where("sp500_predictions.deleted_at IS NULL").
+		Order("sp500_predictions.prediction_date DESC").
 		Find(&preds).Error
 	return preds, err
 }

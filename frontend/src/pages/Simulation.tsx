@@ -19,15 +19,15 @@ interface LeaderboardEntry {
   algorithm: string;
   currency: string;
   is_active: boolean;
-  initial_capital: number;
-  final_value: number;
-  total_return_pct: number;
-  annualized_return_pct: number;
-  sharpe_ratio: number;
-  max_drawdown_pct: number;
-  win_rate_pct: number;
-  profit_factor: number;
-  total_trades: number;
+  initial_capital: number | null;
+  final_value: number | null;
+  total_return_pct: number | null;
+  annualized_return_pct: number | null;
+  sharpe_ratio: number | null;
+  max_drawdown_pct: number | null;
+  win_rate_pct: number | null;
+  profit_factor: number | null;
+  total_trades: number | null;
   simulation_period: SimPeriod | null | undefined;
 }
 
@@ -63,7 +63,23 @@ async function authPost(path: string): Promise<boolean> {
   return res.ok;
 }
 
-function fmtCapital(v: number, currency: string): string {
+function fmtDT(s: string): string {
+  if (!s) return '—';
+  try {
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s.slice(0, 16).replace('T', ' ');
+    const dd = ('0' + d.getDate()).slice(-2);
+    const mm = ('0' + (d.getMonth() + 1)).slice(-2);
+    const hh = ('0' + d.getHours()).slice(-2);
+    const mi = ('0' + d.getMinutes()).slice(-2);
+    return `${dd}/${mm} ${hh}:${mi}`;
+  } catch {
+    return s.slice(0, 16).replace('T', ' ');
+  }
+}
+
+function fmtCapital(v: number | null, currency: string): string {
+  if (v == null) return '—';
   if (currency === 'VND') {
     if (v >= 1e9) return (v / 1e9).toFixed(2) + ' tỷ';
     if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
@@ -369,7 +385,7 @@ export default function Simulation() {
                     <td>
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{e.display_name}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-                        {e.simulation_period?.start ?? '—'} → {e.simulation_period?.end ?? '—'}
+                        {e.simulation_period?.start ? fmtDT(e.simulation_period.start) : '—'} → {e.simulation_period?.end ? fmtDT(e.simulation_period.end) : '—'}
                       </div>
                     </td>
                     <td>
@@ -421,19 +437,19 @@ export default function Simulation() {
                     <td className="r">
                       <Chg pct={e.total_return_pct} />
                     </td>
-                    <td className="r num" style={{ fontSize: 12, color: e.annualized_return_pct >= 0 ? 'var(--up)' : 'var(--down)' }}>
-                      {e.annualized_return_pct >= 0 ? '+' : ''}{e.annualized_return_pct.toFixed(1)}%
+                    <td className="r num" style={{ fontSize: 12, color: (e.annualized_return_pct ?? 0) >= 0 ? 'var(--up)' : 'var(--down)' }}>
+                      {(e.annualized_return_pct ?? 0) >= 0 ? '+' : ''}{(e.annualized_return_pct ?? 0).toFixed(1)}%
                     </td>
-                    <td className="r num" style={{ fontSize: 12, color: e.sharpe_ratio >= 1.5 ? 'var(--up)' : e.sharpe_ratio >= 0 ? 'var(--text-2)' : 'var(--down)' }}>
-                      {e.sharpe_ratio.toFixed(2)}
+                    <td className="r num" style={{ fontSize: 12, color: (e.sharpe_ratio ?? 0) >= 1.5 ? 'var(--up)' : (e.sharpe_ratio ?? 0) >= 0 ? 'var(--text-2)' : 'var(--down)' }}>
+                      {(e.sharpe_ratio ?? 0).toFixed(2)}
                     </td>
                     <td className="r">
                       <span className="num" style={{ fontSize: 12, color: 'var(--down)' }}>
-                        {e.max_drawdown_pct.toFixed(1)}%
+                        {(e.max_drawdown_pct ?? 0).toFixed(1)}%
                       </span>
                     </td>
-                    <td className="r num" style={{ fontSize: 12, color: e.win_rate_pct >= 55 ? 'var(--up)' : 'var(--text-2)' }}>
-                      {e.win_rate_pct.toFixed(1)}%
+                    <td className="r num" style={{ fontSize: 12, color: (e.win_rate_pct ?? 0) >= 55 ? 'var(--up)' : 'var(--text-2)' }}>
+                      {(e.win_rate_pct ?? 0).toFixed(1)}%
                     </td>
                     <td className="r num" style={{ color: 'var(--text-2)', fontSize: 12 }}>{e.total_trades}</td>
                   </tr>

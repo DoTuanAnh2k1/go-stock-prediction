@@ -4,6 +4,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"time"
 
 	"go-stock-prediction/pkg/logger"
 	"go-stock-prediction/pkg/store/repository"
@@ -161,7 +162,7 @@ func GetMarketPredictions(w http.ResponseWriter, r *http.Request) {
 				PredictedPrice: p.PredictedPrice,
 				CurrentPrice:   p.CurrentPrice,
 				Confidence:     p.Confidence,
-				PredictionDate: p.PredictionDate.Format("2006-01-02"),
+				PredictionDate: p.PredictionDate.Format(time.RFC3339),
 				TargetDate:     p.TargetDate.Format("2006-01-02"),
 				ActualPrice:    p.ActualPrice,
 				Accuracy:       p.Accuracy,
@@ -196,7 +197,7 @@ func GetMarketPredictions(w http.ResponseWriter, r *http.Request) {
 				PredictedPrice: p.PredictedPrice,
 				CurrentPrice:   p.CurrentPrice,
 				Confidence:     p.Confidence,
-				PredictionDate: p.PredictionDate.Format("2006-01-02"),
+				PredictionDate: p.PredictionDate.Format(time.RFC3339),
 				TargetDate:     p.TargetDate.Format("2006-01-02"),
 				ActualPrice:    p.ActualPrice,
 				Accuracy:       p.Accuracy,

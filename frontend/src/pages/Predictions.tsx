@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { Panel, KPI, Icon, Chg, Seg, ConfBar } from '../components/ui';
 import { LineChart, HBars, Scatter } from '../components/charts';
+import { useLanguage } from '../context/LangContext';
 
 // ── Color/name helpers ─────────────────────────────────────────────────────────
 const ALGO_COLORS: Record<string, string> = {
@@ -71,6 +72,7 @@ function buildMultiAlgoData(
 export default function Predictions() {
   const { data: D } = useData();
   const { fmt } = D;
+  const { t } = useLanguage();
   const [algo, setAlgo] = useState('');
   const [range, setRange] = useState('30');
   const [compareSym, setCompareSym] = useState('');
@@ -149,33 +151,33 @@ export default function Predictions() {
   return (
     <div className="content__inner fade">
       <div className="grid grid--kpis section-gap">
-        <KPI label="Tổng dự đoán"    value={summary.total || '—'}     sub="30 ngày qua" />
-        <KPI label="Độ chính xác TB" value={summary.acc ? summary.acc + '%' : '—%'} sub="tất cả mô hình" accent />
-        <KPI label="Đã xác nhận"     value={summary.confirmed || '—'} sub="có giá thực tế" />
-        <KPI label="Sai số TB"       value={summary.err ? summary.err + '%' : '—%'} sub="|dự đoán − thực tế|" />
+        <KPI label={t.predictions.totalPredictions} value={summary.total || '—'}     sub={t.predictions.last30Days} />
+        <KPI label={t.predictions.avgAccuracy}      value={summary.acc ? summary.acc + '%' : '—%'} sub={t.predictions.allModels} accent />
+        <KPI label={t.predictions.confirmed}        value={summary.confirmed || '—'} sub={t.predictions.withActualPrice} />
+        <KPI label={t.predictions.avgError}         value={summary.err ? summary.err + '%' : '—%'} sub={t.predictions.errorDiff} />
       </div>
 
       <Panel className="section-gap">
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <Icon name="filter" size={15} style={{ color: 'var(--text-3)' }} />
           <select className="sel" value={algo} onChange={(e) => setAlgo(e.target.value)}>
-            <option value="">Tất cả thuật toán</option>
+            <option value="">{t.common.allAlgos}</option>
             {D.algos.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
-          <Seg options={[{ value: '7', label: '7N' }, { value: '30', label: '30N' }, { value: '90', label: '90N' }]} value={range} onChange={setRange} />
+          <Seg options={[{ value: '7', label: t.dateRange.d7 }, { value: '30', label: t.dateRange.d30 }, { value: '90', label: t.dateRange.d90 }]} value={range} onChange={setRange} />
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button className="btn btn--sm"><Icon name="download" size={13} />Xuất CSV</button>
-            <button className="btn btn--sm btn--ghost"><Icon name="refresh" size={13} />Làm mới</button>
+            <button className="btn btn--sm"><Icon name="download" size={13} />{t.common.exportCsv}</button>
+            <button className="btn btn--sm btn--ghost"><Icon name="refresh" size={13} />{t.common.refresh}</button>
           </div>
         </div>
       </Panel>
 
       <div className="grid grid--wide section-gap">
-        <Panel title="Hiệu suất thuật toán" sub="độ chính xác">
+        <Panel title={t.predictions.algoPerformance} sub={t.predictions.accuracyLabel}>
           {D.algos.length === 0
             ? <div className="empty">
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
-                <p>Chưa có dữ liệu huấn luyện</p>
+                <p>{t.predictions.noTrainingData}</p>
               </div>
             : <>
                 <HBars items={D.algos.map((a) => ({
@@ -193,11 +195,11 @@ export default function Predictions() {
               </>
           }
         </Panel>
-        <Panel title="Xu hướng độ chính xác" sub="phiên gần nhất">
+        <Panel title={t.predictions.accuracyTrend} sub={t.predictions.recentSessions}>
           {D.accTrend.labels.length === 0
             ? <div className="empty">
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
-                <p>Chưa có dữ liệu xu hướng</p>
+                <p>{t.predictions.noTrendData}</p>
               </div>
             : <>
                 <LineChart
@@ -210,19 +212,19 @@ export default function Predictions() {
         </Panel>
       </div>
 
-      <div className="sec-head"><h2>Tất cả dự đoán</h2><div className="line"></div></div>
+      <div className="sec-head"><h2>{t.predictions.allPredictions}</h2><div className="line"></div></div>
       <Panel flush className="section-gap">
         {conf.length === 0
           ? <div className="empty">
               <div className="empty__icon"><Icon name="layers" size={18} /></div>
-              <p>Chưa có dự đoán đã xác nhận</p>
+              <p>{t.predictions.noConfirmedPred}</p>
             </div>
           : <div style={{ overflowX: 'auto' }}>
               <table className="tbl">
                 <thead><tr>
-                  <th>Mã</th><th className="c">Thuật toán</th><th className="r">Giá dự đoán</th><th className="r">Giá thực tế</th>
-                  <th className="r">Δ dự đoán</th><th className="r">Δ thực tế</th><th className="r">Độ tin cậy</th>
-                  <th className="r">Độ chính xác</th><th className="c">Trạng thái</th>
+                  <th>{t.predictions.colSymbol}</th><th className="c">{t.predictions.colAlgo}</th><th className="r">{t.predictions.colPredPrice}</th><th className="r">{t.predictions.colActualPrice}</th>
+                  <th className="r">{t.predictions.colPredDelta}</th><th className="r">{t.predictions.colActualDelta}</th><th className="r">{t.predictions.colConfidence}</th>
+                  <th className="r">{t.predictions.colAccuracy}</th><th className="c">{t.predictions.colStatus}</th>
                 </tr></thead>
                 <tbody>
                   {conf.map((c, i) => (
@@ -237,7 +239,7 @@ export default function Predictions() {
                       <td className="r num" style={{ fontWeight: 600, color: c.acc > 85 ? 'var(--up)' : c.acc > 72 ? 'var(--text)' : 'var(--down)' }}>{c.acc}%</td>
                       <td className="c">
                         <span className={`badge badge--${c.status === 'hit' ? 'up' : c.status === 'miss' ? 'down' : 'neutral'}`}>
-                          {c.status === 'hit' ? 'Chính xác' : c.status === 'miss' ? 'Sai lệch' : 'Gần đúng'}
+                          {c.status === 'hit' ? t.predictions.statusHit : c.status === 'miss' ? t.predictions.statusMiss : t.predictions.statusNear}
                         </span>
                       </td>
                     </tr>
@@ -249,7 +251,7 @@ export default function Predictions() {
       </Panel>
 
       <div className="grid grid--side section-gap">
-        <Panel title="Dự đoán vs Thực tế" dot={effectiveSym || '—'}
+        <Panel title={t.predictions.compareChart} dot={effectiveSym || '—'}
           tools={D.stocks.length > 0 &&
             <select className="sel" value={effectiveSym} onChange={(e) => setCompareSym(e.target.value)}>
               {D.stocks.map((s) => <option key={s.sym}>{s.sym}</option>)}
@@ -258,17 +260,17 @@ export default function Predictions() {
           {compareLoading
             ? <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
-                <p>Đang tải...</p>
+                <p>{t.predictions.loadingCompare}</p>
               </div>
             : (!compareData || compareData.labels.length === 0)
               ? <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   <div className="empty__icon"><Icon name="layers" size={18} /></div>
-                  <p>Chưa có dữ liệu so sánh</p>
+                  <p>{t.predictions.noCompareData}</p>
                 </div>
               : <>
                   <LineChart
                     series={[
-                      { name: 'Thực tế', data: compareData.actual, color: 'var(--text-2)', w: 1.8 },
+                      { name: t.common.actual, data: compareData.actual, color: 'var(--text-2)', w: 1.8 },
                       ...compareData.predSeries.map((ps, i) => ({
                         name: algoDisplayName(ps.key),
                         data: ps.data,
@@ -280,21 +282,21 @@ export default function Predictions() {
                     labels={compareData.labels} height={540} valueFmt={(v) => fmt.price(v)}
                   />
                   <Legend items={[
-                    ['Thực tế', 'var(--text-2)'],
+                    [t.common.actual, 'var(--text-2)'],
                     ...compareData.predSeries.map((ps, i) => [algoDisplayName(ps.key), algoColor(ps.key, i)] as [string, string]),
                   ]} />
                 </>
           }
         </Panel>
 
-        <Panel title="Phân bố sai số" sub="độ tin cậy × |sai số|">
+        <Panel title={t.predictions.errorDist} sub={t.predictions.errorDistSub}>
           {scatterPts.length === 0
             ? <div className="empty" style={{ height: 520, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
-                <p>Chưa có dữ liệu phân tích</p>
+                <p>{t.predictions.noAnalysisData}</p>
               </div>
             : <>
-                <Scatter points={scatterPts} height={520} xLabel="Độ tin cậy (%)" />
+                <Scatter points={scatterPts} height={520} xLabel={t.predictions.confidenceAxis} />
                 <Legend items={D.accTrend.series.map((s) => [s.name, s.color] as [string, string])} />
               </>
           }
@@ -303,8 +305,8 @@ export default function Predictions() {
 
       {(best.length > 0 || worst.length > 0) && (
         <div className="grid grid--halves" style={{ paddingBottom: 8 }}>
-          <FeaturedPanel title="Top 5 chính xác nhất" items={best} good fmt={fmt} />
-          <FeaturedPanel title="Top 5 sai lệch nhất" items={worst} good={false} fmt={fmt} />
+          <FeaturedPanel title={t.predictions.top5Accurate} items={best} good fmt={fmt} />
+          <FeaturedPanel title={t.predictions.top5Inaccurate} items={worst} good={false} fmt={fmt} />
         </div>
       )}
     </div>
@@ -324,23 +326,24 @@ function Legend({ items }: { items: [string, string][] }) {
 }
 
 function FeaturedPanel({ title, items, good, fmt }: { title: string; items: any[]; good: boolean; fmt: any }) {
+  const { t } = useLanguage();
   return (
     <Panel title={title} flush>
       {items.length === 0
         ? <div className="empty">
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Chưa có dữ liệu</p>
+            <p>{t.predictions.noData}</p>
           </div>
         : items.map((c, i) => (
           <div key={i} className="lrow">
             <span className="badge badge--muted" style={{ minWidth: 22, justifyContent: 'center' }}>{i + 1}</span>
             <div className="lrow__main">
               <div className="lrow__sym">{c.sym} <span className={`algo algo--${c.algoCls}`} style={{ marginLeft: 4 }}>{c.algoShort}</span></div>
-              <div className="lrow__sub">DĐ {fmt.price(c.pred)} · TT {fmt.price(c.actual)}</div>
+              <div className="lrow__sub">{t.predictions.predLabel} {fmt.price(c.pred)} · {t.predictions.actualLabel} {fmt.price(c.actual)}</div>
             </div>
             <div className="lrow__rt">
               <div className="num" style={{ fontWeight: 600, color: good ? 'var(--up)' : 'var(--down)' }}>{c.acc}%</div>
-              <div style={{ fontSize: 11, color: 'var(--text-3)' }}>sai số {c.err}%</div>
+              <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{t.predictions.errorLabel} {c.err}%</div>
             </div>
           </div>
         ))

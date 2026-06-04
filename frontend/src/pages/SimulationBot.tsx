@@ -14,15 +14,15 @@ interface BotSession {
 }
 
 interface BotKPIs {
-  total_return_pct: number;
-  annualized_return_pct: number;
-  sharpe_ratio: number;
-  max_drawdown_pct: number;
-  win_rate_pct: number;
-  profit_factor: number;
-  total_trades: number;
-  best_trade_pct: number;
-  worst_trade_pct: number;
+  total_return_pct: number | null;
+  annualized_return_pct: number | null;
+  sharpe_ratio: number | null;
+  max_drawdown_pct: number | null;
+  win_rate_pct: number | null;
+  profit_factor: number | null;
+  total_trades: number | null;
+  best_trade_pct: number | null;
+  worst_trade_pct: number | null;
 }
 
 interface BotDetail {
@@ -30,16 +30,16 @@ interface BotDetail {
   market: string;
   algorithm: string;
   display_name: string;
-  initial_capital: number;
+  initial_capital: number | null;
   currency: string;
   is_active: boolean;
-  buy_threshold: number;
-  sell_threshold: number;
-  min_confidence: number;
-  stop_loss: number;
-  take_profit: number;
+  buy_threshold: number | null;
+  sell_threshold: number | null;
+  min_confidence: number | null;
+  stop_loss: number | null;
+  take_profit: number | null;
   last_session: BotSession | null;
-  kpis: BotKPIs;
+  kpis: BotKPIs | null;
 }
 
 interface BotChart {
@@ -57,8 +57,8 @@ interface Trade {
   quantity: number;
   price: number;
   trade_value: number;
-  signal_strength: number;
-  confidence: number;
+  signal_strength: number | null;
+  confidence: number | null;
   trade_date: string;
   close_reason: string | null;
   pnl: number | null;
@@ -94,7 +94,8 @@ async function authPost(path: string): Promise<boolean> {
   return res.ok;
 }
 
-function fmtCapital(v: number, currency: string): string {
+function fmtCapital(v: number | null, currency: string): string {
+  if (v == null) return '—';
   if (currency === 'VND') {
     if (v >= 1e9) return (v / 1e9).toFixed(2) + ' tỷ VND';
     if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M VND';
@@ -105,7 +106,8 @@ function fmtCapital(v: number, currency: string): string {
   return '$' + v.toFixed(2);
 }
 
-function fmtValueShort(v: number, currency: string): string {
+function fmtValueShort(v: number | null, currency: string): string {
+  if (v == null) return '—';
   if (currency === 'VND') {
     if (v >= 1e9) return (v / 1e9).toFixed(1) + 'B';
     if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
@@ -155,6 +157,21 @@ function ddmm(s: string): string {
     return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2);
   } catch {
     return s.slice(0, 10);
+  }
+}
+
+function fmtDT(s: string): string {
+  if (!s) return '—';
+  try {
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s.slice(0, 16).replace('T', ' ');
+    const dd = ('0' + d.getDate()).slice(-2);
+    const mm = ('0' + (d.getMonth() + 1)).slice(-2);
+    const hh = ('0' + d.getHours()).slice(-2);
+    const mi = ('0' + d.getMinutes()).slice(-2);
+    return `${dd}/${mm} ${hh}:${mi}`;
+  } catch {
+    return s.slice(0, 16).replace('T', ' ');
   }
 }
 
@@ -339,7 +356,7 @@ export default function SimulationBot() {
         <div style={{ marginBottom: 16, fontSize: 12, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <span>
             <Icon name="clock" size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
-            Simulated from {bot.last_session.start_date} to {bot.last_session.end_date}
+            Simulated from {fmtDT(bot.last_session.start_date)} to {fmtDT(bot.last_session.end_date)}
           </span>
           <span style={{ color: 'var(--border-strong)' }}>|</span>
           <span>
@@ -356,35 +373,35 @@ export default function SimulationBot() {
       <div className="grid grid--kpis section-gap">
         <KPI
           label="Total Return"
-          value={kpis.total_return_pct.toFixed(2) + '%'}
-          chgPct={kpis.total_return_pct}
-          accent={kpis.total_return_pct > 0}
+          value={(kpis?.total_return_pct ?? 0).toFixed(2) + '%'}
+          chgPct={kpis?.total_return_pct ?? 0}
+          accent={(kpis?.total_return_pct ?? 0) > 0}
         />
         <KPI
           label="Sharpe Ratio"
-          value={kpis.sharpe_ratio.toFixed(2)}
-          sub={kpis.sharpe_ratio >= 1.5 ? 'Xuất sắc' : kpis.sharpe_ratio >= 1 ? 'Tốt' : 'Thấp'}
+          value={(kpis?.sharpe_ratio ?? 0).toFixed(2)}
+          sub={(kpis?.sharpe_ratio ?? 0) >= 1.5 ? 'Xuất sắc' : (kpis?.sharpe_ratio ?? 0) >= 1 ? 'Tốt' : 'Thấp'}
         />
         <KPI
           label="Win Rate"
-          value={kpis.win_rate_pct.toFixed(1) + '%'}
-          sub={kpis.total_trades + ' giao dịch'}
+          value={(kpis?.win_rate_pct ?? 0).toFixed(1) + '%'}
+          sub={String(kpis?.total_trades ?? 0) + ' giao dịch'}
         />
         <KPI
           label="Max Drawdown"
-          value={kpis.max_drawdown_pct.toFixed(1) + '%'}
+          value={(kpis?.max_drawdown_pct ?? 0).toFixed(1) + '%'}
           sub="rủi ro tối đa"
         />
       </div>
 
       {/* Extra stats row */}
       <div className="grid section-gap" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 'var(--gap)' }}>
-        <StatCard label="Annualized Return" value={(kpis.annualized_return_pct >= 0 ? '+' : '') + kpis.annualized_return_pct.toFixed(1) + '%'} color={kpis.annualized_return_pct >= 0 ? 'var(--up)' : 'var(--down)'} />
-        <StatCard label="Profit Factor" value={kpis.profit_factor.toFixed(2)} color="var(--text)" />
-        <StatCard label="Total Trades" value={String(kpis.total_trades)} color="var(--text)" />
-        <StatCard label="Best Trade" value={'+' + kpis.best_trade_pct.toFixed(1) + '%'} color="var(--up)" />
-        <StatCard label="Worst Trade" value={kpis.worst_trade_pct.toFixed(1) + '%'} color="var(--down)" />
-        <StatCard label="Min Confidence" value={(bot.min_confidence * 100).toFixed(0) + '%'} color="var(--text-2)" />
+        <StatCard label="Annualized Return" value={((kpis?.annualized_return_pct ?? 0) >= 0 ? '+' : '') + (kpis?.annualized_return_pct ?? 0).toFixed(1) + '%'} color={(kpis?.annualized_return_pct ?? 0) >= 0 ? 'var(--up)' : 'var(--down)'} />
+        <StatCard label="Profit Factor" value={(kpis?.profit_factor ?? 0).toFixed(2)} color="var(--text)" />
+        <StatCard label="Total Trades" value={String(kpis?.total_trades ?? 0)} color="var(--text)" />
+        <StatCard label="Best Trade" value={'+' + (kpis?.best_trade_pct ?? 0).toFixed(1) + '%'} color="var(--up)" />
+        <StatCard label="Worst Trade" value={(kpis?.worst_trade_pct ?? 0).toFixed(1) + '%'} color="var(--down)" />
+        <StatCard label="Min Confidence" value={((bot.min_confidence ?? 0) * 100).toFixed(0) + '%'} color="var(--text-2)" />
       </div>
 
       {/* Portfolio chart */}
@@ -424,13 +441,13 @@ export default function SimulationBot() {
                 series={[{
                   name: 'Return %',
                   data: chart.returns_pct,
-                  color: chart.returns_pct[chart.returns_pct.length - 1] >= 0 ? 'var(--up)' : 'var(--down)',
+                  color: (chart.returns_pct[chart.returns_pct.length - 1] ?? 0) >= 0 ? 'var(--up)' : 'var(--down)',
                 }]}
                 labels={chartLabels}
                 height={540}
                 area
-                yFmt={(v) => v.toFixed(1) + '%'}
-                valueFmt={(v) => v.toFixed(2) + '%'}
+                yFmt={(v) => (v ?? 0).toFixed(1) + '%'}
+                valueFmt={(v) => (v ?? 0).toFixed(2) + '%'}
                 padL={52}
               />
             )}
@@ -449,11 +466,11 @@ export default function SimulationBot() {
       {/* Bot config panel */}
       <Panel title="Cấu hình bot" sub="chiến lược giao dịch" className="section-gap">
         <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', fontSize: 13 }}>
-          <ConfigRow label="Buy threshold" value={bot.buy_threshold.toFixed(1) + '%'} />
-          <ConfigRow label="Sell threshold" value={bot.sell_threshold.toFixed(1) + '%'} />
-          <ConfigRow label="Min confidence" value={(bot.min_confidence * 100).toFixed(0) + '%'} />
-          <ConfigRow label="Stop loss" value={bot.stop_loss.toFixed(1) + '%'} />
-          <ConfigRow label="Take profit" value={bot.take_profit.toFixed(1) + '%'} />
+          <ConfigRow label="Buy threshold" value={(bot.buy_threshold ?? 0).toFixed(1) + '%'} />
+          <ConfigRow label="Sell threshold" value={(bot.sell_threshold ?? 0).toFixed(1) + '%'} />
+          <ConfigRow label="Min confidence" value={((bot.min_confidence ?? 0) * 100).toFixed(0) + '%'} />
+          <ConfigRow label="Stop loss" value={(bot.stop_loss ?? 0).toFixed(1) + '%'} />
+          <ConfigRow label="Take profit" value={(bot.take_profit ?? 0).toFixed(1) + '%'} />
           <ConfigRow label="Currency" value={currency} />
         </div>
       </Panel>
@@ -509,23 +526,25 @@ export default function SimulationBot() {
                           {t.action}
                         </span>
                       </td>
-                      <td className="num" style={{ color: 'var(--text-3)', fontSize: 12 }}>{t.trade_date}</td>
+                      <td className="num" style={{ color: 'var(--text-3)', fontSize: 12 }}>{fmtDT(t.trade_date)}</td>
                       <td className="r num" style={{ fontSize: 12 }}>
-                        {currency === 'VND'
-                          ? t.price.toLocaleString('vi-VN')
-                          : '$' + t.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {t.price != null
+                          ? (currency === 'VND'
+                              ? t.price.toLocaleString('vi-VN')
+                              : '$' + t.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                          : '—'}
                       </td>
                       <td className="r num" style={{ color: 'var(--text-2)', fontSize: 12 }}>
-                        {t.quantity.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                        {t.quantity != null ? t.quantity.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}
                       </td>
                       <td className="r num" style={{ fontSize: 12 }}>
                         {fmtValueShort(t.trade_value, currency)}
                       </td>
                       <td className="r num" style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                        {t.signal_strength.toFixed(1)}
+                        {t.signal_strength != null ? t.signal_strength.toFixed(1) : '—'}
                       </td>
                       <td className="r num" style={{ fontSize: 12 }}>
-                        {(t.confidence * 100).toFixed(0)}%
+                        {t.confidence != null ? (t.confidence * 100).toFixed(0) + '%' : '—'}
                       </td>
                       <td className="r">
                         {t.pnl != null ? (

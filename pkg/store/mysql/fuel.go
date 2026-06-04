@@ -112,6 +112,7 @@ func (c *Client) GetLatestFuelPredictions() ([]modelsdb.FuelPrediction, error) {
 	err := c.Db.
 		Joins("JOIN (?) as latest ON latest.product_type = fuel_predictions.product_type AND latest.algorithm_name = fuel_predictions.algorithm_name AND latest.max_date = fuel_predictions.prediction_date", subQuery).
 		Where("fuel_predictions.deleted_at IS NULL").
+		Order("fuel_predictions.prediction_date DESC").
 		Find(&preds).Error
 	return preds, err
 }
@@ -127,6 +128,7 @@ func (c *Client) GetLatestConfirmedFuelPredictions() ([]modelsdb.FuelPrediction,
 	err := c.Db.
 		Joins("JOIN (?) as latest ON latest.max_id = fuel_predictions.id", subQuery).
 		Where("fuel_predictions.deleted_at IS NULL").
+		Order("fuel_predictions.prediction_date DESC").
 		Find(&preds).Error
 	return preds, err
 }

@@ -206,12 +206,12 @@ def delete_predictions_before(target_date: datetime) -> None:
 def get_pending_predictions(days_back: int = 7) -> list[Prediction]:
     session = get_session()
     try:
-        cutoff = datetime.utcnow() - timedelta(days=days_back)
+        cutoff = datetime.now() - timedelta(days=days_back)
         return (
             session.query(Prediction)
             .filter(
                 Prediction.status == "pending",
-                Prediction.target_date <= datetime.utcnow(),
+                Prediction.target_date <= datetime.now(),
                 Prediction.target_date >= cutoff,
                 Prediction.deleted_at.is_(None),
             )
@@ -312,12 +312,12 @@ def create_gold_prediction(
 def get_pending_gold_predictions(days_back: int = 3) -> list[GoldPrediction]:
     session = get_session()
     try:
-        cutoff = datetime.utcnow() - timedelta(days=days_back)
+        cutoff = datetime.now() - timedelta(days=days_back)
         return (
             session.query(GoldPrediction)
             .filter(
                 GoldPrediction.status == "pending",
-                GoldPrediction.target_date <= datetime.utcnow(),
+                GoldPrediction.target_date <= datetime.now(),
                 GoldPrediction.target_date >= cutoff,
                 GoldPrediction.deleted_at.is_(None),
             )
@@ -704,11 +704,17 @@ def upsert_cron_schedule(job_key: str, job_name: str, cron_expression: str, enab
     with session_scope() as session:
         existing = session.query(CronSchedule).filter_by(job_key=job_key).first()
         if existing:
-            # If code default changed to enabled=True but DB still has False (from old seeding),
-            # auto-enable so the job isn't silently dead after code upgrades.
-            # User can still disable via Settings UI after startup.
-            if enabled and not existing.enabled:
-                existing.enabled = True
+            changed = False
+            if existing.cron_expression != cron_expression:
+                existing.cron_expression = cron_expression
+                changed = True
+            if existing.job_name != job_name:
+                existing.job_name = job_name
+                changed = True
+            if existing.enabled != enabled:
+                existing.enabled = enabled
+                changed = True
+            if changed:
                 existing.updated_at = datetime.utcnow()
             return
         session.add(

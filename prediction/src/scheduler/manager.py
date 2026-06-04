@@ -26,11 +26,11 @@ _lock = threading.Lock()
 # Default schedules (mirrors Go constants)
 DEFAULT_SCHEDULES = [
     ("crawler_stock", "Crawl cổ phiếu VN30 (hàng ngày)", "0 0 12 * * *", True),
-    ("crawler_sp500", "Crawl S&P 500 (12PM hàng ngày)", "0 0 12 * * *", True),
-    ("crawler_gold", "Crawl giá vàng (10AM hàng ngày)", "0 0 10 * * *", True),
-    ("gold_predict", "Dự đoán vàng (11AM hàng ngày)", "0 0 11 * * *", True),
-    ("crawler_nasdaq", "Crawl NASDAQ (ngày thường 10:30PM)", "0 30 22 * * 1-5", True),
-    ("crawler_crypto", "Crawl Crypto (mỗi 4 giờ)", "0 0 */4 * * *", True),
+    ("crawler_sp500", "Pipeline S&P 500 (mỗi giờ, phút 30)", "0 30 * * * *", True),
+    ("crawler_gold", "Pipeline Gold (mỗi giờ, phút 0)", "0 0 * * * *", True),
+    ("gold_predict", "Dự đoán vàng (disabled — trong pipeline)", "0 0 11 * * *", False),
+    ("crawler_nasdaq", "Pipeline NASDAQ (mỗi giờ, phút 15)", "0 15 * * * *", True),
+    ("crawler_crypto", "Pipeline Crypto (mỗi giờ, phút 45)", "0 45 * * * *", True),
     ("crawler_fuel", "Crawl giá xăng (9PM hàng ngày)", "0 0 21 * * *", True),
     ("weekly_training", "Huấn luyện mô hình (Chủ nhật 9AM)", "0 0 9 * * 0", False),
     # Per-market training jobs — staggered on Sunday to avoid overlap
@@ -42,10 +42,10 @@ DEFAULT_SCHEDULES = [
     ("train_sp500",  "Training S&P 500 (Chủ nhật 7AM)",        "0 0 7 * * 0", True),
     ("daily_prediction", "Dự đoán tất cả thị trường (mỗi giờ)", "0 0 */1 * * *", False),
     ("predict_vn30",   "Dự đoán VN30 (3PM ngày thường)",          "0 0 15 * * 1-5",  True),
-    ("predict_nasdaq", "Dự đoán NASDAQ (11:30PM ngày thường)",     "0 30 23 * * 1-5", True),
-    ("predict_crypto", "Dự đoán Crypto (mỗi 6 tiếng)",             "0 0 */6 * * *",   True),
+    ("predict_nasdaq", "Dự đoán NASDAQ (disabled — trong pipeline)",  "0 30 23 * * 1-5", False),
+    ("predict_crypto", "Dự đoán Crypto (disabled — trong pipeline)", "0 0 */6 * * *",   False),
     ("predict_fuel",   "Dự đoán Fuel (10PM hàng ngày)",            "0 0 22 * * *",    True),
-    ("predict_sp500",  "Dự đoán S&P 500 (1PM ngày thường)",        "0 0 13 * * 1-5",  True),
+    ("predict_sp500",  "Dự đoán S&P 500 (disabled — trong pipeline)", "0 0 13 * * 1-5",  False),
     ("daily_reconcile", "Reconcile dự đoán (6AM hàng ngày)", "0 0 6 * * *", True),
 ]
 
@@ -129,6 +129,12 @@ def init_scheduler(job_functions: dict[str, Callable]) -> None:
     for schedule in schedules:
         if schedule.enabled and schedule.job_key in job_functions:
             _add_job(schedule.job_key, schedule.cron_expression, job_functions[schedule.job_key])
+        # Pre-populate _schedule_state so the first _watch_schedule_changes poll
+        # doesn't treat every job as "changed" and reset their next fire times.
+        _schedule_state[schedule.job_key] = {
+            "cron": schedule.cron_expression,
+            "enabled": schedule.enabled,
+        }
 
     # Watch for changes every 60 seconds
     _scheduler.add_job(
@@ -169,7 +175,15 @@ def _remove_job(job_key: str) -> None:
         pass
 
 
-_schedule_state: dict[str, dict] = {}
+# Pre-populate from DEFAULT_SCHEDULES so the first _watch_schedule_changes
+# poll (which fires at the next whole minute after startup) never sees "old: {}"
+# for jobs that were already registered. The DB-sourced values loaded in
+# init_scheduler() will overwrite these defaults, so the watcher only fires
+# for genuine changes made after startup.
+_schedule_state: dict[str, dict] = {
+    job_key: {"cron": cron_expr, "enabled": enabled}
+    for job_key, _job_name, cron_expr, enabled in DEFAULT_SCHEDULES
+}
 
 
 def _watch_schedule_changes() -> None:

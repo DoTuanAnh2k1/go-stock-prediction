@@ -3,27 +3,29 @@ import { NavLink } from 'react-router-dom';
 import { Panel, KPI, Icon, Chg, Seg, ConfBar, vnsToast } from '../components/ui';
 import { LineChart } from '../components/charts';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LangContext';
 
 // ── Market tabs ───────────────────────────────────────────────────────────────
 function MarketTabs({ marketKey }: { marketKey: string }) {
+  const { t } = useLanguage();
   const base = '/markets/' + marketKey;
   return (
     <div className="market-tabs">
       <NavLink to={base} end className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="candles" size={14} />
-        Tổng quan
+        {t.marketTabs.overview}
       </NavLink>
       <NavLink to={base + '/predictions'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="pulse" size={14} />
-        Dự đoán
+        {t.marketTabs.predictions}
       </NavLink>
       <NavLink to={base + '/detail'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="layers" size={14} />
-        Chi tiết
+        {t.marketTabs.detail}
       </NavLink>
       <NavLink to={base + '/training'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="cpu" size={14} />
-        Huấn luyện
+        {t.marketTabs.training}
       </NavLink>
     </div>
   );
@@ -183,6 +185,21 @@ function ddmm(s: string): string {
   }
 }
 
+function fmtDT(s: string): string {
+  if (!s) return '—';
+  try {
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s.slice(0, 16).replace('T', ' ');
+    const dd = ('0' + d.getDate()).slice(-2);
+    const mm = ('0' + (d.getMonth() + 1)).slice(-2);
+    const hh = ('0' + d.getHours()).slice(-2);
+    const mi = ('0' + d.getMinutes()).slice(-2);
+    return `${dd}/${mm} ${hh}:${mi}`;
+  } catch {
+    return s.slice(0, 16).replace('T', ' ');
+  }
+}
+
 function algoShort(name: string): { short: string; cls: string } {
   const map: Record<string, { short: string; cls: string }> = {
     lstm_nn: { short: 'LSTM', cls: 'lstm' },
@@ -216,6 +233,7 @@ const COINS = [
 
 export default function Crypto() {
   const { isLoggedIn } = useAuth();
+  const { t } = useLanguage();
 
   const [latest, setLatest] = useState<CryptoLatestItem[]>([]);
   const [activeCoin, setActiveCoin] = useState<string>('bitcoin');
@@ -228,6 +246,10 @@ export default function Crypto() {
   const [predChartAlgo, setPredChartAlgo] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [chartLoading, setChartLoading] = useState(false);
+  const [predTableCoin, setPredTableCoin] = useState<string>('');
+  const [confirmedCoin, setConfirmedCoin] = useState<string>('');
+  const [predPage, setPredPage] = useState(0);
+  const [confirmedPage, setConfirmedPage] = useState(0);
 
   // Load initial data
   useEffect(() => {
@@ -300,6 +322,23 @@ export default function Crypto() {
     });
   })();
 
+  const PAGE_SIZE = 10;
+
+  const matchCoin = (coinId: string | undefined, sym: string | undefined, filterId: string) =>
+    COINS.some(c => c.id === filterId && (c.id === (coinId || '').toLowerCase() || c.symbol === (sym || '').toUpperCase()));
+
+  const filteredDedupPreds = predTableCoin
+    ? dedupPreds.filter(p => matchCoin(p.coin_id, p.symbol, predTableCoin))
+    : dedupPreds;
+  const predPageCount = Math.ceil(filteredDedupPreds.length / PAGE_SIZE);
+  const predPagedItems = filteredDedupPreds.slice(predPage * PAGE_SIZE, (predPage + 1) * PAGE_SIZE);
+
+  const filteredConfirmed = confirmedCoin
+    ? confirmedResults.filter(r => matchCoin(r.coin_id, r.symbol, confirmedCoin))
+    : confirmedResults;
+  const confirmedPageCount = Math.ceil(filteredConfirmed.length / PAGE_SIZE);
+  const confirmedPagedItems = filteredConfirmed.slice(confirmedPage * PAGE_SIZE, (confirmedPage + 1) * PAGE_SIZE);
+
   // Collect unique algorithm names from confirmed results for the filter dropdown
   const confirmedAlgos = Array.from(new Set(confirmedResults.map((r) => r.algorithm_name))).sort();
 
@@ -324,11 +363,11 @@ export default function Crypto() {
       <div className="content__inner fade">
         <MarketTabs marketKey="crypto" />
         <div className="grid grid--kpis section-gap">
-          {[1, 2, 3, 4].map((i) => <KPI key={i} label="—" value="—" sub="Loading..." />)}
+          {[1, 2, 3, 4].map((i) => <KPI key={i} label="—" value="—" sub={t.common.loading} />)}
         </div>
         <div className="empty section-gap">
           <div className="empty__icon"><Icon name="layers" size={18} /></div>
-          <p>Đang tải dữ liệu crypto...</p>
+          <p>{t.crypto.loadingData}</p>
         </div>
       </div>
     );
@@ -340,7 +379,7 @@ export default function Crypto() {
       {/* KPI cards */}
       <div className="grid grid--kpis section-gap">
         {kpiCoins.length === 0 ? (
-          [1, 2, 3, 4].map((i) => <KPI key={i} label="—" value="N/A" sub="Chưa có dữ liệu" />)
+          [1, 2, 3, 4].map((i) => <KPI key={i} label="—" value="N/A" sub={t.crypto.noDataKpi} />)
         ) : (
           kpiCoins.map((c) => {
             const coinDef = COINS.find((d) => d.id === c.coin_id || d.symbol === c.symbol?.toUpperCase());
@@ -349,7 +388,7 @@ export default function Crypto() {
                 key={c.coin_id}
                 label={coinDef ? `${coinDef.label} (${coinDef.symbol})` : (c.symbol || c.coin_id)}
                 value={fmtCrypto(num(c.close_price))}
-                sub={c.market_cap ? 'MCap: ' + fmtMarketCap(num(c.market_cap)) : c.trading_date?.slice(0, 10) || '—'}
+                sub={c.market_cap ? 'MCap: ' + fmtMarketCap(num(c.market_cap)) : fmtDT(c.trading_date)}
                 chgPct={c.change_percent != null ? num(c.change_percent) : undefined}
                 sparkColor={coinDef?.color || 'var(--accent)'}
               />
@@ -360,16 +399,18 @@ export default function Crypto() {
 
       {/* Price chart */}
       <Panel
-        title="Biểu đồ giá Crypto"
+        title={t.crypto.priceChart}
         dot={activeCoinDef.label + ' (' + activeCoinDef.symbol + ')'}
         className="section-gap"
         tools={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Seg
               options={[
-                { value: '30', label: '30N' },
-                { value: '90', label: '90N' },
-                { value: '180', label: '180N' },
+                { value: '1', label: t.dateRange.today },
+                { value: '7', label: t.dateRange.d7 },
+                { value: '30', label: t.dateRange.d30 },
+                { value: '90', label: t.dateRange.d90 },
+                { value: '180', label: t.dateRange.d180 },
               ]}
               value={days}
               onChange={setDays}
@@ -380,22 +421,22 @@ export default function Crypto() {
                   className="btn btn--sm"
                   onClick={() =>
                     authPost('/api/trigger/crypto-crawler').then((ok) =>
-                      vnsToast(ok ? 'Đã gửi yêu cầu thu thập Crypto' : 'Không thể gửi yêu cầu thu thập')
+                      vnsToast(ok ? t.crypto.collectRequest : t.crypto.collectFail)
                     )
                   }
                 >
-                  <Icon name="download" size={13} />Thu thập
+                  <Icon name="download" size={13} />{t.common.collect}
                 </button>
                 <button
                   className="btn btn--sm"
                   style={{ background: 'var(--accent)', borderColor: 'var(--accent)', color: '#fff' }}
                   onClick={() =>
                     authPost('/api/trigger/crypto-predict').then((ok) =>
-                      vnsToast(ok ? 'Đã gửi yêu cầu chạy dự đoán Crypto' : 'Không thể gửi yêu cầu dự đoán')
+                      vnsToast(ok ? t.crypto.predictRequest : t.crypto.predictFail)
                     )
                   }
                 >
-                  <Icon name="play" size={13} />Dự đoán
+                  <Icon name="play" size={13} />{t.common.predict}
                 </button>
               </>
             )}
@@ -444,7 +485,7 @@ export default function Crypto() {
                 </span>
               )}
               <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-                {cur.trading_date?.slice(0, 10) || '—'}
+                {fmtDT(cur.trading_date)}
               </span>
             </div>
           ) : null;
@@ -453,7 +494,7 @@ export default function Crypto() {
         {chartLoading ? (
           <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="refresh" size={18} /></div>
-            <p>Đang tải biểu đồ...</p>
+            <p>{t.common.loadingChart}</p>
           </div>
         ) : chart.prices.length > 0 ? (
           <LineChart
@@ -468,34 +509,41 @@ export default function Crypto() {
         ) : (
           <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Chưa có dữ liệu biểu đồ. Hãy thu thập dữ liệu trước.</p>
+            <p>{t.crypto.noChartData}</p>
           </div>
         )}
       </Panel>
 
       {/* Predictions + Latest confirmed results */}
       <div className="grid grid--halves section-gap">
-        <Panel title="Dự đoán Crypto phiên mai" flush>
-          {dedupPreds.length === 0 ? (
+        <Panel title={t.crypto.tomorrowPred} flush tools={
+          <div className="chips" style={{ margin: 0 }}>
+            <button className={`chip${predTableCoin === '' ? ' active' : ''}`} style={{ fontSize: 12, padding: '3px 10px' }} onClick={() => { setPredTableCoin(''); setPredPage(0); }}>{t.common.all}</button>
+            {COINS.map(c => (
+              <button key={c.id} className={`chip${predTableCoin === c.id ? ' active' : ''}`} style={{ fontSize: 12, padding: '3px 10px' }} onClick={() => { setPredTableCoin(c.id); setPredPage(0); }}>{c.symbol}</button>
+            ))}
+          </div>
+        }>
+          {filteredDedupPreds.length === 0 ? (
             <div className="empty">
               <div className="empty__icon"><Icon name="layers" size={18} /></div>
-              <p>Chưa có dự đoán. Hãy chạy dự đoán trước.</p>
+              <p>{dedupPreds.length === 0 ? t.common.noPredictions : t.crypto.noPredForCoin}</p>
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Coin</th>
-                    <th className="c">TT</th>
-                    <th className="r">Hiện tại</th>
-                    <th className="r">Dự đoán</th>
+                    <th>{t.common.coin}</th>
+                    <th className="c">{t.common.status}</th>
+                    <th className="r">{t.common.current}</th>
+                    <th className="r">{t.common.predicted}</th>
                     <th className="r">±%</th>
-                    <th className="r">Tin cậy</th>
+                    <th className="r">{t.common.confidence}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {dedupPreds.map((p, i) => {
+                  {predPagedItems.map((p, i) => {
                     const cur = num(p.current_price);
                     const pred = num(p.predicted_price);
                     const deltaPct = cur ? +((pred - cur) / cur * 100).toFixed(2) : 0;
@@ -516,32 +564,46 @@ export default function Crypto() {
                   })}
                 </tbody>
               </table>
+              {predPageCount > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, padding: '10px 16px', borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-2)' }}>
+                  <button className="btn btn--sm" disabled={predPage === 0} onClick={() => setPredPage(p => p - 1)} style={{ minWidth: 28, padding: '2px 8px' }}>‹</button>
+                  <span>{predPage + 1} / {predPageCount}</span>
+                  <button className="btn btn--sm" disabled={predPage >= predPageCount - 1} onClick={() => setPredPage(p => p + 1)} style={{ minWidth: 28, padding: '2px 8px' }}>›</button>
+                </div>
+              )}
             </div>
           )}
         </Panel>
 
-        <Panel title="Kết quả dự đoán gần nhất" flush>
-          {confirmedResults.length === 0 ? (
+        <Panel title={t.common.latestPredResults} flush tools={
+          <div className="chips" style={{ margin: 0 }}>
+            <button className={`chip${confirmedCoin === '' ? ' active' : ''}`} style={{ fontSize: 12, padding: '3px 10px' }} onClick={() => { setConfirmedCoin(''); setConfirmedPage(0); }}>{t.common.all}</button>
+            {COINS.map(c => (
+              <button key={c.id} className={`chip${confirmedCoin === c.id ? ' active' : ''}`} style={{ fontSize: 12, padding: '3px 10px' }} onClick={() => { setConfirmedCoin(c.id); setConfirmedPage(0); }}>{c.symbol}</button>
+            ))}
+          </div>
+        }>
+          {filteredConfirmed.length === 0 ? (
             <div className="empty">
               <div className="empty__icon"><Icon name="pulse" size={18} /></div>
-              <p>Chưa có kết quả đã xác nhận. Kết quả sẽ xuất hiện sau khi dự đoán được đối chiếu với giá thực tế.</p>
+              <p>{confirmedResults.length === 0 ? t.common.noConfirmedResults : t.crypto.noConfirmedForCoin}</p>
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Coin</th>
-                    <th className="c">TT</th>
-                    <th className="r">Dự đoán</th>
-                    <th className="r">Thực tế</th>
-                    <th className="r">Lệch</th>
-                    <th className="r">Độ CX</th>
-                    <th className="c">Ngày</th>
+                    <th>{t.common.coin}</th>
+                    <th className="c">{t.common.status}</th>
+                    <th className="r">{t.common.predicted}</th>
+                    <th className="r">{t.common.actual}</th>
+                    <th className="r">{t.common.deviation}</th>
+                    <th className="r">{t.common.accuracy}</th>
+                    <th className="c">{t.common.date}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {confirmedResults.map((r, i) => {
+                  {confirmedPagedItems.map((r, i) => {
                     const predicted = num(r.predicted_price);
                     const actual = num(r.actual_price ?? 0);
                     const deviationPct = actual ? +((predicted - actual) / actual * 100).toFixed(2) : 0;
@@ -578,13 +640,20 @@ export default function Crypto() {
                             : <span style={{ color: 'var(--text-3)' }}>—</span>}
                         </td>
                         <td className="c num" style={{ color: 'var(--text-3)', fontSize: 12 }}>
-                          {ddmm(r.prediction_date)}
+                          {fmtDT(r.prediction_date)}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+              {confirmedPageCount > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, padding: '10px 16px', borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-2)' }}>
+                  <button className="btn btn--sm" disabled={confirmedPage === 0} onClick={() => setConfirmedPage(p => p - 1)} style={{ minWidth: 28, padding: '2px 8px' }}>‹</button>
+                  <span>{confirmedPage + 1} / {confirmedPageCount}</span>
+                  <button className="btn btn--sm" disabled={confirmedPage >= confirmedPageCount - 1} onClick={() => setConfirmedPage(p => p + 1)} style={{ minWidth: 28, padding: '2px 8px' }}>›</button>
+                </div>
+              )}
             </div>
           )}
         </Panel>
@@ -592,11 +661,22 @@ export default function Crypto() {
 
       {/* Prediction vs Actual chart — full width */}
       <Panel
-        title="Dự đoán vs Thực tế"
-        sub={predChartCoinDef.label + ' · ' + (predChartAlgo ? algoShort(predChartAlgo).short : 'Tất cả thuật toán')}
+        title={t.common.predVsActual}
+        sub={predChartCoinDef.label + ' · ' + (predChartAlgo ? algoShort(predChartAlgo).short : t.common.allAlgos)}
         className="section-gap"
         tools={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Seg
+              options={[
+                { value: '1', label: t.dateRange.today },
+                { value: '7', label: t.dateRange.d7 },
+                { value: '30', label: t.dateRange.d30 },
+                { value: '90', label: t.dateRange.d90 },
+                { value: '180', label: t.dateRange.d180 },
+              ]}
+              value={days}
+              onChange={setDays}
+            />
             {/* Coin selector tabs */}
             <div className="chips" style={{ margin: 0 }}>
               {COINS.map((c) => (
@@ -626,7 +706,7 @@ export default function Crypto() {
                   cursor: 'pointer',
                 }}
               >
-                <option value="">Tất cả thuật toán</option>
+                <option value="">{t.common.allAlgos}</option>
                 {confirmedAlgos.map((algo) => (
                   <option key={algo} value={algo}>{algoShort(algo).short} ({algo})</option>
                 ))}
@@ -639,7 +719,7 @@ export default function Crypto() {
           <>
             <LineChart
               series={[
-                { name: 'Thực tế', data: predChart.actual, color: 'var(--text-2)', w: 1.8 },
+                { name: t.common.actual, data: predChart.actual, color: 'var(--text-2)', w: 1.8 },
                 ...predChart.predSeries.map((ps, i) => ({
                   name: algoDisplayName(ps.key),
                   data: ps.data,
@@ -655,37 +735,37 @@ export default function Crypto() {
               padL={70}
             />
             <Legend items={[
-              ['Thực tế', 'var(--text-2)'],
+              [t.common.actual, 'var(--text-2)'],
               ...predChart.predSeries.map((ps, i) => [algoDisplayName(ps.key), algoColor(ps.key, i)] as [string, string]),
             ]} />
           </>
         ) : (
           <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Chưa có dữ liệu so sánh dự đoán cho {predChartCoinDef.label}</p>
+            <p>{t.crypto.noCompareData} {predChartCoinDef.label}</p>
           </div>
         )}
       </Panel>
 
       {/* Market info table */}
-      <div className="sec-head section-gap"><h2>Thông tin thị trường Crypto</h2><div className="line"></div></div>
+      <div className="sec-head section-gap"><h2>{t.crypto.marketInfo}</h2><div className="line"></div></div>
       <Panel flush className="section-gap">
         {latest.length === 0 ? (
           <div className="empty">
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Chưa có dữ liệu. Hãy thu thập dữ liệu trước.</p>
+            <p>{t.common.noDataCollect}</p>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Coin</th>
-                  <th className="r">Giá (USD)</th>
+                  <th>{t.common.coin}</th>
+                  <th className="r">USD</th>
                   <th className="r">±%</th>
-                  <th className="r">Vốn hóa</th>
+                  <th className="r">MCap</th>
                   <th className="r">Vol 24h</th>
-                  <th className="c">Ngày</th>
+                  <th className="c">{t.common.date}</th>
                 </tr>
               </thead>
               <tbody>
@@ -712,7 +792,7 @@ export default function Crypto() {
                         {c.volume_24h != null ? fmtMarketCap(num(c.volume_24h)) : '—'}
                       </td>
                       <td className="c num" style={{ color: 'var(--text-3)', fontSize: 12 }}>
-                        {c.trading_date?.slice(0, 10) || '—'}
+                        {fmtDT(c.trading_date)}
                       </td>
                     </tr>
                   );

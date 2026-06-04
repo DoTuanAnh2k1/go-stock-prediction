@@ -4,28 +4,30 @@ import { useData } from '../context/DataContext';
 import { Panel, Icon, Seg } from '../components/ui';
 import { LineChart } from '../components/charts';
 import { fetchMarketPredictions } from '../api';
+import { useLanguage } from '../context/LangContext';
 
 // ── Sub-nav tabs ──────────────────────────────────────────────────────────────
 function MarketTabs({ marketKey }: { marketKey: string }) {
+  const { t } = useLanguage();
   const base = '/markets/' + marketKey;
   const overviewIcon = marketKey === 'gold' ? 'gold' : 'candles';
   return (
     <div className="market-tabs">
       <NavLink to={base} end className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name={overviewIcon} size={14} />
-        Tổng quan
+        {t.marketTabs.overview}
       </NavLink>
       <NavLink to={base + '/predictions'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="pulse" size={14} />
-        Dự đoán
+        {t.marketTabs.predictions}
       </NavLink>
       <NavLink to={base + '/detail'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="layers" size={14} />
-        Chi tiết
+        {t.marketTabs.detail}
       </NavLink>
       <NavLink to={base + '/training'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
         <Icon name="cpu" size={14} />
-        Huấn luyện
+        {t.marketTabs.training}
       </NavLink>
     </div>
   );
@@ -71,16 +73,19 @@ const FUEL_INSTRUMENTS = [
   { key: 'kerosene',  label: 'Dầu hỏa'     },
 ];
 
-const PERIOD_OPTIONS = [
-  { value: '30d', label: '30 ngày' },
-  { value: '60d', label: '60 ngày' },
-  { value: '90d', label: '90 ngày' },
-];
+// PERIOD_OPTIONS is computed inside the component using t for i18n
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function MarketDetail() {
   const { marketKey = 'vn30' } = useParams<{ marketKey: string }>();
   const { data: D } = useData();
+  const { t } = useLanguage();
+
+  const PERIOD_OPTIONS = [
+    { value: '30d', label: t.marketDetail.periodOptions.d30 },
+    { value: '60d', label: t.marketDetail.periodOptions.d60 },
+    { value: '90d', label: t.marketDetail.periodOptions.d90 },
+  ];
 
   const isGold   = marketKey === 'gold';
   const isNasdaq = marketKey === 'nasdaq100';
@@ -128,7 +133,7 @@ export default function MarketDetail() {
     }).then((res) => {
       setRows(Array.isArray(res.data) ? res.data : []);
     }).catch((e) => {
-      setError('Không thể tải dữ liệu: ' + (e?.message || 'Lỗi không xác định'));
+      setError(t.marketDetail.cannotLoad + ': ' + (e?.message || t.marketDetail.unknownError));
       setRows([]);
     }).finally(() => setLoading(false));
   }, [marketKey, searchTerm]);
@@ -164,7 +169,7 @@ export default function MarketDetail() {
 
   const actualData = dates.map(d => actualByDate[d] ?? null);
   if (actualData.some(v => v != null)) {
-    series.push({ name: 'Thực tế', data: actualData, color: 'var(--text)', w: 2.2 });
+    series.push({ name: t.common.actual, data: actualData, color: 'var(--text)', w: 2.2 });
   }
 
   ALGO_ORDER_DETAIL.forEach(algoKey => {
@@ -262,11 +267,11 @@ export default function MarketDetail() {
       <Panel flush className="section-gap">
         <div style={{ padding: '16px 16px 8px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontWeight: 600, fontSize: 14 }}>
-            So sánh thuật toán — {symbolLabel}
+            {t.marketDetail.algoComparison} — {symbolLabel}
           </span>
           {loading && (
             <span style={{ fontSize: 12, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-              Đang tải...
+              {t.marketDetail.loading}
             </span>
           )}
         </div>
@@ -280,7 +285,7 @@ export default function MarketDetail() {
         {!error && series.length === 0 && !loading ? (
           <div className="empty" style={{ padding: '60px 20px' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Chưa có dữ liệu so sánh cho {symbolLabel}</p>
+            <p>{t.marketDetail.noCompareData} {symbolLabel}</p>
           </div>
         ) : (
           <div style={{ padding: '16px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .15s' }}>

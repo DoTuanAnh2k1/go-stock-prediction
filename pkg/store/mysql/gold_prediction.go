@@ -44,6 +44,7 @@ func (c *Client) GetLatestGoldPredictions() ([]modelsdb.GoldPrediction, error) {
 	err := c.Db.
 		Joins("JOIN (?) as latest ON latest.source = gold_predictions.source AND latest.product_type = gold_predictions.product_type AND latest.algorithm_name = gold_predictions.algorithm_name AND latest.max_date = gold_predictions.prediction_date", subQuery).
 		Where("gold_predictions.deleted_at IS NULL").
+		Order("gold_predictions.prediction_date DESC").
 		Find(&preds).Error
 	return preds, err
 }
@@ -59,6 +60,7 @@ func (c *Client) GetLatestConfirmedGoldPredictions() ([]modelsdb.GoldPrediction,
 	err := c.Db.
 		Joins("JOIN (?) as latest ON latest.max_id = gold_predictions.id", subQuery).
 		Where("gold_predictions.deleted_at IS NULL").
+		Order("gold_predictions.prediction_date DESC").
 		Find(&preds).Error
 	return preds, err
 }

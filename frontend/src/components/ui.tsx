@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { NavLink, useLocation, Link } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LangContext';
 import { Sparkline } from './charts';
 import type { FmtUtils } from '../types';
+import type { Translations } from '../i18n';
 
 // ── Icon definitions ─────────────────────────────────────────────────────────
 const I: Record<string, React.ReactNode> = {
@@ -33,6 +35,8 @@ const I: Record<string, React.ReactNode> = {
   layers:    <><polygon points="12 2 22 8.5 12 15 2 8.5"/><polyline points="2 15.5 12 22 22 15.5"/></>,
   crypto:    <><circle cx="12" cy="12" r="9"/><path d="M9 8h4.5a2.5 2.5 0 0 1 0 5H9"/><path d="M9 13h5a2.5 2.5 0 0 1 0 5H9"/><line x1="9" y1="8" x2="9" y2="18"/><line x1="11" y1="6" x2="11" y2="8"/><line x1="13" y1="18" x2="13" y2="20"/></>,
   trophy:    <><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></>,
+  chevrLeft:  <polyline points="15 18 9 12 15 6"/>,
+  chevrRight: <polyline points="9 18 15 12 9 6"/>,
 };
 
 export function Icon({ name, size = 18, sw = 1.7, style, ...p }: { name: string; size?: number; sw?: number; style?: React.CSSProperties; [key: string]: any }) {
@@ -158,56 +162,77 @@ interface MarketDef {
   selfContained?: boolean;
 }
 
-const MARKETS: MarketDef[] = [
-  { key: 'vn30',     label: 'VN30',      icon: 'candles', color: 'var(--accent)' },
-  { key: 'gold',     label: 'Vàng',      icon: 'gold',    color: 'var(--gold)'   },
-  { key: 'nasdaq100',label: 'NASDAQ 100',icon: 'nasdaq',  color: 'oklch(0.74 0.13 200)' },
-  { key: 'sp500',    label: 'S&P 500',   icon: 'nasdaq',  color: 'oklch(0.72 0.15 145)' },
-  { key: 'crypto',   label: 'Crypto',    icon: 'crypto',  color: '#F7931A'              },
-  { key: 'fuel',     label: 'Giá Xăng',  icon: 'fuel',    color: 'var(--up)'            },
-];
+function getMarkets(t: Translations): MarketDef[] {
+  return [
+    { key: 'vn30',      label: 'VN30',         icon: 'candles', color: 'var(--accent)'            },
+    { key: 'gold',      label: t.markets.gold,  icon: 'gold',    color: 'var(--gold)'              },
+    { key: 'nasdaq100', label: 'NASDAQ 100',    icon: 'nasdaq',  color: 'oklch(0.74 0.13 200)'     },
+    { key: 'sp500',     label: 'S&P 500',       icon: 'nasdaq',  color: 'oklch(0.72 0.15 145)'     },
+    { key: 'crypto',    label: 'Crypto',        icon: 'crypto',  color: '#F7931A'                  },
+    { key: 'fuel',      label: t.markets.fuel,  icon: 'fuel',    color: 'var(--up)'                },
+  ];
+}
 
-const MARKET_SUBS = [
-  { path: '',             label: 'Tổng quan' },
-  { path: '/predictions', label: 'Dự đoán'   },
-  { path: '/training',    label: 'Huấn luyện'},
-];
+function getMarketSubs(t: Translations) {
+  return [
+    { path: '',             label: t.marketSubs.overview    },
+    { path: '/predictions', label: t.marketSubs.predictions },
+    { path: '/training',    label: t.marketSubs.training    },
+  ];
+}
 
-// Flat list for MobNav (top-level items only)
-const NAV: NavItem[] = [
-  { id: 'dashboard', path: '/',                  label: 'Tổng quan', icon: 'grid'    },
-  { id: 'vn30',      path: '/markets/vn30',      label: 'VN30',      icon: 'candles' },
-  { id: 'gold',      path: '/markets/gold',      label: 'Vàng',      icon: 'gold'    },
-  { id: 'nasdaq100', path: '/markets/nasdaq100', label: 'NASDAQ',    icon: 'nasdaq'  },
-  { id: 'sp500',     path: '/markets/sp500',     label: 'S&P 500',   icon: 'nasdaq'  },
-  { id: 'crypto',    path: '/markets/crypto',    label: 'Crypto',    icon: 'crypto'  },
-  { id: 'fuel',       path: '/markets/fuel',  label: 'Xăng',        icon: 'fuel'    },
-  { id: 'simulation', path: '/simulation',    label: 'Leaderboard', icon: 'trophy'  },
-  { id: 'guide',      path: '/guide',         label: 'Hướng dẫn',   icon: 'book'    },
-];
+function getNav(t: Translations): NavItem[] {
+  return [
+    { id: 'dashboard',  path: '/',                  label: t.nav.overview,     icon: 'grid'    },
+    { id: 'vn30',       path: '/markets/vn30',      label: 'VN30',             icon: 'candles' },
+    { id: 'gold',       path: '/markets/gold',      label: t.markets.gold,     icon: 'gold'    },
+    { id: 'nasdaq100',  path: '/markets/nasdaq100', label: 'NASDAQ',           icon: 'nasdaq'  },
+    { id: 'sp500',      path: '/markets/sp500',     label: 'S&P 500',          icon: 'nasdaq'  },
+    { id: 'crypto',     path: '/markets/crypto',    label: 'Crypto',           icon: 'crypto'  },
+    { id: 'fuel',       path: '/markets/fuel',      label: t.markets.fuel,     icon: 'fuel'    },
+    { id: 'simulation', path: '/simulation',        label: t.nav.leaderboard,  icon: 'trophy'  },
+    { id: 'guide',      path: '/guide',             label: t.nav.guide,        icon: 'book'    },
+  ];
+}
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
-export function Sidebar({ status }: { status: 'loading' | 'live' | 'demo' }) {
+export function Sidebar({ status, collapsed = false, onToggle }: {
+  status: 'loading' | 'live' | 'demo';
+  collapsed?: boolean;
+  onToggle?: () => void;
+}) {
   const { pathname } = useLocation();
   const { user } = useAuth();
+  const { t } = useLanguage();
+  const MARKETS = getMarkets(t);
+  const MARKET_SUBS = getMarketSubs(t);
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${collapsed ? ' sidebar--collapsed' : ''}`}>
       <div className="brand">
-        <div className="brand__mark"><span>V</span></div>
-        <div>
-          <div className="brand__name">VNStock</div>
-          <div className="brand__sub">Terminal</div>
-        </div>
+        {!collapsed && <div className="brand__mark"><span>V</span></div>}
+        {!collapsed && (
+          <div className="brand__info">
+            <div className="brand__name">VNStock</div>
+            <div className="brand__sub">Terminal</div>
+          </div>
+        )}
+        <button
+          className="sidebar__toggle"
+          onClick={onToggle}
+          title={collapsed ? 'Mở rộng sidebar' : 'Thu nhỏ sidebar'}
+        >
+          <Icon name={collapsed ? 'chevrRight' : 'chevrLeft'} size={14} sw={2} />
+        </button>
       </div>
       <nav className="nav">
         {/* Dashboard */}
         <NavLink to="/" end className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
-          <Icon name="grid" size={17} /><span>Tổng quan</span>
+          <Icon name="grid" size={17} /><span>{t.nav.overview}</span>
         </NavLink>
 
         {/* Markets section */}
-        <div className="nav__label">Thị trường</div>
+        <div className="nav__label">{t.nav.markets}</div>
         {MARKETS.map((m) => {
           const base = '/markets/' + m.key;
           const expanded = pathname.startsWith(base);
@@ -255,19 +280,19 @@ export function Sidebar({ status }: { status: 'loading' | 'live' | 'demo' }) {
         })}
 
         {/* Simulation section */}
-        <div className="nav__label">Simulation</div>
+        <div className="nav__label">{t.nav.simulation}</div>
         <NavLink to="/simulation" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
-          <Icon name="trophy" size={17} /><span>Leaderboard</span>
+          <Icon name="trophy" size={17} /><span>{t.nav.leaderboard}</span>
         </NavLink>
 
         {/* Support section */}
-        <div className="nav__label">Hỗ trợ</div>
+        <div className="nav__label">{t.nav.support}</div>
         <NavLink to="/guide" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
-          <Icon name="book" size={17} /><span>Hướng dẫn</span>
+          <Icon name="book" size={17} /><span>{t.nav.guide}</span>
         </NavLink>
         {user && (
           <NavLink to="/settings" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
-            <Icon name="settings" size={17} /><span>Cài đặt</span>
+            <Icon name="settings" size={17} /><span>{t.nav.settings}</span>
           </NavLink>
         )}
       </nav>
@@ -275,7 +300,7 @@ export function Sidebar({ status }: { status: 'loading' | 'live' | 'demo' }) {
       {user?.role === 'admin' && (
         <div className="sidebar__admin">
           <NavLink to="/admin/users" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
-            <Icon name="user" size={17} /><span>Người dùng</span>
+            <Icon name="user" size={17} /><span>{t.nav.users}</span>
           </NavLink>
         </div>
       )}
@@ -285,11 +310,11 @@ export function Sidebar({ status }: { status: 'loading' | 'live' | 'demo' }) {
           <div className="mkt__row">
             <span className={`mkt__dot ${status === 'live' ? 'live' : 'closed'}`}></span>
             <span style={{ color: 'var(--text-2)' }}>
-              {status === 'live' ? 'Dữ liệu trực tiếp' : status === 'loading' ? 'Đang tải dữ liệu…' : 'Dữ liệu mẫu'}
+              {status === 'live' ? t.footer.liveData : status === 'loading' ? t.footer.loadingData : t.footer.sampleData}
             </span>
           </div>
           <div className="mkt__row" style={{ color: 'var(--text-3)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-            <Icon name="clock" size={13} /><span>Dữ liệu · phiên gần nhất</span>
+            <Icon name="clock" size={13} /><span>{t.footer.dataSession}</span>
           </div>
         </div>
       </div>
@@ -320,31 +345,6 @@ export function Ticker() {
 }
 
 // ── Topbar ────────────────────────────────────────────────────────────────────
-const TITLES: Record<string, [string, string]> = {
-  '/':                         ['Tổng quan thị trường',  'DASHBOARD'],
-  '/markets/vn30':             ['VN30',                  'EQUITIES · VN30'],
-  '/markets/vn30/predictions': ['Dự đoán VN30',          'PREDICTIONS · VN30'],
-  '/markets/vn30/training':    ['Huấn luyện VN30',       'TRAINING · VN30'],
-  '/markets/gold':             ['Vàng',                  'GOLD'],
-  '/markets/gold/predictions': ['Dự đoán Vàng',          'PREDICTIONS · GOLD'],
-  '/markets/gold/training':    ['Huấn luyện Vàng',       'TRAINING · GOLD'],
-  '/markets/crypto':           ['Cryptocurrency',        'CRYPTO'],
-  '/markets/nasdaq100':        ['NASDAQ 100',            'NASDAQ 100 · US EQUITIES'],
-  '/markets/fuel':             ['Giá Xăng Dầu',          'FUEL · VIETNAM'],
-  '/simulation':               ['Simulation Leaderboard', 'SIMULATION · LEADERBOARD'],
-  '/guide':                    ['Hướng dẫn sử dụng',     'USER GUIDE'],
-  '/settings':                 ['Cài đặt',               'SETTINGS'],
-  '/admin/users':              ['Quản lý người dùng',    'ADMIN · USERS'],
-  // legacy paths (still reachable until redirect fires)
-  '/stocks':                   ['VN30',                  'EQUITIES · VN30'],
-  '/predictions':              ['Dự đoán',               'FORECASTS'],
-  '/training':                 ['Huấn luyện mô hình',    'ML TRAINING'],
-  '/gold':                     ['Giá vàng',              'GOLD'],
-  '/crypto':                   ['Cryptocurrency',        'CRYPTO'],
-  '/nasdaq':                   ['NASDAQ 100',            'NASDAQ 100 · US EQUITIES'],
-  '/fuel':                     ['Giá Xăng Dầu',          'FUEL · VIETNAM'],
-};
-
 export function Topbar({ theme, setTheme, user, onLoginClick, onLogout }: {
   theme: 'dark' | 'light';
   setTheme: (t: 'dark' | 'light') => void;
@@ -355,7 +355,8 @@ export function Topbar({ theme, setTheme, user, onLoginClick, onLogout }: {
 }) {
   const [q, setQ] = useState('');
   const { pathname } = useLocation();
-  const [t1, t2] = TITLES[pathname] || ['', ''];
+  const { lang, toggleLang, t } = useLanguage();
+  const [t1, t2] = t.titles[pathname] || ['', ''];
   return (
     <div className="topbar">
       <div className="topbar__title">{t1}</div>
@@ -363,19 +364,31 @@ export function Topbar({ theme, setTheme, user, onLoginClick, onLogout }: {
       <div className="topbar__spacer"></div>
       <div className="search">
         <Icon name="search" size={15} />
-        <input placeholder="Tìm mã CK, ngành..." value={q} onChange={(e) => setQ(e.target.value)} />
+        <input placeholder={t.topbar.searchPlaceholder} value={q} onChange={(e) => setQ(e.target.value)} />
         <kbd>/</kbd>
       </div>
-      <button className="btn btn--icon btn--ghost" title="Thông báo"><Icon name="bell" size={16} /></button>
+      <button className="btn btn--icon btn--ghost" title={t.topbar.notifications}><Icon name="bell" size={16} /></button>
+      <div className="lang-tog">
+        <button
+          className={lang === 'vi' ? 'active' : ''}
+          onClick={() => lang !== 'vi' && toggleLang()}
+          title="Tiếng Việt"
+        >VI</button>
+        <button
+          className={lang === 'en' ? 'active' : ''}
+          onClick={() => lang !== 'en' && toggleLang()}
+          title="English"
+        >EN</button>
+      </div>
       <div className="theme-tog">
-        <button className={theme === 'light' ? 'active' : ''} onClick={() => setTheme('light')} title="Sáng"><Icon name="sun" size={15} /></button>
-        <button className={theme === 'dark' ? 'active' : ''} onClick={() => setTheme('dark')} title="Tối"><Icon name="moon" size={15} /></button>
+        <button className={theme === 'light' ? 'active' : ''} onClick={() => setTheme('light')} title={t.topbar.lightTheme}><Icon name="sun" size={15} /></button>
+        <button className={theme === 'dark' ? 'active' : ''} onClick={() => setTheme('dark')} title={t.topbar.darkTheme}><Icon name="moon" size={15} /></button>
       </div>
       {user ? (
         <div className="auth-user">
           <Icon name="user" size={14} />
           <span className="auth-user__name">{user.username}</span>
-          <button className="btn btn--icon btn--ghost" title="Đăng xuất" onClick={onLogout}>
+          <button className="btn btn--icon btn--ghost" title={t.topbar.logout} onClick={onLogout}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
               <polyline points="16 17 21 12 16 7"/>
@@ -386,7 +399,7 @@ export function Topbar({ theme, setTheme, user, onLoginClick, onLogout }: {
       ) : (
         <button className="btn btn--sm btn--ghost auth-login-btn" onClick={onLoginClick}>
           <Icon name="user" size={14} />
-          Đăng nhập
+          {t.topbar.login}
         </button>
       )}
     </div>
@@ -395,6 +408,8 @@ export function Topbar({ theme, setTheme, user, onLoginClick, onLogout }: {
 
 // ── MobNav ────────────────────────────────────────────────────────────────────
 export function MobNav() {
+  const { t } = useLanguage();
+  const NAV = getNav(t);
   return (
     <nav className="mob-nav">
       {NAV.map((n) => (
@@ -428,23 +443,36 @@ export function vnsToast(msg: string): void {
 }
 
 // ── ErrorBoundary ─────────────────────────────────────────────────────────────
+function ErrorFallback({ err, onRetry }: { err: Error; onRetry: () => void }) {
+  const { t } = useLanguage();
+  return (
+    <div className="content__inner">
+      <div className="empty" style={{ padding: '80px 20px' }}>
+        <div className="empty__icon"><Icon name="layers" size={18} /></div>
+        <p>{t.error.cannotDisplay}</p>
+        <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8, fontFamily: 'var(--font-mono)' }}>
+          {String(err?.message || err)}
+        </p>
+        <button className="btn btn--sm" style={{ marginTop: 16 }} onClick={onRetry}>
+          {t.error.retry}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err: Error | null }> {
   constructor(p: { children: React.ReactNode }) { super(p); this.state = { err: null }; }
   static getDerivedStateFromError(err: Error) { return { err }; }
   componentDidCatch(err: Error) { console.error('Page error:', err); }
+  componentDidUpdate(prevProps: { children: React.ReactNode }) {
+    if (this.state.err && prevProps.children !== this.props.children) {
+      this.setState({ err: null });
+    }
+  }
   render() {
     if (this.state.err) {
-      return (
-        <div className="content__inner">
-          <div className="empty" style={{ padding: '80px 20px' }}>
-            <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Không thể hiển thị trang này với dữ liệu hiện tại.</p>
-            <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8, fontFamily: 'var(--font-mono)' }}>
-              {String(this.state.err?.message || this.state.err)}
-            </p>
-          </div>
-        </div>
-      );
+      return <ErrorFallback err={this.state.err} onRetry={() => this.setState({ err: null })} />;
     }
     return this.props.children;
   }

@@ -98,6 +98,8 @@ pkg/utils/cron/                         # Hằng số cron schedule + wrapper (d
 web/templates/                          # HTML templates (Go's html/template)
 web/static/js/                          # Frontend JS — AJAX gọi các /api/* endpoint
 frontend/src/context/AuthContext.tsx    # AuthProvider + useAuth hook — quản lý JWT trong localStorage
+frontend/src/context/LangContext.tsx    # LangProvider + useLanguage hook — VI/EN toggle, state lưu localStorage (vns_lang)
+frontend/src/i18n.ts                    # Bảng dịch VI/EN cho toàn bộ UI shell (nav, topbar, sidebar, tweaks)
 frontend/src/components/LoginModal.tsx  # Login modal component — gọi POST /api/auth/login
 frontend/src/pages/Users.tsx            # Trang quản lý user — chỉ hiển thị với role admin
 ```
@@ -214,13 +216,13 @@ BACKUP_DIR=/backups              # Thư mục lưu file backup mysqldump (defaul
 
 - **Repository pattern (Go):** Mọi truy cập DB từ API Backend phải qua interface `DatabaseStore` trong `pkg/store/repository/`. Không gọi GORM trực tiếp từ service layer.
 - **Singleton:** `repository.GetSingleton()` trả về instance DB toàn cục đã init.
-- **Cron constants:** Hằng số trong `pkg/utils/cron/` dùng làm giá trị mặc định khi `seedCronSchedules()`. Lịch chạy thực tế lưu trong bảng `cron_schedules` và có thể chỉnh sửa live.
+- **Cron constants:** Hằng số trong `pkg/utils/cron/` dùng làm giá trị mặc định trong `seedCronSchedules()` (Go, insert-only). Lịch chạy thực tế cho tất cả jobs Python-side được định nghĩa trong `DEFAULT_SCHEDULES` tại `prediction/src/scheduler/manager.py` và được upsert vào DB mỗi lần Python service khởi động.
 - **Decimal:** Dùng `shopspring/decimal` trong Go API Backend cho mọi phép tính số thực liên quan đến giá — tránh float64. Python service dùng `Decimal` từ stdlib hoặc pandas float64 (được làm tròn trước khi lưu DB).
 - **API handlers (Go):** Mỗi nhóm endpoint có file riêng `api_<topic>.go` trong `pkg/server/`.
 - **Algorithms (Python):** Mỗi thuật toán implement abstract class `PredictionAlgorithm` trong `prediction/src/algorithms/base.py` với method `predict(data: StockData) -> Prediction`. Đăng ký metadata tương ứng trong `pkg/service/predict/registry/algorithms.go` (Go) để `/api/training/algorithms` trả đúng danh sách.
 - **Logging:** Go API Backend dùng `pkg/logger` (zerolog). Python service dùng `structlog`.
 - **gRPC triggers:** Tất cả trigger handler trong `pkg/server/api_trigger_*.go` và `pkg/server/api_stock_actions.go` đều gọi `requireGRPCClient(w)` trước. Hàm này trả về 503 nếu gRPC client chưa init. Tất cả trigger endpoints được wrap bằng `AuthRequired()` trong router — yêu cầu JWT hợp lệ.
-- **Dynamic cron schedules:** Lịch cron được lưu trong bảng `cron_schedules`. Khi startup, `seedCronSchedules()` trong `pkg/server/api_schedules.go` (Go) tạo các hàng mặc định nếu chưa tồn tại. Python Prediction Service poll DB mỗi 60 giây để phát hiện thay đổi và tự reschedule qua APScheduler — không cần restart. Dùng `CronScheduleStore` interface (Go) để truy cập từ API Backend.
+- **Dynamic cron schedules:** Lịch cron được lưu trong bảng `cron_schedules`. Python Prediction Service poll DB mỗi 60 giây để phát hiện thay đổi và tự reschedule qua APScheduler — không cần restart. Nguồn sự thật là `DEFAULT_SCHEDULES` trong `prediction/src/scheduler/manager.py`; mỗi lần Python service khởi động, `upsert_cron_schedule()` chạy true upsert — ghi đè DB nếu giá trị code khác. Go `seedCronSchedules()` chỉ insert-if-not-exists (không update). Dùng `CronScheduleStore` interface (Go) để truy cập từ API Backend.
 - **Proto regeneration:** Khi thay đổi `proto/prediction/prediction.proto`, cần tái sinh cả Go stubs (`protoc`) lẫn Python stubs (lệnh `grpc_tools.protoc` trong Dockerfile stage 1). Không sửa tay các file generated.
 - **Data ordering — QUAN TRỌNG:** DB trả `stock_prices` với `ORDER BY trading_date DESC` (mới nhất trước). Python algorithms cần đảo ngược về ASC trước khi build feature sequences. Repository (Python) trả DESC — tầng algorithm tự xử lý (tương tự pattern Go cũ với `reverseStockPrices()`).
 - **JWT middleware — non-blocking:** `JWTMiddleware` trong `pkg/server/middleware_jwt.go` nằm trong middleware chain `CORS → RateLimit → JWT → mux`. Middleware này chỉ inject claims vào context nếu token hợp lệ — request không có token vẫn tiếp tục (unauthenticated). Các handler bảo vệ dùng `requireAuth(w, r)` hoặc `requireAdmin(w, r)` để enforce.
@@ -279,20 +281,44 @@ Các bước bắt buộc:
 
 Lịch cron được lưu trong bảng `cron_schedules` và có thể chỉnh sửa live qua API `/api/schedules` hoặc Settings page trên frontend — **không cần restart service**. Prediction Service poll DB mỗi phút để phát hiện thay đổi và rescheduling tự động.
 
-Khi lần đầu startup, `seedCronSchedules()` trong `pkg/server/api_schedules.go` tạo các hàng mặc định nếu chưa tồn tại.
+**Nguồn sự thật (source of truth) cho lịch mặc định là `DEFAULT_SCHEDULES` trong `prediction/src/scheduler/manager.py`.** Mỗi lần Python service khởi động, `upsert_cron_schedule()` trong `repository.py` chạy true upsert — cập nhật `cron_expression`, `job_name`, `enabled` trong DB nếu giá trị trong code khác với DB hiện tại. Giá trị do người dùng chỉnh sửa qua API sẽ bị ghi đè khi restart nếu khác với `DEFAULT_SCHEDULES`.
 
-| Job Key (DB) | Schedule mặc định | Công việc |
-|-------------|-------------------|-----------|
-| `reconcile_daily` | `0 0 6 * * *` | Reconcile dự đoán với giá thực tế |
-| `gold_crawler_daily` | `0 0 10 * * *` | Crawl giá vàng SJC và XAU/USD |
-| `crawler_daily` | `0 0 12 * * *` | Crawl dữ liệu giá cổ phiếu (VN30) |
-| `crawler_sp500` | `0 0 12 * * *` | Crawl dữ liệu giá S&P 500 (Yahoo Finance) |
-| `predict_daily` | `0 0 18 * * *` | Chạy dự đoán cho TẤT CẢ markets qua `orchestrator.run_all_markets()` — bao gồm SP500 |
-| `train_weekly` | `0 0 9 * * SUN` | Huấn luyện mô hình |
-| `db_backup_daily` | `0 0 2 * * *` | Backup database (mysqldump → `BACKUP_DIR`) — hiện chạy trong Python service |
-| `backup_cleanup_daily` | `0 0 3 * * *` | Xóa backup cũ hơn 7 ngày trong `BACKUP_DIR` — hiện chạy trong Python service |
+Go-side `seedCronSchedules()` trong `pkg/server/api_schedules.go` chỉ insert nếu row chưa tồn tại (không update) — chỉ dùng để seed các job key cũ (`crawler_daily`, `predict_daily`, `train_weekly`, `reconcile_daily`, `gold_crawler_daily`, `gold_predict_daily`, `simulation_daily`).
 
-Hằng số cron trong `pkg/utils/cron/` vẫn được dùng làm giá trị mặc định khi seed Go-side. Python APScheduler đọc expression từ bảng `cron_schedules` và parse cùng format.
+### Danh sách jobs hiện tại
+
+| Job Key (DB) | Schedule mặc định | Enabled | Công việc |
+|-------------|-------------------|---------|-----------|
+| `daily_reconcile` | `0 0 6 * * *` | bật | Reconcile dự đoán với giá thực tế |
+| `crawler_gold` | `0 0 * * * *` | bật | Pipeline Gold: crawl → train mỗi 10 lần → predict (mỗi giờ phút 0) |
+| `crawler_nasdaq` | `0 15 * * * *` | bật | Pipeline NASDAQ: crawl → train mỗi 10 lần → predict (mỗi giờ phút 15) |
+| `crawler_sp500` | `0 30 * * * *` | bật | Pipeline S&P 500: crawl → train mỗi 10 lần → predict (mỗi giờ phút 30) |
+| `crawler_crypto` | `0 45 * * * *` | bật | Pipeline Crypto: crawl → train mỗi 10 lần → predict (mỗi giờ phút 45) |
+| `crawler_stock` | `0 0 12 * * *` | bật | Pipeline VN30: crawl → train mỗi 10 lần → predict (12PM hàng ngày) |
+| `crawler_fuel` | `0 0 21 * * *` | bật | Pipeline Fuel: crawl → train mỗi 10 lần → predict (9PM hàng ngày) |
+| `predict_vn30` | `0 0 15 * * 1-5` | bật | Dự đoán VN30 (3PM ngày thường) |
+| `predict_fuel` | `0 0 22 * * *` | bật | Dự đoán Fuel (10PM hàng ngày) |
+| `train_vn30` | `0 0 2 * * 0` | bật | Training VN30 (Chủ nhật 2AM) |
+| `train_gold` | `0 0 3 * * 0` | bật | Training Gold (Chủ nhật 3AM) |
+| `train_nasdaq` | `0 0 4 * * 0` | bật | Training NASDAQ (Chủ nhật 4AM) |
+| `train_crypto` | `0 0 5 * * 0` | bật | Training Crypto (Chủ nhật 5AM) |
+| `train_fuel` | `0 0 6 * * 0` | bật | Training Fuel (Chủ nhật 6AM) |
+| `train_sp500` | `0 0 7 * * 0` | bật | Training S&P 500 (Chủ nhật 7AM) |
+| `gold_predict` | `0 0 11 * * *` | **tắt** | Dự đoán vàng riêng lẻ — disabled vì đã chạy trong pipeline `crawler_gold` |
+| `predict_nasdaq` | `0 30 23 * * 1-5` | **tắt** | Dự đoán NASDAQ riêng lẻ — disabled vì đã chạy trong pipeline `crawler_nasdaq` |
+| `predict_crypto` | `0 0 */6 * * *` | **tắt** | Dự đoán Crypto riêng lẻ — disabled vì đã chạy trong pipeline `crawler_crypto` |
+| `predict_sp500` | `0 0 13 * * 1-5` | **tắt** | Dự đoán S&P 500 riêng lẻ — disabled vì đã chạy trong pipeline `crawler_sp500` |
+| `weekly_training` | `0 0 9 * * 0` | **tắt** | Huấn luyện toàn bộ tất cả markets — disabled (thay bằng per-market training jobs) |
+| `daily_prediction` | `0 0 */1 * * *` | **tắt** | Dự đoán tất cả markets — disabled (thay bằng pipeline trong từng crawler job) |
+
+### Pipeline logic
+
+Bốn markets chạy hourly pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`, `crawler_crypto`) đều dùng hàm `_run_pipeline()` trong `jobs.py`:
+1. Crawl dữ liệu mới
+2. Tăng counter per-market; mỗi 10 lần crawl → trigger `train_for_market()`
+3. Chạy `run_for_market()` để sinh dự đoán mới
+
+VN30 (`crawler_stock`) và Fuel (`crawler_fuel`) cũng dùng cùng pipeline nhưng chạy theo lịch ngày thay vì mỗi giờ.
 
 ## Ports
 

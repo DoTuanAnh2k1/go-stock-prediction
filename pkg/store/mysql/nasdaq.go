@@ -100,6 +100,7 @@ func (c *Client) GetLatestNasdaqPredictions() ([]modelsdb.NasdaqPrediction, erro
 	err := c.Db.
 		Joins("JOIN (?) as latest ON latest.symbol = nasdaq_predictions.symbol AND latest.algorithm_name = nasdaq_predictions.algorithm_name AND latest.max_date = nasdaq_predictions.prediction_date", subQuery).
 		Where("nasdaq_predictions.deleted_at IS NULL").
+		Order("nasdaq_predictions.prediction_date DESC").
 		Find(&preds).Error
 	return preds, err
 }
@@ -115,6 +116,7 @@ func (c *Client) GetLatestConfirmedNasdaqPredictions() ([]modelsdb.NasdaqPredict
 	err := c.Db.
 		Joins("JOIN (?) as latest ON latest.max_id = nasdaq_predictions.id", subQuery).
 		Where("nasdaq_predictions.deleted_at IS NULL").
+		Order("nasdaq_predictions.prediction_date DESC").
 		Find(&preds).Error
 	return preds, err
 }

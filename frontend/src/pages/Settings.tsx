@@ -166,7 +166,7 @@ function ScheduleEditor({ expr, onChange }: { expr: string; onChange: (newExpr: 
   );
 }
 
-// ── Trigger button ────────────────────────────────────────────────────────────
+// ── Single trigger button ─────────────────────────────────────────────────────
 function TriggerBtn({ label, endpoint, icon }: { label: string; endpoint: string; icon: string }) {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -181,7 +181,7 @@ function TriggerBtn({ label, endpoint, icon }: { label: string; endpoint: string
       setMsg({ ok: false, text: e?.message || 'Lỗi' });
     } finally {
       setLoading(false);
-      setTimeout(() => setMsg(null), 4000);
+      setTimeout(() => setMsg(null), 5000);
     }
   };
 
@@ -189,16 +189,118 @@ function TriggerBtn({ label, endpoint, icon }: { label: string; endpoint: string
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <button
         className="btn btn--ghost"
-        style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', fontSize: 13 }}
+        style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 12px', fontSize: 12 }}
         disabled={loading}
         onClick={run}
       >
-        <Icon name={icon} size={14} />
+        <Icon name={icon} size={13} />
         {loading ? 'Đang chạy…' : label}
       </button>
       {msg && (
         <div style={{ fontSize: 11, color: msg.ok ? 'var(--up)' : 'var(--down)', paddingLeft: 4 }}>
           {msg.ok ? '✓' : '✗'} {msg.text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Pipeline button (crawl → predict → simulation) ────────────────────────────
+type PipelineStep = { label: string; endpoint: string };
+type StepState = 'idle' | 'running' | 'ok' | 'error';
+
+function PipelineTriggerBtn({ label, icon, steps }: { label: string; icon: string; steps: PipelineStep[] }) {
+  const [running, setRunning] = useState(false);
+  const [stepStates, setStepStates] = useState<StepState[]>(() => steps.map(() => 'idle'));
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const reset = () => {
+    setStepStates(steps.map(() => 'idle'));
+    setErrorMsg('');
+  };
+
+  const run = async () => {
+    setRunning(true);
+    setErrorMsg('');
+    const states: StepState[] = steps.map(() => 'idle');
+    setStepStates([...states]);
+
+    for (let i = 0; i < steps.length; i++) {
+      states[i] = 'running';
+      setStepStates([...states]);
+      try {
+        await triggerEndpoint(steps[i].endpoint);
+        states[i] = 'ok';
+        setStepStates([...states]);
+      } catch (e: any) {
+        states[i] = 'error';
+        setStepStates([...states]);
+        setErrorMsg(`${steps[i].label}: ${e?.message || 'Lỗi'}`);
+        break;
+      }
+    }
+
+    setRunning(false);
+    setTimeout(reset, 6000);
+  };
+
+  const allDone  = stepStates.every(s => s === 'ok');
+  const hasError = stepStates.some(s => s === 'error');
+  const anyRan   = stepStates.some(s => s !== 'idle');
+
+  const stepIcon = (s: StepState) => {
+    if (s === 'idle')    return <span style={{ color: 'var(--text-4)', fontSize: 10 }}>○</span>;
+    if (s === 'running') return <span style={{ color: 'var(--accent)', fontSize: 10, animation: 'pulse 1s infinite' }}>●</span>;
+    if (s === 'ok')      return <span style={{ color: 'var(--up)',   fontSize: 10 }}>✓</span>;
+    return                      <span style={{ color: 'var(--down)', fontSize: 10 }}>✗</span>;
+  };
+
+  return (
+    <div style={{
+      border: '1px solid var(--border)',
+      borderRadius: 8,
+      padding: '10px 12px',
+      background: hasError ? 'rgba(220,60,60,0.04)' : allDone ? 'rgba(47,181,124,0.04)' : 'var(--surface-2)',
+      minWidth: 150,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+    }}>
+      {/* Header button */}
+      <button
+        className="btn btn--ghost"
+        style={{
+          display: 'flex', alignItems: 'center', gap: 7,
+          padding: '6px 0', fontSize: 13, fontWeight: 600,
+          background: 'none', border: 'none', cursor: running ? 'not-allowed' : 'pointer',
+          color: hasError ? 'var(--down)' : allDone ? 'var(--up)' : 'var(--text-1)',
+          justifyContent: 'flex-start',
+        }}
+        disabled={running}
+        onClick={run}
+      >
+        <Icon name={icon} size={14} />
+        {label}
+      </button>
+
+      {/* Steps */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {steps.map((step, i) => (
+          <div key={step.endpoint} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-3)' }}>
+            {stepIcon(stepStates[i])}
+            <span style={{ color: stepStates[i] === 'running' ? 'var(--accent)' : stepStates[i] === 'ok' ? 'var(--up)' : stepStates[i] === 'error' ? 'var(--down)' : 'var(--text-3)' }}>
+              {step.label}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Status message */}
+      {anyRan && (
+        <div style={{ fontSize: 11, marginTop: 2 }}>
+          {allDone  && <span style={{ color: 'var(--up)' }}>✓ Hoàn thành</span>}
+          {hasError && <span style={{ color: 'var(--down)' }}>✗ {errorMsg}</span>}
+          {running  && <span style={{ color: 'var(--accent)' }}>Đang chạy…</span>}
         </div>
       )}
     </div>
@@ -456,24 +558,48 @@ export default function Settings() {
 
       {/* Manual triggers */}
       <Panel title="Thao tác thủ công">
-        <div style={{ padding: '4px 0', fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
-          Kích hoạt tác vụ ngay lập tức (chạy nền, không chờ lịch cron)
+        <div style={{ padding: '4px 0', fontSize: 12, color: 'var(--text-3)', marginBottom: 14 }}>
+          Chạy pipeline ngay lập tức: crawl dữ liệu mới → dự đoán → cập nhật bot trading
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
-          <TriggerBtn label="Crawl VN30"    endpoint="crawler"        icon="candles" />
-          <TriggerBtn label="Crawl Vàng"    endpoint="gold-crawler"   icon="gold"    />
-          <TriggerBtn label="Crawl NASDAQ"  endpoint="nasdaq-crawler" icon="nasdaq"  />
-          <TriggerBtn label="Crawl Crypto"  endpoint="crypto-crawler" icon="crypto"  />
-          <TriggerBtn label="Crawl Xăng"    endpoint="fuel-crawler"   icon="fuel"    />
+
+        {/* Pipeline cards */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+          <PipelineTriggerBtn label="Vàng" icon="gold" steps={[
+            { label: 'Crawl',      endpoint: 'gold-crawler'        },
+            { label: 'Dự đoán',   endpoint: 'gold-predict'        },
+            { label: 'Bot trading', endpoint: 'simulation-live-step' },
+          ]} />
+          <PipelineTriggerBtn label="NASDAQ" icon="nasdaq" steps={[
+            { label: 'Crawl',      endpoint: 'nasdaq-crawler'      },
+            { label: 'Dự đoán',   endpoint: 'nasdaq-predict'      },
+            { label: 'Bot trading', endpoint: 'simulation-live-step' },
+          ]} />
+          <PipelineTriggerBtn label="S&P 500" icon="pulse" steps={[
+            { label: 'Crawl',      endpoint: 'sp500-crawler'       },
+            { label: 'Dự đoán',   endpoint: 'sp500-predict'       },
+            { label: 'Bot trading', endpoint: 'simulation-live-step' },
+          ]} />
+          <PipelineTriggerBtn label="Crypto" icon="crypto" steps={[
+            { label: 'Crawl',      endpoint: 'crypto-crawler'      },
+            { label: 'Dự đoán',   endpoint: 'crypto-predict'      },
+            { label: 'Bot trading', endpoint: 'simulation-live-step' },
+          ]} />
+          <PipelineTriggerBtn label="Xăng" icon="fuel" steps={[
+            { label: 'Crawl',      endpoint: 'fuel-crawler'        },
+            { label: 'Dự đoán',   endpoint: 'fuel-predict'        },
+            { label: 'Bot trading', endpoint: 'simulation-live-step' },
+          ]} />
+          <PipelineTriggerBtn label="VN30" icon="candles" steps={[
+            { label: 'Crawl',      endpoint: 'crawler'             },
+            { label: 'Dự đoán',   endpoint: 'predict'             },
+            { label: 'Bot trading', endpoint: 'simulation-live-step' },
+          ]} />
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-          <TriggerBtn label="Dự đoán Vàng"   endpoint="gold-predict"   icon="gold"    />
-          <TriggerBtn label="Dự đoán NASDAQ" endpoint="nasdaq-predict" icon="nasdaq"  />
-          <TriggerBtn label="Dự đoán Crypto" endpoint="crypto-predict" icon="crypto"  />
-          <TriggerBtn label="Dự đoán Xăng"   endpoint="fuel-predict"   icon="fuel"    />
-          <TriggerBtn label="Dự đoán (tất cả)" endpoint="predict"      icon="pulse"   />
-          <TriggerBtn label="Huấn luyện"     endpoint="train"          icon="cpu"     />
-          <TriggerBtn label="Reconcile"      endpoint="reconcile"      icon="refresh" />
+
+        {/* Utility actions */}
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <TriggerBtn label="Huấn luyện tất cả"  endpoint="train"       icon="cpu"     />
+          <TriggerBtn label="Reconcile"           endpoint="reconcile"   icon="refresh" />
         </div>
       </Panel>
     </div>

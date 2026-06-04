@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { Panel, KPI, Seg, Icon, Chg, ConfBar } from '../components/ui';
 import { Sparkline, LineChart, BarChart, HBars, Donut } from '../components/charts';
+import { useLanguage } from '../context/LangContext';
 
 export default function Dashboard() {
   const { data: D } = useData();
   const { fmt } = D;
+  const { t } = useLanguage();
   const [idx, setIdx] = useState('vnindex');
   const index = D.indices[idx as 'vnindex' | 'vn30'];
   const watch = D.stocks.slice(0, 8);
@@ -28,20 +30,20 @@ export default function Dashboard() {
       <div className="grid grid--kpis section-gap">
         <KPI label="VN-Index" value={vnindexDisplay} chgPct={D.indices.vnindex.chgPct} chgAbs={D.indices.vnindex.chg} spark={D.indices.vnindex.series.slice(-22)} />
         <KPI label="VN30" value={vn30Display} chgPct={D.indices.vn30.chgPct} chgAbs={D.indices.vn30.chg} spark={D.indices.vn30.series.slice(-22)} />
-        <KPI label="Thanh khoản" value={volDisplay} sub="cổ phiếu khớp lệnh" />
-        <KPI label="Độ chính xác ENS" value={ensAccDisplay} sub="mô hình tổng hợp" chgPct={ens ? ens.accDelta : 0} accent />
+        <KPI label={t.dashboard.liquidity} value={volDisplay} sub={t.dashboard.stocksMatched} />
+        <KPI label={t.dashboard.ensAccuracy} value={ensAccDisplay} sub={t.dashboard.ensModel} chgPct={ens ? ens.accDelta : 0} accent />
       </div>
 
       <div className="grid grid--main section-gap">
         <Panel
-          title="Diễn biến chỉ số"
+          title={t.dashboard.indexChart}
           dot={idx === 'vnindex' ? 'VN-Index' : 'VN30'}
           tools={<Seg options={[{ value: 'vnindex', label: 'VN-Index' }, { value: 'vn30', label: 'VN30' }]} value={idx} onChange={setIdx} />}
         >
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
             <span className="num" style={{ fontSize: 28, fontWeight: 600, letterSpacing: '-1px' }}>{indexDisplay}</span>
             {indexVal ? <Chg pct={index.chgPct} abs={index.chg} /> : null}
-            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>Phiên hôm nay · đóng cửa</span>
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{t.dashboard.sessionToday}</span>
           </div>
           {index.series.length > 0
             ? <LineChart
@@ -51,29 +53,29 @@ export default function Dashboard() {
               />
             : <div className="empty" style={{ height: 580, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
-                <p>Chưa có dữ liệu chỉ số</p>
+                <p>{t.dashboard.noIndexData}</p>
               </div>
           }
         </Panel>
-        <Panel title="Độ rộng thị trường" sub="VN30">
+        <Panel title={t.dashboard.marketBreadth} sub="VN30">
           <Breadth stocks={D.stocks} fmt={fmt} />
         </Panel>
       </div>
 
       <div className="grid grid--side section-gap">
         <Panel
-          title="Danh sách theo dõi"
-          tools={<button className="btn btn--sm btn--ghost"><Icon name="refresh" size={13} />Làm mới</button>}
+          title={t.dashboard.watchlist}
+          tools={<button className="btn btn--sm btn--ghost"><Icon name="refresh" size={13} />{t.common.refresh}</button>}
           flush
         >
           {watch.length === 0
             ? <div className="empty">
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
-                <p>Chưa có dữ liệu. Đang tải...</p>
+                <p>{t.dashboard.noWatchData}</p>
               </div>
             : <div style={{ overflowX: 'auto' }}>
                 <table className="tbl">
-                  <thead><tr><th>Mã</th><th className="r">Giá</th><th className="r">±%</th><th className="r">KL (M)</th><th className="c" style={{ width: 110 }}>7 phiên</th></tr></thead>
+                  <thead><tr><th>{t.dashboard.colSymbol}</th><th className="r">{t.dashboard.colPrice}</th><th className="r">{t.dashboard.colChangePct}</th><th className="r">{t.dashboard.colVolume}</th><th className="c" style={{ width: 110 }}>{t.dashboard.col7Sessions}</th></tr></thead>
                   <tbody>
                     {watch.map((s) => (
                       <tr key={s.sym} className="clickable">
@@ -90,11 +92,11 @@ export default function Dashboard() {
           }
         </Panel>
 
-        <Panel title="Trạng thái mô hình ML" sub={D.algos.length ? D.algos.length + ' thuật toán' : '—'} flush>
+        <Panel title={t.dashboard.mlModelStatus} sub={D.algos.length ? D.algos.length + ' ' + t.dashboard.algorithms : '—'} flush>
           {D.algos.length === 0
             ? <div className="empty">
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
-                <p>Chưa có dữ liệu huấn luyện</p>
+                <p>{t.dashboard.noTrainingData}</p>
               </div>
             : D.algos.map((a) => (
               <div className="lrow" key={a.id}>
@@ -115,18 +117,18 @@ export default function Dashboard() {
         </Panel>
       </div>
 
-      <div className="sec-head"><h2>Dự đoán mới nhất</h2><div className="line"></div></div>
+      <div className="sec-head"><h2>{t.dashboard.latestPredictions}</h2><div className="line"></div></div>
       <Panel flush className="section-gap">
         {D.predictions.length === 0
           ? <div className="empty">
               <div className="empty__icon"><Icon name="layers" size={18} /></div>
-              <p>Chưa có dự đoán. Đang tải...</p>
+              <p>{t.dashboard.noPredData}</p>
             </div>
           : <div style={{ overflowX: 'auto' }}>
               <table className="tbl">
                 <thead><tr>
-                  <th>Mã</th><th className="r">Giá hiện tại</th><th className="r">Giá dự đoán</th><th className="r">Δ dự kiến</th>
-                  <th className="c">Thuật toán</th><th className="r">Độ tin cậy</th><th>Phiên mục tiêu</th>
+                  <th>{t.dashboard.colSymbol}</th><th className="r">{t.dashboard.colCurrentPrice}</th><th className="r">{t.dashboard.colPredPrice}</th><th className="r">{t.dashboard.colExpectedDelta}</th>
+                  <th className="c">{t.dashboard.colAlgo}</th><th className="r">{t.dashboard.colConfidence}</th><th>{t.dashboard.colTargetSession}</th>
                 </tr></thead>
                 <tbody>
                   {D.predictions.slice(0, 8).map((p, i) => (
@@ -147,11 +149,11 @@ export default function Dashboard() {
       </Panel>
 
       <div className="grid grid--halves" style={{ paddingBottom: 8 }}>
-        <Panel title="So sánh độ chính xác thuật toán" sub="30 phiên">
+        <Panel title={t.dashboard.algoAccuracy} sub={t.dashboard.last30Sessions}>
           {D.algos.length === 0
             ? <div className="empty">
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
-                <p>Chưa có dữ liệu huấn luyện</p>
+                <p>{t.dashboard.noTrainingData}</p>
               </div>
             : <HBars items={D.algos.map((a) => ({
                 label: a.name, value: a.acc,
@@ -159,13 +161,13 @@ export default function Dashboard() {
               }))} />
           }
         </Panel>
-        <Panel title="Số dự đoán theo ngày" sub="7 ngày">
+        <Panel title={t.dashboard.predByDay} sub={t.dashboard.last7Days}>
           {D.dailyCounts.values.length === 0
             ? <div className="empty">
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
-                <p>Chưa có dữ liệu</p>
+                <p>{t.dashboard.noChartData}</p>
               </div>
-            : <BarChart data={D.dailyCounts.values} labels={D.dailyCounts.labels} height={500} color="var(--accent)" valueFmt={(v) => v + ' dự đoán'} />
+            : <BarChart data={D.dailyCounts.values} labels={D.dailyCounts.labels} height={500} color="var(--accent)" valueFmt={(v) => v + ' ' + t.dashboard.predCount} />
           }
         </Panel>
       </div>
@@ -186,6 +188,7 @@ interface SimBot {
 }
 
 function TopSimulationBots() {
+  const { t } = useLanguage();
   const [bots, setBots] = useState<SimBot[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -205,12 +208,12 @@ function TopSimulationBots() {
 
   return (
     <Panel
-      title="Top Simulation Bots"
-      sub="3 bots hiệu suất cao nhất"
+      title={t.dashboard.topSimBots}
+      sub={t.dashboard.topBotsDesc}
       className="section-gap"
       tools={
         <Link to="/simulation" style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-          Xem tất cả →
+          {t.dashboard.viewAll}
         </Link>
       }
       style={{ paddingBottom: 4 }}
@@ -218,7 +221,7 @@ function TopSimulationBots() {
       {bots.length === 0 ? (
         <div className="empty" style={{ padding: '24px 0' }}>
           <div className="empty__icon"><Icon name="layers" size={16} /></div>
-          <p style={{ fontSize: 12 }}>Chưa có dữ liệu simulation. <Link to="/simulation" style={{ color: 'var(--accent)' }}>Chạy backtest</Link></p>
+          <p style={{ fontSize: 12 }}>{t.dashboard.noSimData} <Link to="/simulation" style={{ color: 'var(--accent)' }}>{t.dashboard.runBacktest}</Link></p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -249,11 +252,12 @@ function TopSimulationBots() {
 }
 
 function Breadth({ stocks, fmt }: { stocks: any[]; fmt: any }) {
+  const { t } = useLanguage();
   if (!stocks.length) {
     return (
       <div className="empty">
         <div className="empty__icon"><Icon name="layers" size={18} /></div>
-        <p>Chưa có dữ liệu thị trường</p>
+        <p>{t.dashboard.noMarketData}</p>
       </div>
     );
   }
@@ -269,11 +273,11 @@ function Breadth({ stocks, fmt }: { stocks: any[]; fmt: any }) {
   return (
     <div>
       <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 14 }}>
-        <Donut value={up / total * 100} color="var(--up)" label="tăng giá" />
+        <Donut value={up / total * 100} color="var(--up)" label={t.dashboard.rising} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 9 }}>
-          <StatRow dot="var(--up)"   label="Tăng"        value={up} />
-          <StatRow dot="var(--down)" label="Giảm"        value={down} />
-          <StatRow dot="var(--flat)" label="Tham chiếu"  value={flat} />
+          <StatRow dot="var(--up)"   label={t.dashboard.up}   value={up} />
+          <StatRow dot="var(--down)" label={t.dashboard.down} value={down} />
+          <StatRow dot="var(--flat)" label={t.dashboard.ref}  value={flat} />
         </div>
       </div>
       <div className="bar" style={{ height: 8, display: 'flex' }}>
@@ -281,7 +285,7 @@ function Breadth({ stocks, fmt }: { stocks: any[]; fmt: any }) {
         <div style={{ width: flat / total * 100 + '%', background: 'var(--flat)' }}></div>
         <div style={{ width: down / total * 100 + '%', background: 'var(--down)' }}></div>
       </div>
-      <div style={{ fontSize: 11, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, margin: '16px 0 8px' }}>Ngành dẫn dắt</div>
+      <div style={{ fontSize: 11, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, margin: '16px 0 8px' }}>{t.dashboard.leadingSectors}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
         {sectors.slice(0, 5).map((s) => (
           <div key={s.name} style={{ display: 'flex', alignItems: 'center', fontSize: 12.5 }}>
