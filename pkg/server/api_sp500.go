@@ -105,6 +105,7 @@ func GetSP500Prices(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 	to := time.Now()
 	from := to.AddDate(0, 0, -days)
+	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
 	prices, err := store.GetSP500PricesByDateRange(symbol, from, to)
 	if err != nil {
@@ -132,19 +133,20 @@ func GetSP500Prices(w http.ResponseWriter, r *http.Request) {
 }
 
 type sp500ChartResponse struct {
-	Symbol string            `json:"symbol"`
-	Dates  []string          `json:"dates"`
-	Prices []decimal.Decimal `json:"prices"`
+	Symbol      string            `json:"symbol"`
+	Dates       []string          `json:"dates"`
+	Prices      []decimal.Decimal `json:"prices"`
+	Granularity string            `json:"granularity"`
 }
 
 // GetSP500Chart godoc
 //
 //	@Summary      Get S&P 500 price chart data
-//	@Description  Returns chronologically ordered date labels and closing prices for charting
+//	@Description  Returns chronologically ordered date labels and closing prices for charting. When days=1, returns hourly intraday data; otherwise returns daily data.
 //	@Tags         SP500
 //	@Produce      json
 //	@Param        symbol  query  string  false  "S&P 500 symbol (e.g. SPY, AAPL)"
-//	@Param        days    query  int     false  "Number of days to look back (default 30)"
+//	@Param        days    query  int     false  "Number of days to look back (default 30); use 1 for intraday hourly data"
 //	@Success      200     {object}  sp500ChartResponse
 //	@Failure      500     {object}  ResponseFailure
 //	@Router       /api/sp500/chart [get]
@@ -161,7 +163,37 @@ func GetSP500Chart(w http.ResponseWriter, r *http.Request) {
 
 	store := repository.GetSingleton()
 	to := time.Now()
+
+	if days == 1 {
+		from := to.Add(-24 * time.Hour)
+		intradayPrices, err := store.GetSP500IntradayByRange(symbol, from, to)
+		if err != nil {
+			logger.Logger.Errorf("[api/sp500/chart] Failed to get S&P 500 intraday prices: %v", err)
+			ResponseError(w, http.StatusInternalServerError, "Failed to get S&P 500 intraday prices")
+			return
+		}
+
+		dates := make([]string, 0, len(intradayPrices))
+		closePrices := make([]decimal.Decimal, 0, len(intradayPrices))
+
+		// intraday prices are ordered DESC from DB — reverse for chart (oldest first)
+		for i := len(intradayPrices) - 1; i >= 0; i-- {
+			p := intradayPrices[i]
+			dates = append(dates, p.Timestamp.Format("2006-01-02 15:04"))
+			closePrices = append(closePrices, p.ClosePrice)
+		}
+
+		ResponseSuccess(w, http.StatusOK, sp500ChartResponse{
+			Symbol:      symbol,
+			Dates:       dates,
+			Prices:      closePrices,
+			Granularity: "1h",
+		})
+		return
+	}
+
 	from := to.AddDate(0, 0, -days)
+	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
 	prices, err := store.GetSP500PricesByDateRange(symbol, from, to)
 	if err != nil {
@@ -181,8 +213,9 @@ func GetSP500Chart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ResponseSuccess(w, http.StatusOK, sp500ChartResponse{
-		Symbol: symbol,
-		Dates:  dates,
-		Prices: closePrices,
+		Symbol:      symbol,
+		Dates:       dates,
+		Prices:      closePrices,
+		Granularity: "1d",
 	})
 }

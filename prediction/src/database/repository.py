@@ -10,15 +10,18 @@ from src.database.connection import get_session, session_scope
 from src.database.models import (
     CronSchedule,
     CryptoPrediction,
+    CryptoIntradayPrice,
     CryptoPrice,
     Exchange,
     FuelPrediction,
     FuelPrice,
     GoldPrediction,
     GoldPrice,
+    NasdaqIntradayPrice,
     NasdaqPrediction,
     NasdaqPrice,
     Prediction,
+    SP500IntradayPrice,
     SP500Prediction,
     SP500Price,
     Stock,
@@ -434,6 +437,31 @@ def create_nasdaq_prediction(
         )
 
 
+def get_pending_nasdaq_predictions(days_back: int = 7) -> list[NasdaqPrediction]:
+    session = get_session()
+    try:
+        cutoff = datetime.now() - timedelta(days=days_back)
+        return (
+            session.query(NasdaqPrediction)
+            .filter(
+                NasdaqPrediction.status == "pending",
+                NasdaqPrediction.target_date <= datetime.now(),
+                NasdaqPrediction.target_date >= cutoff,
+                NasdaqPrediction.deleted_at.is_(None),
+            )
+            .all()
+        )
+    finally:
+        session.close()
+
+
+def update_nasdaq_prediction_actual(pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str) -> None:
+    with session_scope() as session:
+        session.query(NasdaqPrediction).filter_by(id=pred_id).update(
+            {"actual_price": actual_price, "accuracy": accuracy, "status": status, "updated_at": datetime.utcnow()}
+        )
+
+
 # ---------------------------------------------------------------------------
 # Crypto
 # ---------------------------------------------------------------------------
@@ -515,6 +543,31 @@ def create_crypto_prediction(
                 accuracy=accuracy,
                 status=status,
             )
+        )
+
+
+def get_pending_crypto_predictions(days_back: int = 7) -> list[CryptoPrediction]:
+    session = get_session()
+    try:
+        cutoff = datetime.now() - timedelta(days=days_back)
+        return (
+            session.query(CryptoPrediction)
+            .filter(
+                CryptoPrediction.status == "pending",
+                CryptoPrediction.target_date <= datetime.now(),
+                CryptoPrediction.target_date >= cutoff,
+                CryptoPrediction.deleted_at.is_(None),
+            )
+            .all()
+        )
+    finally:
+        session.close()
+
+
+def update_crypto_prediction_actual(pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str) -> None:
+    with session_scope() as session:
+        session.query(CryptoPrediction).filter_by(id=pred_id).update(
+            {"actual_price": actual_price, "accuracy": accuracy, "status": status, "updated_at": datetime.utcnow()}
         )
 
 
@@ -678,6 +731,112 @@ def create_sp500_prediction(
                 status=status,
             )
         )
+
+
+def get_pending_sp500_predictions(days_back: int = 7) -> list[SP500Prediction]:
+    session = get_session()
+    try:
+        cutoff = datetime.now() - timedelta(days=days_back)
+        return (
+            session.query(SP500Prediction)
+            .filter(
+                SP500Prediction.status == "pending",
+                SP500Prediction.target_date <= datetime.now(),
+                SP500Prediction.target_date >= cutoff,
+                SP500Prediction.deleted_at.is_(None),
+            )
+            .all()
+        )
+    finally:
+        session.close()
+
+
+def update_sp500_prediction_actual(pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str) -> None:
+    with session_scope() as session:
+        session.query(SP500Prediction).filter_by(id=pred_id).update(
+            {"actual_price": actual_price, "accuracy": accuracy, "status": status, "updated_at": datetime.utcnow()}
+        )
+
+
+# ---------------------------------------------------------------------------
+# Intraday prices
+# ---------------------------------------------------------------------------
+
+def upsert_nasdaq_intraday(record: NasdaqIntradayPrice) -> None:
+    with session_scope() as session:
+        existing = (
+            session.query(NasdaqIntradayPrice)
+            .filter_by(symbol=record.symbol, timestamp=record.timestamp)
+            .first()
+        )
+        if existing:
+            existing.open_price = record.open_price
+            existing.high_price = record.high_price
+            existing.low_price = record.low_price
+            existing.close_price = record.close_price
+            existing.volume = record.volume
+            existing.updated_at = datetime.utcnow()
+        else:
+            new = NasdaqIntradayPrice(
+                symbol=record.symbol,
+                timestamp=record.timestamp,
+                open_price=record.open_price,
+                high_price=record.high_price,
+                low_price=record.low_price,
+                close_price=record.close_price,
+                volume=record.volume,
+            )
+            session.add(new)
+
+
+def upsert_sp500_intraday(record: SP500IntradayPrice) -> None:
+    with session_scope() as session:
+        existing = (
+            session.query(SP500IntradayPrice)
+            .filter_by(symbol=record.symbol, timestamp=record.timestamp)
+            .first()
+        )
+        if existing:
+            existing.open_price = record.open_price
+            existing.high_price = record.high_price
+            existing.low_price = record.low_price
+            existing.close_price = record.close_price
+            existing.volume = record.volume
+            existing.updated_at = datetime.utcnow()
+        else:
+            new = SP500IntradayPrice(
+                symbol=record.symbol,
+                timestamp=record.timestamp,
+                open_price=record.open_price,
+                high_price=record.high_price,
+                low_price=record.low_price,
+                close_price=record.close_price,
+                volume=record.volume,
+            )
+            session.add(new)
+
+
+def upsert_crypto_intraday(record: CryptoIntradayPrice) -> None:
+    with session_scope() as session:
+        existing = (
+            session.query(CryptoIntradayPrice)
+            .filter_by(coin_id=record.coin_id, timestamp=record.timestamp)
+            .first()
+        )
+        if existing:
+            existing.price = record.price
+            existing.market_cap = record.market_cap
+            existing.volume = record.volume
+            existing.updated_at = datetime.utcnow()
+        else:
+            new = CryptoIntradayPrice(
+                coin_id=record.coin_id,
+                timestamp=record.timestamp,
+                price=record.price,
+                market_cap=record.market_cap,
+                volume=record.volume,
+            )
+            session.add(new)
 
 
 # ---------------------------------------------------------------------------

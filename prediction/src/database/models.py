@@ -420,3 +420,59 @@ class SimPortfolioSnapshot(Base):
     total_value = Column(Numeric(20, 2), nullable=False)
     total_return_pct = Column(Numeric(8, 4))
     open_positions = Column(Integer, default=0)
+
+
+# ---------------------------------------------------------------------------
+# Intraday price tables (hourly bars, last 24-48h)
+# ---------------------------------------------------------------------------
+
+class NasdaqIntradayPrice(Base):
+    __tablename__ = "nasdaq_intraday_prices"
+    __table_args__ = (
+        UniqueConstraint("symbol", "timestamp", name="idx_nasdaq_intraday_symbol_ts"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    symbol = Column(String(20), nullable=False)
+    timestamp = Column(DateTime, nullable=False)
+    open_price = Column(Numeric(20, 6))
+    high_price = Column(Numeric(20, 6))
+    low_price = Column(Numeric(20, 6))
+    close_price = Column(Numeric(20, 6))
+    volume = Column(BigInteger)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SP500IntradayPrice(Base):
+    __tablename__ = "sp500_intraday_prices"
+    __table_args__ = (
+        UniqueConstraint("symbol", "timestamp", name="idx_sp500_intraday_symbol_ts"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    symbol = Column(String(20), nullable=False)
+    timestamp = Column(DateTime, nullable=False)
+    open_price = Column(Numeric(20, 6))
+    high_price = Column(Numeric(20, 6))
+    low_price = Column(Numeric(20, 6))
+    close_price = Column(Numeric(20, 6))
+    volume = Column(BigInteger)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CryptoIntradayPrice(Base):
+    __tablename__ = "crypto_intraday_prices"
+    __table_args__ = (
+        UniqueConstraint("coin_id", "timestamp", name="idx_crypto_intraday_coin_ts"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    coin_id = Column(String(50), nullable=False)
+    timestamp = Column(DateTime, nullable=False)
+    price = Column(Numeric(30, 8))
+    market_cap = Column(Numeric(30, 2))
+    volume = Column(Numeric(30, 2))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -317,8 +317,10 @@ def _bg_crawl_vn30():
 def _bg_crawl_nasdaq():
     try:
         from src.crawlers.nasdaq import NasdaqCrawler
-        saved = NasdaqCrawler().crawl()
+        crawler = NasdaqCrawler()
+        saved = crawler.crawl()
         log.info("bg.nasdaq.done", saved=saved)
+        crawler.crawl_intraday()
     except Exception as exc:
         log.error("bg.nasdaq.error", error=str(exc))
 
@@ -326,8 +328,10 @@ def _bg_crawl_nasdaq():
 def _bg_crawl_crypto():
     try:
         from src.crawlers.crypto import CryptoCrawler
-        saved = CryptoCrawler().crawl()
+        crawler = CryptoCrawler()
+        saved = crawler.crawl()
         log.info("bg.crypto.done", saved=saved)
+        crawler.crawl_intraday()
     except Exception as exc:
         log.error("bg.crypto.error", error=str(exc))
 
@@ -398,8 +402,10 @@ def _bg_predict_fuel():
 def _bg_crawl_sp500():
     try:
         from src.crawlers.sp500 import SP500Crawler
-        saved = SP500Crawler().crawl()
+        crawler = SP500Crawler()
+        saved = crawler.crawl()
         log.info("bg.sp500.done", saved=saved)
+        crawler.crawl_intraday()
     except Exception as exc:
         log.error("bg.sp500.error", error=str(exc))
 

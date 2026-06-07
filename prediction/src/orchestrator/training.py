@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import threading
 import uuid
+from datetime import date as date_type
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -488,6 +489,130 @@ def reconcile_predictions() -> int:
 
     except Exception as exc:
         log.error("reconcile.gold.error", error=str(exc))
+
+    # --- NASDAQ predictions ---
+    try:
+        nasdaq_pending = repo.get_pending_nasdaq_predictions(days_back=10)
+        log.info("reconcile.nasdaq.pending", count=len(nasdaq_pending))
+
+        for pred in nasdaq_pending:
+            # target_date is DATETIME, trading_date in NasdaqPrice is DATE — convert
+            target_d = pred.target_date.date() if isinstance(pred.target_date, datetime) else pred.target_date
+
+            prices = repo.get_nasdaq_prices_asc(pred.symbol, limit=10)
+            if not prices:
+                continue
+
+            closest = min(
+                prices,
+                key=lambda p: abs((p.trading_date - target_d).days)
+                if isinstance(p.trading_date, date_type)
+                else 999,
+            )
+            diff_days = (
+                abs((closest.trading_date - target_d).days)
+                if isinstance(closest.trading_date, date_type)
+                else 999
+            )
+            if diff_days > 3:
+                continue
+
+            actual = Decimal(str(closest.close_price))
+            if actual == 0:
+                continue
+
+            predicted = Decimal(str(pred.predicted_price))
+            accuracy = max(Decimal("0"), Decimal("1") - abs(actual - predicted) / actual)
+            accuracy = accuracy.quantize(Decimal("0.0001"))
+            status = "confirmed" if float(accuracy) >= 0.70 else "wrong"
+
+            repo.update_nasdaq_prediction_actual(pred.id, actual, accuracy, status)
+            total_updated += 1
+
+    except Exception as exc:
+        log.error("reconcile.nasdaq.error", error=str(exc))
+
+    # --- SP500 predictions ---
+    try:
+        sp500_pending = repo.get_pending_sp500_predictions(days_back=10)
+        log.info("reconcile.sp500.pending", count=len(sp500_pending))
+
+        for pred in sp500_pending:
+            target_d = pred.target_date.date() if isinstance(pred.target_date, datetime) else pred.target_date
+
+            prices = repo.get_sp500_prices_asc(pred.symbol, limit=10)
+            if not prices:
+                continue
+
+            closest = min(
+                prices,
+                key=lambda p: abs((p.trading_date - target_d).days)
+                if isinstance(p.trading_date, date_type)
+                else 999,
+            )
+            diff_days = (
+                abs((closest.trading_date - target_d).days)
+                if isinstance(closest.trading_date, date_type)
+                else 999
+            )
+            if diff_days > 3:
+                continue
+
+            actual = Decimal(str(closest.close_price))
+            if actual == 0:
+                continue
+
+            predicted = Decimal(str(pred.predicted_price))
+            accuracy = max(Decimal("0"), Decimal("1") - abs(actual - predicted) / actual)
+            accuracy = accuracy.quantize(Decimal("0.0001"))
+            status = "confirmed" if float(accuracy) >= 0.70 else "wrong"
+
+            repo.update_sp500_prediction_actual(pred.id, actual, accuracy, status)
+            total_updated += 1
+
+    except Exception as exc:
+        log.error("reconcile.sp500.error", error=str(exc))
+
+    # --- Crypto predictions ---
+    try:
+        crypto_pending = repo.get_pending_crypto_predictions(days_back=10)
+        log.info("reconcile.crypto.pending", count=len(crypto_pending))
+
+        for pred in crypto_pending:
+            target_d = pred.target_date.date() if isinstance(pred.target_date, datetime) else pred.target_date
+
+            prices = repo.get_crypto_prices_asc(pred.coin_id, limit=10)
+            if not prices:
+                continue
+
+            closest = min(
+                prices,
+                key=lambda p: abs((p.trading_date - target_d).days)
+                if isinstance(p.trading_date, date_type)
+                else 999,
+            )
+            diff_days = (
+                abs((closest.trading_date - target_d).days)
+                if isinstance(closest.trading_date, date_type)
+                else 999
+            )
+            if diff_days > 3:
+                continue
+
+            actual = Decimal(str(closest.close_price))
+            if actual == 0:
+                continue
+
+            predicted = Decimal(str(pred.predicted_price))
+            accuracy = max(Decimal("0"), Decimal("1") - abs(actual - predicted) / actual)
+            accuracy = accuracy.quantize(Decimal("0.0001"))
+            status = "confirmed" if float(accuracy) >= 0.70 else "wrong"
+
+            repo.update_crypto_prediction_actual(pred.id, actual, accuracy, status)
+            total_updated += 1
+
+    except Exception as exc:
+        log.error("reconcile.crypto.error", error=str(exc))
 
     log.info("reconcile.done", updated=total_updated)
     return total_updated

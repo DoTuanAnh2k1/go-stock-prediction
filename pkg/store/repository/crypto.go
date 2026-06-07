@@ -18,6 +18,12 @@ type CryptoPriceStore interface {
 	GetAllCryptoPricesForCoin(coinID string) ([]modelsdb.CryptoPrice, error)
 }
 
+// CryptoIntradayStore handles persistence for cryptocurrency hourly intraday price records.
+type CryptoIntradayStore interface {
+	UpsertCryptoIntradayPrice(p *modelsdb.CryptoIntradayPrice) error
+	GetCryptoIntradayByRange(coinID string, from, to time.Time) ([]modelsdb.CryptoIntradayPrice, error)
+}
+
 // CryptoPredictionStore handles persistence for cryptocurrency prediction records.
 type CryptoPredictionStore interface {
 	CreateCryptoPrediction(p *modelsdb.CryptoPrediction) error

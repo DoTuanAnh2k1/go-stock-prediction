@@ -17,6 +17,12 @@ type SP500PriceStore interface {
 	GetAllSP500PricesForSymbol(symbol string) ([]modelsdb.SP500Price, error)
 }
 
+// SP500IntradayStore handles persistence for S&P 500 hourly intraday price records.
+type SP500IntradayStore interface {
+	UpsertSP500IntradayPrice(p *modelsdb.SP500IntradayPrice) error
+	GetSP500IntradayByRange(symbol string, from, to time.Time) ([]modelsdb.SP500IntradayPrice, error)
+}
+
 // SP500PredictionStore handles persistence for S&P 500 prediction records.
 type SP500PredictionStore interface {
 	CreateSP500Prediction(p *modelsdb.SP500Prediction) error

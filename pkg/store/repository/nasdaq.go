@@ -17,6 +17,12 @@ type NasdaqPriceStore interface {
 	GetAllNasdaqPricesForSymbol(symbol string) ([]modelsdb.NasdaqPrice, error)
 }
 
+// NasdaqIntradayStore handles persistence for NASDAQ 100 hourly intraday price records.
+type NasdaqIntradayStore interface {
+	UpsertNasdaqIntradayPrice(p *modelsdb.NasdaqIntradayPrice) error
+	GetNasdaqIntradayByRange(symbol string, from, to time.Time) ([]modelsdb.NasdaqIntradayPrice, error)
+}
+
 // NasdaqPredictionStore handles persistence for NASDAQ 100 prediction records.
 type NasdaqPredictionStore interface {
 	CreateNasdaqPrediction(p *modelsdb.NasdaqPrediction) error

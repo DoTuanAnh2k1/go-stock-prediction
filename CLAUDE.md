@@ -77,6 +77,7 @@ pkg/server/api_trigger_sp500.go         # POST /api/trigger/sp500-crawler (→ g
 pkg/server/api_auth.go                  # POST /api/auth/login (DB + bcrypt), GET /api/auth/me — JWT authentication
 pkg/server/api_users.go                 # GET/POST /api/users, DELETE /api/users/{id} — quản lý user (admin only)
 pkg/server/api_schedules.go             # GET /api/schedules, PUT /api/schedules/{key} — quản lý lịch cron động
+pkg/server/api_backup.go                # GET /api/backups, POST /api/trigger/backup, GET/DELETE /api/backups/{filename}
 pkg/server/middleware_jwt.go            # JWTMiddleware (non-blocking, inject claims vào context), getClaims(), requireAuth(), requireAdmin(), AuthRequired()
 pkg/server/helper.go                    # requireGRPCClient(), ResponseError(), ResponseSuccess() và các helper
 pkg/service/predict/registry/registry.go   # AlgorithmDef struct (metadata only — không có Factory), Register(), All()
@@ -209,7 +210,7 @@ LOG_LEVEL=DEBUG
 DB_LOG_LEVEL=DEBUG
 
 # Backup
-BACKUP_DIR=/backups              # Thư mục lưu file backup mysqldump (default: /backups, được mount qua Docker volume)
+BACKUP_DIR=/backups              # Thư mục lưu file backup mysqldump (mount vào cả api và prediction containers)
 ```
 
 ## Conventions trong codebase
@@ -310,6 +311,7 @@ Go-side `seedCronSchedules()` trong `pkg/server/api_schedules.go` chỉ insert n
 | `predict_sp500` | `0 0 13 * * 1-5` | **tắt** | Dự đoán S&P 500 riêng lẻ — disabled vì đã chạy trong pipeline `crawler_sp500` |
 | `weekly_training` | `0 0 9 * * 0` | **tắt** | Huấn luyện toàn bộ tất cả markets — disabled (thay bằng per-market training jobs) |
 | `daily_prediction` | `0 0 */1 * * *` | **tắt** | Dự đoán tất cả markets — disabled (thay bằng pipeline trong từng crawler job) |
+| `daily_backup` | `0 0 3 * * *` | bật | Backup MySQL database hàng ngày lúc 3AM |
 
 ### Pipeline logic
 
@@ -416,6 +418,15 @@ VN30 (`crawler_stock`) và Fuel (`crawler_fuel`) cũng dùng cùng pipeline như
 |--------|------|---------|
 | `GET` | `/api/schedules` | Danh sách lịch tác vụ — yêu cầu JWT; trả `[{"job_key":"...","job_name":"...","cron_expression":"...","enabled":true,"updated_at":"..."}]` |
 | `PUT` | `/api/schedules/{key}` | Cập nhật lịch tác vụ — yêu cầu JWT; body: `{"cron_expression":"0 0 12 * * *","enabled":true}`; validate cron expression trước khi lưu |
+
+### Backup
+
+| Method | Path | Ghi chú |
+|--------|------|---------|
+| `GET` | `/api/backups` | Danh sách file backup — yêu cầu JWT; trả `[{filename, size, size_human, created_at}]` |
+| `POST` | `/api/trigger/backup` | Tạo backup ngay (mysqldump → gzip) — yêu cầu admin JWT; trả `{filename, size, message}`; giữ 10 backup gần nhất |
+| `GET` | `/api/backups/{filename}` | Tải xuống file backup — yêu cầu JWT; stream file .sql.gz |
+| `DELETE` | `/api/backups/{filename}` | Xóa file backup — yêu cầu admin JWT |
 
 ### Trigger
 

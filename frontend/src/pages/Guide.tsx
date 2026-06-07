@@ -1,24 +1,26 @@
 import { useState } from 'react';
 import { Icon } from '../components/ui';
+import { useLanguage } from '../context/LangContext';
 
 export default function Guide() {
   const [active, setActive] = useState('start');
+  const { t } = useLanguage();
 
   const sections = [
-    { id: 'start',       label: 'Bắt đầu',      icon: 'play' },
-    { id: 'dashboard',   label: 'Tổng quan',     icon: 'grid' },
-    { id: 'stocks',      label: 'Cổ phiếu',      icon: 'candles' },
-    { id: 'predictions', label: 'Dự đoán',       icon: 'pulse' },
-    { id: 'training',    label: 'Huấn luyện',    icon: 'cpu' },
-    { id: 'gold',        label: 'Giá vàng',      icon: 'gold' },
-    { id: 'api',         label: 'API & Trigger', icon: 'refresh' },
+    { id: 'start',       label: t.guide.sections.start,       icon: 'play' },
+    { id: 'dashboard',   label: t.guide.sections.dashboard,   icon: 'grid' },
+    { id: 'stocks',      label: t.guide.sections.stocks,      icon: 'candles' },
+    { id: 'predictions', label: t.guide.sections.predictions, icon: 'pulse' },
+    { id: 'training',    label: t.guide.sections.training,    icon: 'cpu' },
+    { id: 'gold',        label: t.guide.sections.gold,        icon: 'gold' },
+    { id: 'api',         label: t.guide.sections.api,         icon: 'refresh' },
   ];
 
   return (
     <div className="content__inner">
       <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 20, alignItems: 'start' }}>
         <div className="panel" style={{ position: 'sticky', top: 16 }}>
-          <div className="panel__head"><div className="panel__title">Mục lục</div></div>
+          <div className="panel__head"><div className="panel__title">{t.guide.tableOfContents}</div></div>
           <div className="panel__body" style={{ padding: '6px 0' }}>
             {sections.map((s) => (
               <button key={s.id} onClick={() => setActive(s.id)} style={{

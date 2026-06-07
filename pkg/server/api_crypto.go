@@ -107,6 +107,7 @@ func GetCryptoPrices(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 	to := time.Now()
 	from := to.AddDate(0, 0, -days)
+	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
 	prices, err := store.GetCryptoPricesByDateRange(coinID, from, to)
 	if err != nil {
@@ -132,19 +133,20 @@ func GetCryptoPrices(w http.ResponseWriter, r *http.Request) {
 }
 
 type cryptoChartResponse struct {
-	CoinID string            `json:"coin_id"`
-	Dates  []string          `json:"dates"`
-	Prices []decimal.Decimal `json:"prices"`
+	CoinID      string            `json:"coin_id"`
+	Dates       []string          `json:"dates"`
+	Prices      []decimal.Decimal `json:"prices"`
+	Granularity string            `json:"granularity"`
 }
 
 // GetCryptoChart godoc
 //
 //	@Summary      Get crypto price chart data
-//	@Description  Returns chronologically ordered date labels and closing prices for charting
+//	@Description  Returns chronologically ordered date labels and closing prices for charting. When days=1, returns hourly intraday data; otherwise returns daily data.
 //	@Tags         Crypto
 //	@Produce      json
 //	@Param        coin  query  string  false  "Coin ID (e.g. bitcoin, ethereum)"
-//	@Param        days  query  int     false  "Number of days to look back (default 30)"
+//	@Param        days  query  int     false  "Number of days to look back (default 30); use 1 for intraday hourly data"
 //	@Success      200   {object}  cryptoChartResponse
 //	@Failure      500   {object}  ResponseFailure
 //	@Router       /api/crypto/chart [get]
@@ -161,7 +163,37 @@ func GetCryptoChart(w http.ResponseWriter, r *http.Request) {
 
 	store := repository.GetSingleton()
 	to := time.Now()
+
+	if days == 1 {
+		from := to.Add(-24 * time.Hour)
+		intradayPrices, err := store.GetCryptoIntradayByRange(coinID, from, to)
+		if err != nil {
+			logger.Logger.Errorf("[api/crypto/chart] Failed to get crypto intraday prices: %v", err)
+			ResponseError(w, http.StatusInternalServerError, "Failed to get crypto intraday prices")
+			return
+		}
+
+		dates := make([]string, 0, len(intradayPrices))
+		closePrices := make([]decimal.Decimal, 0, len(intradayPrices))
+
+		// intraday prices are ordered DESC from DB — reverse for chart (oldest first)
+		for i := len(intradayPrices) - 1; i >= 0; i-- {
+			p := intradayPrices[i]
+			dates = append(dates, p.Timestamp.Format("2006-01-02 15:04"))
+			closePrices = append(closePrices, p.Price)
+		}
+
+		ResponseSuccess(w, http.StatusOK, cryptoChartResponse{
+			CoinID:      coinID,
+			Dates:       dates,
+			Prices:      closePrices,
+			Granularity: "1h",
+		})
+		return
+	}
+
 	from := to.AddDate(0, 0, -days)
+	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
 	prices, err := store.GetCryptoPricesByDateRange(coinID, from, to)
 	if err != nil {
@@ -181,8 +213,9 @@ func GetCryptoChart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ResponseSuccess(w, http.StatusOK, cryptoChartResponse{
-		CoinID: coinID,
-		Dates:  dates,
-		Prices: closePrices,
+		CoinID:      coinID,
+		Dates:       dates,
+		Prices:      closePrices,
+		Granularity: "1d",
 	})
 }

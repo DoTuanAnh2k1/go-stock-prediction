@@ -138,6 +138,12 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("POST /api/trigger/sp500-crawler", AuthRequired(TriggerSP500CrawlerHandler))
 	mux.HandleFunc("POST /api/trigger/sp500-predict", AuthRequired(TriggerSP500PredictHandler))
 
+	// Backup APIs (require JWT authentication; trigger and delete require admin)
+	mux.HandleFunc("POST /api/trigger/backup", AuthRequired(TriggerBackupHandler))
+	mux.HandleFunc("GET /api/backups", AuthRequired(ListBackupsHandler))
+	mux.HandleFunc("GET /api/backups/{filename}", AuthRequired(DownloadBackupHandler))
+	mux.HandleFunc("DELETE /api/backups/{filename}", AuthRequired(DeleteBackupHandler))
+
 	// User management APIs (admin only)
 	mux.HandleFunc("GET /api/users", ListUsersHandler)
 	mux.HandleFunc("POST /api/users", CreateUserHandler)
@@ -258,6 +264,10 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  POST /api/trigger/fuel-predict")
 	logger.Logger.Info("  POST /api/trigger/sp500-crawler")
 	logger.Logger.Info("  POST /api/trigger/sp500-predict")
+	logger.Logger.Info("  POST /api/trigger/backup")
+	logger.Logger.Info("  GET  /api/backups")
+	logger.Logger.Info("  GET  /api/backups/{filename}")
+	logger.Logger.Info("  DELETE /api/backups/{filename}")
 	logger.Logger.Info("  GET  /api/sp500/latest")
 	logger.Logger.Info("  GET  /api/sp500/prices")
 	logger.Logger.Info("  GET  /api/sp500/chart")

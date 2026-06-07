@@ -99,6 +99,7 @@ func GetFuelPrices(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 	to := time.Now()
 	from := to.AddDate(0, 0, -days)
+	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
 	prices, err := store.GetFuelPricesByDateRange(productType, from, to)
 	if err != nil {
@@ -152,6 +153,7 @@ func GetFuelChart(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 	to := time.Now()
 	from := to.AddDate(0, 0, -days)
+	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
 	prices, err := store.GetFuelPricesByDateRange(productType, from, to)
 	if err != nil {

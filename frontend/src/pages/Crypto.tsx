@@ -46,6 +46,7 @@ interface CryptoLatestItem {
 interface ChartData {
   dates: string[];
   prices: number[];
+  granularity?: string;
 }
 
 interface PredictionItem {
@@ -286,6 +287,7 @@ export default function Crypto() {
         setChart({
           dates: Array.isArray(v.dates) ? v.dates : [],
           prices: Array.isArray(v.prices) ? v.prices.map(num) : [],
+          granularity: v.granularity ?? '1d',
         });
       })
       .catch(() => {})
@@ -309,7 +311,10 @@ export default function Crypto() {
 
   const activeCoinDef = COINS.find((c) => c.id === activeCoin) || COINS[0];
   const predChartCoinDef = COINS.find((c) => c.id === predChartCoin) || COINS[0];
-  const chartLabels = chart.dates.map(ddmm);
+  const fmtLabel = chart.granularity === '1h'
+    ? (s: string) => s.length >= 16 ? s.slice(11, 16) : s
+    : ddmm;
+  const chartLabels = chart.dates.map(fmtLabel);
 
   // Deduplicate predictions: keep only the first occurrence per (coin + algorithm)
   const dedupPreds = (() => {

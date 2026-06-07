@@ -103,6 +103,7 @@ func GetGoldPrices(w http.ResponseWriter, r *http.Request) {
 
 	to := time.Now()
 	from := to.AddDate(0, 0, -days)
+	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
 	prices, err := store.GetGoldPricesByDateRange(source, productType, from, to)
 	if err != nil {
@@ -161,6 +162,7 @@ func GetGoldChart(w http.ResponseWriter, r *http.Request) {
 
 	to := time.Now()
 	from := to.AddDate(0, 0, -days)
+	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
 	prices, err := store.GetGoldPricesByDateRange(source, productType, from, to)
 	if err != nil {

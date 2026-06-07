@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Panel } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LangContext';
 
 interface UserItem {
   id: number;
@@ -15,6 +16,7 @@ function getToken() {
 
 export default function Users() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -32,7 +34,7 @@ export default function Users() {
       const res = await fetch('/api/users', {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
-      if (!res.ok) throw new Error('Không thể tải danh sách người dùng');
+      if (!res.ok) throw new Error(t.users.cannotLoad);
       const data = await res.json();
       setUsers(data || []);
     } catch (e: any) {
@@ -58,7 +60,7 @@ export default function Users() {
         body: JSON.stringify({ username: newUsername, password: newPassword, role: newRole }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Tạo người dùng thất bại');
+      if (!res.ok) throw new Error(data.message || t.users.createFail);
       setNewUsername('');
       setNewPassword('');
       setNewRole('user');
@@ -71,7 +73,7 @@ export default function Users() {
   };
 
   const handleDelete = async (u: UserItem) => {
-    if (!confirm(`Xóa người dùng "${u.username}"?`)) return;
+    if (!confirm(`${t.users.deleteConfirm} "${u.username}"?`)) return;
     try {
       await fetch(`/api/users/${u.id}`, {
         method: 'DELETE',
@@ -85,11 +87,11 @@ export default function Users() {
 
   return (
     <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <Panel title="Tạo người dùng mới">
+      <Panel title={t.users.createUser}>
         <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 360 }}>
           {createError && <div className="modal-error">{createError}</div>}
           <div className="field">
-            <label className="field__label">Tên đăng nhập</label>
+            <label className="field__label">{t.users.username}</label>
             <input
               className="field__input"
               value={newUsername}
@@ -99,7 +101,7 @@ export default function Users() {
             />
           </div>
           <div className="field">
-            <label className="field__label">Mật khẩu</label>
+            <label className="field__label">{t.users.password}</label>
             <input
               className="field__input"
               type="password"
@@ -110,7 +112,7 @@ export default function Users() {
             />
           </div>
           <div className="field">
-            <label className="field__label">Vai trò</label>
+            <label className="field__label">{t.users.role}</label>
             <select
               className="field__input"
               value={newRole}
@@ -121,29 +123,29 @@ export default function Users() {
             </select>
           </div>
           <button className="btn btn--primary" type="submit" disabled={creating}>
-            {creating ? 'Đang tạo...' : 'Tạo người dùng'}
+            {creating ? t.users.creating : t.users.createBtn}
           </button>
         </form>
       </Panel>
 
       <Panel
-        title="Danh sách người dùng"
-        sub={loading ? undefined : `${users.length} người dùng`}
+        title={t.users.userList}
+        sub={loading ? undefined : `${users.length} ${t.users.people}`}
       >
         {loading ? (
-          <div style={{ padding: 16, color: 'var(--text-2)' }}>Đang tải...</div>
+          <div style={{ padding: 16, color: 'var(--text-2)' }}>{t.users.loading}</div>
         ) : error ? (
           <div className="modal-error" style={{ margin: 0 }}>{error}</div>
         ) : users.length === 0 ? (
-          <div style={{ padding: 16, color: 'var(--text-3)' }}>Chưa có người dùng nào.</div>
+          <div style={{ padding: 16, color: 'var(--text-3)' }}>{t.users.noUsers}</div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>ID</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>Username</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>Vai trò</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>Ngày tạo</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>{t.users.colId}</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>{t.users.colUsername}</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>{t.users.colRole}</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>{t.users.colCreatedAt}</th>
                 <th style={{ width: 48 }}></th>
               </tr>
             </thead>

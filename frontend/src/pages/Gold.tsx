@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { Panel, KPI, Icon, Chg, Seg, ConfBar } from '../components/ui';
 import { Sparkline, LineChart } from '../components/charts';
-import { crawlGold, predictGold, goldBacktest } from '../api';
+import { crawlGold, predictGold, goldBacktest, goldChart } from '../api';
 import { vnsToast } from '../components/ui';
 import { useLanguage } from '../context/LangContext';
 
@@ -85,6 +85,20 @@ export default function Gold() {
   const [confirmedGoldFilter, setConfirmedGoldFilter] = useState('');
   const [predPage, setPredPage] = useState(0);
   const [confirmedPage, setConfirmedPage] = useState(0);
+  const [chartData, setChartData] = useState<{ labels: string[]; sell: number[] }>({ labels: [], sell: [] });
+  const [chartLoading, setChartLoading] = useState(false);
+
+  const src = srcs.find((g) => g.id === active) || srcs[0] || null;
+  const isOz = src ? src.unit === 'oz' : false;
+
+  useEffect(() => {
+    if (!src) return;
+    const daysN = parseInt(days, 10) || 180;
+    setChartLoading(true);
+    goldChart(src.source, src.product, daysN)
+      .then((c) => setChartData({ labels: c.labels, sell: c.sell }))
+      .finally(() => setChartLoading(false));
+  }, [src?.id, days]);
 
   useEffect(() => {
     fetch('/api/gold/predictions/latest-results', { headers: { Accept: 'application/json' } })
@@ -98,11 +112,8 @@ export default function Gold() {
       .catch(() => {});
   }, []);
 
-  const src = srcs.find((g) => g.id === active) || srcs[0] || null;
-  const isOz = src ? src.unit === 'oz' : false;
-  const n = days === '30' ? 30 : days === '90' ? 90 : 180;
-  const hist = src ? (src.hist || []).slice(-n) : [];
-  const histLabels = src ? (src.histLabels || []).slice(-n) : [];
+  const hist = chartData.sell;
+  const histLabels = chartData.labels;
 
   const find = (pred: (g: any) => boolean) => srcs.find(pred);
   let kpis = [
@@ -188,18 +199,23 @@ export default function Gold() {
             <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{src.vendor} · {src.region}</span>
           </div>
         )}
-        {hist.length > 0
-          ? <LineChart
-              series={[{ name: src!.name, data: hist, color: 'var(--gold)' }]}
-              labels={histLabels.length
-                ? histLabels.map((l) => { const p = l.slice(5).split('-'); return p[1] + '/' + p[0]; })
-                : hist.map((_, i) => `${i + 1}`)}
-              height={540} area yFmt={fmtGold} valueFmt={fmtFull} padL={58}
-            />
-          : <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        {chartLoading
+          ? <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div className="empty__icon"><Icon name="layers" size={18} /></div>
-              <p>{t.gold.noGoldHistory}</p>
+              <p>...</p>
             </div>
+          : hist.length > 0
+            ? <LineChart
+                series={[{ name: src!.name, data: hist, color: 'var(--gold)' }]}
+                labels={histLabels.length
+                  ? histLabels.map((l) => { const p = l.slice(5).split('-'); return p[1] + '/' + p[0]; })
+                  : hist.map((_, i) => `${i + 1}`)}
+                height={540} area yFmt={fmtGold} valueFmt={fmtFull} padL={58}
+              />
+            : <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div className="empty__icon"><Icon name="layers" size={18} /></div>
+                <p>{t.gold.noGoldHistory}</p>
+              </div>
         }
       </Panel>
 

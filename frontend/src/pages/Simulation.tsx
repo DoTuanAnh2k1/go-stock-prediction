@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Panel, KPI, Icon, Chg, vnsToast } from '../components/ui';
 import { BarChart } from '../components/charts';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LangContext';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -138,6 +139,7 @@ type SortKey =
 export default function Simulation() {
   const { isLoggedIn } = useAuth();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [summary, setSummary] = useState<LeaderboardSummary | null>(null);
@@ -216,7 +218,7 @@ export default function Simulation() {
         </div>
         <div className="empty section-gap">
           <div className="empty__icon"><Icon name="layers" size={18} /></div>
-          <p>Đang tải dữ liệu Simulation...</p>
+          <p>{t.simulation.loadingData}</p>
         </div>
       </div>
     );
@@ -227,23 +229,23 @@ export default function Simulation() {
       {/* Summary KPI row */}
       <div className="grid grid--kpis section-gap">
         <KPI
-          label="Tổng số bots"
+          label={t.simulation.totalBots}
           value={summary?.total_bots != null ? String(summary.total_bots) : entries.length.toString()}
-          sub="đang được theo dõi"
+          sub={t.simulation.monitored}
         />
         <KPI
-          label="Thị trường tốt nhất"
+          label={t.simulation.bestMarket}
           value={summary?.best_market || '—'}
-          sub="theo avg return"
+          sub={t.simulation.byAvgReturn}
           accent
         />
         <KPI
-          label="Thuật toán tốt nhất"
+          label={t.simulation.bestAlgo}
           value={summary?.best_algorithm ? algoLabel(summary.best_algorithm) : '—'}
-          sub="avg performance"
+          sub={t.simulation.avgPerformance}
         />
         <KPI
-          label="Avg Return"
+          label={t.simulation.avgReturn}
           value={summary?.avg_return_pct != null ? summary.avg_return_pct.toFixed(2) + '%' : '—'}
           chgPct={summary?.avg_return_pct}
         />
@@ -253,7 +255,7 @@ export default function Simulation() {
       {error && (
         <div className="empty section-gap" style={{ padding: '20px', background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="empty__icon"><Icon name="layers" size={18} /></div>
-          <p style={{ color: 'var(--down)' }}>Không thể tải dữ liệu. Backend chưa có dữ liệu simulation.</p>
+          <p style={{ color: 'var(--down)' }}>{t.simulation.cannotLoad}</p>
           <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4 }}>{error}</p>
         </div>
       )}
@@ -261,7 +263,7 @@ export default function Simulation() {
       {/* Charts row */}
       {!error && top8.length > 0 && (
         <div className="grid grid--halves section-gap">
-          <Panel title="Top bots theo Return %" sub="cao nhất">
+          <Panel title={t.simulation.topReturnBots} sub={t.simulation.highest}>
             <BarChart
               data={barData}
               labels={barLabels}
@@ -271,7 +273,7 @@ export default function Simulation() {
               valueFmt={(v) => v.toFixed(2) + '%'}
             />
           </Panel>
-          <Panel title="Phân bố thị trường" sub="theo số bot">
+          <Panel title={t.simulation.marketDist} sub={t.simulation.byBotCount}>
             <MarketDistribution entries={entries} />
           </Panel>
         </div>
@@ -279,8 +281,8 @@ export default function Simulation() {
 
       {/* Filter bar */}
       <Panel
-        title="Bảng xếp hạng Simulation"
-        sub={sorted.length + ' bots'}
+        title={t.simulation.leaderboard}
+        sub={sorted.length + ' ' + t.simulation.bots}
         className="section-gap"
         tools={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -314,7 +316,7 @@ export default function Simulation() {
               }}
             >
               {ALGORITHMS.map((a) => (
-                <option key={a} value={a}>{a === 'ALL' ? 'Tất cả thuật toán' : algoLabel(a)}</option>
+                <option key={a} value={a}>{a === 'ALL' ? t.simulation.allAlgos : algoLabel(a)}</option>
               ))}
             </select>
             {isLoggedIn && (
@@ -323,7 +325,7 @@ export default function Simulation() {
                 style={{ background: 'var(--accent)', borderColor: 'var(--accent)', color: '#fff' }}
                 onClick={() =>
                   authPost('/api/simulation/run-all').then((ok) =>
-                    vnsToast(ok ? 'Đã gửi yêu cầu chạy backtest tất cả bots' : 'Không thể gửi yêu cầu')
+                    vnsToast(ok ? t.simulation.runAllBacktest : t.simulation.cannotSendRequest)
                   )
                 }
               >
@@ -337,18 +339,18 @@ export default function Simulation() {
         {sorted.length === 0 ? (
           <div className="empty" style={{ padding: '48px 20px' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Chưa có dữ liệu simulation. Hãy chạy backtest trước.</p>
+            <p>{t.simulation.noSimData}</p>
             {isLoggedIn && (
               <button
                 className="btn btn--sm"
                 style={{ marginTop: 16, background: 'var(--accent)', borderColor: 'var(--accent)', color: '#fff' }}
                 onClick={() =>
                   authPost('/api/simulation/run-all').then((ok) =>
-                    vnsToast(ok ? 'Đã gửi yêu cầu chạy backtest' : 'Không thể gửi yêu cầu')
+                    vnsToast(ok ? t.simulation.runAllBacktest : t.simulation.cannotSendRequest)
                   )
                 }
               >
-                <Icon name="play" size={13} />Chạy backtest ngay
+                <Icon name="play" size={13} />{t.simulation.runNow}
               </button>
             )}
           </div>
@@ -357,13 +359,13 @@ export default function Simulation() {
             <table className="tbl">
               <thead>
                 <tr>
-                  {th('#', 'rank', 'c')}
-                  <th>Bot</th>
-                  <th>Thị trường</th>
-                  <th className="c">Thuật toán</th>
-                  {isLoggedIn && <th className="c">Status</th>}
-                  <th className="r">Vốn ban đầu</th>
-                  <th className="r">Giá trị cuối</th>
+                  {th(t.simulation.colRank, 'rank', 'c')}
+                  <th>{t.simulation.colBot}</th>
+                  <th>{t.simulation.colMarket}</th>
+                  <th className="c">{t.simulation.colAlgo}</th>
+                  {isLoggedIn && <th className="c">{t.simulation.colStatus}</th>}
+                  <th className="r">{t.simulation.colInitCapital}</th>
+                  <th className="r">{t.simulation.colFinalValue}</th>
                   {th('Return%', 'total_return_pct', 'r')}
                   {th('Annlzd%', 'annualized_return_pct', 'r')}
                   {th('Sharpe', 'sharpe_ratio', 'r')}
@@ -466,11 +468,12 @@ export default function Simulation() {
 // ── Market distribution mini chart ───────────────────────────────────────────
 
 function MarketDistribution({ entries }: { entries: LeaderboardEntry[] }) {
+  const { t } = useLanguage();
   if (entries.length === 0) {
     return (
       <div className="empty" style={{ height: 390, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <div className="empty__icon"><Icon name="layers" size={18} /></div>
-        <p>Chưa có dữ liệu</p>
+        <p>{t.simulation.noData}</p>
       </div>
     );
   }

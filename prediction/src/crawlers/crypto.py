@@ -2,13 +2,17 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo
+
+_VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 import requests
 
 from src.crawlers.base import DEFAULT_HEADERS, BaseCrawler
 from src.database import repository as repo
+from src.database.models import CryptoIntradayPrice
 from src.utils.logger import get_logger
 
 log = get_logger("crawler.crypto")
@@ -21,6 +25,10 @@ COINGECKO_SIMPLE_PRICE = (
 COINGECKO_HISTORY = (
     "https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
     "?vs_currency=usd&days=180&interval=daily"
+)
+COINGECKO_HOURLY = (
+    "https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
+    "?vs_currency=usd&days=2"
 )
 REQUEST_DELAY = 3  # 3s between coins for free tier rate limit
 
@@ -77,6 +85,49 @@ class CryptoCrawler(BaseCrawler):
             errors += 1
 
         log.info("crypto.crawl.done", saved=saved, errors=errors)
+        return saved
+
+    def crawl_intraday(self) -> int:
+        """Fetch last 2d of hourly data from CoinGecko for each coin and persist them."""
+        log.info("crypto.intraday.start")
+        saved = 0
+
+        for coin_id, _symbol in COINS:
+            try:
+                url = COINGECKO_HOURLY.format(coin_id=coin_id)
+                resp = self._session.get(url, timeout=self._timeout)
+                resp.raise_for_status()
+                data = resp.json()
+
+                prices_data = data.get("prices", [])
+                mcaps_data = data.get("market_caps", [])
+                volumes_data = data.get("total_volumes", [])
+
+                for i, (ts_ms, price) in enumerate(prices_data):
+                    dt = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).astimezone(_VN_TZ).replace(
+                        minute=0, second=0, microsecond=0, tzinfo=None
+                    )
+                    mcap = mcaps_data[i][1] if i < len(mcaps_data) else 0
+                    vol = volumes_data[i][1] if i < len(volumes_data) else 0
+
+                    record = CryptoIntradayPrice(
+                        coin_id=coin_id,
+                        timestamp=dt,
+                        price=Decimal(str(price)),
+                        market_cap=Decimal(str(mcap or 0)),
+                        volume=Decimal(str(vol or 0)),
+                    )
+                    repo.upsert_crypto_intraday(record)
+                    saved += 1
+
+                log.debug("crypto.intraday.coin", coin_id=coin_id, rows=len(prices_data))
+
+            except Exception as exc:
+                log.warning("crypto.intraday.error", coin_id=coin_id, error=str(exc))
+
+            time.sleep(REQUEST_DELAY)
+
+        log.info("crypto.intraday.done", saved=saved)
         return saved
 
     def crawl_history(self, days: int = 180) -> int:

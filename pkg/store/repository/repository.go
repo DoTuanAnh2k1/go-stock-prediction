@@ -28,12 +28,15 @@ type DatabaseStore interface {
 	CronScheduleStore
 	NasdaqPriceStore
 	NasdaqPredictionStore
+	NasdaqIntradayStore
 	CryptoPriceStore
 	CryptoPredictionStore
+	CryptoIntradayStore
 	FuelPriceStore
 	FuelPredictionStore
 	SP500PriceStore
 	SP500PredictionStore
+	SP500IntradayStore
 	SimulationStore
 }
 

@@ -65,12 +65,22 @@ def job_crawl_gold() -> None:
 
 def job_crawl_nasdaq() -> None:
     from src.crawlers.nasdaq import NasdaqCrawler
-    _run_pipeline("NASDAQ100", lambda: NasdaqCrawler().crawl())
+    crawler = NasdaqCrawler()
+    _run_pipeline("NASDAQ100", lambda: crawler.crawl())
+    try:
+        crawler.crawl_intraday()
+    except Exception as exc:
+        log.warning("job.crawl_nasdaq.intraday.error", error=str(exc))
 
 
 def job_crawl_crypto() -> None:
     from src.crawlers.crypto import CryptoCrawler
-    _run_pipeline("CRYPTO", lambda: CryptoCrawler().crawl())
+    crawler = CryptoCrawler()
+    _run_pipeline("CRYPTO", lambda: crawler.crawl())
+    try:
+        crawler.crawl_intraday()
+    except Exception as exc:
+        log.warning("job.crawl_crypto.intraday.error", error=str(exc))
 
 
 def job_crawl_fuel() -> None:
@@ -107,7 +117,12 @@ def job_daily_reconcile() -> None:
 
 def job_crawl_sp500() -> None:
     from src.crawlers.sp500 import SP500Crawler
-    _run_pipeline("SP500", lambda: SP500Crawler().crawl())
+    crawler = SP500Crawler()
+    _run_pipeline("SP500", lambda: crawler.crawl())
+    try:
+        crawler.crawl_intraday()
+    except Exception as exc:
+        log.warning("job.crawl_sp500.intraday.error", error=str(exc))
 
 
 def job_gold_predict() -> None:
@@ -232,6 +247,72 @@ def job_train_sp500() -> None:
         log.error("job.train_sp500.error", error=str(exc))
 
 
+def job_backup_database() -> None:
+    """Create a compressed mysqldump backup of the database."""
+    import subprocess
+    import os
+    import datetime
+
+    from src.config import get_settings
+    settings = get_settings()
+
+    backup_dir = os.environ.get("BACKUP_DIR", "/backups")
+    os.makedirs(backup_dir, exist_ok=True)
+
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"backup_{ts}.sql.gz"
+    filepath_out = os.path.join(backup_dir, filename)
+
+    try:
+        dump_cmd = [
+            "mysqldump",
+            f"--host={settings.mysql_host}",
+            f"--port={settings.mysql_port}",
+            f"--user={settings.mysql_user}",
+            f"--password={settings.mysql_password}",
+            "--single-transaction",
+            "--routines",
+            "--triggers",
+            settings.mysql_db_name,
+        ]
+
+        with open(filepath_out, "wb") as f:
+            dump_proc = subprocess.Popen(dump_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            gzip_proc = subprocess.Popen(["gzip", "-c"], stdin=dump_proc.stdout, stdout=f, stderr=subprocess.PIPE)
+            dump_proc.stdout.close()
+            gzip_proc.wait()
+            dump_proc.wait()
+
+            if dump_proc.returncode != 0:
+                _, stderr_data = dump_proc.communicate()
+                raise RuntimeError(f"mysqldump failed (rc={dump_proc.returncode}): {stderr_data.decode()}")
+
+        size = os.path.getsize(filepath_out)
+        log.info("job.backup.done", filename=filename, size_bytes=size)
+
+        # Keep only the 10 most recent backups
+        _cleanup_old_backups(backup_dir, keep=10)
+
+    except Exception as exc:
+        log.error("job.backup.error", error=str(exc))
+        if os.path.exists(filepath_out):
+            os.remove(filepath_out)
+
+
+def _cleanup_old_backups(backup_dir: str, keep: int = 10) -> None:
+    """Remove old backups, keeping only the `keep` most recent files."""
+    try:
+        files = sorted(
+            [f for f in os.listdir(backup_dir) if f.startswith("backup_") and f.endswith(".sql.gz")],
+            reverse=True,
+        )
+        for old_file in files[keep:]:
+            os.remove(os.path.join(backup_dir, old_file))
+            log.info("job.backup.cleanup", removed=old_file)
+    except Exception as exc:
+        log.warning("job.backup.cleanup.error", error=str(exc))
+
+
 # Job registry — maps job_key → callable
 JOB_FUNCTIONS = {
     "crawler_stock": job_crawl_vn30,
@@ -257,4 +338,5 @@ JOB_FUNCTIONS = {
     "train_crypto": job_train_crypto,
     "train_fuel": job_train_fuel,
     "train_sp500": job_train_sp500,
+    "daily_backup": job_backup_database,
 }

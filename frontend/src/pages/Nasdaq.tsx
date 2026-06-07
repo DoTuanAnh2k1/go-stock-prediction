@@ -44,6 +44,7 @@ interface NasdaqLatestItem {
 interface ChartData {
   dates: string[];
   prices: number[];
+  granularity?: string;
 }
 
 interface PredictionItem {
@@ -294,6 +295,7 @@ export default function Nasdaq() {
         setChart({
           dates: Array.isArray(v.dates) ? v.dates : [],
           prices: Array.isArray(v.prices) ? v.prices.map(num) : [],
+          granularity: v.granularity ?? '1d',
         });
       }
       if (predChartRes.status === 'fulfilled' && predChartRes.value) {
@@ -324,7 +326,10 @@ export default function Nasdaq() {
   })();
 
   const n = parseInt(days);
-  const chartLabels = chart.dates.map(ddmm);
+  const fmtLabel = chart.granularity === '1h'
+    ? (s: string) => s.length >= 16 ? s.slice(11, 16) : s
+    : ddmm;
+  const chartLabels = chart.dates.map(fmtLabel);
 
   const predSymbols = Array.from(new Set(preds.map((p) => p.symbol).filter(Boolean))).sort() as string[];
   const filteredPreds = predSym ? preds.filter((p) => p.symbol === predSym) : preds;

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Panel, KPI, Icon, Chg, vnsToast } from '../components/ui';
 import { LineChart } from '../components/charts';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LangContext';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -181,6 +182,7 @@ export default function SimulationBot() {
   const { botId } = useParams<{ botId: string }>();
   const { isLoggedIn } = useAuth();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const [bot, setBot] = useState<BotDetail | null>(null);
   const [chart, setChart] = useState<BotChart | null>(null);
@@ -244,7 +246,7 @@ export default function SimulationBot() {
       <div className="content__inner fade">
         <div className="empty section-gap" style={{ padding: '80px 20px' }}>
           <div className="empty__icon"><Icon name="layers" size={18} /></div>
-          <p>Đang tải chi tiết bot...</p>
+          <p>{t.simulationBot.loadingBot}</p>
         </div>
       </div>
     );
@@ -255,10 +257,10 @@ export default function SimulationBot() {
       <div className="content__inner fade">
         <div className="empty section-gap" style={{ padding: '80px 20px' }}>
           <div className="empty__icon"><Icon name="layers" size={18} /></div>
-          <p style={{ color: 'var(--down)' }}>Không tìm thấy bot hoặc chưa có dữ liệu simulation.</p>
+          <p style={{ color: 'var(--down)' }}>{t.simulationBot.botNotFound}</p>
           {error && <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4 }}>{error}</p>}
           <button className="btn btn--sm" style={{ marginTop: 16 }} onClick={() => navigate('/simulation')}>
-            ← Quay lại Leaderboard
+            {t.simulationBot.backToLeaderboard}
           </button>
         </div>
       </div>
@@ -285,7 +287,7 @@ export default function SimulationBot() {
           style={{ display: 'flex', alignItems: 'center', gap: 6 }}
         >
           <Icon name="arrowUp" size={13} style={{ transform: 'rotate(-90deg)' }} />
-          Leaderboard
+          {t.simulationBot.backToLeaderboard}
         </button>
         <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.5px', flex: 1 }}>
           {bot.display_name}
@@ -342,7 +344,7 @@ export default function SimulationBot() {
             style={{ background: 'var(--accent)', borderColor: 'var(--accent)', color: '#fff' }}
             onClick={() =>
               authPost(`/api/simulation/bots/${botId}/run`).then((ok) =>
-                vnsToast(ok ? 'Đã gửi yêu cầu chạy backtest cho bot này' : 'Không thể gửi yêu cầu')
+                vnsToast(ok ? t.simulationBot.runBacktestRequest : t.simulationBot.cannotSendRequest)
               )
             }
           >
@@ -380,17 +382,17 @@ export default function SimulationBot() {
         <KPI
           label="Sharpe Ratio"
           value={(kpis?.sharpe_ratio ?? 0).toFixed(2)}
-          sub={(kpis?.sharpe_ratio ?? 0) >= 1.5 ? 'Xuất sắc' : (kpis?.sharpe_ratio ?? 0) >= 1 ? 'Tốt' : 'Thấp'}
+          sub={(kpis?.sharpe_ratio ?? 0) >= 1.5 ? t.simulationBot.sharpeExcellent : (kpis?.sharpe_ratio ?? 0) >= 1 ? t.simulationBot.sharpeGood : t.simulationBot.sharpeLow}
         />
         <KPI
           label="Win Rate"
           value={(kpis?.win_rate_pct ?? 0).toFixed(1) + '%'}
-          sub={String(kpis?.total_trades ?? 0) + ' giao dịch'}
+          sub={String(kpis?.total_trades ?? 0) + ' ' + t.simulationBot.transactions}
         />
         <KPI
           label="Max Drawdown"
           value={(kpis?.max_drawdown_pct ?? 0).toFixed(1) + '%'}
-          sub="rủi ro tối đa"
+          sub={t.simulationBot.maxRisk}
         />
       </div>
 
@@ -406,19 +408,19 @@ export default function SimulationBot() {
 
       {/* Portfolio chart */}
       <Panel
-        title="Biểu đồ danh mục"
+        title={t.simulationBot.portfolioChart}
         className="section-gap"
         tools={
           <div className="seg">
-            <button className={activeChart === 'value' ? 'active' : ''} onClick={() => setActiveChart('value')}>Giá trị</button>
-            <button className={activeChart === 'return' ? 'active' : ''} onClick={() => setActiveChart('return')}>Return %</button>
+            <button className={activeChart === 'value' ? 'active' : ''} onClick={() => setActiveChart('value')}>{t.simulationBot.chartValue}</button>
+            <button className={activeChart === 'return' ? 'active' : ''} onClick={() => setActiveChart('return')}>{t.simulationBot.chartReturn}</button>
           </div>
         }
       >
         {chartLoading ? (
           <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="refresh" size={18} /></div>
-            <p>Đang tải biểu đồ...</p>
+            <p>{t.simulationBot.loadingChart}</p>
           </div>
         ) : chart && chart.dates.length > 1 ? (
           <>
@@ -456,15 +458,15 @@ export default function SimulationBot() {
           <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
             <p>{chart && chart.dates.length === 1
-              ? `Chỉ có 1 ngày dữ liệu (${chart.dates[0]}). Cần ít nhất 2 ngày để vẽ biểu đồ.`
-              : 'Chưa có dữ liệu biểu đồ. Hãy chạy backtest trước.'
+              ? `${t.simulationBot.onlyOneDay} (${chart.dates[0]}). ${t.simulationBot.needMinTwoDays}`
+              : t.simulationBot.noChartData
             }</p>
           </div>
         )}
       </Panel>
 
       {/* Bot config panel */}
-      <Panel title="Cấu hình bot" sub="chiến lược giao dịch" className="section-gap">
+      <Panel title={t.simulationBot.botConfig} sub={t.simulationBot.tradingStrategy} className="section-gap">
         <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', fontSize: 13 }}>
           <ConfigRow label="Buy threshold" value={(bot.buy_threshold ?? 0).toFixed(1) + '%'} />
           <ConfigRow label="Sell threshold" value={(bot.sell_threshold ?? 0).toFixed(1) + '%'} />
@@ -476,17 +478,17 @@ export default function SimulationBot() {
       </Panel>
 
       {/* Trades table */}
-      <div className="sec-head section-gap"><h2>Lịch sử giao dịch</h2><div className="line"></div></div>
+      <div className="sec-head section-gap"><h2>{t.simulationBot.tradeHistory}</h2><div className="line"></div></div>
       <Panel flush className="section-gap">
         {tradesLoading ? (
           <div className="empty" style={{ padding: 32 }}>
             <div className="empty__icon"><Icon name="refresh" size={18} /></div>
-            <p>Đang tải giao dịch...</p>
+            <p>{t.simulationBot.loadingTrades}</p>
           </div>
         ) : trades.length === 0 ? (
           <div className="empty" style={{ padding: 48 }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>Chưa có giao dịch nào. Hãy chạy backtest trước.</p>
+            <p>{t.simulationBot.noTrades}</p>
           </div>
         ) : (
           <>
@@ -494,17 +496,17 @@ export default function SimulationBot() {
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Mã</th>
-                    <th className="c">Loại</th>
-                    <th>Ngày</th>
-                    <th className="r">Giá</th>
-                    <th className="r">Số lượng</th>
-                    <th className="r">Giá trị</th>
-                    <th className="r">Tín hiệu</th>
+                    <th>{t.simulationBot.colSymbol}</th>
+                    <th className="c">{t.simulationBot.colType}</th>
+                    <th>{t.simulationBot.colDate}</th>
+                    <th className="r">{t.simulationBot.colPrice}</th>
+                    <th className="r">{t.simulationBot.colQuantity}</th>
+                    <th className="r">{t.simulationBot.colValue}</th>
+                    <th className="r">{t.simulationBot.colSignal}</th>
                     <th className="r">Conf.</th>
                     <th className="r">P&L</th>
                     <th className="r">P&L %</th>
-                    <th>Lý do đóng</th>
+                    <th>{t.simulationBot.colCloseReason}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -574,7 +576,7 @@ export default function SimulationBot() {
             {totalPages > 1 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderTop: '1px solid var(--border)', fontSize: 12 }}>
                 <span style={{ color: 'var(--text-3)' }}>
-                  Trang {tradePage}/{totalPages} · {tradeTotal} giao dịch
+                  {t.simulationBot.page} {tradePage}/{totalPages} · {tradeTotal} {t.simulationBot.trades}
                 </span>
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                   <button
@@ -582,14 +584,14 @@ export default function SimulationBot() {
                     disabled={tradePage <= 1}
                     onClick={() => setTradePage(tradePage - 1)}
                   >
-                    ← Trước
+                    {t.simulationBot.pagePrev}
                   </button>
                   <button
                     className="btn btn--sm btn--ghost"
                     disabled={tradePage >= totalPages}
                     onClick={() => setTradePage(tradePage + 1)}
                   >
-                    Tiếp →
+                    {t.simulationBot.pageNext}
                   </button>
                 </div>
               </div>

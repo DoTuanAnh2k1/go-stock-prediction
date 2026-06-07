@@ -46,6 +46,9 @@ services:
       MYSQL_DB_NAME: go_stock_prediction
       MYSQL_DEBUG: "true"
       LOG_LEVEL: DEBUG
+      BACKUP_DIR: "/backups"
+    volumes:
+      - backup_data:/backups
     networks:
       - app-network
 
@@ -77,6 +80,9 @@ services:
       ADMIN_USERNAME: "admin"
       ADMIN_PASSWORD: "admin123"
       JWT_SECRET: "go-stock-prediction-jwt-secret-2024"
+      BACKUP_DIR: "/backups"
+    volumes:
+      - backup_data:/backups
     networks:
       - app-network
 
