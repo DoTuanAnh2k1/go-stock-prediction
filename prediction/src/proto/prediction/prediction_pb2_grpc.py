@@ -146,6 +146,11 @@ class PredictionServiceStub(object):
                 request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
                 response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
                 _registered_method=True)
+        self.ResetSimBots = channel.unary_unary(
+                '/prediction.PredictionService/ResetSimBots',
+                request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
+                response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
+                _registered_method=True)
 
 
 class PredictionServiceServicer(object):
@@ -302,6 +307,12 @@ class PredictionServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ResetSimBots(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_PredictionServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -412,6 +423,11 @@ def add_PredictionServiceServicer_to_server(servicer, server):
             ),
             'TriggerSimulationLiveStep': grpc.unary_unary_rpc_method_handler(
                     servicer.TriggerSimulationLiveStep,
+                    request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
+                    response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
+            ),
+            'ResetSimBots': grpc.unary_unary_rpc_method_handler(
+                    servicer.ResetSimBots,
                     request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
                     response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
             ),
@@ -1010,6 +1026,33 @@ class PredictionService(object):
             request,
             target,
             '/prediction.PredictionService/TriggerSimulationLiveStep',
+            prediction_dot_prediction__pb2.Empty.SerializeToString,
+            prediction_dot_prediction__pb2.TriggerResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ResetSimBots(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/prediction.PredictionService/ResetSimBots',
             prediction_dot_prediction__pb2.Empty.SerializeToString,
             prediction_dot_prediction__pb2.TriggerResponse.FromString,
             options,

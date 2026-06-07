@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from src.algorithms.base import PredictionAlgorithm, PredictionResult
+from src.algorithms.base import PredictionAlgorithm, PredictionResult, get_max_change_pct
 from src.utils.logger import get_logger
 
 log = get_logger("lightgbm")
@@ -186,7 +186,7 @@ class LightGBMPredictor(PredictionAlgorithm):
         pred_return = float(self._model.predict(X_pred)[0])
 
         predicted_price = current * (1 + pred_return)
-        max_change = current * 0.07
+        max_change = current * get_max_change_pct(self._market_key)
         predicted_price = max(current - max_change, min(current + max_change, predicted_price))
         confidence = max(0.3, min(0.9, 0.5 + abs(pred_return) * 5))
 
@@ -240,7 +240,7 @@ class LightGBMPredictor(PredictionAlgorithm):
         pred_return = float(model.predict(X_pred)[0])
 
         predicted_price = current * (1 + pred_return)
-        max_change = current * 0.07
+        max_change = current * get_max_change_pct(self._market_key)
         predicted_price = max(current - max_change, min(current + max_change, predicted_price))
 
         # Confidence based on abs of predicted return (smaller = more uncertain)
@@ -298,8 +298,7 @@ class LightGBMPredictor(PredictionAlgorithm):
 
         return features, targets
 
-    @staticmethod
-    def _ema_fallback(prices: list[float], current: float) -> PredictionResult:
+    def _ema_fallback(self, prices: list[float], current: float) -> PredictionResult:
         arr = np.array(prices, dtype=float)
         period = min(26, len(arr))
         k = 2.0 / (period + 1)
@@ -308,7 +307,7 @@ class LightGBMPredictor(PredictionAlgorithm):
             ema = float(p) * k + ema * (1 - k)
         trend = (ema - current) / current
         predicted = current * (1 + trend * 0.5)
-        max_change = current * 0.07
+        max_change = current * get_max_change_pct(self._market_key)
         predicted = max(current - max_change, min(current + max_change, predicted))
         return PredictionResult(
             predicted_price=predicted,

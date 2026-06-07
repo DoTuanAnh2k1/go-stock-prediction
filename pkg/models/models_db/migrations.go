@@ -24,6 +24,8 @@ var AllModels = []interface{}{
 	&NasdaqIntradayPrice{},
 	&SP500IntradayPrice{},
 	&CryptoIntradayPrice{},
+	&GoldIntradayPrice{},
+	&StockIntradayPrice{},
 	&SimBot{},
 	&SimSession{},
 	&SimTrade{},

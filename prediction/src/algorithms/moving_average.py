@@ -1,15 +1,14 @@
 """VWMA (Volume-Weighted Moving Average) prediction algorithm.
 
 Port of the Go MovingAveragePredictor, translated to NumPy-vectorized operations.
+Step 2 improvement: predict actual price via VWMA trend slope projection +
+RSI momentum scaling instead of the old BUY/SELL signal → tiny %.
 """
 from __future__ import annotations
 
-import random
-import time
-
 import numpy as np
 
-from src.algorithms.base import PredictionAlgorithm, PredictionResult
+from src.algorithms.base import PredictionAlgorithm, PredictionResult, get_max_change_pct
 
 
 class MovingAveragePredictor(PredictionAlgorithm):
@@ -17,7 +16,6 @@ class MovingAveragePredictor(PredictionAlgorithm):
 
     SHORT_PERIOD = 5   # 1 trading week
     LONG_PERIOD = 20   # 1 trading month
-    MAX_DAILY_CHANGE = 0.07  # 7% HOSE daily limit
 
     def get_name(self) -> str:
         return "Volume-Weighted Moving Average"
@@ -32,13 +30,17 @@ class MovingAveragePredictor(PredictionAlgorithm):
         arr = np.array(prices, dtype=float)
         vol_arr = np.array(volumes, dtype=float) if volumes and len(volumes) == len(prices) else None
 
-        short_ma = self._vwma(arr, vol_arr, self.SHORT_PERIOD)
-        long_ma = self._vwma(arr, vol_arr, self.LONG_PERIOD)
         current = float(arr[-1])
 
-        signal = self._generate_signal(short_ma, long_ma, current)
-        confidence = self._adjust_for_vn_session(signal)
-        predicted_price = self._calc_predicted_price(current, signal, confidence)
+        # Compute VWMA series for trend slope extraction
+        short_ma = self._vwma(arr, vol_arr, self.SHORT_PERIOD)
+        long_ma = self._vwma(arr, vol_arr, self.LONG_PERIOD)
+
+        # RSI for momentum scaling
+        rsi = self.calc_rsi(arr)
+
+        confidence = self._calc_confidence(short_ma, long_ma)
+        predicted_price = self._calc_predicted_price(arr, vol_arr, current, rsi)
 
         return PredictionResult(
             predicted_price=predicted_price,
@@ -62,68 +64,76 @@ class MovingAveragePredictor(PredictionAlgorithm):
             return float(np.sum(window_prices * window_volumes) / np.sum(window_volumes))
         return float(np.mean(window_prices))
 
-    def _generate_signal(self, short_ma: float, long_ma: float, current: float) -> dict:
-        direction = "HOLD"
-        strength = 0.5
-
-        if short_ma == 0 or long_ma == 0:
-            return {"direction": direction, "strength": strength}
-
-        ma_diff_pct = (short_ma - long_ma) / long_ma * 100
-
-        if short_ma > long_ma:
-            direction = "BUY"
-            strength = min(1.0, 0.5 + abs(ma_diff_pct) / 10)
-        elif short_ma < long_ma:
-            direction = "SELL"
-            strength = min(1.0, 0.5 + abs(ma_diff_pct) / 10)
-
-        # Adjust based on current price vs MAs
-        if current > short_ma and current > long_ma:
-            if direction == "BUY":
-                strength *= 1.2
+    def _vwma_series(self, prices: np.ndarray, volumes: np.ndarray | None, period: int) -> np.ndarray:
+        """Compute a rolling VWMA series (length = len(prices) - period + 1)."""
+        result = []
+        for i in range(period - 1, len(prices)):
+            wp = prices[i - period + 1 : i + 1]
+            if volumes is not None and len(volumes) > i:
+                wv = volumes[i - period + 1 : i + 1]
+                wv = np.where(wv > 0, wv, 1.0)
+                result.append(float(np.sum(wp * wv) / np.sum(wv)))
             else:
-                strength *= 0.8
-        elif current < short_ma and current < long_ma:
-            if direction == "SELL":
-                strength *= 1.2
-            else:
-                strength *= 0.8
+                result.append(float(np.mean(wp)))
+        return np.array(result, dtype=float)
 
-        strength = max(0.1, min(1.0, strength))
-        return {"direction": direction, "strength": strength}
+    def _calc_confidence(self, short_ma: float, long_ma: float) -> float:
+        """Derive confidence from MA separation magnitude."""
+        if long_ma == 0:
+            return 0.50
+        ma_diff_pct = abs(short_ma - long_ma) / long_ma
+        # Stronger divergence → higher confidence, capped at 0.85
+        confidence = 0.40 + min(ma_diff_pct * 10, 0.45)
+        return round(max(0.30, min(0.85, confidence)), 4)
 
-    def _adjust_for_vn_session(self, signal: dict) -> float:
-        base_confidence = signal["strength"] * 0.75
-        hour = time.localtime().tm_hour
+    def _calc_predicted_price(
+        self,
+        arr: np.ndarray,
+        vol_arr: np.ndarray | None,
+        current: float,
+        rsi: float,
+    ) -> float:
+        """Predict next price using VWMA trend slope + RSI momentum scaling.
 
-        if 9 <= hour <= 11:
-            time_adj = 0.10
-        elif 13 <= hour <= 14:
-            time_adj = 0.05
+        Strategy:
+          1. Build a rolling VWMA series and measure its recent slope (last N steps).
+          2. Extrapolate 1 period forward: predicted = current + slope.
+          3. Scale by RSI momentum:
+               RSI > 60 → bullish boost (0.8 … 1.2 multiplier on slope)
+               RSI < 40 → bearish (0.8 … 1.2 multiplier on slope in negative direction)
+               40-60    → neutral (slope unmodified, slight dampen)
+          4. Apply market-aware clamp.
+        """
+        slope_window = min(5, self.SHORT_PERIOD)
+        vwma_series = self._vwma_series(arr, vol_arr, self.SHORT_PERIOD)
+
+        if len(vwma_series) >= slope_window:
+            recent = vwma_series[-slope_window:]
+            # Least-squares slope (per period)
+            x = np.arange(len(recent), dtype=float)
+            slope = float(np.polyfit(x, recent, 1)[0])
         else:
-            time_adj = -0.05
+            # Fallback: simple difference
+            slope = float(vwma_series[-1] - vwma_series[-2]) if len(vwma_series) >= 2 else 0.0
 
-        confidence = base_confidence + time_adj
-        return max(0.3, min(0.9, confidence))
-
-    def _calc_predicted_price(self, current: float, signal: dict, confidence: float) -> float:
-        direction = signal["direction"]
-        strength = signal["strength"]
-
-        if direction == "BUY":
-            movement = current * strength * 0.02 * confidence
-        elif direction == "SELL":
-            movement = -current * strength * 0.02 * confidence
+        # RSI momentum multiplier
+        if rsi > 60:
+            # Bullish zone: amplify upward slope, dampen downward
+            momentum_mult = 0.8 + (rsi - 60) / 40 * 0.8   # 0.8 … 1.6 range → clamp
+            momentum_mult = min(1.4, momentum_mult)
+        elif rsi < 40:
+            # Bearish zone: amplify downward slope, dampen upward
+            momentum_mult = 0.8 + (40 - rsi) / 40 * 0.8
+            momentum_mult = min(1.4, momentum_mult)
+            slope = -abs(slope) if slope > 0 else slope   # bias towards down
         else:
-            movement = current * (strength - 0.5) * 0.005
+            # Neutral: slight dampening
+            momentum_mult = 0.6
 
-        noise_range = current * 0.001 * (1 - confidence)
-        noise = (random.random() - 0.5) * 2 * noise_range
+        predicted = current + slope * momentum_mult
 
-        predicted = current + movement + noise
-
-        max_change = current * self.MAX_DAILY_CHANGE
+        # Market-aware clamp
+        max_change = current * get_max_change_pct(self._market_key)
         predicted = max(current - max_change, min(current + max_change, predicted))
 
         if predicted <= 0:

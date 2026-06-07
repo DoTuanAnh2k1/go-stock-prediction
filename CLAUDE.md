@@ -56,6 +56,7 @@ Dockerfile.api                          # Docker build cho API Backend (Go)
 pkg/server/router.go                    # Đăng ký tất cả routes (API)
 pkg/server/api_*.go                     # Mỗi file = một nhóm API endpoint
 pkg/server/api_prediction_compare.go    # GET /api/predictions/compare/{symbol} và /api/predictions/error-distribution
+pkg/server/api_direction_accuracy.go    # GET /api/predictions/direction-accuracy — direction accuracy per algorithm per market
 pkg/server/api_training_algorithms.go   # GET /api/training/algorithms
 pkg/server/api_training_metrics.go      # GET /api/training/metrics
 pkg/server/api_gold.go                  # GET /api/gold/latest, /api/gold/prices, /api/gold/chart
@@ -83,17 +84,21 @@ pkg/server/helper.go                    # requireGRPCClient(), ResponseError(), 
 pkg/service/predict/registry/registry.go   # AlgorithmDef struct (metadata only — không có Factory), Register(), All()
 pkg/service/predict/registry/algorithms.go # FILE DUY NHẤT cần sửa khi thêm/bỏ thuật toán trong metadata registry
 pkg/store/repository/repository.go     # Interface DatabaseStore (composite) — bao gồm GetConfirmedPredictionsPage, DeletePredictionsBeforeDate, BulkCreatePredictions, CronScheduleStore
+pkg/store/repository/direction_accuracy.go # DirectionAccuracyStore interface — GetDirectionAccuracy(market)
 pkg/store/repository/user.go           # UserStore interface — CreateUser, GetUserByUsername, GetUserByID, GetAllUsers, DeleteUser, AdminExists
 pkg/store/mysql/                        # Triển khai MySQL dùng GORM
 pkg/store/mysql/user.go                 # MySQL implementation của UserStore
 pkg/store/mysql/cron_schedule.go        # MySQL implementation của CronScheduleStore — GetAllCronSchedules, GetCronScheduleByKey, UpsertCronSchedule
+pkg/store/mysql/direction_accuracy.go   # MySQL implementation của DirectionAccuracyStore — raw SQL query GROUP BY algorithm trên 6 prediction tables
 pkg/models/models_db/                   # GORM struct: Stock, StockPrice, Prediction, SyncLog, Exchange, GoldPrice, TrainingLog, TrainingMetrics, User, CronSchedule
 pkg/models/models_db/cron_schedule.go   # CronSchedule GORM struct (JobKey, JobName, CronExpression, Enabled, UpdatedAt)
 pkg/models/models_db/user.go            # User GORM struct (Username, PasswordHash, Role)
 pkg/models/models_db/gold_price.go      # GoldPrice GORM struct
 pkg/models/models_db/training_log.go    # TrainingLog GORM struct
 pkg/models/models_db/training_metrics.go # TrainingMetrics struct
-pkg/models/models_api/                  # DTO cho JSON response
+# Tất cả 6 prediction structs (Prediction, GoldPrediction, NasdaqPrediction, Sp500Prediction, CryptoPrediction, FuelPrediction)
+# đều có trường DirectionCorrect *bool (nullable, cột direction_correct trong DB)
+pkg/models/models_api/                  # DTO cho JSON response — bao gồm DirectionAccuracyRow{Algorithm, Total, Correct}
 pkg/models/models_config/config.go      # Config struct — bao gồm GRPCConfig (ServerPort, ClientTarget) và ServerConfig (AdminUsername, AdminPassword, JWTSecret)
 pkg/utils/cron/                         # Hằng số cron schedule + wrapper (dùng làm giá trị mặc định khi seed DB)
 web/templates/                          # HTML templates (Go's html/template)
@@ -122,10 +127,10 @@ prediction/
 │   ├── grpc_server/
 │   │   └── server.py                   # gRPC servicer — implement tất cả RPC trong proto
 │   ├── algorithms/
-│   │   ├── base.py                     # Abstract PredictionAlgorithm interface
-│   │   ├── registry.py                 # Algorithm registry (Register, All, build_algorithms)
-│   │   ├── moving_average.py           # VWMA + RSI + Bollinger
-│   │   ├── ema_macd.py                 # EMA/MACD(12,26,9) với signal line
+│   │   ├── base.py                     # Abstract PredictionAlgorithm interface; MARKET_MAX_CHANGE dict + get_max_change_pct() helper; _market_key attr set by registry
+│   │   ├── registry.py                 # Algorithm registry (Register, All, build_algorithms) — set _market_key trên mỗi instance khi khởi tạo per-market
+│   │   ├── moving_average.py           # VWMA trend slope projection + RSI momentum scaling; clamp market-aware
+│   │   ├── ema_macd.py                 # EMA slope projection + MACD momentum boost; clamp market-aware
 │   │   ├── lstm.py                     # PyTorch LSTM (2 layers, hidden=64, seq=60, dropout=0.2)
 │   │   ├── arima_garch.py              # statsmodels ARIMA(2,1,2) + arch GARCH(1,1)
 │   │   ├── lightgbm_model.py           # LightGBM (lag returns 1-10, RSI, MA ratios, n_estimators=200)
@@ -142,7 +147,8 @@ prediction/
 │   │   ├── manager.py                  # APScheduler + DB-backed CronSchedule; poll mỗi 60s để phát hiện thay đổi
 │   │   └── jobs.py                     # Định nghĩa tất cả jobs (crawlers + predictions + training + reconcile)
 │   ├── orchestrator/
-│   │   └── runner.py                   # run_all_markets() — VN30/GOLD/NASDAQ100/CRYPTO/FUEL/SP500; run_for_market(key)
+│   │   ├── runner.py                   # run_all_markets() — VN30/GOLD/NASDAQ100/CRYPTO/FUEL/SP500; run_for_market(key)
+│   │   └── training.py                 # reconcile_predictions() — tính direction_correct cho tất cả 6 markets (VN30/GOLD/NASDAQ/SP500/CRYPTO/FUEL); train_for_market()
 │   └── utils/
 │       ├── logger.py                   # structlog config
 │       ├── timezone.py                 # Asia/Ho_Chi_Minh helpers
@@ -220,7 +226,9 @@ BACKUP_DIR=/backups              # Thư mục lưu file backup mysqldump (mount 
 - **Cron constants:** Hằng số trong `pkg/utils/cron/` dùng làm giá trị mặc định trong `seedCronSchedules()` (Go, insert-only). Lịch chạy thực tế cho tất cả jobs Python-side được định nghĩa trong `DEFAULT_SCHEDULES` tại `prediction/src/scheduler/manager.py` và được upsert vào DB mỗi lần Python service khởi động.
 - **Decimal:** Dùng `shopspring/decimal` trong Go API Backend cho mọi phép tính số thực liên quan đến giá — tránh float64. Python service dùng `Decimal` từ stdlib hoặc pandas float64 (được làm tròn trước khi lưu DB).
 - **API handlers (Go):** Mỗi nhóm endpoint có file riêng `api_<topic>.go` trong `pkg/server/`.
-- **Algorithms (Python):** Mỗi thuật toán implement abstract class `PredictionAlgorithm` trong `prediction/src/algorithms/base.py` với method `predict(data: StockData) -> Prediction`. Đăng ký metadata tương ứng trong `pkg/service/predict/registry/algorithms.go` (Go) để `/api/training/algorithms` trả đúng danh sách.
+- **Algorithms (Python):** Mỗi thuật toán implement abstract class `PredictionAlgorithm` trong `prediction/src/algorithms/base.py` với method `predict(prices, volumes) -> PredictionResult`. Đăng ký metadata tương ứng trong `pkg/service/predict/registry/algorithms.go` (Go) để `/api/training/algorithms` trả đúng danh sách.
+- **Market-aware clamp:** Tất cả algorithms dùng `get_max_change_pct(self._market_key)` từ `base.py` để giới hạn thay đổi giá dự đoán. Giới hạn theo market: VN30 ±7%, GOLD/SP500 ±15%, NASDAQ100/FUEL ±20%, CRYPTO ±50%. Registry set `_market_key` trên instance trước khi gọi `predict()`. Market key không xác định dùng `DEFAULT_MAX_CHANGE = 0.15`.
+- **Direction accuracy:** Sau khi reconcile, trường `direction_correct` (nullable boolean) được lưu vào 6 prediction tables (`predictions`, `gold_predictions`, `nasdaq_predictions`, `sp500_predictions`, `crypto_predictions`, `fuel_predictions`). Giá trị `True` khi hướng dự đoán (tăng/giảm so với giá hiện tại) khớp với hướng thực tế; `NULL` khi chưa có giá thực tế. Query tổng hợp qua `DirectionAccuracyStore` (Go) hoặc `get_direction_accuracy()` (Python repository).
 - **Logging:** Go API Backend dùng `pkg/logger` (zerolog). Python service dùng `structlog`.
 - **gRPC triggers:** Tất cả trigger handler trong `pkg/server/api_trigger_*.go` và `pkg/server/api_stock_actions.go` đều gọi `requireGRPCClient(w)` trước. Hàm này trả về 503 nếu gRPC client chưa init. Tất cả trigger endpoints được wrap bằng `AuthRequired()` trong router — yêu cầu JWT hợp lệ.
 - **Dynamic cron schedules:** Lịch cron được lưu trong bảng `cron_schedules`. Python Prediction Service poll DB mỗi 60 giây để phát hiện thay đổi và tự reschedule qua APScheduler — không cần restart. Nguồn sự thật là `DEFAULT_SCHEDULES` trong `prediction/src/scheduler/manager.py`; mỗi lần Python service khởi động, `upsert_cron_schedule()` chạy true upsert — ghi đè DB nếu giá trị code khác. Go `seedCronSchedules()` chỉ insert-if-not-exists (không update). Dùng `CronScheduleStore` interface (Go) để truy cập từ API Backend.
@@ -239,11 +247,19 @@ BACKUP_DIR=/backups              # Thư mục lưu file backup mysqldump (mount 
 
 1. Tạo `prediction/src/algorithms/<tên>.py` — implement abstract class:
    ```python
+   from src.algorithms.base import PredictionAlgorithm, PredictionResult, get_max_change_pct
+
    class MyAlgorithm(PredictionAlgorithm):
-       def predict(self, data: StockData) -> Prediction:
-           ...
-       def get_name(self) -> str: return "my_algo"
-       def get_accuracy(self) -> float: return 0.0
+       def predict(self, prices: list[float], volumes: list[float] | None = None) -> PredictionResult:
+           current = prices[-1]
+           predicted = ...  # tính toán
+           # Bắt buộc: áp dụng market-aware clamp
+           max_change = current * get_max_change_pct(self._market_key)
+           predicted = max(current - max_change, min(current + max_change, predicted))
+           return PredictionResult(predicted_price=predicted, confidence=0.5,
+                                   current_price=current, algorithm_name=self.get_key())
+       def get_name(self) -> str: return "My Algorithm"
+       def get_key(self) -> str: return "my_algo"
    ```
 2. Đăng ký trong `prediction/src/algorithms/registry.py` — thêm vào `build_algorithms()`.
 3. Thêm metadata vào `pkg/service/predict/registry/algorithms.go` trong `init()`:
@@ -277,6 +293,7 @@ Các bước bắt buộc:
 - **Tables chính:** `exchanges`, `stocks`, `stock_prices`, `predictions`, `sync_logs`, `gold_prices`, `training_logs`, `users`, `cron_schedules`, `sp500_prices`, `sp500_predictions`
 - **Auto-migrate:** Chạy khi start app qua `models_db/migrations.go`
 - **Schema đầy đủ:** `database.sql` ở root
+- **direction_correct (nullable boolean):** Có mặt trong tất cả 6 prediction tables. Được set bởi `reconcile_predictions()` trong Python; `NULL` = chưa reconcile, `1` = hướng đúng, `0` = hướng sai. Dùng cho endpoint `/api/predictions/direction-accuracy`.
 
 ## Cron schedules
 
@@ -311,6 +328,7 @@ Go-side `seedCronSchedules()` trong `pkg/server/api_schedules.go` chỉ insert n
 | `predict_sp500` | `0 0 13 * * 1-5` | **tắt** | Dự đoán S&P 500 riêng lẻ — disabled vì đã chạy trong pipeline `crawler_sp500` |
 | `weekly_training` | `0 0 9 * * 0` | **tắt** | Huấn luyện toàn bộ tất cả markets — disabled (thay bằng per-market training jobs) |
 | `daily_prediction` | `0 0 */1 * * *` | **tắt** | Dự đoán tất cả markets — disabled (thay bằng pipeline trong từng crawler job) |
+| `simulation_daily` | `0 0 20 * * *` | bật | Bot trading hàng ngày (8PM) |
 | `daily_backup` | `0 0 3 * * *` | bật | Backup MySQL database hàng ngày lúc 3AM |
 
 ### Pipeline logic
@@ -370,6 +388,7 @@ VN30 (`crawler_stock`) và Fuel (`crawler_fuel`) cũng dùng cùng pipeline như
 | `GET` | `/api/predictions/accuracy-trend` | Xu hướng độ chính xác theo thời gian |
 | `GET` | `/api/predictions/compare/{symbol}` | Cặp giá dự đoán vs thực tế theo thời gian — query: `?days=30&algorithm=lstm_nn` |
 | `GET` | `/api/predictions/error-distribution` | Scatter plot: predicted change % vs actual change % — query: `?algorithm=lstm_nn` |
+| `GET` | `/api/predictions/direction-accuracy` | Direction accuracy per algorithm — query: `?market=VN30\|GOLD\|NASDAQ\|SP500\|CRYPTO\|FUEL`; trả `{market, algorithms:[{algorithm, direction_accuracy, total, correct}]}`; chỉ đếm rows có `direction_correct IS NOT NULL` |
 | `GET` | `/api/predictions/{id}` | Chi tiết một dự đoán |
 
 ### Training
@@ -445,6 +464,7 @@ Tất cả trigger endpoint đều yêu cầu JWT authentication (`Authorization
 | `POST` | `/api/trigger/historical-backtest` | Walk-forward backtest (background) — query: `?train_window=30&step_size=6&market_key=VN30\|GOLD\|NASDAQ100\|CRYPTO\|FUEL\|SP500\|ALL`; trả 202; 409 nếu đang chạy — yêu cầu JWT |
 | `POST` | `/api/trigger/sp500-crawler` | Crawl S&P 500 (background) — yêu cầu JWT |
 | `POST` | `/api/trigger/sp500-predict` | Dự đoán S&P 500 (background) — yêu cầu JWT |
+| `POST` | `/api/trigger/sim-reset` | Reset tất cả active bots — đóng live session cũ, tạo session mới — yêu cầu JWT |
 
 ## Trigger thủ công qua API
 
@@ -528,6 +548,7 @@ curl -X PUT http://localhost:8118/api/schedules/crawler_daily \
 | `TriggerStockPredict` | `StockRequest` | `StockPredictResponse` | Dự đoán tất cả thuật toán cho một mã đồng bộ |
 | `TriggerSP500Crawler` | `Empty` | `TriggerResponse` | Crawl S&P 500 trong background |
 | `TriggerSP500Predict` | `Empty` | `TriggerResponse` | Dự đoán S&P 500 trong background |
+| `ResetSimBots` | `Empty` | `TriggerResponse` | Đóng live sessions cũ, tạo fresh live session cho tất cả active bots |
 | `GetTrainingStatus` | `Empty` | `TrainingStatusResponse` | Trạng thái training: `is_training`, `progress`, `phase`, `total/done algorithms` |
 
 ## Test

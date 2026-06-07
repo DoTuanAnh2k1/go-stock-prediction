@@ -76,6 +76,19 @@ func (c *Client) GetBestSimSessionForChart(botID string) (*modelsdb.SimSession, 
 	return &s, nil
 }
 
+// GetLatestLiveSimSession returns the most recent running live session for a bot.
+// Returns nil error + nil session if none exists.
+func (c *Client) GetLatestLiveSimSession(botID string) (*modelsdb.SimSession, error) {
+	var s modelsdb.SimSession
+	err := c.Db.Where("bot_id = ? AND mode = 'live' AND status = 'running'", botID).
+		Order("id DESC").
+		First(&s).Error
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
 // GetSimSessionsByBot returns sessions for a bot ordered newest-first, up to limit rows.
 func (c *Client) GetSimSessionsByBot(botID string, limit int) ([]modelsdb.SimSession, error) {
 	var sessions []modelsdb.SimSession

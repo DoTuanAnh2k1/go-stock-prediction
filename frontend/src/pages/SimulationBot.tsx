@@ -186,6 +186,7 @@ export default function SimulationBot() {
 
   const [bot, setBot] = useState<BotDetail | null>(null);
   const [chart, setChart] = useState<BotChart | null>(null);
+  const [liveChart, setLiveChart] = useState<BotChart | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [tradePage, setTradePage] = useState(1);
   const [tradeTotal, setTradeTotal] = useState(0);
@@ -194,6 +195,8 @@ export default function SimulationBot() {
   const [tradesLoading, setTradesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeChart, setActiveChart] = useState<'value' | 'return'>('value');
+  const [chartSession, setChartSession] = useState<'backtest' | 'live'>('backtest');
+  const [tradeSession, setTradeSession] = useState<'backtest' | 'live'>('backtest');
 
   const TRADE_LIMIT = 50;
 
@@ -228,8 +231,23 @@ export default function SimulationBot() {
 
   useEffect(() => {
     if (!botId) return;
+    apiFetch(`/api/simulation/bots/${encodeURIComponent(botId)}/chart?mode=live`)
+      .then((d: BotChart) => setLiveChart(d))
+      .catch(() => setLiveChart(null));
+  }, [botId]);
+
+  useEffect(() => {
+    if (!botId) return;
+    const sessionId = tradeSession === 'backtest' ? chart?.session_id : liveChart?.session_id;
+    if (sessionId == null) {
+      setTrades([]);
+      setTradeTotal(0);
+      return;
+    }
     setTradesLoading(true);
-    apiFetch(`/api/simulation/bots/${encodeURIComponent(botId)}/trades?page=${tradePage}&limit=${TRADE_LIMIT}`)
+    apiFetch(
+      `/api/simulation/bots/${encodeURIComponent(botId)}/trades?page=${tradePage}&limit=${TRADE_LIMIT}&session_id=${sessionId}`
+    )
       .then((d: TradesResponse) => {
         setTrades(Array.isArray(d.data) ? d.data : []);
         setTradeTotal(d.total || 0);
@@ -239,7 +257,7 @@ export default function SimulationBot() {
         setTrades([]);
         setTradesLoading(false);
       });
-  }, [botId, tradePage]);
+  }, [botId, tradePage, chart, liveChart, tradeSession]);
 
   if (loading) {
     return (
@@ -270,10 +288,13 @@ export default function SimulationBot() {
   const kpis = bot.kpis;
   const currency = bot.currency;
 
+  // Active chart data based on session selector
+  const activeChartData = chartSession === 'live' ? liveChart : chart;
+
   // Chart data
-  const n = chart?.dates.length || 0;
+  const n = activeChartData?.dates.length || 0;
   const chartStep = Math.max(1, Math.ceil(n / 8));
-  const chartLabels = (chart?.dates || []).map(ddmm);
+  const chartLabels = (activeChartData?.dates || []).map(ddmm);
 
   const totalPages = Math.ceil(tradeTotal / TRADE_LIMIT);
 
@@ -371,6 +392,53 @@ export default function SimulationBot() {
         </div>
       )}
 
+      {/* Live session status banner */}
+      {liveChart && liveChart.session_id != null && (
+        <div style={{
+          marginBottom: 16,
+          padding: '8px 14px',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          fontSize: 12,
+          color: 'var(--text-2)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: '50%',
+            background: 'var(--up)', display: 'inline-block',
+            boxShadow: '0 0 6px var(--up)',
+            flexShrink: 0,
+          }} />
+          <span>Live session #{liveChart.session_id}</span>
+          {liveChart.dates.length > 0 && (
+            <>
+              <span style={{ color: 'var(--border-strong)' }}>|</span>
+              <span>
+                Portfolio hôm nay:{' '}
+                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text)' }}>
+                  {fmtCapital(liveChart.values[liveChart.values.length - 1] ?? null, currency)}
+                </span>
+              </span>
+              {liveChart.returns_pct.length > 0 && (
+                <>
+                  <span style={{ color: 'var(--border-strong)' }}>|</span>
+                  <Chg pct={liveChart.returns_pct[liveChart.returns_pct.length - 1] ?? 0} />
+                </>
+              )}
+            </>
+          )}
+          {liveChart.dates.length === 0 && (
+            <>
+              <span style={{ color: 'var(--border-strong)' }}>|</span>
+              <span style={{ color: 'var(--text-3)' }}>Chưa có dữ liệu hôm nay</span>
+            </>
+          )}
+        </div>
+      )}
+
       {/* KPI cards */}
       <div className="grid grid--kpis section-gap">
         <KPI
@@ -411,9 +479,15 @@ export default function SimulationBot() {
         title={t.simulationBot.portfolioChart}
         className="section-gap"
         tools={
-          <div className="seg">
-            <button className={activeChart === 'value' ? 'active' : ''} onClick={() => setActiveChart('value')}>{t.simulationBot.chartValue}</button>
-            <button className={activeChart === 'return' ? 'active' : ''} onClick={() => setActiveChart('return')}>{t.simulationBot.chartReturn}</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div className="seg">
+              <button className={activeChart === 'value' ? 'active' : ''} onClick={() => setActiveChart('value')}>{t.simulationBot.chartValue}</button>
+              <button className={activeChart === 'return' ? 'active' : ''} onClick={() => setActiveChart('return')}>{t.simulationBot.chartReturn}</button>
+            </div>
+            <div className="seg" style={{ marginLeft: 8 }}>
+              <button className={chartSession === 'backtest' ? 'active' : ''} onClick={() => setChartSession('backtest')}>Backtest</button>
+              <button className={chartSession === 'live' ? 'active' : ''} onClick={() => setChartSession('live')}>Live</button>
+            </div>
           </div>
         }
       >
@@ -422,46 +496,95 @@ export default function SimulationBot() {
             <div className="empty__icon"><Icon name="refresh" size={18} /></div>
             <p>{t.simulationBot.loadingChart}</p>
           </div>
-        ) : chart && chart.dates.length > 1 ? (
-          <>
-            {activeChart === 'value' ? (
-              <LineChart
-                series={[{
-                  name: 'Portfolio Value',
-                  data: chart.values,
-                  color: 'var(--accent)',
-                }]}
-                labels={chartLabels}
-                height={540}
-                area
-                yFmt={(v) => fmtValueShort(v, currency)}
-                valueFmt={(v) => fmtCapital(v, currency)}
-                padL={68}
-              />
-            ) : (
-              <LineChart
-                series={[{
-                  name: 'Return %',
-                  data: chart.returns_pct,
-                  color: (chart.returns_pct[chart.returns_pct.length - 1] ?? 0) >= 0 ? 'var(--up)' : 'var(--down)',
-                }]}
-                labels={chartLabels}
-                height={540}
-                area
-                yFmt={(v) => (v ?? 0).toFixed(1) + '%'}
-                valueFmt={(v) => (v ?? 0).toFixed(2) + '%'}
-                padL={52}
-              />
-            )}
-          </>
+        ) : chartSession === 'live' ? (
+          // Live chart view
+          activeChartData && activeChartData.dates.length > 1 ? (
+            <>
+              {activeChart === 'value' ? (
+                <LineChart
+                  series={[{
+                    name: 'Portfolio Value (Live)',
+                    data: activeChartData.values,
+                    color: 'var(--up)',
+                  }]}
+                  labels={chartLabels}
+                  height={540}
+                  area
+                  yFmt={(v) => fmtValueShort(v, currency)}
+                  valueFmt={(v) => fmtCapital(v, currency)}
+                  padL={68}
+                />
+              ) : (
+                <LineChart
+                  series={[{
+                    name: 'Return % (Live)',
+                    data: activeChartData.returns_pct,
+                    color: (activeChartData.returns_pct[activeChartData.returns_pct.length - 1] ?? 0) >= 0 ? 'var(--up)' : 'var(--down)',
+                  }]}
+                  labels={chartLabels}
+                  height={540}
+                  area
+                  yFmt={(v) => (v ?? 0).toFixed(1) + '%'}
+                  valueFmt={(v) => (v ?? 0).toFixed(2) + '%'}
+                  padL={52}
+                />
+              )}
+            </>
+          ) : (
+            <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div className="empty__icon"><Icon name="layers" size={18} /></div>
+              <p style={{ textAlign: 'center', lineHeight: 1.6 }}>
+                {liveChart
+                  ? liveChart.dates.length === 0
+                    ? 'Live session chưa có dữ liệu giao dịch.'
+                    : `Live session bắt đầu ${liveChart.dates[0]}. Biểu đồ sẽ hiển thị sau khi có 2+ ngày giao dịch.`
+                  : 'Không có dữ liệu live session.'}
+              </p>
+            </div>
+          )
         ) : (
-          <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>{chart && chart.dates.length === 1
-              ? `${t.simulationBot.onlyOneDay} (${chart.dates[0]}). ${t.simulationBot.needMinTwoDays}`
-              : t.simulationBot.noChartData
-            }</p>
-          </div>
+          // Backtest chart view
+          activeChartData && activeChartData.dates.length > 1 ? (
+            <>
+              {activeChart === 'value' ? (
+                <LineChart
+                  series={[{
+                    name: 'Portfolio Value',
+                    data: activeChartData.values,
+                    color: 'var(--accent)',
+                  }]}
+                  labels={chartLabels}
+                  height={540}
+                  area
+                  yFmt={(v) => fmtValueShort(v, currency)}
+                  valueFmt={(v) => fmtCapital(v, currency)}
+                  padL={68}
+                />
+              ) : (
+                <LineChart
+                  series={[{
+                    name: 'Return %',
+                    data: activeChartData.returns_pct,
+                    color: (activeChartData.returns_pct[activeChartData.returns_pct.length - 1] ?? 0) >= 0 ? 'var(--up)' : 'var(--down)',
+                  }]}
+                  labels={chartLabels}
+                  height={540}
+                  area
+                  yFmt={(v) => (v ?? 0).toFixed(1) + '%'}
+                  valueFmt={(v) => (v ?? 0).toFixed(2) + '%'}
+                  padL={52}
+                />
+              )}
+            </>
+          ) : (
+            <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div className="empty__icon"><Icon name="layers" size={18} /></div>
+              <p>{chart && chart.dates.length === 1
+                ? `${t.simulationBot.onlyOneDay} (${chart.dates[0]}). ${t.simulationBot.needMinTwoDays}`
+                : t.simulationBot.noChartData
+              }</p>
+            </div>
+          )
         )}
       </Panel>
 
@@ -478,7 +601,24 @@ export default function SimulationBot() {
       </Panel>
 
       {/* Trades table */}
-      <div className="sec-head section-gap"><h2>{t.simulationBot.tradeHistory}</h2><div className="line"></div></div>
+      <div className="sec-head section-gap" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <h2>{t.simulationBot.tradeHistory}</h2>
+        <div className="line" style={{ flex: 1 }} />
+        <div className="seg">
+          <button
+            className={tradeSession === 'backtest' ? 'active' : ''}
+            onClick={() => { setTradeSession('backtest'); setTradePage(1); }}
+          >
+            Backtest
+          </button>
+          <button
+            className={tradeSession === 'live' ? 'active' : ''}
+            onClick={() => { setTradeSession('live'); setTradePage(1); }}
+          >
+            Live
+          </button>
+        </div>
+      </div>
       <Panel flush className="section-gap">
         {tradesLoading ? (
           <div className="empty" style={{ padding: 32 }}>
@@ -488,7 +628,13 @@ export default function SimulationBot() {
         ) : trades.length === 0 ? (
           <div className="empty" style={{ padding: 48 }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
-            <p>{t.simulationBot.noTrades}</p>
+            <p>
+              {tradeSession === 'live' && liveChart
+                ? 'Live session chưa có giao dịch nào hôm nay.'
+                : tradeSession === 'live' && !liveChart
+                  ? 'Không có live session.'
+                  : t.simulationBot.noTrades}
+            </p>
           </div>
         ) : (
           <>

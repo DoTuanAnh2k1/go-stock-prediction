@@ -381,7 +381,10 @@ func GetSimBots(w http.ResponseWriter, r *http.Request) {
 	for _, bot := range bots {
 		item := simBotListItem{simBotJSON: botToJSON(bot)}
 
-		sess, err := store.GetLatestSimSession(bot.ID)
+		sess, err := store.GetLatestLiveSimSession(bot.ID)
+		if err != nil || sess == nil {
+			sess, err = store.GetLatestSimSession(bot.ID)
+		}
 		if err == nil && sess != nil {
 			item.LastSession = &simSessionSummary{
 				ID:        sess.ID,
@@ -508,14 +511,26 @@ func GetSimBotTrades(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store := repository.GetSingleton()
-	sess, err := store.GetLatestSimSession(id)
-	if err != nil {
-		// No session yet — return empty page (200) instead of 404
-		ResponseSuccess(w, http.StatusOK, simTradesPage{
-			BotID: id, Total: 0, Page: page, Limit: limit,
-			Data: []simTradeJSON{},
-		})
-		return
+
+	// Allow caller to pin a specific session_id (e.g. chart session for consistency).
+	var sess *modelsdb.SimSession
+	if sidStr := r.URL.Query().Get("session_id"); sidStr != "" {
+		sid, convErr := strconv.ParseInt(sidStr, 10, 64)
+		if convErr == nil {
+			sess = &modelsdb.SimSession{ID: sid}
+		}
+	}
+	if sess == nil {
+		var sessErr error
+		sess, sessErr = store.GetLatestSimSession(id)
+		if sessErr != nil {
+			// No session yet — return empty page (200) instead of 404
+			ResponseSuccess(w, http.StatusOK, simTradesPage{
+				BotID: id, Total: 0, Page: page, Limit: limit,
+				Data: []simTradeJSON{},
+			})
+			return
+		}
 	}
 
 	offset := (page - 1) * limit
@@ -560,11 +575,18 @@ func GetSimBotChart(w http.ResponseWriter, r *http.Request) {
 
 	store := repository.GetSingleton()
 
-	// Prefer the session with the most snapshots (typically a completed backtest)
-	// instead of the latest session which may be a running live-step with only 1 point.
-	sess, err := store.GetBestSimSessionForChart(id)
-	if err != nil || sess == nil {
+	var sess *modelsdb.SimSession
+	var err error
+	if r.URL.Query().Get("mode") == "live" {
+		// Live mode: return the latest session (today's live trading)
 		sess, err = store.GetLatestSimSession(id)
+	} else {
+		// Default: prefer the session with the most snapshots (typically a completed backtest)
+		// instead of the latest session which may be a running live-step with only 1 point.
+		sess, err = store.GetBestSimSessionForChart(id)
+		if err != nil || sess == nil {
+			sess, err = store.GetLatestSimSession(id)
+		}
 	}
 	if err != nil {
 		// No session yet — return empty chart (200) instead of 404
@@ -653,8 +675,11 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 		ic, _ := bot.InitialCapital.Float64()
 		entry.InitialCapital = ic
 
-		// Prefer session with most snapshots for KPIs
-		sess, err := store.GetBestSimSessionForChart(bot.ID)
+		// Prefer running live session; fall back to best chart session (completed backtest)
+		sess, err := store.GetLatestLiveSimSession(bot.ID)
+		if err != nil || sess == nil {
+			sess, err = store.GetBestSimSessionForChart(bot.ID)
+		}
 		if err != nil || sess == nil {
 			sess, err = store.GetLatestSimSession(bot.ID)
 		}

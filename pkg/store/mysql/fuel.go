@@ -134,9 +134,11 @@ func (c *Client) GetLatestConfirmedFuelPredictions() ([]modelsdb.FuelPrediction,
 }
 
 // GetFuelPredictionsByDateRange returns fuel predictions for a product type within a date range.
+// Filters by prediction_date (when the prediction was created) so intraday predictions
+// created today are included even though their target_date is tomorrow.
 func (c *Client) GetFuelPredictionsByDateRange(productType string, from, to time.Time) ([]modelsdb.FuelPrediction, error) {
 	var preds []modelsdb.FuelPrediction
-	query := c.Db.Where("target_date BETWEEN ? AND ?", from, to).Order("target_date DESC")
+	query := c.Db.Where("prediction_date BETWEEN ? AND ?", from, to).Order("prediction_date ASC")
 	if productType != "" {
 		query = query.Where("product_type = ?", productType)
 	}

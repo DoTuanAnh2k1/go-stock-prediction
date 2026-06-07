@@ -165,7 +165,8 @@ func GetNasdaqChart(w http.ResponseWriter, r *http.Request) {
 	to := time.Now()
 
 	if days == 1 {
-		from := to.Add(-24 * time.Hour)
+		// Use 96h window so weekends show the last trading day (Friday US close = Saturday ~03:00 VN)
+		from := to.Add(-96 * time.Hour)
 		intradayPrices, err := store.GetNasdaqIntradayByRange(symbol, from, to)
 		if err != nil {
 			logger.Logger.Errorf("[api/nasdaq/chart] Failed to get NASDAQ intraday prices: %v", err)

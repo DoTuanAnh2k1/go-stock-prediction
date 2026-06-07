@@ -97,18 +97,39 @@ function buildMultiAlgoData(
   predField: string,
   algoField: string,
   fmtDate: (s: string) => string,
+  useIntraday = false,
 ): { labels: string[]; actual: (number | null)[]; predSeries: { key: string; data: (number | null)[] }[] } {
-  const sorted = [...list].sort((a, b) => (a[dateField] || '') < (b[dateField] || '') ? -1 : 1);
+  // When intraday mode: use prediction_date (full datetime) as key so multiple
+  // predictions within the same calendar day are not collapsed into one point.
+  // Fallback to dateField when prediction_date is absent.
+  const getKey = (it: any): string => {
+    if (useIntraday) {
+      const pd = it['prediction_date'] || it[dateField] || '';
+      return pd;
+    }
+    return it[dateField] || '';
+  };
+  const fmtLabel = useIntraday
+    ? (s: string) => {
+        if (!s) return '';
+        try {
+          const d = new Date(s);
+          if (isNaN(d.getTime())) return s.slice(11, 16) || s;
+          return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+        } catch { return s.slice(11, 16) || s; }
+      }
+    : fmtDate;
+  const sorted = [...list].sort((a, b) => (getKey(a)) < (getKey(b)) ? -1 : 1);
   const uniqueDates: string[] = [];
   const dateIndex = new Map<string, number>();
   for (const it of sorted) {
-    const d = it[dateField] || '';
+    const d = getKey(it);
     if (!dateIndex.has(d)) { dateIndex.set(d, uniqueDates.length); uniqueDates.push(d); }
   }
   const n = uniqueDates.length;
   const actual: (number | null)[] = new Array(n).fill(null);
   for (const it of sorted) {
-    const idx = dateIndex.get(it[dateField] || '');
+    const idx = dateIndex.get(getKey(it));
     if (idx !== undefined && actual[idx] === null && it[actualField] != null) {
       const v = parseFloat(it[actualField]);
       actual[idx] = isFinite(v) ? v : null;
@@ -118,13 +139,13 @@ function buildMultiAlgoData(
   for (const it of sorted) {
     const key = (it[algoField] || 'unknown').toLowerCase();
     if (!algoMap.has(key)) algoMap.set(key, new Array(n).fill(null));
-    const idx = dateIndex.get(it[dateField] || '');
+    const idx = dateIndex.get(getKey(it));
     if (idx !== undefined && it[predField] != null) {
       const v = parseFloat(it[predField]);
       algoMap.get(key)![idx] = isFinite(v) ? v : null;
     }
   }
-  return { labels: uniqueDates.map(fmtDate), actual, predSeries: Array.from(algoMap.entries()).map(([key, data]) => ({ key, data })) };
+  return { labels: uniqueDates.map(fmtLabel), actual, predSeries: Array.from(algoMap.entries()).map(([key, data]) => ({ key, data })) };
 }
 
 function num(x: any): number {
@@ -244,6 +265,7 @@ export default function Fuel() {
   const [confirmedProduct, setConfirmedProduct] = useState('');
   const [predPage, setPredPage] = useState(0);
   const [confirmedPage, setConfirmedPage] = useState(0);
+  const [predChartAlgo, setPredChartAlgo] = useState('');
 
   // Load initial data
   useEffect(() => {
@@ -290,7 +312,7 @@ export default function Fuel() {
         const v = predChartRes.value;
         const list = Array.isArray(v) ? v : Array.isArray(v?.data) ? v.data : [];
         if (list.length > 0) {
-          setPredChart(buildMultiAlgoData(list, 'date', 'actual_price', 'predicted_price', 'algorithm_name', ddmm));
+          setPredChart(buildMultiAlgoData(list, 'date', 'actual_price', 'predicted_price', 'algorithm_name', ddmm, days === '1'));
         } else {
           setPredChart({ labels: [], actual: [], predSeries: [] });
         }
@@ -306,6 +328,7 @@ export default function Fuel() {
   const chartLabels = chart.dates.map(ddmm);
 
   const PAGE_SIZE = 10;
+  const confirmedAlgos = Array.from(new Set(confirmedResults.map((r) => r.algorithm_name))).sort();
   const filteredPreds = predProduct ? preds.filter((p) => p.product_type === predProduct) : preds;
   const predPageCount = Math.ceil(filteredPreds.length / PAGE_SIZE);
   const predPagedItems = filteredPreds.slice(predPage * PAGE_SIZE, (predPage + 1) * PAGE_SIZE);
@@ -617,15 +640,32 @@ export default function Fuel() {
       </div>
 
       {/* Prediction vs Actual chart — full width */}
-      <Panel title={t.common.predVsActual} sub={activeProductDef.label + ' · ' + t.common.allAlgos} className="section-gap"
-        tools={<Seg options={[{ value: '7', label: t.dateRange.d7 }, { value: '30', label: t.dateRange.d30 }, { value: '90', label: t.dateRange.d90 }, { value: '180', label: t.dateRange.d180 }, { value: '365', label: t.dateRange.d365 }]} value={days} onChange={setDays} />}
+      <Panel title={t.common.predVsActual} sub={activeProductDef.label + ' · ' + (predChartAlgo ? algoShort(predChartAlgo).short : t.common.allAlgos)} className="section-gap"
+        tools={
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Seg options={[{ value: '7', label: t.dateRange.d7 }, { value: '30', label: t.dateRange.d30 }, { value: '90', label: t.dateRange.d90 }, { value: '180', label: t.dateRange.d180 }, { value: '365', label: t.dateRange.d365 }]} value={days} onChange={setDays} />
+            {confirmedAlgos.length > 0 && (
+              <select value={predChartAlgo} onChange={(e) => setPredChartAlgo(e.target.value)}
+                style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)', cursor: 'pointer' }}>
+                <option value="">{t.common.allAlgos}</option>
+                {confirmedAlgos.map((algo) => (
+                  <option key={algo} value={algo}>{algoShort(algo).short} ({algo})</option>
+                ))}
+              </select>
+            )}
+          </div>
+        }
       >
-        {predChart.labels.length > 0 && (predChart.predSeries.length > 0 || predChart.actual.some((v) => v != null)) ? (
+        {predChart.labels.length > 0 && (predChart.predSeries.length > 0 || predChart.actual.some((v) => v != null)) ? (() => {
+          const visibleSeries = predChartAlgo
+            ? predChart.predSeries.filter((ps) => ps.key === predChartAlgo.toLowerCase())
+            : predChart.predSeries;
+          return (
           <>
             <LineChart
               series={[
                 { name: t.common.actual, data: predChart.actual, color: 'var(--text-2)', w: 1.8 },
-                ...predChart.predSeries.map((ps, i) => ({
+                ...visibleSeries.map((ps, i) => ({
                   name: algoDisplayName(ps.key),
                   data: ps.data,
                   color: algoColor(ps.key, i),
@@ -641,10 +681,11 @@ export default function Fuel() {
             />
             <Legend items={[
               [t.common.actual, 'var(--text-2)'],
-              ...predChart.predSeries.map((ps, i) => [algoDisplayName(ps.key), algoColor(ps.key, i)] as [string, string]),
+              ...visibleSeries.map((ps, i) => [algoDisplayName(ps.key), algoColor(ps.key, i)] as [string, string]),
             ]} />
           </>
-        ) : (
+          );
+        })() : (
           <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
             <p>{t.common.noCompareData}</p>

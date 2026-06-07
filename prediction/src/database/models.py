@@ -95,6 +95,7 @@ class Prediction(Base):
     target_date = Column(DateTime, nullable=False)
     actual_price = Column(Numeric(15, 2))
     accuracy = Column(Numeric(5, 4))
+    direction_correct = Column(Boolean, nullable=True)
     status = Column(String(20), default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -134,6 +135,7 @@ class GoldPrediction(Base):
     target_date = Column(DateTime, nullable=False)
     actual_price = Column(Numeric(20, 2))
     accuracy = Column(Numeric(5, 4))
+    direction_correct = Column(Boolean, nullable=True)
     status = Column(String(20), default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -174,6 +176,7 @@ class NasdaqPrediction(Base):
     target_date = Column(DateTime, nullable=False)
     actual_price = Column(Numeric(15, 4))
     accuracy = Column(Numeric(5, 4))
+    direction_correct = Column(Boolean, nullable=True)
     status = Column(String(20), default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -214,6 +217,7 @@ class SP500Prediction(Base):
     target_date = Column(DateTime, nullable=False)
     actual_price = Column(Numeric(15, 4))
     accuracy = Column(Numeric(5, 4))
+    direction_correct = Column(Boolean, nullable=True)
     status = Column(String(20), default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -253,6 +257,7 @@ class CryptoPrediction(Base):
     target_date = Column(DateTime, nullable=False)
     actual_price = Column(Numeric(20, 2))
     accuracy = Column(Numeric(5, 4))
+    direction_correct = Column(Boolean, nullable=True)
     status = Column(String(20), default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -287,6 +292,7 @@ class FuelPrediction(Base):
     target_date = Column(DateTime, nullable=False)
     actual_price = Column(Numeric(10, 3))
     accuracy = Column(Numeric(5, 4))
+    direction_correct = Column(Boolean, nullable=True)
     status = Column(String(20), default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -397,7 +403,7 @@ class SimTrade(Base):
     trade_value = Column(Numeric(20, 2), nullable=False)
     signal_strength = Column(Numeric(8, 4))
     confidence = Column(Numeric(4, 3))
-    trade_date = Column(Date, nullable=False, index=True)
+    trade_date = Column(DateTime, nullable=False, index=True)
     close_reason = Column(String(20))               # signal, stop_loss, take_profit
     entry_trade_id = Column(BigInteger)
     pnl = Column(Numeric(20, 2))
@@ -474,5 +480,40 @@ class CryptoIntradayPrice(Base):
     price = Column(Numeric(30, 8))
     market_cap = Column(Numeric(30, 2))
     volume = Column(Numeric(30, 2))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class GoldIntradayPrice(Base):
+    __tablename__ = "gold_intraday_prices"
+    __table_args__ = (
+        UniqueConstraint("source", "product_type", "timestamp", name="idx_gold_intraday_src_prod_ts"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source = Column(String(50), nullable=False)
+    product_type = Column(String(50), nullable=False)
+    timestamp = Column(DateTime, nullable=False)
+    buy_price = Column(Numeric(15, 2))
+    sell_price = Column(Numeric(15, 2))
+    currency = Column(String(3), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class StockIntradayPrice(Base):
+    __tablename__ = "stock_intraday_prices"
+    __table_args__ = (
+        UniqueConstraint("symbol", "timestamp", name="idx_stock_intraday_symbol_ts"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    symbol = Column(String(20), nullable=False)
+    timestamp = Column(DateTime, nullable=False)
+    open_price = Column(Numeric(20, 6))
+    high_price = Column(Numeric(20, 6))
+    low_price = Column(Numeric(20, 6))
+    close_price = Column(Numeric(20, 6))
+    volume = Column(BigInteger)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

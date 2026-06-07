@@ -22,6 +22,7 @@ type DatabaseStore interface {
 	Utility
 	GoldPriceStore
 	GoldPredictionStore
+	GoldIntradayStore
 	MacroIndicatorStore
 	TrainingLogStore
 	UserStore
@@ -37,7 +38,9 @@ type DatabaseStore interface {
 	SP500PriceStore
 	SP500PredictionStore
 	SP500IntradayStore
+	StockIntradayStore
 	SimulationStore
+	DirectionAccuracyStore
 }
 
 // CronScheduleStore - interface cho cron schedule operations

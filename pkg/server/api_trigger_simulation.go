@@ -76,3 +76,30 @@ func TriggerSimulationLiveStepHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	ResponseSuccess(w, http.StatusOK, map[string]string{"message": resp.Message})
 }
+
+// TriggerSimResetHandler godoc
+//
+//	@Summary      Reset all active simulation bots
+//	@Description  Closes stale live sessions and creates fresh running sessions for all active bots. Use when bots stop trading after the first day.
+//	@Tags         Triggers
+//	@Produce      json
+//	@Security     BearerAuth
+//	@Success      200  {object}  map[string]string
+//	@Failure      401  {object}  ResponseFailure
+//	@Failure      500  {object}  ResponseFailure
+//	@Failure      503  {object}  ResponseFailure
+//	@Router       /api/trigger/sim-reset [post]
+func TriggerSimResetHandler(w http.ResponseWriter, r *http.Request) {
+	client := requireGRPCClient(w)
+	if client == nil {
+		return
+	}
+
+	resp, err := client.ResetSimBots(r.Context(), &pb.Empty{})
+	if err != nil {
+		logger.Logger.Errorf("TriggerSimReset: %v", err)
+		ResponseError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	ResponseSuccess(w, http.StatusOK, map[string]string{"message": resp.Message})
+}

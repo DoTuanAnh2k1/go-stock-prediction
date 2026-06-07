@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
+
+_VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 import requests
 
@@ -31,7 +34,7 @@ class FuelCrawler(BaseCrawler):
         self._timeout = timeout
 
     def crawl(self) -> int:
-        today_str = datetime.utcnow().strftime("%Y-%m-%d")
+        today_str = datetime.now(tz=_VN_TZ).strftime("%Y-%m-%d")
         url = FUEL_DAILY_URL.format(date=today_str)
         log.info("fuel.crawl.start", date=today_str)
 

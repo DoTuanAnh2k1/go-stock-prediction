@@ -17,6 +17,7 @@ type SimulationStore interface {
 	UpdateSimSession(s *modelsdb.SimSession) error
 	GetLatestSimSession(botID string) (*modelsdb.SimSession, error)
 	GetBestSimSessionForChart(botID string) (*modelsdb.SimSession, error)
+	GetLatestLiveSimSession(botID string) (*modelsdb.SimSession, error)
 	GetSimSessionsByBot(botID string, limit int) ([]modelsdb.SimSession, error)
 
 	// Trades

@@ -41,6 +41,7 @@ const (
 	PredictionService_TriggerSP500Predict_FullMethodName       = "/prediction.PredictionService/TriggerSP500Predict"
 	PredictionService_TriggerSimulationBacktest_FullMethodName = "/prediction.PredictionService/TriggerSimulationBacktest"
 	PredictionService_TriggerSimulationLiveStep_FullMethodName = "/prediction.PredictionService/TriggerSimulationLiveStep"
+	PredictionService_ResetSimBots_FullMethodName              = "/prediction.PredictionService/ResetSimBots"
 )
 
 // PredictionServiceClient is the client API for PredictionService service.
@@ -89,6 +90,7 @@ type PredictionServiceClient interface {
 	// Trading Simulation
 	TriggerSimulationBacktest(ctx context.Context, in *SimulationRequest, opts ...grpc.CallOption) (*TriggerResponse, error)
 	TriggerSimulationLiveStep(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
+	ResetSimBots(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
 }
 
 type predictionServiceClient struct {
@@ -319,6 +321,16 @@ func (c *predictionServiceClient) TriggerSimulationLiveStep(ctx context.Context,
 	return out, nil
 }
 
+func (c *predictionServiceClient) ResetSimBots(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TriggerResponse)
+	err := c.cc.Invoke(ctx, PredictionService_ResetSimBots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PredictionServiceServer is the server API for PredictionService service.
 // All implementations must embed UnimplementedPredictionServiceServer
 // for forward compatibility.
@@ -365,6 +377,7 @@ type PredictionServiceServer interface {
 	// Trading Simulation
 	TriggerSimulationBacktest(context.Context, *SimulationRequest) (*TriggerResponse, error)
 	TriggerSimulationLiveStep(context.Context, *Empty) (*TriggerResponse, error)
+	ResetSimBots(context.Context, *Empty) (*TriggerResponse, error)
 	mustEmbedUnimplementedPredictionServiceServer()
 }
 
@@ -440,6 +453,9 @@ func (UnimplementedPredictionServiceServer) TriggerSimulationBacktest(context.Co
 }
 func (UnimplementedPredictionServiceServer) TriggerSimulationLiveStep(context.Context, *Empty) (*TriggerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TriggerSimulationLiveStep not implemented")
+}
+func (UnimplementedPredictionServiceServer) ResetSimBots(context.Context, *Empty) (*TriggerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResetSimBots not implemented")
 }
 func (UnimplementedPredictionServiceServer) mustEmbedUnimplementedPredictionServiceServer() {}
 func (UnimplementedPredictionServiceServer) testEmbeddedByValue()                           {}
@@ -858,6 +874,24 @@ func _PredictionService_TriggerSimulationLiveStep_Handler(srv interface{}, ctx c
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PredictionService_ResetSimBots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PredictionServiceServer).ResetSimBots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PredictionService_ResetSimBots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PredictionServiceServer).ResetSimBots(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PredictionService_ServiceDesc is the grpc.ServiceDesc for PredictionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -952,6 +986,10 @@ var PredictionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TriggerSimulationLiveStep",
 			Handler:    _PredictionService_TriggerSimulationLiveStep_Handler,
+		},
+		{
+			MethodName: "ResetSimBots",
+			Handler:    _PredictionService_ResetSimBots_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

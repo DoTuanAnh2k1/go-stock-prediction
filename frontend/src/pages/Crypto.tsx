@@ -102,18 +102,39 @@ function buildMultiAlgoData(
   predField: string,
   algoField: string,
   fmtDate: (s: string) => string,
+  useIntraday = false,
 ): { labels: string[]; actual: (number | null)[]; predSeries: { key: string; data: (number | null)[] }[] } {
-  const sorted = [...list].sort((a, b) => (a[dateField] || '') < (b[dateField] || '') ? -1 : 1);
+  // When intraday mode: use prediction_date (full datetime) as key so multiple
+  // predictions within the same calendar day are not collapsed into one point.
+  // Fallback to dateField when prediction_date is absent.
+  const getKey = (it: any): string => {
+    if (useIntraday) {
+      const pd = it['prediction_date'] || it[dateField] || '';
+      return pd;
+    }
+    return it[dateField] || '';
+  };
+  const fmtLabel = useIntraday
+    ? (s: string) => {
+        if (!s) return '';
+        try {
+          const d = new Date(s);
+          if (isNaN(d.getTime())) return s.slice(11, 16) || s;
+          return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+        } catch { return s.slice(11, 16) || s; }
+      }
+    : fmtDate;
+  const sorted = [...list].sort((a, b) => (getKey(a)) < (getKey(b)) ? -1 : 1);
   const uniqueDates: string[] = [];
   const dateIndex = new Map<string, number>();
   for (const it of sorted) {
-    const d = it[dateField] || '';
+    const d = getKey(it);
     if (!dateIndex.has(d)) { dateIndex.set(d, uniqueDates.length); uniqueDates.push(d); }
   }
   const n = uniqueDates.length;
   const actual: (number | null)[] = new Array(n).fill(null);
   for (const it of sorted) {
-    const idx = dateIndex.get(it[dateField] || '');
+    const idx = dateIndex.get(getKey(it));
     if (idx !== undefined && actual[idx] === null && it[actualField] != null) {
       const v = parseFloat(it[actualField]);
       actual[idx] = isFinite(v) ? v : null;
@@ -123,13 +144,13 @@ function buildMultiAlgoData(
   for (const it of sorted) {
     const key = (it[algoField] || 'unknown').toLowerCase();
     if (!algoMap.has(key)) algoMap.set(key, new Array(n).fill(null));
-    const idx = dateIndex.get(it[dateField] || '');
+    const idx = dateIndex.get(getKey(it));
     if (idx !== undefined && it[predField] != null) {
       const v = parseFloat(it[predField]);
       algoMap.get(key)![idx] = isFinite(v) ? v : null;
     }
   }
-  return { labels: uniqueDates.map(fmtDate), actual, predSeries: Array.from(algoMap.entries()).map(([key, data]) => ({ key, data })) };
+  return { labels: uniqueDates.map(fmtLabel), actual, predSeries: Array.from(algoMap.entries()).map(([key, data]) => ({ key, data })) };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -301,7 +322,7 @@ export default function Crypto() {
       .then((v: any) => {
         const list = Array.isArray(v) ? v : Array.isArray(v?.data) ? v.data : [];
         if (list.length > 0) {
-          setPredChart(buildMultiAlgoData(list, 'date', 'actual_price', 'predicted_price', 'algorithm_name', ddmm));
+          setPredChart(buildMultiAlgoData(list, 'date', 'actual_price', 'predicted_price', 'algorithm_name', ddmm, days === '1'));
         } else {
           setPredChart({ labels: [], actual: [], predSeries: [] });
         }

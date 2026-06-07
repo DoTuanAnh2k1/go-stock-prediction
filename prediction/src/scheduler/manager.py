@@ -47,6 +47,7 @@ DEFAULT_SCHEDULES = [
     ("predict_fuel",   "Dự đoán Fuel (10PM hàng ngày)",            "0 0 22 * * *",    True),
     ("predict_sp500",  "Dự đoán S&P 500 (disabled — trong pipeline)", "0 0 13 * * 1-5",  False),
     ("daily_reconcile", "Reconcile dự đoán (6AM hàng ngày)", "0 0 6 * * *", True),
+    ("simulation_daily", "Bot trading hàng ngày (8PM)", "0 0 20 * * *", True),
     ("daily_backup", "Backup database (3AM hàng ngày)", "0 0 3 * * *", True),
 ]
 

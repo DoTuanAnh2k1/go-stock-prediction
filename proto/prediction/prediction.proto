@@ -62,6 +62,7 @@ service PredictionService {
   // Trading Simulation
   rpc TriggerSimulationBacktest(SimulationRequest) returns (TriggerResponse);
   rpc TriggerSimulationLiveStep(Empty) returns (TriggerResponse);
+  rpc ResetSimBots(Empty) returns (TriggerResponse);
 }
 
 message Empty {}

@@ -155,7 +155,7 @@ class NasdaqCrawler(BaseCrawler):
             if not close:
                 continue
 
-            trading_date = datetime.utcfromtimestamp(ts).date()
+            trading_date = datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(_VN_TZ).date()
             rows.append(dict(
                 symbol=symbol,
                 trading_date=trading_date,

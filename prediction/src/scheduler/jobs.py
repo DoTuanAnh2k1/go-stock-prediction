@@ -55,12 +55,22 @@ def _run_pipeline(market_key: str, crawl_fn: Callable) -> None:
 
 def job_crawl_vn30() -> None:
     from src.crawlers.vn30 import VN30Crawler
-    _run_pipeline("VN30", lambda: VN30Crawler().crawl())
+    crawler = VN30Crawler()
+    _run_pipeline("VN30", lambda: crawler.crawl())
+    try:
+        crawler.crawl_intraday()
+    except Exception as exc:
+        log.warning("job.crawl_vn30.intraday.error", error=str(exc))
 
 
 def job_crawl_gold() -> None:
     from src.crawlers.gold import GoldCrawler
-    _run_pipeline("GOLD", lambda: GoldCrawler().crawl())
+    crawler = GoldCrawler()
+    _run_pipeline("GOLD", lambda: crawler.crawl())
+    try:
+        crawler.crawl_intraday()
+    except Exception as exc:
+        log.warning("job.crawl_gold.intraday.error", error=str(exc))
 
 
 def job_crawl_nasdaq() -> None:

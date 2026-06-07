@@ -55,7 +55,7 @@ class CryptoCrawler(BaseCrawler):
             resp.raise_for_status()
             data = resp.json()
 
-            today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0).date()
+            today = datetime.now(tz=_VN_TZ).date()
 
             for coin_id, symbol in COINS:
                 coin_data = data.get(coin_id, {})
@@ -148,7 +148,7 @@ class CryptoCrawler(BaseCrawler):
 
                 for ts_ms, price in prices_raw:
                     ts_sec = ts_ms / 1000
-                    trading_date = datetime.utcfromtimestamp(ts_sec).date()
+                    trading_date = datetime.fromtimestamp(ts_sec, tz=timezone.utc).astimezone(_VN_TZ).date()
 
                     repo.upsert_crypto_price(
                         coin_id=coin_id,

@@ -129,20 +129,21 @@ func GetGoldPrices(w http.ResponseWriter, r *http.Request) {
 }
 
 type goldChartResponse struct {
-	Labels     []string          `json:"labels"`
-	BuyPrices  []decimal.Decimal `json:"buy_prices"`
-	SellPrices []decimal.Decimal `json:"sell_prices"`
+	Labels      []string          `json:"labels"`
+	BuyPrices   []decimal.Decimal `json:"buy_prices"`
+	SellPrices  []decimal.Decimal `json:"sell_prices"`
+	Granularity string            `json:"granularity"`
 }
 
 // GetGoldChart godoc
 //
 //	@Summary      Get gold price chart data
-//	@Description  Returns chronologically ordered labels and buy/sell price arrays suitable for charting
+//	@Description  Returns chronologically ordered labels and buy/sell price arrays suitable for charting. When days=1, returns hourly intraday data; otherwise returns daily data.
 //	@Tags         Gold
 //	@Produce      json
 //	@Param        source        query  string  false  "Gold source (e.g. SJC, BTMC)"
 //	@Param        product_type  query  string  false  "Product type (e.g. 1l, nhan_tron)"
-//	@Param        days          query  int     false  "Number of days to look back (default 30)"
+//	@Param        days          query  int     false  "Number of days to look back (default 30); use 1 for intraday hourly data"
 //	@Success      200           {object}  goldChartResponse
 //	@Failure      500           {object}  ResponseFailure
 //	@Router       /api/gold/chart [get]
@@ -159,8 +160,38 @@ func GetGoldChart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store := repository.GetSingleton()
-
 	to := time.Now()
+
+	if days == 1 {
+		from := to.Add(-24 * time.Hour)
+		intradayPrices, err := store.GetGoldIntradayByRange(source, from, to)
+		if err != nil {
+			logger.Logger.Errorf("[api/gold/chart] Failed to get gold intraday prices: %v", err)
+			ResponseError(w, http.StatusInternalServerError, "Failed to get gold intraday prices")
+			return
+		}
+
+		labels := make([]string, 0, len(intradayPrices))
+		buyPrices := make([]decimal.Decimal, 0, len(intradayPrices))
+		sellPrices := make([]decimal.Decimal, 0, len(intradayPrices))
+
+		// intraday prices are ordered DESC from DB — reverse for chart (oldest first)
+		for i := len(intradayPrices) - 1; i >= 0; i-- {
+			p := intradayPrices[i]
+			labels = append(labels, p.Timestamp.Format("2006-01-02 15:04"))
+			buyPrices = append(buyPrices, p.BuyPrice)
+			sellPrices = append(sellPrices, p.SellPrice)
+		}
+
+		ResponseSuccess(w, http.StatusOK, goldChartResponse{
+			Labels:      labels,
+			BuyPrices:   buyPrices,
+			SellPrices:  sellPrices,
+			Granularity: "1h",
+		})
+		return
+	}
+
 	from := to.AddDate(0, 0, -days)
 	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
@@ -184,8 +215,9 @@ func GetGoldChart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ResponseSuccess(w, http.StatusOK, goldChartResponse{
-		Labels:     labels,
-		BuyPrices:  buyPrices,
-		SellPrices: sellPrices,
+		Labels:      labels,
+		BuyPrices:   buyPrices,
+		SellPrices:  sellPrices,
+		Granularity: "1d",
 	})
 }

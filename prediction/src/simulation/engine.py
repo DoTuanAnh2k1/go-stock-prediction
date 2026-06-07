@@ -53,6 +53,69 @@ def _get_simulation_dates(market: str, algorithm: str, start_date: date, end_dat
         return [r[0] for r in result if r[0] is not None]
 
 
+def _restore_portfolio_state(bot, db_trades: list, initial_capital: float) -> None:
+    """Restore bot portfolio state from prior trades in the live session."""
+    from src.simulation.portfolio import Position
+
+    if not db_trades:
+        return
+
+    cash = initial_capital
+    # Per-symbol: queue of unmatched BUYs (FIFO matching)
+    open_buys: dict[str, list] = {}  # symbol → list of buy dicts
+
+    for t in db_trades:  # ordered by id ASC = insertion order
+        tv = float(t.trade_value)
+        symbol = t.symbol
+
+        if t.action == "BUY":
+            cash -= tv
+            open_buys.setdefault(symbol, []).append({
+                'quantity': float(t.quantity),
+                'price': float(t.price),
+                'date': t.trade_date.date() if hasattr(t.trade_date, 'date') else t.trade_date,
+                'id': t.id,
+                'trade_value': tv,
+            })
+        elif t.action == "SELL":
+            cash += tv
+            # FIFO: match against earliest open buy
+            if symbol in open_buys and open_buys[symbol]:
+                open_buys[symbol].pop(0)
+                if not open_buys[symbol]:
+                    del open_buys[symbol]
+
+    # Restore positions: one per symbol (first open buy), refund duplicates to cash
+    for symbol, buys in open_buys.items():
+        if not buys:
+            continue
+        b = buys[0]  # first open buy
+        if symbol not in bot.portfolio.positions:
+            bot.portfolio.positions[symbol] = Position(
+                symbol=symbol,
+                quantity=b['quantity'],
+                entry_price=b['price'],
+                entry_date=b['date'],
+                entry_trade_id=b['id'],
+            )
+        # Refund extra duplicate buys (Bug artifacts) back to cash
+        for extra in buys[1:]:
+            cash += extra['trade_value']
+
+    bot.portfolio.cash = max(0.0, cash)
+
+    # Set counter to avoid in-memory ID conflicts
+    if db_trades:
+        max_id = max(t.id for t in db_trades)
+        bot.portfolio._trade_id_counter = max_id
+
+    log.debug(
+        "sim.portfolio.restored",
+        positions=list(bot.portfolio.positions.keys()),
+        cash=round(bot.portfolio.cash, 2),
+    )
+
+
 class SimulationEngine:
     """Runs backtest or live simulation for trading bots."""
 
@@ -111,6 +174,7 @@ class SimulationEngine:
                 trades = bot.step(sim_date)
 
                 # Persist trades
+                trade_datetime = datetime(sim_date.year, sim_date.month, sim_date.day)
                 with session_scope() as session:
                     for trade in trades:
                         db_trade = SimTrade(
@@ -123,7 +187,7 @@ class SimulationEngine:
                             trade_value=Decimal(str(round(trade.trade_value, 2))),
                             signal_strength=Decimal(str(round(trade.signal_strength, 4))) if trade.signal_strength is not None else None,
                             confidence=Decimal(str(round(trade.confidence, 3))) if trade.confidence is not None else None,
-                            trade_date=sim_date,
+                            trade_date=trade_datetime,
                             close_reason=trade.close_reason,
                             entry_trade_id=trade.entry_trade_id,
                             pnl=Decimal(str(round(trade.pnl, 2))) if trade.pnl is not None else None,
@@ -295,6 +359,7 @@ class SimulationEngine:
 
     def _run_bot_steps(self, bot_configs: list, today) -> None:
         """Execute one simulation step for a list of (bot_id, BotConfig) pairs."""
+        now = datetime.now()  # VN local time (TZ=Asia/Ho_Chi_Minh set at startup)
         for bot_id, config in bot_configs:
             try:
                 with session_scope() as session:
@@ -317,6 +382,15 @@ class SimulationEngine:
                     session.commit()
 
                 bot = TradingBot(config)
+
+                # Restore portfolio state from existing live session trades
+                with session_scope() as _sess:
+                    prior_trades = _sess.query(SimTrade).filter(
+                        SimTrade.session_id == session_id
+                    ).order_by(SimTrade.id.asc()).all()
+                if prior_trades:
+                    _restore_portfolio_state(bot, prior_trades, config.initial_capital)
+
                 trades = bot.step(today)
 
                 with session_scope() as session:
@@ -331,7 +405,7 @@ class SimulationEngine:
                             trade_value=Decimal(str(round(trade.trade_value, 2))),
                             signal_strength=Decimal(str(round(trade.signal_strength, 4))) if trade.signal_strength is not None else None,
                             confidence=Decimal(str(round(trade.confidence, 3))) if trade.confidence is not None else None,
-                            trade_date=today,
+                            trade_date=now,
                             close_reason=trade.close_reason,
                             pnl=Decimal(str(round(trade.pnl, 2))) if trade.pnl is not None else None,
                             pnl_pct=Decimal(str(round(trade.pnl_pct, 4))) if trade.pnl_pct is not None else None,
@@ -383,3 +457,50 @@ class SimulationEngine:
         log.info("sim.live_step.all_start", bots=len(bot_configs))
         self._run_bot_steps(bot_configs, today)
         log.info("sim.live_step.all_done")
+
+    def reset_active_bots(self) -> int:
+        """Close all existing live sessions and create fresh ones for all active bots.
+
+        Closes any 'running' or 'paused' live sessions, then creates a new
+        'running' live session per active bot. Call this when bots stop trading
+        due to stale session state.
+
+        Returns count of bots successfully reset.
+        """
+        from datetime import date as date_type
+        today = date_type.today()
+
+        with session_scope() as session:
+            bots = session.query(SimBot).filter(SimBot.is_active == True).all()
+            bot_ids = [b.id for b in bots]
+
+        count = 0
+        for bot_id in bot_ids:
+            try:
+                with session_scope() as session:
+                    stale = session.query(SimSession).filter(
+                        SimSession.bot_id == bot_id,
+                        SimSession.mode == "live",
+                        SimSession.status.in_(["running", "paused"]),
+                    ).all()
+                    for s in stale:
+                        s.status = "completed"
+                        s.end_date = today
+                    session.commit()
+
+                with session_scope() as session:
+                    new_sess = SimSession(
+                        bot_id=bot_id,
+                        start_date=today,
+                        status="running",
+                        mode="live",
+                    )
+                    session.add(new_sess)
+                    session.commit()
+
+                count += 1
+            except Exception as exc:
+                log.error("sim.reset.bot_error", bot_id=bot_id, error=str(exc))
+
+        log.info("sim.reset.done", count=count, total=len(bot_ids))
+        return count

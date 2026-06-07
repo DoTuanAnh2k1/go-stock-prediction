@@ -100,18 +100,39 @@ function buildMultiAlgoData(
   predField: string,
   algoField: string,
   fmtDate: (s: string) => string,
+  useIntraday = false,
 ): { labels: string[]; actual: (number | null)[]; predSeries: { key: string; data: (number | null)[] }[] } {
-  const sorted = [...list].sort((a, b) => (a[dateField] || '') < (b[dateField] || '') ? -1 : 1);
+  // When intraday mode: use prediction_date (full datetime) as key so multiple
+  // predictions within the same calendar day are not collapsed into one point.
+  // Fallback to dateField when prediction_date is absent.
+  const getKey = (it: any): string => {
+    if (useIntraday) {
+      const pd = it['prediction_date'] || it[dateField] || '';
+      return pd;
+    }
+    return it[dateField] || '';
+  };
+  const fmtLabel = useIntraday
+    ? (s: string) => {
+        if (!s) return '';
+        try {
+          const d = new Date(s);
+          if (isNaN(d.getTime())) return s.slice(11, 16) || s;
+          return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+        } catch { return s.slice(11, 16) || s; }
+      }
+    : fmtDate;
+  const sorted = [...list].sort((a, b) => (getKey(a)) < (getKey(b)) ? -1 : 1);
   const uniqueDates: string[] = [];
   const dateIndex = new Map<string, number>();
   for (const it of sorted) {
-    const d = it[dateField] || '';
+    const d = getKey(it);
     if (!dateIndex.has(d)) { dateIndex.set(d, uniqueDates.length); uniqueDates.push(d); }
   }
   const n = uniqueDates.length;
   const actual: (number | null)[] = new Array(n).fill(null);
   for (const it of sorted) {
-    const idx = dateIndex.get(it[dateField] || '');
+    const idx = dateIndex.get(getKey(it));
     if (idx !== undefined && actual[idx] === null && it[actualField] != null) {
       const v = parseFloat(it[actualField]);
       actual[idx] = isFinite(v) ? v : null;
@@ -121,13 +142,13 @@ function buildMultiAlgoData(
   for (const it of sorted) {
     const key = (it[algoField] || 'unknown').toLowerCase();
     if (!algoMap.has(key)) algoMap.set(key, new Array(n).fill(null));
-    const idx = dateIndex.get(it[dateField] || '');
+    const idx = dateIndex.get(getKey(it));
     if (idx !== undefined && it[predField] != null) {
       const v = parseFloat(it[predField]);
       algoMap.get(key)![idx] = isFinite(v) ? v : null;
     }
   }
-  return { labels: uniqueDates.map(fmtDate), actual, predSeries: Array.from(algoMap.entries()).map(([key, data]) => ({ key, data })) };
+  return { labels: uniqueDates.map(fmtLabel), actual, predSeries: Array.from(algoMap.entries()).map(([key, data]) => ({ key, data })) };
 }
 
 function num(x: any): number {
@@ -220,12 +241,10 @@ function TablePager({ total, page, perPage, onChange }: { total: number; page: n
   const totalPages = Math.ceil(total / perPage);
   if (totalPages <= 1) return null;
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-3)' }}>
-      <span>{(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} / {total}</span>
-      <div style={{ display: 'flex', gap: 4 }}>
-        <button className="btn btn--sm btn--ghost" disabled={page <= 1} onClick={() => onChange(page - 1)}>←</button>
-        <button className="btn btn--sm btn--ghost" disabled={page >= totalPages} onClick={() => onChange(page + 1)}>→</button>
-      </div>
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, padding: '10px 16px', borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-2)' }}>
+      <button className="btn btn--sm" disabled={page <= 1} onClick={() => onChange(page - 1)} style={{ minWidth: 28, padding: '2px 8px' }}>‹</button>
+      <span>{page} / {totalPages}</span>
+      <button className="btn btn--sm" disabled={page >= totalPages} onClick={() => onChange(page + 1)} style={{ minWidth: 28, padding: '2px 8px' }}>›</button>
     </div>
   );
 }
@@ -248,6 +267,7 @@ export default function SP500() {
   const [confirmedPage, setConfirmedPage] = useState(1);
   const [predSym, setPredSym] = useState('');
   const [confirmedSym, setConfirmedSym] = useState('');
+  const [predChartAlgo, setPredChartAlgo] = useState('');
 
   // Load initial data
   useEffect(() => {
@@ -301,7 +321,7 @@ export default function SP500() {
         const v = predChartRes.value;
         const list = Array.isArray(v) ? v : Array.isArray(v?.data) ? v.data : [];
         if (list.length > 0) {
-          setPredChart(buildMultiAlgoData(list, 'date', 'actual_price', 'predicted_price', 'algorithm_name', ddmm));
+          setPredChart(buildMultiAlgoData(list, 'date', 'actual_price', 'predicted_price', 'algorithm_name', ddmm, days === '1'));
         } else {
           setPredChart({ labels: [], actual: [], predSeries: [] });
         }
@@ -336,6 +356,7 @@ export default function SP500() {
   const filteredPreds = predSym ? preds.filter((p) => p.symbol === predSym) : preds;
   const confirmedSymbols = Array.from(new Set(confirmedResults.map((r) => r.symbol).filter(Boolean))).sort() as string[];
   const filteredConfirmed = confirmedSym ? confirmedResults.filter((r) => r.symbol === confirmedSym) : confirmedResults;
+  const confirmedAlgos = Array.from(new Set(confirmedResults.map((r) => r.algorithm_name))).sort();
 
   if (loading) {
     return (
@@ -612,15 +633,32 @@ export default function SP500() {
       </div>
 
       {/* Prediction vs Actual chart — full width */}
-      <Panel title={t.common.predVsActual} sub={activeSym ? activeSym + ' · ' + t.common.allAlgos : 'S&P 500'} className="section-gap"
-        tools={<Seg options={[{ value: '1', label: t.dateRange.today }, { value: '7', label: t.dateRange.d7 }, { value: '30', label: t.dateRange.d30 }, { value: '90', label: t.dateRange.d90 }, { value: '180', label: t.dateRange.d180 }]} value={days} onChange={setDays} />}
+      <Panel title={t.common.predVsActual} sub={activeSym ? activeSym + ' · ' + (predChartAlgo ? algoShort(predChartAlgo).short : t.common.allAlgos) : 'S&P 500'} className="section-gap"
+        tools={
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Seg options={[{ value: '1', label: t.dateRange.today }, { value: '7', label: t.dateRange.d7 }, { value: '30', label: t.dateRange.d30 }, { value: '90', label: t.dateRange.d90 }, { value: '180', label: t.dateRange.d180 }]} value={days} onChange={setDays} />
+            {confirmedAlgos.length > 0 && (
+              <select value={predChartAlgo} onChange={(e) => setPredChartAlgo(e.target.value)}
+                style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)', cursor: 'pointer' }}>
+                <option value="">{t.common.allAlgos}</option>
+                {confirmedAlgos.map((algo) => (
+                  <option key={algo} value={algo}>{algoShort(algo).short} ({algo})</option>
+                ))}
+              </select>
+            )}
+          </div>
+        }
       >
-        {predChart.labels.length > 0 && (predChart.predSeries.length > 0 || predChart.actual.some((v) => v != null)) ? (
+        {predChart.labels.length > 0 && (predChart.predSeries.length > 0 || predChart.actual.some((v) => v != null)) ? (() => {
+          const visibleSeries = predChartAlgo
+            ? predChart.predSeries.filter((ps) => ps.key === predChartAlgo.toLowerCase())
+            : predChart.predSeries;
+          return (
           <>
             <LineChart
               series={[
                 { name: t.common.actual, data: predChart.actual, color: 'var(--text-2)', w: 1.8 },
-                ...predChart.predSeries.map((ps, i) => ({
+                ...visibleSeries.map((ps, i) => ({
                   name: algoDisplayName(ps.key),
                   data: ps.data,
                   color: algoColor(ps.key, i),
@@ -636,10 +674,11 @@ export default function SP500() {
             />
             <Legend items={[
               [t.common.actual, 'var(--text-2)'],
-              ...predChart.predSeries.map((ps, i) => [algoDisplayName(ps.key), algoColor(ps.key, i)] as [string, string]),
+              ...visibleSeries.map((ps, i) => [algoDisplayName(ps.key), algoColor(ps.key, i)] as [string, string]),
             ]} />
           </>
-        ) : (
+          );
+        })() : (
           <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
             <p>{t.common.noCompareData}</p>

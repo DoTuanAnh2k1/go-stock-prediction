@@ -138,7 +138,12 @@ class PredictionServicer:
         log.info("grpc.TriggerGoldCrawler")
         try:
             from src.crawlers.gold import GoldCrawler
-            saved = GoldCrawler().crawl()
+            crawler = GoldCrawler()
+            saved = crawler.crawl()
+            try:
+                crawler.crawl_intraday()
+            except Exception as exc:
+                log.warning("grpc.gold.intraday.error", error=str(exc))
             return pb2.TriggerResponse(success=True, message=f"Gold crawler completed: {saved} prices saved")
         except Exception as exc:
             log.error("grpc.TriggerGoldCrawler.error", error=str(exc))
@@ -300,6 +305,17 @@ class PredictionServicer:
         threading.Thread(target=_bg_simulation_live_step, daemon=True).start()
         return pb2.TriggerResponse(success=True, message="Simulation live step started")
 
+    def ResetSimBots(self, request, context):
+        pb2, _ = _get_pb()
+        log.info("grpc.ResetSimBots")
+        try:
+            from src.simulation.engine import SimulationEngine
+            count = SimulationEngine().reset_active_bots()
+            return pb2.TriggerResponse(success=True, message=f"Reset {count} active bots with fresh live sessions")
+        except Exception as exc:
+            log.error("grpc.ResetSimBots.error", error=str(exc))
+            return pb2.TriggerResponse(success=False, error=str(exc))
+
 
 # -------------------------------------------------------------------
 # Background worker functions
@@ -308,7 +324,12 @@ class PredictionServicer:
 def _bg_crawl_vn30():
     try:
         from src.crawlers.vn30 import VN30Crawler
-        saved = VN30Crawler().crawl()
+        crawler = VN30Crawler()
+        saved = crawler.crawl()
+        try:
+            crawler.crawl_intraday()
+        except Exception as exc:
+            log.warning("bg.vn30.intraday.error", error=str(exc))
         log.info("bg.vn30.done", saved=saved)
     except Exception as exc:
         log.error("bg.vn30.error", error=str(exc))

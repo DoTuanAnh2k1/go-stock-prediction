@@ -10,7 +10,7 @@ import math
 
 import numpy as np
 
-from src.algorithms.base import PredictionAlgorithm, PredictionResult
+from src.algorithms.base import PredictionAlgorithm, PredictionResult, get_max_change_pct
 from src.utils.logger import get_logger
 
 log = get_logger("lstm")
@@ -203,7 +203,7 @@ class LSTMPredictor(PredictionAlgorithm):
             pred_norm = self._model(last_seq).item()
 
         predicted_price = float(pred_norm * (p_max - p_min) + p_min)
-        max_change = current * 0.07
+        max_change = current * get_max_change_pct(self._market_key)
         predicted_price = max(current - max_change, min(current + max_change, predicted_price))
 
         return PredictionResult(
@@ -259,8 +259,8 @@ class LSTMPredictor(PredictionAlgorithm):
 
         predicted_price = float(pred_norm * (p_max - p_min) + p_min)
 
-        # Clamp to ±7% daily limit
-        max_change = current * 0.07
+        # Clamp to market-aware daily limit
+        max_change = current * get_max_change_pct(self._market_key)
         predicted_price = max(current - max_change, min(current + max_change, predicted_price))
 
         # Confidence based on inverse of final loss
@@ -279,8 +279,7 @@ class LSTMPredictor(PredictionAlgorithm):
             algorithm_name=self.get_key(),
         )
 
-    @staticmethod
-    def _ema_fallback(prices: list[float]) -> PredictionResult:
+    def _ema_fallback(self, prices: list[float]) -> PredictionResult:
         """Simple EMA fallback when LSTM fails."""
         arr = np.array(prices, dtype=float)
         current = float(arr[-1])
@@ -291,7 +290,7 @@ class LSTMPredictor(PredictionAlgorithm):
             ema = float(p) * k + ema * (1 - k)
         trend = (ema - current) / current
         predicted = current * (1 + trend * 0.5)
-        max_change = current * 0.07
+        max_change = current * get_max_change_pct(self._market_key)
         predicted = max(current - max_change, min(current + max_change, predicted))
         return PredictionResult(
             predicted_price=predicted,

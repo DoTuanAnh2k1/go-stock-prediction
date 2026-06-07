@@ -164,11 +164,10 @@ func GetFuelPredictionsChart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := make([]fuelPredictionChartPoint, 0, len(filtered))
-	// reverse for chronological order (DB returns DESC)
-	for i := len(filtered) - 1; i >= 0; i-- {
-		p := filtered[i]
+	// DB returns prediction_date ASC — iterate forward
+	for _, p := range filtered {
 		data = append(data, fuelPredictionChartPoint{
-			Date:           p.TargetDate.Format("2006-01-02"),
+			Date:           p.PredictionDate.Format("2006-01-02T15:04:05"),
 			AlgorithmName:  p.AlgorithmName,
 			PredictedPrice: p.PredictedPrice,
 			ActualPrice:    p.ActualPrice,

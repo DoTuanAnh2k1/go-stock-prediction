@@ -122,9 +122,11 @@ func (c *Client) GetLatestConfirmedSP500Predictions() ([]modelsdb.SP500Predictio
 }
 
 // GetSP500PredictionsByDateRange returns S&P 500 predictions for a symbol within a date range.
+// Filters by prediction_date (when the prediction was created) so intraday predictions
+// created today are included even though their target_date is tomorrow.
 func (c *Client) GetSP500PredictionsByDateRange(symbol string, from, to time.Time) ([]modelsdb.SP500Prediction, error) {
 	var preds []modelsdb.SP500Prediction
-	query := c.Db.Where("target_date BETWEEN ? AND ?", from, to).Order("target_date DESC")
+	query := c.Db.Where("prediction_date BETWEEN ? AND ?", from, to).Order("prediction_date ASC")
 	if symbol != "" {
 		query = query.Where("symbol = ?", symbol)
 	}

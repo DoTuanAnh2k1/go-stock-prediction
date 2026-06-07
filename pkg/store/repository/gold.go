@@ -35,6 +35,12 @@ type GoldPredictionStore interface {
 	GetLatestConfirmedGoldPredictions() ([]modelsdb.GoldPrediction, error)
 }
 
+// GoldIntradayStore handles persistence for gold hourly intraday price records.
+type GoldIntradayStore interface {
+	UpsertGoldIntradayPrice(p *modelsdb.GoldIntradayPrice) error
+	GetGoldIntradayByRange(source string, from, to time.Time) ([]modelsdb.GoldIntradayPrice, error)
+}
+
 type MacroIndicatorStore interface {
 	GetMacroIndicators(name string, limit int) ([]modelsdb.MacroIndicator, error)
 	GetLatestMacroIndicator(name string) (*modelsdb.MacroIndicator, error)

@@ -143,14 +143,15 @@ export function stockHistory(sym: string, days?: number): Promise<number[]> {
 }
 
 // ── Gold chart ───────────────────────────────────────────────────────────────
-export function goldChart(source: string, product: string, days?: number): Promise<{ labels: string[]; buy: number[]; sell: number[] }> {
+export function goldChart(source: string, product: string, days?: number): Promise<{ labels: string[]; buy: number[]; sell: number[]; granularity?: string }> {
   return fetchJSON('/gold/chart?source=' + source + '&product_type=' + product + '&days=' + (days || 180))
     .then((j: any) => ({
       labels: arr<string>(j.labels),
       buy:    arr<number>(j.buy_prices).map(num),
       sell:   arr<number>(j.sell_prices).map(num),
+      granularity: j.granularity ?? '1d',
     }))
-    .catch(() => ({ labels: [], buy: [], sell: [] }));
+    .catch(() => ({ labels: [], buy: [], sell: [], granularity: '1d' }));
 }
 
 // ── Market page (backend pagination + sort) ──────────────────────────────────

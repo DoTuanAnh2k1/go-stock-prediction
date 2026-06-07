@@ -2,14 +2,18 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo
+
+_VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 import requests
 from bs4 import BeautifulSoup
 
 from src.crawlers.base import DEFAULT_HEADERS, USER_AGENT, BaseCrawler
 from src.database import repository as repo
+from src.database.models import GoldIntradayPrice
 from src.utils.logger import get_logger
 from src.utils.number_parser import safe_parse_vnd
 
@@ -17,6 +21,7 @@ log = get_logger("crawler.gold")
 
 YAHOO_GOLD_DAILY = "https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1d&range=1d"
 YAHOO_GOLD_HISTORY = "https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1d&range=6mo"
+YAHOO_GOLD_INTRADAY = "https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1h&range=2d"
 USD_VND_RATE_URL = "https://open.er-api.com/v6/latest/USD"
 BTMC_API_URL = "http://api.btmc.vn/api/BTMCAPI/getpricebtmc?key=3kd8ub1llcg9t45hnoh8hmn7t5kc2v"
 BTMH_URL = "https://giavang.org/trong-nuoc/bao-tin-manh-hai/"
@@ -132,6 +137,82 @@ class GoldCrawler(BaseCrawler):
         log.info("gold.history.done", saved=saved)
         return saved
 
+    def crawl_intraday(self) -> int:
+        """Fetch last 2d of hourly XAU/USD bars from Yahoo Finance and persist them."""
+        log.info("gold.intraday.start")
+        saved = 0
+
+        try:
+            resp = self._session.get(YAHOO_GOLD_INTRADAY, timeout=self._timeout)
+            resp.raise_for_status()
+            data = resp.json()
+
+            results = data.get("chart", {}).get("result", [])
+            if not results:
+                log.warning("gold.intraday.empty")
+                return 0
+
+            result = results[0]
+            timestamps = result.get("timestamp", [])
+            quote = result.get("indicators", {}).get("quote", [{}])[0]
+
+            opens = quote.get("open", [])
+            highs = quote.get("high", [])
+            lows = quote.get("low", [])
+            closes = quote.get("close", [])
+
+            # Fetch USD/VND rate once for VND conversion
+            try:
+                vnd_rate = self._fetch_usd_vnd_rate()
+            except Exception as exc:
+                log.warning("gold.intraday.vnd_rate.error", error=str(exc))
+                vnd_rate = None
+
+            for i, ts in enumerate(timestamps):
+                close = closes[i] if i < len(closes) else None
+                if close is None:
+                    continue
+
+                dt = datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(_VN_TZ).replace(
+                    minute=0, second=0, microsecond=0, tzinfo=None
+                )
+                open_price = Decimal(str(opens[i] or 0)) if i < len(opens) else Decimal(0)
+                high_price = Decimal(str(highs[i] or 0)) if i < len(highs) else Decimal(0)
+                low_price = Decimal(str(lows[i] or 0)) if i < len(lows) else Decimal(0)
+                close_price = Decimal(str(close))
+
+                # Save USD bar using buy/sell = close (spot)
+                record_usd = GoldIntradayPrice(
+                    source="XAU",
+                    product_type="spot",
+                    timestamp=dt,
+                    buy_price=close_price,
+                    sell_price=close_price,
+                    currency="USD",
+                )
+                repo.upsert_gold_intraday(record_usd)
+                saved += 1
+
+                # Also save VND converted bar
+                if vnd_rate:
+                    vnd_price = (close_price * vnd_rate).quantize(Decimal("1"))
+                    record_vnd = GoldIntradayPrice(
+                        source="XAU_VND",
+                        product_type="spot",
+                        timestamp=dt,
+                        buy_price=vnd_price,
+                        sell_price=vnd_price,
+                        currency="VND",
+                    )
+                    repo.upsert_gold_intraday(record_vnd)
+                    saved += 1
+
+        except Exception as exc:
+            log.warning("gold.intraday.error", error=str(exc))
+
+        log.info("gold.intraday.done", saved=saved)
+        return saved
+
     # -------------------------------------------------------------------
     # XAU
     # -------------------------------------------------------------------
@@ -149,7 +230,7 @@ class GoldCrawler(BaseCrawler):
         if price == 0:
             raise ValueError("Yahoo Finance returned zero price")
 
-        trading_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        trading_date = datetime.now(tz=_VN_TZ).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
 
         xau_usd = dict(
             source="XAU", product_type="spot", trading_date=trading_date,
@@ -203,7 +284,7 @@ class GoldCrawler(BaseCrawler):
         for ts, close in zip(timestamps, closes):
             if not close or close == 0:
                 continue
-            trading_date = datetime.utcfromtimestamp(ts).replace(hour=0, minute=0, second=0, microsecond=0)
+            trading_date = datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(_VN_TZ).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
             price = Decimal(str(close))
 
             repo.upsert_gold_price(
@@ -233,7 +314,7 @@ class GoldCrawler(BaseCrawler):
 
         items = data.get("DataList", {}).get("Data", [])
         ten = Decimal("10")
-        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = datetime.now(tz=_VN_TZ).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
 
         seen: set[str] = set()
         prices = []
@@ -302,7 +383,7 @@ class GoldCrawler(BaseCrawler):
         resp.raise_for_status()
 
         soup = BeautifulSoup(resp.text, "lxml")
-        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = datetime.now(tz=_VN_TZ).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
         thousand = Decimal("1000")
         prices = []
 
@@ -352,7 +433,7 @@ class GoldCrawler(BaseCrawler):
             raise ValueError("vang.today returned success=false")
 
         lookup = {tc: (src, pt) for tc, src, pt in VANG_TODAY_TYPE_MAP}
-        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = datetime.now(tz=_VN_TZ).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
         prices = []
 
         for item in data.get("data", []):
@@ -418,7 +499,7 @@ class GoldCrawler(BaseCrawler):
         resp.raise_for_status()
 
         soup = BeautifulSoup(resp.text, "lxml")
-        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = datetime.now(tz=_VN_TZ).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
         ten = Decimal("10")
         seen: set[str] = set()
         prices = []

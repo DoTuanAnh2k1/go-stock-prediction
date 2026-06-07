@@ -58,8 +58,11 @@ def build_algorithms(market_key: str | None = None) -> dict[str, PredictionAlgor
     }
 
     if market_key:
+        mk_upper = market_key.upper()
+        for algo in instances.values():
+            algo._market_key = mk_upper
         with _registry_lock:
-            _market_algos[market_key.upper()] = instances
+            _market_algos[mk_upper] = instances
 
     return instances
 

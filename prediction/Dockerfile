@@ -41,8 +41,11 @@ WORKDIR /app
 COPY prediction/pyproject.toml pyproject.toml
 RUN pip install --no-cache-dir -e ".[dev,ml]"
 
-# Copy generated proto files from builder stage
-COPY --from=proto-builder /app/src/proto src/proto/
+# Copy pre-generated proto stubs (committed to repo alongside prediction.proto)
+# To regenerate: python -m grpc_tools.protoc -Iproto --python_out=prediction/src/proto
+#                --grpc_python_out=prediction/src/proto proto/prediction/prediction.proto
+#                then fix import: sed -i 's/from prediction import/from src.proto.prediction import/' ...
+COPY prediction/src/proto src/proto/
 
 # Copy application source and tests
 COPY prediction/src/ src/

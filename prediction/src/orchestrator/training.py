@@ -451,11 +451,19 @@ def reconcile_predictions() -> int:
                 continue
 
             predicted = Decimal(str(pred.predicted_price))
+            current = Decimal(str(pred.current_price))
             accuracy = max(Decimal("0"), Decimal("1") - abs(actual - predicted) / actual)
             accuracy = accuracy.quantize(Decimal("0.0001"))
             status = "confirmed" if float(accuracy) >= 0.70 else "wrong"
 
-            repo.update_prediction_actual(pred.id, actual, accuracy, status)
+            # direction_correct: both predicted and actual move in the same direction vs current_price
+            pred_diff = predicted - current
+            actual_diff = actual - current
+            direction_correct: bool | None = None
+            if pred_diff != 0 and actual_diff != 0:
+                direction_correct = (pred_diff > 0) == (actual_diff > 0)
+
+            repo.update_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
             total_updated += 1
 
     except Exception as exc:
@@ -467,7 +475,7 @@ def reconcile_predictions() -> int:
         log.info("reconcile.gold.pending", count=len(gold_pending))
 
         for pred in gold_pending:
-            gold_prices = repo.get_gold_prices_asc(pred.source, pred.product_type, limit=10)
+            gold_prices = repo.get_gold_prices_asc(pred.source, pred.product_type, limit=60)
             if not gold_prices:
                 continue
 
@@ -480,11 +488,18 @@ def reconcile_predictions() -> int:
                 continue
 
             predicted = Decimal(str(pred.predicted_price))
+            current = Decimal(str(pred.current_price))
             accuracy = max(Decimal("0"), Decimal("1") - abs(actual - predicted) / actual)
             accuracy = accuracy.quantize(Decimal("0.0001"))
             status = "confirmed" if float(accuracy) >= 0.70 else "wrong"
 
-            repo.update_gold_prediction_actual(pred.id, actual, accuracy, status)
+            pred_diff = predicted - current
+            actual_diff = actual - current
+            direction_correct: bool | None = None
+            if pred_diff != 0 and actual_diff != 0:
+                direction_correct = (pred_diff > 0) == (actual_diff > 0)
+
+            repo.update_gold_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
             total_updated += 1
 
     except Exception as exc:
@@ -499,7 +514,7 @@ def reconcile_predictions() -> int:
             # target_date is DATETIME, trading_date in NasdaqPrice is DATE — convert
             target_d = pred.target_date.date() if isinstance(pred.target_date, datetime) else pred.target_date
 
-            prices = repo.get_nasdaq_prices_asc(pred.symbol, limit=10)
+            prices = repo.get_nasdaq_prices_asc(pred.symbol, limit=60)
             if not prices:
                 continue
 
@@ -522,11 +537,18 @@ def reconcile_predictions() -> int:
                 continue
 
             predicted = Decimal(str(pred.predicted_price))
+            current = Decimal(str(pred.current_price))
             accuracy = max(Decimal("0"), Decimal("1") - abs(actual - predicted) / actual)
             accuracy = accuracy.quantize(Decimal("0.0001"))
             status = "confirmed" if float(accuracy) >= 0.70 else "wrong"
 
-            repo.update_nasdaq_prediction_actual(pred.id, actual, accuracy, status)
+            pred_diff = predicted - current
+            actual_diff = actual - current
+            direction_correct: bool | None = None
+            if pred_diff != 0 and actual_diff != 0:
+                direction_correct = (pred_diff > 0) == (actual_diff > 0)
+
+            repo.update_nasdaq_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
             total_updated += 1
 
     except Exception as exc:
@@ -540,7 +562,7 @@ def reconcile_predictions() -> int:
         for pred in sp500_pending:
             target_d = pred.target_date.date() if isinstance(pred.target_date, datetime) else pred.target_date
 
-            prices = repo.get_sp500_prices_asc(pred.symbol, limit=10)
+            prices = repo.get_sp500_prices_asc(pred.symbol, limit=60)
             if not prices:
                 continue
 
@@ -563,11 +585,18 @@ def reconcile_predictions() -> int:
                 continue
 
             predicted = Decimal(str(pred.predicted_price))
+            current = Decimal(str(pred.current_price))
             accuracy = max(Decimal("0"), Decimal("1") - abs(actual - predicted) / actual)
             accuracy = accuracy.quantize(Decimal("0.0001"))
             status = "confirmed" if float(accuracy) >= 0.70 else "wrong"
 
-            repo.update_sp500_prediction_actual(pred.id, actual, accuracy, status)
+            pred_diff = predicted - current
+            actual_diff = actual - current
+            direction_correct: bool | None = None
+            if pred_diff != 0 and actual_diff != 0:
+                direction_correct = (pred_diff > 0) == (actual_diff > 0)
+
+            repo.update_sp500_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
             total_updated += 1
 
     except Exception as exc:
@@ -581,7 +610,7 @@ def reconcile_predictions() -> int:
         for pred in crypto_pending:
             target_d = pred.target_date.date() if isinstance(pred.target_date, datetime) else pred.target_date
 
-            prices = repo.get_crypto_prices_asc(pred.coin_id, limit=10)
+            prices = repo.get_crypto_prices_asc(pred.coin_id, limit=60)
             if not prices:
                 continue
 
@@ -604,15 +633,70 @@ def reconcile_predictions() -> int:
                 continue
 
             predicted = Decimal(str(pred.predicted_price))
+            current = Decimal(str(pred.current_price))
             accuracy = max(Decimal("0"), Decimal("1") - abs(actual - predicted) / actual)
             accuracy = accuracy.quantize(Decimal("0.0001"))
             status = "confirmed" if float(accuracy) >= 0.70 else "wrong"
 
-            repo.update_crypto_prediction_actual(pred.id, actual, accuracy, status)
+            pred_diff = predicted - current
+            actual_diff = actual - current
+            direction_correct: bool | None = None
+            if pred_diff != 0 and actual_diff != 0:
+                direction_correct = (pred_diff > 0) == (actual_diff > 0)
+
+            repo.update_crypto_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
             total_updated += 1
 
     except Exception as exc:
         log.error("reconcile.crypto.error", error=str(exc))
+
+    # --- Fuel predictions ---
+    try:
+        fuel_pending = repo.get_pending_fuel_predictions(days_back=14)
+        log.info("reconcile.fuel.pending", count=len(fuel_pending))
+
+        for pred in fuel_pending:
+            target_d = pred.target_date.date() if isinstance(pred.target_date, datetime) else pred.target_date
+
+            prices = repo.get_fuel_prices_asc(pred.product_type, limit=60)
+            if not prices:
+                continue
+
+            closest = min(
+                prices,
+                key=lambda p: abs((p.trading_date - target_d).days)
+                if isinstance(p.trading_date, date_type)
+                else 999,
+            )
+            diff_days = (
+                abs((closest.trading_date - target_d).days)
+                if isinstance(closest.trading_date, date_type)
+                else 999
+            )
+            if diff_days > 7:
+                continue
+
+            actual = Decimal(str(closest.price))
+            if actual == 0:
+                continue
+
+            predicted = Decimal(str(pred.predicted_price))
+            current = Decimal(str(pred.current_price))
+            accuracy = max(Decimal("0"), Decimal("1") - abs(actual - predicted) / actual)
+            accuracy = accuracy.quantize(Decimal("0.0001"))
+            status = "confirmed" if float(accuracy) >= 0.70 else "wrong"
+
+            pred_diff = predicted - current
+            actual_diff = actual - current
+            direction_correct: bool | None = None
+            if pred_diff != 0 and actual_diff != 0:
+                direction_correct = (pred_diff > 0) == (actual_diff > 0)
+
+            repo.update_fuel_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
+            total_updated += 1
+
+    except Exception as exc:
+        log.error("reconcile.fuel.error", error=str(exc))
 
     log.info("reconcile.done", updated=total_updated)
     return total_updated

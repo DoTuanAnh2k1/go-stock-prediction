@@ -43,6 +43,7 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("/api/predictions/accuracy-trend", GetAccuracyTrend)
 	mux.HandleFunc("/api/predictions/compare/{symbol}", GetPredictionCompare)
 	mux.HandleFunc("/api/predictions/error-distribution", GetErrorDistribution)
+	mux.HandleFunc("/api/predictions/direction-accuracy", GetDirectionAccuracy)
 	mux.HandleFunc("/api/predictions/", GetPredictionDetail)
 	mux.HandleFunc("/api/algorithms/comparison", GetAlgorithmComparison)
 	mux.HandleFunc("/api/algorithms/backtest", GetAlgorithmBacktest)
@@ -168,6 +169,7 @@ func addHandler() *http.ServeMux {
 	// Trigger simulation
 	mux.HandleFunc("POST /api/trigger/simulation-backtest", AuthRequired(TriggerSimulationBacktestHandler))
 	mux.HandleFunc("POST /api/trigger/simulation-live-step", AuthRequired(TriggerSimulationLiveStepHandler))
+	mux.HandleFunc("POST /api/trigger/sim-reset", AuthRequired(TriggerSimResetHandler))
 
 	return mux
 }
@@ -200,6 +202,7 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  GET  /api/predictions/accuracy-trend")
 	logger.Logger.Info("  GET  /api/predictions/compare/{symbol}")
 	logger.Logger.Info("  GET  /api/predictions/error-distribution")
+	logger.Logger.Info("  GET  /api/predictions/direction-accuracy")
 	logger.Logger.Info("  GET  /api/predictions/{id}")
 	logger.Logger.Info("  GET  /api/algorithms/comparison")
 	logger.Logger.Info("  GET  /api/algorithms/backtest")
@@ -286,4 +289,5 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  POST /api/simulation/run-all")
 	logger.Logger.Info("  POST /api/trigger/simulation-backtest")
 	logger.Logger.Info("  POST /api/trigger/simulation-live-step")
+	logger.Logger.Info("  POST /api/trigger/sim-reset")
 }

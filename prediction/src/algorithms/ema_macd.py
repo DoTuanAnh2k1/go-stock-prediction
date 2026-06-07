@@ -1,15 +1,14 @@
 """EMA/MACD prediction algorithm.
 
 Port of the Go EMAPredictor — MACD(12, 26, 9) with Vietnamese session adjustment.
+Step 2 improvement: predict actual price via EMA trend slope + MACD momentum
+instead of the old BUY/SELL signal → tiny %.
 """
 from __future__ import annotations
 
-import random
-import time
-
 import numpy as np
 
-from src.algorithms.base import PredictionAlgorithm, PredictionResult
+from src.algorithms.base import PredictionAlgorithm, PredictionResult, get_max_change_pct
 
 
 class EMAMACDPredictor(PredictionAlgorithm):
@@ -18,7 +17,6 @@ class EMAMACDPredictor(PredictionAlgorithm):
     SHORT_PERIOD = 12
     LONG_PERIOD = 26
     SIGNAL_PERIOD = 9
-    MAX_DAILY_CHANGE = 0.07
 
     def get_name(self) -> str:
         return "Exponential Moving Average"
@@ -33,12 +31,15 @@ class EMAMACDPredictor(PredictionAlgorithm):
         arr = np.array(prices, dtype=float)
         current = float(arr[-1])
 
-        short_ema = self._ema_scalar(arr, self.SHORT_PERIOD)
-        long_ema = self._ema_scalar(arr, self.LONG_PERIOD)
-
+        # Build full EMA series for slope calculation
         short_series = self._ema_series(arr, self.SHORT_PERIOD)
         long_series = self._ema_series(arr, self.LONG_PERIOD)
 
+        # Scalar EMA values (last point of each series)
+        short_ema = float(short_series[-1]) if len(short_series) > 0 else current
+        long_ema = float(long_series[-1]) if len(long_series) > 0 else current
+
+        # MACD line and signal line
         overlap = len(long_series)
         short_offset = len(short_series) - overlap
         macd_series = short_series[short_offset:] - long_series
@@ -52,9 +53,8 @@ class EMAMACDPredictor(PredictionAlgorithm):
 
         histogram = macd_line - signal_line
 
-        signal = self._macd_signal(macd_line, signal_line, histogram)
-        confidence = self._adjust_for_vn_session(signal)
-        predicted = self._calc_price(current, signal, confidence)
+        confidence = self._calc_confidence(macd_line, signal_line, histogram)
+        predicted = self._calc_price(arr, current, short_series, macd_line, signal_line)
 
         return PredictionResult(
             predicted_price=predicted,
@@ -88,50 +88,52 @@ class EMAMACDPredictor(PredictionAlgorithm):
         return result
 
     @staticmethod
-    def _macd_signal(macd_line: float, signal_line: float, histogram: float) -> dict:
-        direction = "HOLD"
-        if macd_line > signal_line and histogram > 0:
-            direction = "BUY"
-        elif macd_line < signal_line and histogram < 0:
-            direction = "SELL"
-
+    def _calc_confidence(macd_line: float, signal_line: float, histogram: float) -> float:
+        """Confidence based on MACD histogram size relative to MACD magnitude."""
         if macd_line != 0:
             strength = min(1.0, abs(histogram) / abs(macd_line) * 2 + 0.5)
         else:
             strength = 0.5
-
         strength = max(0.1, min(1.0, strength))
-        return {"direction": direction, "strength": strength}
+        # Map to [0.30, 0.85] confidence range
+        return round(max(0.30, min(0.85, strength * 0.75)), 4)
 
-    @staticmethod
-    def _adjust_for_vn_session(signal: dict) -> float:
-        base = signal["strength"] * 0.75
-        hour = time.localtime().tm_hour
+    def _calc_price(
+        self,
+        arr: np.ndarray,
+        current: float,
+        short_ema_series: np.ndarray,
+        macd_line: float,
+        signal_line: float,
+    ) -> float:
+        """Predict next price using EMA slope + MACD momentum boost.
 
-        if 9 <= hour <= 11:
-            adj = 0.10
-        elif 13 <= hour <= 14:
-            adj = 0.05
+        Strategy:
+          1. Compute the EMA(12) slope from the last few values of the series.
+          2. MACD momentum: if MACD > signal → upward boost proportional to
+             (macd - signal) / current; if MACD < signal → downward.
+          3. predicted = current + ema_slope + macd_boost
+          4. Apply market-aware clamp.
+        """
+        # EMA slope: average change over last min(3, available) steps
+        slope_window = min(4, len(short_ema_series))
+        if slope_window >= 2:
+            recent = short_ema_series[-slope_window:]
+            x = np.arange(len(recent), dtype=float)
+            ema_slope = float(np.polyfit(x, recent, 1)[0])
         else:
-            adj = -0.05
+            ema_slope = 0.0
 
-        return max(0.3, min(0.9, base + adj))
-
-    def _calc_price(self, current: float, signal: dict, confidence: float) -> float:
-        direction = signal["direction"]
-        strength = signal["strength"]
-
-        if direction == "BUY":
-            movement = current * strength * 0.025 * confidence
-        elif direction == "SELL":
-            movement = -current * strength * 0.025 * confidence
+        # MACD momentum: normalise by current price to get a price-unit contribution
+        if current > 0:
+            macd_momentum = (macd_line - signal_line) / current * current * 0.5
         else:
-            movement = current * (strength - 0.5) * 0.005
+            macd_momentum = 0.0
 
-        noise = (random.random() - 0.5) * 2 * current * 0.001 * (1 - confidence)
-        predicted = current + movement + noise
+        predicted = current + ema_slope + macd_momentum
 
-        max_change = current * self.MAX_DAILY_CHANGE
+        # Market-aware clamp
+        max_change = current * get_max_change_pct(self._market_key)
         predicted = max(current - max_change, min(current + max_change, predicted))
         if predicted <= 0:
             predicted = current * 0.01

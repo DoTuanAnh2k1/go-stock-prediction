@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useData } from '../context/DataContext';
-import { Panel, KPI, Icon, Chg, Seg, vnsToast } from '../components/ui';
+import { Panel, KPI, Icon, Chg, Seg, ConfBar, vnsToast } from '../components/ui';
 import { Sparkline, LineChart } from '../components/charts';
 import { fetchMarketPage } from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -31,6 +31,177 @@ async function authPost(path: string): Promise<boolean> {
   const res = await fetch(path, { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` } });
   return res.ok;
 }
+async function apiFetch(path: string): Promise<any> {
+  const res = await fetch(path, { headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function num(x: any): number {
+  const n = typeof x === 'number' ? x : parseFloat(x);
+  return isFinite(n) ? n : 0;
+}
+
+function ddmm(s: string): string {
+  if (!s) return '';
+  try {
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s.slice(0, 10);
+    return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2);
+  } catch {
+    return s.slice(0, 10);
+  }
+}
+
+function fmtDT(s: string): string {
+  if (!s) return '—';
+  try {
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s.slice(0, 16).replace('T', ' ');
+    const dd = ('0' + d.getDate()).slice(-2);
+    const mm = ('0' + (d.getMonth() + 1)).slice(-2);
+    const hh = ('0' + d.getHours()).slice(-2);
+    const mi = ('0' + d.getMinutes()).slice(-2);
+    return `${dd}/${mm} ${hh}:${mi}`;
+  } catch {
+    return s.slice(0, 16).replace('T', ' ');
+  }
+}
+
+function algoShort(name: string): { short: string; cls: string } {
+  const map: Record<string, { short: string; cls: string }> = {
+    lstm_nn: { short: 'LSTM', cls: 'lstm' },
+    lstm: { short: 'LSTM', cls: 'lstm' },
+    arima_garch: { short: 'ARIMA', cls: 'arima' },
+    moving_average: { short: 'MA', cls: 'ma' },
+    ema: { short: 'EMA', cls: 'ema' },
+    ema_macd: { short: 'EMA', cls: 'ema' },
+    ensemble: { short: 'ENS', cls: 'ens' },
+    lightgbm: { short: 'LGBM', cls: 'ens' },
+    random_forest: { short: 'RF', cls: 'ma' },
+    xgboost: { short: 'XGB', cls: 'lstm' },
+  };
+  return map[(name || '').toLowerCase()] || { short: (name || '?').slice(0, 5).toUpperCase(), cls: 'unknown' };
+}
+
+const ALGO_COLORS: Record<string, string> = {
+  lstm_nn:        'oklch(0.74 0.13 200)',
+  lstm:           'oklch(0.74 0.13 200)',
+  arima_garch:    'var(--gold)',
+  arima:          'var(--gold)',
+  moving_average: 'var(--up)',
+  ema:            'oklch(0.72 0.18 150)',
+  ema_macd:       'oklch(0.72 0.18 150)',
+  lightgbm:       'oklch(0.75 0.16 30)',
+  random_forest:  'oklch(0.72 0.14 270)',
+  xgboost:        'oklch(0.73 0.17 350)',
+  gru:            'oklch(0.72 0.15 240)',
+  ensemble:       'oklch(0.72 0.14 300)',
+};
+const FALLBACK_COLORS = ['var(--accent)', 'oklch(0.72 0.14 300)', 'var(--gold)', 'oklch(0.72 0.18 150)', 'var(--up)'];
+function algoColor(key: string, idx: number): string {
+  return ALGO_COLORS[key.toLowerCase()] || FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
+}
+const ALGO_DISPLAY: Record<string, string> = {
+  lstm_nn: 'LSTM', lstm: 'LSTM', arima_garch: 'ARIMA', arima: 'ARIMA',
+  moving_average: 'MA', ema: 'EMA', ema_macd: 'EMA/MACD',
+  lightgbm: 'LightGBM', random_forest: 'RF', xgboost: 'XGBoost',
+  gru: 'GRU', ensemble: 'Ensemble',
+};
+function algoDisplayName(key: string): string {
+  return ALGO_DISPLAY[key.toLowerCase()] || key;
+}
+
+interface PredictionItem {
+  symbol?: string;
+  algorithm_name: string;
+  current_price: number;
+  predicted_price: number;
+  confidence: number;
+  prediction_date: string;
+  target_date?: string;
+  actual_price?: number | null;
+  accuracy?: number | null;
+}
+
+interface PredChartData {
+  labels: string[];
+  actual: (number | null)[];
+  predSeries: { key: string; data: (number | null)[] }[];
+}
+
+function buildMultiAlgoData(
+  list: any[],
+  dateField: string,
+  actualField: string,
+  predField: string,
+  algoField: string,
+  fmtDate: (s: string) => string,
+  useIntraday = false,
+): PredChartData {
+  // When intraday mode: use prediction_date (full datetime) as key so multiple
+  // predictions within the same calendar day are not collapsed into one point.
+  // Fallback to dateField when prediction_date is absent.
+  const getKey = (it: any): string => {
+    if (useIntraday) {
+      const pd = it['prediction_date'] || it[dateField] || '';
+      return pd;
+    }
+    return it[dateField] || '';
+  };
+  const fmtLabel = useIntraday
+    ? (s: string) => {
+        if (!s) return '';
+        try {
+          const d = new Date(s);
+          if (isNaN(d.getTime())) return s.slice(11, 16) || s;
+          return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+        } catch { return s.slice(11, 16) || s; }
+      }
+    : fmtDate;
+  const sorted = [...list].sort((a, b) => (getKey(a)) < (getKey(b)) ? -1 : 1);
+  const uniqueDates: string[] = [];
+  const dateIndex = new Map<string, number>();
+  for (const it of sorted) {
+    const d = getKey(it);
+    if (!dateIndex.has(d)) { dateIndex.set(d, uniqueDates.length); uniqueDates.push(d); }
+  }
+  const n = uniqueDates.length;
+  const actual: (number | null)[] = new Array(n).fill(null);
+  for (const it of sorted) {
+    const idx = dateIndex.get(getKey(it));
+    if (idx !== undefined && actual[idx] === null && it[actualField] != null) {
+      const v = parseFloat(it[actualField]);
+      actual[idx] = isFinite(v) ? v : null;
+    }
+  }
+  const algoMap = new Map<string, (number | null)[]>();
+  for (const it of sorted) {
+    const key = (it[algoField] || 'unknown').toLowerCase();
+    if (!algoMap.has(key)) algoMap.set(key, new Array(n).fill(null));
+    const idx = dateIndex.get(getKey(it));
+    if (idx !== undefined && it[predField] != null) {
+      const v = parseFloat(it[predField]);
+      algoMap.get(key)![idx] = isFinite(v) ? v : null;
+    }
+  }
+  return { labels: uniqueDates.map(fmtLabel), actual, predSeries: Array.from(algoMap.entries()).map(([key, data]) => ({ key, data })) };
+}
+
+function Legend({ items }: { items: [string, string][] }) {
+  return (
+    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12, fontSize: 12, color: 'var(--text-3)' }}>
+      {items.map(([l, c]) => (
+        <span key={l} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+          <span style={{ width: 12, height: 3, background: c, display: 'inline-block' }}></span>{l}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const PAGE_SIZE = 10;
 
 export default function Stocks() {
   const { data: D } = useData();
@@ -48,8 +219,22 @@ export default function Stocks() {
   const [sel, setSel] = useState<StockItem | null>(null);
   const [activeSym, setActiveSym] = useState<string | null>(null);
   const [chartDays, setChartDays] = useState('90');
-  const [stockChart, setStockChart] = useState<{ dates: string[]; prices: number[] }>({ dates: [], prices: [] });
+  const [stockChart, setStockChart] = useState<{ dates: string[]; prices: number[]; granularity?: string }>({ dates: [], prices: [], granularity: '1d' });
   const [chartLoading, setChartLoading] = useState(false);
+
+  // Prediction section state
+  const [vn30Preds, setVn30Preds] = useState<PredictionItem[]>([]);
+  const [confirmedResults, setConfirmedResults] = useState<PredictionItem[]>([]);
+  const [predSym, setPredSym] = useState('');
+  const [confirmedSym, setConfirmedSym] = useState('');
+  const [predPage, setPredPage] = useState(0);
+  const [confirmedPage, setConfirmedPage] = useState(0);
+
+  // Prediction vs Actual chart state
+  const [predChart, setPredChart] = useState<PredChartData>({ labels: [], actual: [], predSeries: [] });
+  const [predChartSym, setPredChartSym] = useState('');
+  const [predChartAlgo, setPredChartAlgo] = useState('');
+  const [predChartDays, setPredChartDays] = useState('30');
 
   const sectors = [...new Set(D.stocks.map((s) => s.sector))].filter(Boolean);
 
@@ -62,19 +247,73 @@ export default function Stocks() {
   useEffect(() => {
     if (!activeSym) return;
     setChartLoading(true);
-    fetch(`/api/stocks/${encodeURIComponent(activeSym)}/history?days=${chartDays}`)
-      .then(r => r.json())
-      .then(v => {
-        const priceData: any[] = v?.price_data || [];
-        const reversed = [...priceData].reverse();
-        setStockChart({
-          dates: reversed.map((p) => (p.trading_date || '').slice(0, 10)),
-          prices: reversed.map((p) => parseFloat(p.close_price) || 0),
-        });
-      })
-      .catch(() => setStockChart({ dates: [], prices: [] }))
-      .finally(() => setChartLoading(false));
+    if (chartDays === '1') {
+      // Intraday: use /chart endpoint with period=1D&interval=1h
+      fetch(`/api/stocks/${encodeURIComponent(activeSym)}/chart?period=1D&interval=1h`)
+        .then(r => r.json())
+        .then(v => {
+          const raw: any[] = v?.data || [];
+          setStockChart({
+            dates: raw.map((p: any) => p.timestamp || ''),
+            prices: raw.map((p: any) => parseFloat(p.close) || 0),
+            granularity: '1h',
+          });
+        })
+        .catch(() => setStockChart({ dates: [], prices: [], granularity: '1h' }))
+        .finally(() => setChartLoading(false));
+    } else {
+      fetch(`/api/stocks/${encodeURIComponent(activeSym)}/history?days=${chartDays}`)
+        .then(r => r.json())
+        .then(v => {
+          const priceData: any[] = v?.price_data || [];
+          const reversed = [...priceData].reverse();
+          setStockChart({
+            dates: reversed.map((p) => (p.trading_date || '').slice(0, 10)),
+            prices: reversed.map((p) => parseFloat(p.close_price) || 0),
+            granularity: '1d',
+          });
+        })
+        .catch(() => setStockChart({ dates: [], prices: [], granularity: '1d' }))
+        .finally(() => setChartLoading(false));
+    }
   }, [activeSym, chartDays]);
+
+  // Load predictions data
+  useEffect(() => {
+    Promise.allSettled([
+      apiFetch('/api/predictions?limit=200'),
+      apiFetch('/api/predictions?status=confirmed&limit=200'),
+    ]).then(([predsRes, confirmedRes]) => {
+      if (predsRes.status === 'fulfilled' && predsRes.value) {
+        const raw = Array.isArray(predsRes.value) ? predsRes.value
+          : Array.isArray(predsRes.value?.data) ? predsRes.value.data
+          : Array.isArray(predsRes.value?.predictions) ? predsRes.value.predictions : [];
+        setVn30Preds(raw);
+      }
+      if (confirmedRes.status === 'fulfilled' && confirmedRes.value) {
+        const raw = Array.isArray(confirmedRes.value) ? confirmedRes.value
+          : Array.isArray(confirmedRes.value?.data) ? confirmedRes.value.data
+          : Array.isArray(confirmedRes.value?.predictions) ? confirmedRes.value.predictions : [];
+        setConfirmedResults(raw);
+      }
+    });
+  }, []);
+
+  // Load prediction vs actual chart
+  useEffect(() => {
+    const effectiveSym = predChartSym || D.stocks[0]?.sym || 'VCB';
+    const algoParam = predChartAlgo ? `&algorithm=${encodeURIComponent(predChartAlgo)}` : '';
+    apiFetch(`/api/predictions/compare/${encodeURIComponent(effectiveSym)}?days=${predChartDays}${algoParam}`)
+      .then((v: any) => {
+        const list = Array.isArray(v) ? v : Array.isArray(v?.data) ? v.data : [];
+        if (list.length > 0) {
+          setPredChart(buildMultiAlgoData(list, 'date', 'actual_price', 'predicted_price', 'algorithm_name', ddmm, predChartDays === '1'));
+        } else {
+          setPredChart({ labels: [], actual: [], predSeries: [] });
+        }
+      })
+      .catch(() => setPredChart({ labels: [], actual: [], predSeries: [] }));
+  }, [predChartSym, predChartAlgo, predChartDays, D.stocks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const doFetch = useCallback((pg: number, sb: string, sd: boolean, searchQ: string, sec: string) => {
     setLoading(true);
@@ -101,11 +340,11 @@ export default function Stocks() {
   }, [doFetch]);
 
   useEffect(() => {
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       setPage(1);
       doFetch(1, sortBy, sortDesc, q, sector);
     }, 300);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleSort(key: 'price' | 'change_percent') {
@@ -138,8 +377,26 @@ export default function Stocks() {
 
   const vn30Val = D.indices.vn30.val;
 
+  // Derived prediction section data
+  const predSymbols = Array.from(new Set(vn30Preds.map((p) => p.symbol).filter(Boolean))).sort() as string[];
+  const filteredPreds = predSym ? vn30Preds.filter((p) => p.symbol === predSym) : vn30Preds;
+  const predPageCount = Math.ceil(filteredPreds.length / PAGE_SIZE);
+  const predPagedItems = filteredPreds.slice(predPage * PAGE_SIZE, (predPage + 1) * PAGE_SIZE);
+
+  const confirmedSymbols = Array.from(new Set(confirmedResults.map((r) => r.symbol).filter(Boolean))).sort() as string[];
+  const filteredConfirmed = confirmedSym ? confirmedResults.filter((r) => r.symbol === confirmedSym) : confirmedResults;
+  const confirmedPageCount = Math.ceil(filteredConfirmed.length / PAGE_SIZE);
+  const confirmedPagedItems = filteredConfirmed.slice(confirmedPage * PAGE_SIZE, (confirmedPage + 1) * PAGE_SIZE);
+
+  // Unique algorithms from confirmed for dropdown
+  const confirmedAlgos = Array.from(new Set(confirmedResults.map((r) => r.algorithm_name))).sort();
+
+  // VN30 symbols for pred chart selector
+  const vn30Symbols = D.stocks.map((s) => s.sym);
+
   return (
     <div className="content__inner fade">
+      {/* 1. KPI Cards */}
       <div className="grid grid--kpis section-gap">
         <KPI label="VN30-Index" value={vn30Val ? fmt.price(vn30Val) : '—'} chgPct={D.indices.vn30.chgPct} chgAbs={D.indices.vn30.chg} spark={D.indices.vn30.series.slice(-22)} />
         <KPI label={t.stocks.upDown} value={D.stocks.length ? D.stocks.length + ' ' + t.stocks.symbolsLoaded : '—'} sub={t.stocks.symbolsLoaded} />
@@ -147,6 +404,7 @@ export default function Stocks() {
         <KPI label={t.dashboard.liquidity} value={D.indices.vnindex.vol ? fmt.compact(D.indices.vnindex.vol * 1e6) : '—'} sub={t.dashboard.stocksMatched} />
       </div>
 
+      {/* Search/filter bar */}
       <Panel className="section-gap">
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <div className="search" style={{ width: 280 }}>
@@ -167,7 +425,7 @@ export default function Stocks() {
         </div>
       </Panel>
 
-      {/* Price chart */}
+      {/* 2. Price Chart */}
       <Panel
         title={t.stocks.priceChart}
         dot={activeSym || '—'}
@@ -176,6 +434,8 @@ export default function Stocks() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Seg
               options={[
+                { value: '1', label: t.dateRange.today },
+                { value: '7', label: t.dateRange.d7 },
                 { value: '30', label: t.dateRange.d30 },
                 { value: '90', label: t.dateRange.d90 },
                 { value: '180', label: t.dateRange.d180 },
@@ -250,7 +510,12 @@ export default function Stocks() {
         ) : stockChart.prices.length > 0 ? (
           <LineChart
             series={[{ name: activeSym || 'Giá', data: stockChart.prices, color: 'var(--accent)' }]}
-            labels={stockChart.dates}
+            labels={stockChart.dates.map((s) => {
+              if (stockChart.granularity === '1h') {
+                return s.length >= 16 ? s.slice(11, 16) : s;
+              }
+              return ddmm(s);
+            })}
             height={400}
             area
             yFmt={(v) => v.toFixed(1)}
@@ -265,6 +530,7 @@ export default function Stocks() {
         )}
       </Panel>
 
+      {/* Price table */}
       <Panel title={t.stocks.priceTable} sub={t.stocks.updatedAt} flush className="section-gap"
         tools={<button className="btn btn--sm btn--ghost"><Icon name="refresh" size={13} />{t.common.refresh}</button>}>
         {loading && pagedStocks.length === 0
@@ -311,20 +577,15 @@ export default function Stocks() {
               className="btn btn--sm btn--ghost"
               disabled={page <= 1 || loading}
               onClick={() => handlePage(page - 1)}
-            >←</button>
-            {Array.from({ length: meta.totalPages }, (_, i) => i + 1).map((p) => (
-              <button
-                key={p}
-                className={`btn btn--sm ${p === page ? 'btn--primary' : 'btn--ghost'}`}
-                onClick={() => handlePage(p)}
-                disabled={loading}
-              >{p}</button>
-            ))}
+              style={{ minWidth: 28, padding: '2px 8px' }}
+            >‹</button>
+            <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{page} / {meta.totalPages}</span>
             <button
               className="btn btn--sm btn--ghost"
               disabled={page >= meta.totalPages || loading}
               onClick={() => handlePage(page + 1)}
-            >→</button>
+              style={{ minWidth: 28, padding: '2px 8px' }}
+            >›</button>
             <span style={{ fontSize: 12, color: 'var(--text-3)', marginLeft: 8 }}>
               {meta.total} {t.stocks.totalSymbols}
             </span>
@@ -332,6 +593,228 @@ export default function Stocks() {
         )}
       </Panel>
 
+      {/* 3. Predictions Section */}
+      <div className="grid grid--halves section-gap">
+        {/* Left: Tomorrow's predictions */}
+        <Panel title="Dự đoán VN30 phiên mai" flush tools={
+          predSymbols.length > 0 && (
+            <select value={predSym} onChange={(e) => { setPredSym(e.target.value); setPredPage(0); }}
+              style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)', cursor: 'pointer' }}>
+              <option value="">{t.common.allSymbols}</option>
+              {predSymbols.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )
+        }>
+          {filteredPreds.length === 0 ? (
+            <div className="empty">
+              <div className="empty__icon"><Icon name="layers" size={18} /></div>
+              <p>{vn30Preds.length === 0 ? t.common.noPredictions : 'Không có dữ liệu cho mã này.'}</p>
+            </div>
+          ) : (
+            <>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>{t.common.symbol}</th>
+                      <th className="c">{t.common.status}</th>
+                      <th className="r">{t.common.current}</th>
+                      <th className="r">{t.common.predicted}</th>
+                      <th className="r">±%</th>
+                      <th className="r">{t.common.confidence}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {predPagedItems.map((p, i) => {
+                      const cur = num(p.current_price);
+                      const pred = num(p.predicted_price);
+                      const deltaPct = cur ? +((pred - cur) / cur * 100).toFixed(2) : 0;
+                      const { short, cls } = algoShort(p.algorithm_name);
+                      let conf = num(p.confidence);
+                      if (conf > 0 && conf <= 1) conf = Math.round(conf * 100);
+                      return (
+                        <tr key={i}>
+                          <td className="sym" style={{ fontSize: 12.5 }}>{p.symbol}</td>
+                          <td className="c"><span className={`algo algo--${cls}`}>{short}</span></td>
+                          <td className="r num" style={{ color: 'var(--text-2)', fontSize: 12 }}>{fmt.price(cur)}</td>
+                          <td className="r num" style={{ fontWeight: 600, fontSize: 12 }}>{fmt.price(pred)}</td>
+                          <td className="r"><Chg pct={deltaPct} /></td>
+                          <td className="r"><ConfBar v={conf} /></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {predPageCount > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, padding: '10px 16px', borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-2)' }}>
+                  <button className="btn btn--sm" disabled={predPage === 0} onClick={() => setPredPage((p) => p - 1)} style={{ minWidth: 28, padding: '2px 8px' }}>‹</button>
+                  <span>{predPage + 1} / {predPageCount}</span>
+                  <button className="btn btn--sm" disabled={predPage >= predPageCount - 1} onClick={() => setPredPage((p) => p + 1)} style={{ minWidth: 28, padding: '2px 8px' }}>›</button>
+                </div>
+              )}
+            </>
+          )}
+        </Panel>
+
+        {/* Right: Latest confirmed results */}
+        <Panel title={t.common.latestPredResults} flush tools={
+          confirmedSymbols.length > 0 && (
+            <select value={confirmedSym} onChange={(e) => { setConfirmedSym(e.target.value); setConfirmedPage(0); }}
+              style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)', cursor: 'pointer' }}>
+              <option value="">{t.common.allSymbols}</option>
+              {confirmedSymbols.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )
+        }>
+          {filteredConfirmed.length === 0 ? (
+            <div className="empty">
+              <div className="empty__icon"><Icon name="pulse" size={18} /></div>
+              <p>{confirmedResults.length === 0 ? t.common.noConfirmedResults : 'Không có dữ liệu cho mã này.'}</p>
+            </div>
+          ) : (
+            <>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>{t.common.symbol}</th>
+                      <th className="c">{t.common.status}</th>
+                      <th className="r">{t.common.predicted}</th>
+                      <th className="r">{t.common.actual}</th>
+                      <th className="r">{t.common.deviation}</th>
+                      <th className="r">{t.common.accuracy}</th>
+                      <th className="c">{t.common.date}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {confirmedPagedItems.map((r, i) => {
+                      const predicted = num(r.predicted_price);
+                      const actual = num(r.actual_price ?? 0);
+                      const deviationPct = actual ? +((predicted - actual) / actual * 100).toFixed(2) : 0;
+                      const absDeviation = Math.abs(deviationPct);
+                      const deviationColor = absDeviation < 3
+                        ? 'var(--up)'
+                        : absDeviation < 5
+                          ? 'oklch(0.78 0.18 80)'
+                          : 'var(--dn)';
+                      let acc = r.accuracy != null ? num(r.accuracy) : null;
+                      if (acc != null && acc > 0 && acc <= 1) acc = Math.round(acc * 100);
+                      const accColor = acc == null ? 'var(--text-3)'
+                        : acc >= 95 ? 'var(--up)'
+                        : acc >= 80 ? 'oklch(0.78 0.18 80)'
+                        : 'var(--dn)';
+                      const { short, cls } = algoShort(r.algorithm_name);
+                      return (
+                        <tr key={i}>
+                          <td className="sym" style={{ fontSize: 12.5 }}>{r.symbol}</td>
+                          <td className="c"><span className={`algo algo--${cls}`}>{short}</span></td>
+                          <td className="r num" style={{ fontWeight: 600, fontSize: 12 }}>{fmt.price(predicted)}</td>
+                          <td className="r num" style={{ color: 'var(--text-2)', fontSize: 12 }}>
+                            {r.actual_price != null ? fmt.price(actual) : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                          </td>
+                          <td className="r num" style={{ color: deviationColor, fontSize: 12, fontWeight: 500 }}>
+                            {r.actual_price != null
+                              ? (deviationPct >= 0 ? '+' : '') + deviationPct.toFixed(2) + '%'
+                              : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                          </td>
+                          <td className="r">
+                            {acc != null
+                              ? <span style={{ color: accColor, fontWeight: 600, fontSize: 12 }}>{acc}%</span>
+                              : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                          </td>
+                          <td className="c num" style={{ color: 'var(--text-3)', fontSize: 12 }}>
+                            {fmtDT(r.prediction_date)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {confirmedPageCount > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, padding: '10px 16px', borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-2)' }}>
+                  <button className="btn btn--sm" disabled={confirmedPage === 0} onClick={() => setConfirmedPage((p) => p - 1)} style={{ minWidth: 28, padding: '2px 8px' }}>‹</button>
+                  <span>{confirmedPage + 1} / {confirmedPageCount}</span>
+                  <button className="btn btn--sm" disabled={confirmedPage >= confirmedPageCount - 1} onClick={() => setConfirmedPage((p) => p + 1)} style={{ minWidth: 28, padding: '2px 8px' }}>›</button>
+                </div>
+              )}
+            </>
+          )}
+        </Panel>
+      </div>
+
+      {/* 4. Prediction vs Actual Chart */}
+      <Panel
+        title={t.common.predVsActual}
+        sub={(predChartSym || (D.stocks[0]?.sym || 'VN30')) + ' · ' + (predChartAlgo ? algoShort(predChartAlgo).short : t.common.allAlgos)}
+        className="section-gap"
+        tools={
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Seg
+              options={[
+                { value: '1', label: t.dateRange.today },
+                { value: '7', label: t.dateRange.d7 },
+                { value: '30', label: t.dateRange.d30 },
+                { value: '90', label: t.dateRange.d90 },
+                { value: '180', label: t.dateRange.d180 },
+              ]}
+              value={predChartDays}
+              onChange={setPredChartDays}
+            />
+            {/* Symbol selector */}
+            {vn30Symbols.length > 0 && (
+              <select value={predChartSym} onChange={(e) => setPredChartSym(e.target.value)}
+                style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)', cursor: 'pointer' }}>
+                {vn30Symbols.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+            {/* Algorithm filter */}
+            {confirmedAlgos.length > 0 && (
+              <select value={predChartAlgo} onChange={(e) => setPredChartAlgo(e.target.value)}
+                style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)', cursor: 'pointer' }}>
+                <option value="">{t.common.allAlgos}</option>
+                {confirmedAlgos.map((algo) => (
+                  <option key={algo} value={algo}>{algoShort(algo).short} ({algo})</option>
+                ))}
+              </select>
+            )}
+          </div>
+        }
+      >
+        {predChart.labels.length > 0 && (predChart.predSeries.length > 0 || predChart.actual.some((v) => v != null)) ? (
+          <>
+            <LineChart
+              series={[
+                { name: t.common.actual, data: predChart.actual, color: 'var(--text-2)', w: 1.8 },
+                ...predChart.predSeries.map((ps, i) => ({
+                  name: algoDisplayName(ps.key),
+                  data: ps.data,
+                  color: algoColor(ps.key, i),
+                  dash: '5 4',
+                  w: 1.6,
+                })),
+              ]}
+              labels={predChart.labels}
+              height={400}
+              yFmt={(v) => v.toFixed(1)}
+              valueFmt={(v) => fmt.price(v)}
+              padL={52}
+            />
+            <Legend items={[
+              [t.common.actual, 'var(--text-2)'],
+              ...predChart.predSeries.map((ps, i) => [algoDisplayName(ps.key), algoColor(ps.key, i)] as [string, string]),
+            ]} />
+          </>
+        ) : (
+          <div className="empty" style={{ height: 400, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div className="empty__icon"><Icon name="layers" size={18} /></div>
+            <p>{t.common.noCompareData}</p>
+          </div>
+        )}
+      </Panel>
+
+      {/* Gainers / Losers — VN30 specific */}
       <div className="grid grid--halves section-gap">
         <MoverPanel title={t.stocks.biggestGainers} icon="arrowUp" items={D.gainers} direction="up" fmt={fmt} />
         <MoverPanel title={t.stocks.biggestLosers} icon="arrowDown" items={D.losers} direction="down" fmt={fmt} />

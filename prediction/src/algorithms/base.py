@@ -4,6 +4,33 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+# ---------------------------------------------------------------------------
+# Market-aware clamp limits
+# ---------------------------------------------------------------------------
+
+MARKET_MAX_CHANGE: dict[str, float] = {
+    "VN30": 0.07,
+    "GOLD": 0.15,
+    "NASDAQ100": 0.20,
+    "SP500": 0.15,
+    "CRYPTO": 0.50,
+    "FUEL": 0.20,
+}
+DEFAULT_MAX_CHANGE = 0.15
+
+
+def get_max_change_pct(market_key: str) -> float:
+    """Return the maximum allowed price-change fraction for a given market.
+
+    Args:
+        market_key: Market identifier string (e.g. "VN30", "GOLD", "CRYPTO").
+                    Case-insensitive. Returns DEFAULT_MAX_CHANGE for unknown keys.
+
+    Returns:
+        Float fraction, e.g. 0.07 means ±7%.
+    """
+    return MARKET_MAX_CHANGE.get((market_key or "").upper(), DEFAULT_MAX_CHANGE)
+
 
 @dataclass
 class PredictionResult:
@@ -16,6 +43,10 @@ class PredictionResult:
 
 class PredictionAlgorithm(ABC):
     """All prediction algorithms must implement this interface."""
+
+    # Market key set by the registry when algorithms are instantiated per-market.
+    # Algorithms use this to apply market-aware clamp limits.
+    _market_key: str = ""
 
     @abstractmethod
     def predict(self, prices: list[float], volumes: list[float] | None = None) -> PredictionResult:

@@ -92,7 +92,19 @@ def _startup_sync():
         log.warning("startup.sync.sim_bots.error", error=str(exc))
 
 
+def _startup_reconcile():
+    time.sleep(10)
+    log.info("startup.reconcile.begin")
+    try:
+        from src.orchestrator.training import reconcile_predictions
+        updated = reconcile_predictions()
+        log.info("startup.reconcile.done", updated=updated)
+    except Exception as exc:
+        log.warning("startup.reconcile.error", error=str(exc))
+
+
 threading.Thread(target=_startup_sync, daemon=True).start()
+threading.Thread(target=_startup_reconcile, daemon=True).start()
 
 # ---------------------------------------------------------------------------
 # 8. Wait for shutdown signal

@@ -85,8 +85,9 @@ export default function Gold() {
   const [confirmedGoldFilter, setConfirmedGoldFilter] = useState('');
   const [predPage, setPredPage] = useState(0);
   const [confirmedPage, setConfirmedPage] = useState(0);
-  const [chartData, setChartData] = useState<{ labels: string[]; sell: number[] }>({ labels: [], sell: [] });
+  const [chartData, setChartData] = useState<{ labels: string[]; sell: number[]; granularity?: string }>({ labels: [], sell: [], granularity: '1d' });
   const [chartLoading, setChartLoading] = useState(false);
+  const [predChartAlgo, setPredChartAlgo] = useState('');
 
   const src = srcs.find((g) => g.id === active) || srcs[0] || null;
   const isOz = src ? src.unit === 'oz' : false;
@@ -96,7 +97,7 @@ export default function Gold() {
     const daysN = parseInt(days, 10) || 180;
     setChartLoading(true);
     goldChart(src.source, src.product, daysN)
-      .then((c) => setChartData({ labels: c.labels, sell: c.sell }))
+      .then((c) => setChartData({ labels: c.labels, sell: c.sell, granularity: c.granularity }))
       .finally(() => setChartLoading(false));
   }, [src?.id, days]);
 
@@ -208,7 +209,12 @@ export default function Gold() {
             ? <LineChart
                 series={[{ name: src!.name, data: hist, color: 'var(--gold)' }]}
                 labels={histLabels.length
-                  ? histLabels.map((l) => { const p = l.slice(5).split('-'); return p[1] + '/' + p[0]; })
+                  ? histLabels.map((l) => {
+                      if (chartData.granularity === '1h') {
+                        return l.length >= 16 ? l.slice(11, 16) : l;
+                      }
+                      const p = l.slice(5).split('-'); return p[1] + '/' + p[0];
+                    })
                   : hist.map((_, i) => `${i + 1}`)}
                 height={540} area yFmt={fmtGold} valueFmt={fmtFull} padL={58}
               />
@@ -388,7 +394,26 @@ export default function Gold() {
       </div>
 
       {/* Prediction vs Actual chart — full width */}
-      <Panel title={t.common.predVsActual} sub={t.gold.subEnsemble} className="section-gap">
+      <Panel title={t.common.predVsActual} sub={t.gold.subEnsemble} className="section-gap"
+        tools={
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Seg options={[{ value: '1', label: t.dateRange.today }, { value: '7', label: t.dateRange.d7 }, { value: '30', label: t.dateRange.d30 }, { value: '90', label: t.dateRange.d90 }, { value: '180', label: t.dateRange.d180 }]} value={days} onChange={setDays} />
+            {/* Algorithm filter — from confirmed results */}
+            {Array.from(new Set(confirmedResults.map((r) => r.algorithm_name))).sort().length > 0 && (
+              <select
+                value={predChartAlgo}
+                onChange={(e) => setPredChartAlgo(e.target.value)}
+                style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)', cursor: 'pointer' }}
+              >
+                <option value="">{t.common.allAlgos}</option>
+                {Array.from(new Set(confirmedResults.map((r) => r.algorithm_name))).sort().map((algo) => (
+                  <option key={algo} value={algo}>{algoShort(algo).short} ({algo})</option>
+                ))}
+              </select>
+            )}
+          </div>
+        }
+      >
         {D.goldPredActual && D.goldPredActual.labels.length > 0
           ? <>
               <LineChart

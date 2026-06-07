@@ -15,6 +15,7 @@ from src.database.models import (
     Exchange,
     FuelPrediction,
     FuelPrice,
+    GoldIntradayPrice,
     GoldPrediction,
     GoldPrice,
     NasdaqIntradayPrice,
@@ -25,6 +26,7 @@ from src.database.models import (
     SP500Prediction,
     SP500Price,
     Stock,
+    StockIntradayPrice,
     StockPrice,
     SyncLog,
     TrainingLog,
@@ -214,6 +216,7 @@ def get_pending_predictions(days_back: int = 7) -> list[Prediction]:
             session.query(Prediction)
             .filter(
                 Prediction.status == "pending",
+                Prediction.actual_price.is_(None),
                 Prediction.target_date <= datetime.now(),
                 Prediction.target_date >= cutoff,
                 Prediction.deleted_at.is_(None),
@@ -224,10 +227,18 @@ def get_pending_predictions(days_back: int = 7) -> list[Prediction]:
         session.close()
 
 
-def update_prediction_actual(pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str) -> None:
+def update_prediction_actual(
+    pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str, direction_correct: bool | None = None
+) -> None:
     with session_scope() as session:
         session.query(Prediction).filter_by(id=pred_id).update(
-            {"actual_price": actual_price, "accuracy": accuracy, "status": status, "updated_at": datetime.utcnow()}
+            {
+                "actual_price": actual_price,
+                "accuracy": accuracy,
+                "status": status,
+                "direction_correct": direction_correct,
+                "updated_at": datetime.utcnow(),
+            }
         )
 
 
@@ -320,6 +331,7 @@ def get_pending_gold_predictions(days_back: int = 3) -> list[GoldPrediction]:
             session.query(GoldPrediction)
             .filter(
                 GoldPrediction.status == "pending",
+                GoldPrediction.actual_price.is_(None),
                 GoldPrediction.target_date <= datetime.now(),
                 GoldPrediction.target_date >= cutoff,
                 GoldPrediction.deleted_at.is_(None),
@@ -330,10 +342,18 @@ def get_pending_gold_predictions(days_back: int = 3) -> list[GoldPrediction]:
         session.close()
 
 
-def update_gold_prediction_actual(pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str) -> None:
+def update_gold_prediction_actual(
+    pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str, direction_correct: bool | None = None
+) -> None:
     with session_scope() as session:
         session.query(GoldPrediction).filter_by(id=pred_id).update(
-            {"actual_price": actual_price, "accuracy": accuracy, "status": status, "updated_at": datetime.utcnow()}
+            {
+                "actual_price": actual_price,
+                "accuracy": accuracy,
+                "status": status,
+                "direction_correct": direction_correct,
+                "updated_at": datetime.utcnow(),
+            }
         )
 
 
@@ -445,6 +465,7 @@ def get_pending_nasdaq_predictions(days_back: int = 7) -> list[NasdaqPrediction]
             session.query(NasdaqPrediction)
             .filter(
                 NasdaqPrediction.status == "pending",
+                NasdaqPrediction.actual_price.is_(None),
                 NasdaqPrediction.target_date <= datetime.now(),
                 NasdaqPrediction.target_date >= cutoff,
                 NasdaqPrediction.deleted_at.is_(None),
@@ -455,10 +476,18 @@ def get_pending_nasdaq_predictions(days_back: int = 7) -> list[NasdaqPrediction]
         session.close()
 
 
-def update_nasdaq_prediction_actual(pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str) -> None:
+def update_nasdaq_prediction_actual(
+    pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str, direction_correct: bool | None = None
+) -> None:
     with session_scope() as session:
         session.query(NasdaqPrediction).filter_by(id=pred_id).update(
-            {"actual_price": actual_price, "accuracy": accuracy, "status": status, "updated_at": datetime.utcnow()}
+            {
+                "actual_price": actual_price,
+                "accuracy": accuracy,
+                "status": status,
+                "direction_correct": direction_correct,
+                "updated_at": datetime.utcnow(),
+            }
         )
 
 
@@ -554,6 +583,7 @@ def get_pending_crypto_predictions(days_back: int = 7) -> list[CryptoPrediction]
             session.query(CryptoPrediction)
             .filter(
                 CryptoPrediction.status == "pending",
+                CryptoPrediction.actual_price.is_(None),
                 CryptoPrediction.target_date <= datetime.now(),
                 CryptoPrediction.target_date >= cutoff,
                 CryptoPrediction.deleted_at.is_(None),
@@ -564,10 +594,18 @@ def get_pending_crypto_predictions(days_back: int = 7) -> list[CryptoPrediction]
         session.close()
 
 
-def update_crypto_prediction_actual(pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str) -> None:
+def update_crypto_prediction_actual(
+    pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str, direction_correct: bool | None = None
+) -> None:
     with session_scope() as session:
         session.query(CryptoPrediction).filter_by(id=pred_id).update(
-            {"actual_price": actual_price, "accuracy": accuracy, "status": status, "updated_at": datetime.utcnow()}
+            {
+                "actual_price": actual_price,
+                "accuracy": accuracy,
+                "status": status,
+                "direction_correct": direction_correct,
+                "updated_at": datetime.utcnow(),
+            }
         )
 
 
@@ -602,6 +640,40 @@ def get_fuel_prices_asc(product_type: str, limit: int = 270) -> list[FuelPrice]:
         return list(reversed(rows))
     finally:
         session.close()
+
+
+def get_pending_fuel_predictions(days_back: int = 14) -> list[FuelPrediction]:
+    session = get_session()
+    try:
+        cutoff = datetime.now() - timedelta(days=days_back)
+        return (
+            session.query(FuelPrediction)
+            .filter(
+                FuelPrediction.status == "pending",
+                FuelPrediction.actual_price.is_(None),
+                FuelPrediction.target_date <= datetime.now(),
+                FuelPrediction.target_date >= cutoff,
+                FuelPrediction.deleted_at.is_(None),
+            )
+            .all()
+        )
+    finally:
+        session.close()
+
+
+def update_fuel_prediction_actual(
+    pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str, direction_correct: bool | None = None
+) -> None:
+    with session_scope() as session:
+        session.query(FuelPrediction).filter_by(id=pred_id).update(
+            {
+                "actual_price": actual_price,
+                "accuracy": accuracy,
+                "status": status,
+                "direction_correct": direction_correct,
+                "updated_at": datetime.utcnow(),
+            }
+        )
 
 
 def create_fuel_prediction(
@@ -741,6 +813,7 @@ def get_pending_sp500_predictions(days_back: int = 7) -> list[SP500Prediction]:
             session.query(SP500Prediction)
             .filter(
                 SP500Prediction.status == "pending",
+                SP500Prediction.actual_price.is_(None),
                 SP500Prediction.target_date <= datetime.now(),
                 SP500Prediction.target_date >= cutoff,
                 SP500Prediction.deleted_at.is_(None),
@@ -751,10 +824,18 @@ def get_pending_sp500_predictions(days_back: int = 7) -> list[SP500Prediction]:
         session.close()
 
 
-def update_sp500_prediction_actual(pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str) -> None:
+def update_sp500_prediction_actual(
+    pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str, direction_correct: bool | None = None
+) -> None:
     with session_scope() as session:
         session.query(SP500Prediction).filter_by(id=pred_id).update(
-            {"actual_price": actual_price, "accuracy": accuracy, "status": status, "updated_at": datetime.utcnow()}
+            {
+                "actual_price": actual_price,
+                "accuracy": accuracy,
+                "status": status,
+                "direction_correct": direction_correct,
+                "updated_at": datetime.utcnow(),
+            }
         )
 
 
@@ -837,6 +918,112 @@ def upsert_crypto_intraday(record: CryptoIntradayPrice) -> None:
                 volume=record.volume,
             )
             session.add(new)
+
+
+def upsert_gold_intraday(record: GoldIntradayPrice) -> None:
+    with session_scope() as session:
+        existing = (
+            session.query(GoldIntradayPrice)
+            .filter_by(source=record.source, product_type=record.product_type, timestamp=record.timestamp)
+            .first()
+        )
+        if existing:
+            existing.buy_price = record.buy_price
+            existing.sell_price = record.sell_price
+            existing.updated_at = datetime.utcnow()
+        else:
+            new = GoldIntradayPrice(
+                source=record.source,
+                product_type=record.product_type,
+                timestamp=record.timestamp,
+                buy_price=record.buy_price,
+                sell_price=record.sell_price,
+                currency=record.currency,
+            )
+            session.add(new)
+
+
+def upsert_stock_intraday(record: StockIntradayPrice) -> None:
+    with session_scope() as session:
+        existing = (
+            session.query(StockIntradayPrice)
+            .filter_by(symbol=record.symbol, timestamp=record.timestamp)
+            .first()
+        )
+        if existing:
+            existing.open_price = record.open_price
+            existing.high_price = record.high_price
+            existing.low_price = record.low_price
+            existing.close_price = record.close_price
+            existing.volume = record.volume
+            existing.updated_at = datetime.utcnow()
+        else:
+            new = StockIntradayPrice(
+                symbol=record.symbol,
+                timestamp=record.timestamp,
+                open_price=record.open_price,
+                high_price=record.high_price,
+                low_price=record.low_price,
+                close_price=record.close_price,
+                volume=record.volume,
+            )
+            session.add(new)
+
+
+# ---------------------------------------------------------------------------
+# Direction accuracy
+# ---------------------------------------------------------------------------
+
+_MARKET_MODEL_MAP: dict[str, tuple] = {
+    "VN30": (Prediction, "algorithm_name"),
+    "GOLD": (GoldPrediction, "algorithm_name"),
+    "NASDAQ100": (NasdaqPrediction, "algorithm_name"),
+    "CRYPTO": (CryptoPrediction, "algorithm_name"),
+    "FUEL": (FuelPrediction, "algorithm_name"),
+    "SP500": (SP500Prediction, "algorithm_name"),
+}
+
+
+def get_direction_accuracy(market_key: str) -> dict[str, float]:
+    """Return per-algorithm direction accuracy (%) for reconciled predictions in a market.
+
+    Only rows where direction_correct IS NOT NULL are counted (i.e. reconciled rows).
+
+    Returns:
+        dict mapping algorithm_name -> accuracy_pct (0.0–100.0), e.g.
+        {"moving_average": 62.5, "lstm": 58.0, ...}
+    """
+    mk = market_key.upper()
+    entry = _MARKET_MODEL_MAP.get(mk)
+    if entry is None:
+        return {}
+
+    model_cls, algo_col = entry
+    session = get_session()
+    try:
+        rows = (
+            session.query(
+                getattr(model_cls, algo_col),
+                getattr(model_cls, "direction_correct"),
+            )
+            .filter(getattr(model_cls, "direction_correct").isnot(None))
+            .all()
+        )
+
+        # Aggregate in Python — group by algorithm
+        totals: dict[str, int] = {}
+        corrects: dict[str, int] = {}
+        for algo_name, direction_correct in rows:
+            totals[algo_name] = totals.get(algo_name, 0) + 1
+            if direction_correct:
+                corrects[algo_name] = corrects.get(algo_name, 0) + 1
+
+        result: dict[str, float] = {}
+        for algo_name, total in totals.items():
+            result[algo_name] = round(corrects.get(algo_name, 0) / total * 100, 2)
+        return result
+    finally:
+        session.close()
 
 
 # ---------------------------------------------------------------------------
