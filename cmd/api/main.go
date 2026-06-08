@@ -21,7 +21,7 @@ import (
 
 //	@title			Go Stock Prediction API
 //	@version		1.0
-//	@description	Vietnamese stock market prediction system — ML algorithms (VWMA, EMA, LSTM, ARIMA-GARCH, Ensemble) for VN30 stocks, gold, NASDAQ, crypto, and fuel prices.
+//	@description	Vietnamese stock market prediction system — ML algorithms (VWMA, EMA, LSTM, ARIMA-GARCH, Ensemble) for VN30 stocks, gold, NASDAQ, crypto, and S&P 500.
 //	@host			localhost:8118
 //	@BasePath		/
 //	@securityDefinitions.apikey	BearerAuth

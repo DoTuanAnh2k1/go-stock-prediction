@@ -116,16 +116,6 @@ class PredictionServiceStub(object):
                 request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
                 response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
                 _registered_method=True)
-        self.TriggerFuelCrawler = channel.unary_unary(
-                '/prediction.PredictionService/TriggerFuelCrawler',
-                request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
-                response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
-                _registered_method=True)
-        self.TriggerFuelPredict = channel.unary_unary(
-                '/prediction.PredictionService/TriggerFuelPredict',
-                request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
-                response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
-                _registered_method=True)
         self.TriggerSP500Crawler = channel.unary_unary(
                 '/prediction.PredictionService/TriggerSP500Crawler',
                 request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
@@ -268,19 +258,6 @@ class PredictionServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def TriggerFuelCrawler(self, request, context):
-        """Fuel (Giá Xăng VN)
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def TriggerFuelPredict(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
     def TriggerSP500Crawler(self, request, context):
         """S&P 500
         """
@@ -393,16 +370,6 @@ def add_PredictionServiceServicer_to_server(servicer, server):
             ),
             'TriggerCryptoPredict': grpc.unary_unary_rpc_method_handler(
                     servicer.TriggerCryptoPredict,
-                    request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
-                    response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
-            ),
-            'TriggerFuelCrawler': grpc.unary_unary_rpc_method_handler(
-                    servicer.TriggerFuelCrawler,
-                    request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
-                    response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
-            ),
-            'TriggerFuelPredict': grpc.unary_unary_rpc_method_handler(
-                    servicer.TriggerFuelPredict,
                     request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
                     response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
             ),
@@ -864,60 +831,6 @@ class PredictionService(object):
             request,
             target,
             '/prediction.PredictionService/TriggerCryptoPredict',
-            prediction_dot_prediction__pb2.Empty.SerializeToString,
-            prediction_dot_prediction__pb2.TriggerResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def TriggerFuelCrawler(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/prediction.PredictionService/TriggerFuelCrawler',
-            prediction_dot_prediction__pb2.Empty.SerializeToString,
-            prediction_dot_prediction__pb2.TriggerResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def TriggerFuelPredict(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/prediction.PredictionService/TriggerFuelPredict',
             prediction_dot_prediction__pb2.Empty.SerializeToString,
             prediction_dot_prediction__pb2.TriggerResponse.FromString,
             options,
