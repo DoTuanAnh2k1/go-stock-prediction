@@ -2,11 +2,11 @@
 
 ## Tổng quan dự án
 
-Hệ thống dự đoán giá cổ phiếu Việt Nam. Thu thập dữ liệu từ nhiều nguồn (VN30, Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, S&P 500, Fuel), chạy 6 thuật toán ML (Moving Average, EMA, LSTM PyTorch, ARIMA-GARCH, LightGBM, Ensemble), và hiển thị kết quả qua web dashboard.
+Hệ thống dự đoán giá cổ phiếu Việt Nam. Thu thập dữ liệu từ nhiều nguồn (VN30, Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, S&P 500), chạy 11 thuật toán ML (Moving Average, EMA/MACD, LSTM PyTorch, GRU PyTorch, ARIMA-GARCH, EGARCH, SARIMA, LightGBM, XGBoost, Random Forest, Ensemble), và hiển thị kết quả qua web dashboard.
 
 **Kiến trúc hiện tại: microservice (2 service + nginx)**
 - **API Backend** (`cmd/api`) — Go HTTP trên `:8118`, phục vụ toàn bộ `/api/*`. Gọi Prediction Service qua gRPC để trigger crawler/training; đọc DB trực tiếp cho các query dữ liệu.
-- **Prediction Service** (`prediction/`) — **Python** gRPC trên `:8119`. Xử lý crawling (VN30, Gold, NASDAQ, Crypto BTC/ETH/SOL, S&P 500, Fuel), 6 thuật toán ML, training, APScheduler cron jobs.
+- **Prediction Service** (`prediction/`) — **Python** gRPC trên `:8119`. Xử lý crawling (VN30, Gold, NASDAQ, Crypto BTC/ETH/SOL, S&P 500), 11 thuật toán ML, training, APScheduler cron jobs.
 - **Nginx** — Reverse proxy trên `:80`, forward tất cả request về API Backend.
 
 
@@ -89,14 +89,14 @@ pkg/store/repository/user.go           # UserStore interface — CreateUser, Get
 pkg/store/mysql/                        # Triển khai MySQL dùng GORM
 pkg/store/mysql/user.go                 # MySQL implementation của UserStore
 pkg/store/mysql/cron_schedule.go        # MySQL implementation của CronScheduleStore — GetAllCronSchedules, GetCronScheduleByKey, UpsertCronSchedule
-pkg/store/mysql/direction_accuracy.go   # MySQL implementation của DirectionAccuracyStore — raw SQL query GROUP BY algorithm trên 6 prediction tables
+pkg/store/mysql/direction_accuracy.go   # MySQL implementation của DirectionAccuracyStore — raw SQL query GROUP BY algorithm trên 5 prediction tables
 pkg/models/models_db/                   # GORM struct: Stock, StockPrice, Prediction, SyncLog, Exchange, GoldPrice, TrainingLog, TrainingMetrics, User, CronSchedule
 pkg/models/models_db/cron_schedule.go   # CronSchedule GORM struct (JobKey, JobName, CronExpression, Enabled, UpdatedAt)
 pkg/models/models_db/user.go            # User GORM struct (Username, PasswordHash, Role)
 pkg/models/models_db/gold_price.go      # GoldPrice GORM struct
 pkg/models/models_db/training_log.go    # TrainingLog GORM struct
 pkg/models/models_db/training_metrics.go # TrainingMetrics struct
-# Tất cả 6 prediction structs (Prediction, GoldPrediction, NasdaqPrediction, Sp500Prediction, CryptoPrediction, FuelPrediction)
+# Tất cả 5 prediction structs (Prediction, GoldPrediction, NasdaqPrediction, Sp500Prediction, CryptoPrediction)
 # đều có trường DirectionCorrect *bool (nullable, cột direction_correct trong DB)
 pkg/models/models_api/                  # DTO cho JSON response — bao gồm DirectionAccuracyRow{Algorithm, Total, Correct}
 pkg/models/models_config/config.go      # Config struct — bao gồm GRPCConfig (ServerPort, ClientTarget) và ServerConfig (AdminUsername, AdminPassword, JWTSecret)
@@ -115,7 +115,7 @@ frontend/src/pages/Users.tsx            # Trang quản lý user — chỉ hiển
 ```
 prediction/
 ├── Dockerfile                          # Multi-stage build: proto-builder (grpcio-tools) → python:3.12-slim runtime
-├── pyproject.toml                      # Python dependencies (torch, statsmodels, lightgbm, grpcio, APScheduler, SQLAlchemy...)
+├── pyproject.toml                      # Python dependencies (torch, statsmodels, lightgbm, xgboost, grpcio, APScheduler, SQLAlchemy, pandas-ta; optuna trong [ml] extras)
 ├── Makefile                            # make test, make test-phase5, v.v.
 ├── src/
 │   ├── main.py                         # Entry point — config → timezone → logger → DB → gRPC → scheduler → startup sync → signal wait
@@ -128,27 +128,32 @@ prediction/
 │   │   └── server.py                   # gRPC servicer — implement tất cả RPC trong proto
 │   ├── algorithms/
 │   │   ├── base.py                     # Abstract PredictionAlgorithm interface; MARKET_MAX_CHANGE dict + get_max_change_pct() helper; _market_key attr set by registry
-│   │   ├── registry.py                 # Algorithm registry (Register, All, build_algorithms) — set _market_key trên mỗi instance khi khởi tạo per-market
-│   │   ├── moving_average.py           # VWMA trend slope projection + RSI momentum scaling; clamp market-aware
-│   │   ├── ema_macd.py                 # EMA slope projection + MACD momentum boost; clamp market-aware
+│   │   ├── registry.py                 # Algorithm registry (build_algorithms, get_algos_for_market, set_algos_for_market) — per-market instance cache; set _market_key trên mỗi instance
+│   │   ├── features.py                 # Shared feature builder cho tree-based models: build_basic_features() (14 features) và build_enhanced_features() (~30 features); graceful fallback numpy-only khi pandas-ta vắng
+│   │   ├── moving_average.py           # VWMA trend slope projection + RSI momentum scaling + StochRSI overlay (overbought/oversold); clamp market-aware; pandas-ta optional
+│   │   ├── ema_macd.py                 # EMA slope projection + MACD momentum boost + Bollinger %B overlay (mean-reversion near band extremes); clamp market-aware; pandas-ta optional
 │   │   ├── lstm.py                     # PyTorch LSTM (2 layers, hidden=64, seq=60, dropout=0.2)
+│   │   ├── gru.py                      # PyTorch GRU (2 layers, hidden=64, seq=60, dropout=0.2)
 │   │   ├── arima_garch.py              # statsmodels ARIMA(2,1,2) + arch GARCH(1,1)
-│   │   ├── lightgbm_model.py           # LightGBM (lag returns 1-10, RSI, MA ratios, n_estimators=200)
-│   │   └── ensemble.py                 # Equal-weight ensemble of all base models
+│   │   ├── egarch.py                   # arch EGARCH(p=1, o=1, q=1) với HARX mean model
+│   │   ├── sarima.py                   # statsmodels SARIMA(1,1,1)(1,0,1,5) — seasonal period 5 (trading week)
+│   │   ├── lightgbm_model.py           # LightGBM enhanced ~30 features; Optuna hyperopt (≥200 points, 30 trials, timeout 120s); EMA fallback
+│   │   ├── xgboost_model.py            # XGBoost enhanced ~30 features; Optuna hyperopt (≥200 points, 30 trials, timeout 120s); EMA fallback
+│   │   ├── random_forest.py            # scikit-learn RandomForest enhanced ~30 features; n_estimators=200, max_depth=8; không có Optuna
+│   │   └── ensemble.py                 # Equal-weight ensemble của tất cả 10 base models
 │   ├── crawlers/
 │   │   ├── base.py                     # Abstract BaseCrawler
 │   │   ├── vn30.py                     # VNDirect API — 30 stocks HOSE
 │   │   ├── gold.py                     # Yahoo Finance XAU + BTMC API + Phú Quý
 │   │   ├── nasdaq.py                   # Yahoo Finance — 15 NASDAQ symbols
 │   │   ├── crypto.py                   # CoinGecko — BTC/ETH/SOL
-│   │   ├── sp500.py                    # Yahoo Finance — 16 S&P 500 symbols (SPY, QQQ, JPM, BAC, GS, JNJ, UNH, PFE, PG, KO, WMT, XOM, CVX, V, MA)
-│   │   └── fuel.py                     # giaxanghomnay.com/api/pvdate + /api/chart
+│   │   └── sp500.py                    # Yahoo Finance — 16 S&P 500 symbols (SPY, QQQ, JPM, BAC, GS, JNJ, UNH, PFE, PG, KO, WMT, XOM, CVX, V, MA)
 │   ├── scheduler/
 │   │   ├── manager.py                  # APScheduler + DB-backed CronSchedule; poll mỗi 60s để phát hiện thay đổi
 │   │   └── jobs.py                     # Định nghĩa tất cả jobs (crawlers + predictions + training + reconcile)
 │   ├── orchestrator/
-│   │   ├── runner.py                   # run_all_markets() — VN30/GOLD/NASDAQ100/CRYPTO/FUEL/SP500; run_for_market(key)
-│   │   └── training.py                 # reconcile_predictions() — tính direction_correct cho tất cả 6 markets (VN30/GOLD/NASDAQ/SP500/CRYPTO/FUEL); train_for_market()
+│   │   ├── runner.py                   # run_all_markets() — VN30/GOLD/NASDAQ100/CRYPTO/SP500; run_for_market(key)
+│   │   └── training.py                 # reconcile_predictions() — tính direction_correct cho tất cả 5 markets (VN30/GOLD/NASDAQ/SP500/CRYPTO); train_for_market()
 │   └── utils/
 │       ├── logger.py                   # structlog config
 │       ├── timezone.py                 # Asia/Ho_Chi_Minh helpers
@@ -226,9 +231,9 @@ BACKUP_DIR=/backups              # Thư mục lưu file backup mysqldump (mount 
 - **Cron constants:** Hằng số trong `pkg/utils/cron/` dùng làm giá trị mặc định trong `seedCronSchedules()` (Go, insert-only). Lịch chạy thực tế cho tất cả jobs Python-side được định nghĩa trong `DEFAULT_SCHEDULES` tại `prediction/src/scheduler/manager.py` và được upsert vào DB mỗi lần Python service khởi động.
 - **Decimal:** Dùng `shopspring/decimal` trong Go API Backend cho mọi phép tính số thực liên quan đến giá — tránh float64. Python service dùng `Decimal` từ stdlib hoặc pandas float64 (được làm tròn trước khi lưu DB).
 - **API handlers (Go):** Mỗi nhóm endpoint có file riêng `api_<topic>.go` trong `pkg/server/`.
-- **Algorithms (Python):** Mỗi thuật toán implement abstract class `PredictionAlgorithm` trong `prediction/src/algorithms/base.py` với method `predict(prices, volumes) -> PredictionResult`. Đăng ký metadata tương ứng trong `pkg/service/predict/registry/algorithms.go` (Go) để `/api/training/algorithms` trả đúng danh sách.
-- **Market-aware clamp:** Tất cả algorithms dùng `get_max_change_pct(self._market_key)` từ `base.py` để giới hạn thay đổi giá dự đoán. Giới hạn theo market: VN30 ±7%, GOLD/SP500 ±15%, NASDAQ100/FUEL ±20%, CRYPTO ±50%. Registry set `_market_key` trên instance trước khi gọi `predict()`. Market key không xác định dùng `DEFAULT_MAX_CHANGE = 0.15`.
-- **Direction accuracy:** Sau khi reconcile, trường `direction_correct` (nullable boolean) được lưu vào 6 prediction tables (`predictions`, `gold_predictions`, `nasdaq_predictions`, `sp500_predictions`, `crypto_predictions`, `fuel_predictions`). Giá trị `True` khi hướng dự đoán (tăng/giảm so với giá hiện tại) khớp với hướng thực tế; `NULL` khi chưa có giá thực tế. Query tổng hợp qua `DirectionAccuracyStore` (Go) hoặc `get_direction_accuracy()` (Python repository).
+- **Algorithms (Python):** Mỗi thuật toán implement abstract class `PredictionAlgorithm` trong `prediction/src/algorithms/base.py` với method `predict(prices, volumes) -> PredictionResult`. Đăng ký metadata tương ứng trong `pkg/service/predict/registry/algorithms.go` (Go) để `/api/training/algorithms` trả đúng danh sách. Tổng cộng 11 thuật toán: moving_average, ema, lstm_nn, gru_nn, arima_garch, egarch, sarima, lightgbm, xgboost, random_forest, ensemble.
+- **Market-aware clamp:** Tất cả algorithms dùng `get_max_change_pct(self._market_key)` từ `base.py` để giới hạn thay đổi giá dự đoán. Giới hạn theo market: VN30 ±7%, GOLD/SP500 ±15%, NASDAQ100 ±20%, CRYPTO ±50%. Registry set `_market_key` trên instance trước khi gọi `predict()`. Market key không xác định dùng `DEFAULT_MAX_CHANGE = 0.15`.
+- **Direction accuracy:** Sau khi reconcile, trường `direction_correct` (nullable boolean) được lưu vào 5 prediction tables (`predictions`, `gold_predictions`, `nasdaq_predictions`, `sp500_predictions`, `crypto_predictions`). Giá trị `True` khi hướng dự đoán (tăng/giảm so với giá hiện tại) khớp với hướng thực tế; `NULL` khi chưa có giá thực tế. Query tổng hợp qua `DirectionAccuracyStore` (Go) hoặc `get_direction_accuracy()` (Python repository).
 - **Logging:** Go API Backend dùng `pkg/logger` (zerolog). Python service dùng `structlog`.
 - **gRPC triggers:** Tất cả trigger handler trong `pkg/server/api_trigger_*.go` và `pkg/server/api_stock_actions.go` đều gọi `requireGRPCClient(w)` trước. Hàm này trả về 503 nếu gRPC client chưa init. Tất cả trigger endpoints được wrap bằng `AuthRequired()` trong router — yêu cầu JWT hợp lệ.
 - **Dynamic cron schedules:** Lịch cron được lưu trong bảng `cron_schedules`. Python Prediction Service poll DB mỗi 60 giây để phát hiện thay đổi và tự reschedule qua APScheduler — không cần restart. Nguồn sự thật là `DEFAULT_SCHEDULES` trong `prediction/src/scheduler/manager.py`; mỗi lần Python service khởi động, `upsert_cron_schedule()` chạy true upsert — ghi đè DB nếu giá trị code khác. Go `seedCronSchedules()` chỉ insert-if-not-exists (không update). Dùng `CronScheduleStore` interface (Go) để truy cập từ API Backend.
@@ -238,6 +243,8 @@ BACKUP_DIR=/backups              # Thư mục lưu file backup mysqldump (mount 
 - **Admin seeder:** Khi startup, `seedAdminUser()` trong `cmd/api/main.go` kiểm tra `AdminExists()`. Nếu chưa có user nào với `role="admin"`, tạo một user mới từ `ADMIN_USERNAME`/`ADMIN_PASSWORD` env vars với bcrypt hash. Chạy một lần duy nhất — các lần sau bỏ qua nếu admin đã tồn tại.
 - **User management:** `ADMIN_USERNAME`/`ADMIN_PASSWORD` trong `.env` chỉ dùng để seed lần đầu. Sau đó quản lý user hoàn toàn qua API `/api/users` (admin JWT required). Password lưu dưới dạng bcrypt hash — không lưu plaintext.
 - **Swagger annotations:** Mỗi handler function trong `pkg/server/api_*.go` có swaggo annotations (`@Summary`, `@Tags`, `@Param`, `@Success`, `@Router`). Khi thêm handler mới, phải thêm annotations. Sau khi thêm/sửa annotations, chạy `swag init -g cmd/api/main.go -o docs/` để regenerate. Không sửa tay files trong `docs/`.
+- **Shared feature builder (Python):** `prediction/src/algorithms/features.py` cung cấp hai hàm dùng chung cho LightGBM, XGBoost, RandomForest: `build_basic_features()` (14 features: lag returns 1-10, RSI, MA5/20 ratios, vol ratio) và `build_enhanced_features()` (~30 features: lag returns 1-10, MA5/10/20/50 ratios, multi-timeframe returns 5/10/20d, RSI, StochRSI %K/%D, Bollinger %B, MACD line/hist normalized, rolling volatility 5/10/20d, ROC(10), momentum 5/10, volume ratio). Khi `pandas-ta` có sẵn thì dùng pandas-ta; nếu không dùng numpy-only fallback hoàn toàn tương đương. Minimum data: `MIN_DATA_POINTS = 80`.
+- **Optuna hyperparameter tuning:** LightGBM và XGBoost chạy Optuna Bayesian search khi data >= 200 points và optuna được cài (`[ml]` extras). Search tối đa 30 trials, timeout 120s; fallback về `_DEFAULT_PARAMS` nếu optuna không có hoặc data không đủ. Search space — LightGBM: learning_rate, num_leaves, min_data_in_leaf, n_estimators, subsample, colsample_bytree. XGBoost: n_estimators, learning_rate, max_depth, subsample, colsample_bytree, min_child_weight. RandomForest không dùng Optuna (fixed: n_estimators=200, max_depth=8, min_samples_leaf=5).
 
 ## Hướng dẫn mở rộng (Extension Guide)
 
@@ -270,10 +277,11 @@ BACKUP_DIR=/backups              # Thư mục lưu file backup mysqldump (mount 
        Config:      map[string]interface{}{"param": value},
    })
    ```
-4. (Tuỳ chọn) Nếu muốn tham gia Ensemble, thêm instance vào `EnsemblePredictor` trong `ensemble.py`.
-5. Thuật toán tự động xuất hiện trong API `/api/training/algorithms` (metadata từ Go registry) và được dùng trong tất cả prediction workflows của Python service.
+4. (Tuỳ chọn) Nếu muốn tham gia Ensemble, thêm instance vào `EnsemblePredictor` trong `ensemble.py`. Hiện tại Ensemble nhận đủ 10 base instances: `[ma, ema, lstm, arima, lgbm, sarima, egarch, gru, rf, xgb]`.
+5. Nếu thuật toán là tree-based, có thể dùng `build_enhanced_features()` từ `features.py` thay vì tự implement feature engineering.
+6. Thuật toán tự động xuất hiện trong API `/api/training/algorithms` (metadata từ Go registry) và được dùng trong tất cả prediction workflows của Python service.
 
-**Lưu ý về `build_algorithms()`:** Python registry dùng two-pass tương tự Go: base algorithms trước, Ensemble cuối (nhận các base instances). Đảm bảo Ensemble luôn nhận đúng instance đang dùng.
+**Lưu ý về `build_algorithms()`:** Python registry dùng two-pass: base algorithms trước, Ensemble cuối (nhận các base instances). Đảm bảo Ensemble luôn nhận đúng instance đang dùng.
 
 ### 2. Thêm thị trường hoặc loại tài sản dự đoán mới
 
@@ -293,7 +301,7 @@ Các bước bắt buộc:
 - **Tables chính:** `exchanges`, `stocks`, `stock_prices`, `predictions`, `sync_logs`, `gold_prices`, `training_logs`, `users`, `cron_schedules`, `sp500_prices`, `sp500_predictions`
 - **Auto-migrate:** Chạy khi start app qua `models_db/migrations.go`
 - **Schema đầy đủ:** `database.sql` ở root
-- **direction_correct (nullable boolean):** Có mặt trong tất cả 6 prediction tables. Được set bởi `reconcile_predictions()` trong Python; `NULL` = chưa reconcile, `1` = hướng đúng, `0` = hướng sai. Dùng cho endpoint `/api/predictions/direction-accuracy`.
+- **direction_correct (nullable boolean):** Có mặt trong tất cả 5 prediction tables. Được set bởi `reconcile_predictions()` trong Python; `NULL` = chưa reconcile, `1` = hướng đúng, `0` = hướng sai. Dùng cho endpoint `/api/predictions/direction-accuracy`.
 
 ## Cron schedules
 
@@ -313,14 +321,11 @@ Go-side `seedCronSchedules()` trong `pkg/server/api_schedules.go` chỉ insert n
 | `crawler_sp500` | `0 30 * * * *` | bật | Pipeline S&P 500: crawl → train mỗi 10 lần → predict (mỗi giờ phút 30) |
 | `crawler_crypto` | `0 45 * * * *` | bật | Pipeline Crypto: crawl → train mỗi 10 lần → predict (mỗi giờ phút 45) |
 | `crawler_stock` | `0 0 12 * * *` | bật | Pipeline VN30: crawl → train mỗi 10 lần → predict (12PM hàng ngày) |
-| `crawler_fuel` | `0 0 21 * * *` | bật | Pipeline Fuel: crawl → train mỗi 10 lần → predict (9PM hàng ngày) |
 | `predict_vn30` | `0 0 15 * * 1-5` | bật | Dự đoán VN30 (3PM ngày thường) |
-| `predict_fuel` | `0 0 22 * * *` | bật | Dự đoán Fuel (10PM hàng ngày) |
 | `train_vn30` | `0 0 2 * * 0` | bật | Training VN30 (Chủ nhật 2AM) |
 | `train_gold` | `0 0 3 * * 0` | bật | Training Gold (Chủ nhật 3AM) |
 | `train_nasdaq` | `0 0 4 * * 0` | bật | Training NASDAQ (Chủ nhật 4AM) |
 | `train_crypto` | `0 0 5 * * 0` | bật | Training Crypto (Chủ nhật 5AM) |
-| `train_fuel` | `0 0 6 * * 0` | bật | Training Fuel (Chủ nhật 6AM) |
 | `train_sp500` | `0 0 7 * * 0` | bật | Training S&P 500 (Chủ nhật 7AM) |
 | `gold_predict` | `0 0 11 * * *` | **tắt** | Dự đoán vàng riêng lẻ — disabled vì đã chạy trong pipeline `crawler_gold` |
 | `predict_nasdaq` | `0 30 23 * * 1-5` | **tắt** | Dự đoán NASDAQ riêng lẻ — disabled vì đã chạy trong pipeline `crawler_nasdaq` |
@@ -338,7 +343,7 @@ Bốn markets chạy hourly pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler
 2. Tăng counter per-market; mỗi 10 lần crawl → trigger `train_for_market()`
 3. Chạy `run_for_market()` để sinh dự đoán mới
 
-VN30 (`crawler_stock`) và Fuel (`crawler_fuel`) cũng dùng cùng pipeline nhưng chạy theo lịch ngày thay vì mỗi giờ.
+VN30 (`crawler_stock`) cũng dùng cùng pipeline nhưng chạy theo lịch ngày thay vì mỗi giờ.
 
 ## Ports
 
@@ -388,7 +393,7 @@ VN30 (`crawler_stock`) và Fuel (`crawler_fuel`) cũng dùng cùng pipeline như
 | `GET` | `/api/predictions/accuracy-trend` | Xu hướng độ chính xác theo thời gian |
 | `GET` | `/api/predictions/compare/{symbol}` | Cặp giá dự đoán vs thực tế theo thời gian — query: `?days=30&algorithm=lstm_nn` |
 | `GET` | `/api/predictions/error-distribution` | Scatter plot: predicted change % vs actual change % — query: `?algorithm=lstm_nn` |
-| `GET` | `/api/predictions/direction-accuracy` | Direction accuracy per algorithm — query: `?market=VN30\|GOLD\|NASDAQ\|SP500\|CRYPTO\|FUEL`; trả `{market, algorithms:[{algorithm, direction_accuracy, total, correct}]}`; chỉ đếm rows có `direction_correct IS NOT NULL` |
+| `GET` | `/api/predictions/direction-accuracy` | Direction accuracy per algorithm — query: `?market=VN30\|GOLD\|NASDAQ\|SP500\|CRYPTO`; trả `{market, algorithms:[{algorithm, direction_accuracy, total, correct}]}`; chỉ đếm rows có `direction_correct IS NOT NULL` |
 | `GET` | `/api/predictions/{id}` | Chi tiết một dự đoán |
 
 ### Training
@@ -461,7 +466,7 @@ Tất cả trigger endpoint đều yêu cầu JWT authentication (`Authorization
 | `POST` | `/api/trigger/gold-predict` | Dự đoán vàng (background) — yêu cầu JWT |
 | `POST` | `/api/trigger/reconcile` | Reconcile dự đoán với giá thực tế — yêu cầu JWT |
 | `POST` | `/api/trigger/stock-history` | Crawl lịch sử stock (background) — body JSON `{"days":365}` — yêu cầu JWT |
-| `POST` | `/api/trigger/historical-backtest` | Walk-forward backtest (background) — query: `?train_window=30&step_size=6&market_key=VN30\|GOLD\|NASDAQ100\|CRYPTO\|FUEL\|SP500\|ALL`; trả 202; 409 nếu đang chạy — yêu cầu JWT |
+| `POST` | `/api/trigger/historical-backtest` | Walk-forward backtest (background) — query: `?train_window=30&step_size=6&market_key=VN30\|GOLD\|NASDAQ100\|CRYPTO\|SP500\|ALL`; trả 202; 409 nếu đang chạy — yêu cầu JWT |
 | `POST` | `/api/trigger/sp500-crawler` | Crawl S&P 500 (background) — yêu cầu JWT |
 | `POST` | `/api/trigger/sp500-predict` | Dự đoán S&P 500 (background) — yêu cầu JWT |
 | `POST` | `/api/trigger/sim-reset` | Reset tất cả active bots — đóng live session cũ, tạo session mới — yêu cầu JWT |
@@ -543,7 +548,7 @@ curl -X PUT http://localhost:8118/api/schedules/crawler_daily \
 | `TriggerStockHistory` | `StockHistoryRequest` | `TriggerResponse` | Crawl lịch sử stock trong background — field `days` |
 | `TriggerGoldHistory` | `Empty` | `TriggerResponse` | Import lịch sử XAU trong background |
 | `TriggerGoldPredict` | `Empty` | `TriggerResponse` | Dự đoán vàng trong background |
-| `TriggerHistoricalBacktest` | `BacktestRequest` | `TriggerResponse` | Walk-forward backtest trong background — concurrency guard; `market_key`: `""` hoặc `"VN30"`, `"GOLD"`, `"NASDAQ100"`, `"CRYPTO"`, `"FUEL"`, `"SP500"`, `"ALL"` |
+| `TriggerHistoricalBacktest` | `BacktestRequest` | `TriggerResponse` | Walk-forward backtest trong background — concurrency guard; `market_key`: `""` hoặc `"VN30"`, `"GOLD"`, `"NASDAQ100"`, `"CRYPTO"`, `"SP500"`, `"ALL"` |
 | `TriggerStockCrawl` | `StockRequest` | `StockCrawlResponse` | Crawl và lưu một mã cổ phiếu đồng bộ |
 | `TriggerStockPredict` | `StockRequest` | `StockPredictResponse` | Dự đoán tất cả thuật toán cho một mã đồng bộ |
 | `TriggerSP500Crawler` | `Empty` | `TriggerResponse` | Crawl S&P 500 trong background |

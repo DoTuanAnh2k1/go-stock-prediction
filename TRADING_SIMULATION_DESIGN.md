@@ -4,7 +4,7 @@
 
 Mỗi bot = 1 cặp **(market × algorithm)**. Bot đọc prediction từ DB, phát sinh tín hiệu BUY/SELL/HOLD, giả lập giao dịch trên portfolio ảo, và theo dõi hiệu suất. Toàn bộ chạy trên dữ liệu lịch sử đã có sẵn trong hệ thống (không cần dữ liệu real-time mới).
 
-**Tổng: 6 markets × 11 algorithms = 66 bots**
+**Tổng: 5 markets × 11 algorithms = 55 bots**
 
 | Market | Symbols | Vốn ban đầu | Đơn vị |
 |--------|---------|------------|--------|
@@ -13,7 +13,6 @@ Mỗi bot = 1 cặp **(market × algorithm)**. Bot đọc prediction từ DB, ph
 | NASDAQ | 15 symbols | 100,000 | USD |
 | S&P 500 | 16 symbols | 100,000 | USD |
 | Crypto | BTC, ETH, SOL | 100,000 | USD |
-| Fuel | 4 loại xăng dầu VN | 1,000,000,000 | VND |
 
 ---
 
@@ -60,8 +59,6 @@ Mỗi bot = 1 cặp **(market × algorithm)**. Bot đọc prediction từ DB, ph
 **S&P 500 (11 bots — USD):** `sp500_moving_average`, `sp500_ema`, `sp500_lstm_nn`, `sp500_arima_garch`, `sp500_lightgbm`, `sp500_sarima`, `sp500_egarch`, `sp500_gru_nn`, `sp500_random_forest`, `sp500_xgboost`, `sp500_ensemble`
 
 **Crypto (11 bots — USD):** `crypto_moving_average`, `crypto_ema`, `crypto_lstm_nn`, `crypto_arima_garch`, `crypto_lightgbm`, `crypto_sarima`, `crypto_egarch`, `crypto_gru_nn`, `crypto_random_forest`, `crypto_xgboost`, `crypto_ensemble`
-
-**Fuel (11 bots — VND):** `fuel_moving_average`, `fuel_ema`, `fuel_lstm_nn`, `fuel_arima_garch`, `fuel_lightgbm`, `fuel_sarima`, `fuel_egarch`, `fuel_gru_nn`, `fuel_random_forest`, `fuel_xgboost`, `fuel_ensemble`
 
 ---
 
@@ -115,7 +112,6 @@ Phân loại tín hiệu theo `signal_strength` và `confidence`:
 - VN30: chỉ giao dịch các ngày trading thực tế (loại ngày nghỉ)
 - NASDAQ/SP500: theo lịch NYSE (T2-T6, bỏ holiday)
 - Crypto: 24/7
-- Fuel: chỉ khi có cập nhật giá mới
 
 ---
 
@@ -127,7 +123,7 @@ Phân loại tín hiệu theo `signal_strength` và `confidence`:
 ```sql
 CREATE TABLE sim_bots (
     id           VARCHAR(50) PRIMARY KEY,      -- 'vn30_lstm'
-    market       VARCHAR(20) NOT NULL,         -- 'VN30', 'GOLD', 'NASDAQ', 'SP500', 'CRYPTO', 'FUEL'
+    market       VARCHAR(20) NOT NULL,         -- 'VN30', 'GOLD', 'NASDAQ', 'SP500', 'CRYPTO'
     algorithm    VARCHAR(50) NOT NULL,         -- 'lstm_nn', 'moving_average', ...
     display_name VARCHAR(100) NOT NULL,
     initial_capital   DECIMAL(20,2) NOT NULL,
@@ -465,7 +461,6 @@ Thêm hàng trong `cron_schedules`:
 ### Về dữ liệu
 - **Backtest chỉ dùng được khi đã có predictions trong DB.** Cần chạy predict trước cho khoảng thời gian muốn backtest.
 - Predictions dùng `current_price` tại thời điểm predict, không phải giá mở cửa ngày hôm sau — có **look-ahead bias nhỏ** (chấp nhận được cho simulation nội bộ).
-- Fuel là commodity đặc biệt: giá không thay đổi hằng ngày (thay đổi theo đợt điều chỉnh) → `signal_strength` thường = 0, ít giao dịch.
 
 ### Về quy trình
 - Luồng chuẩn: **Crawl → Predict → Simulation step** (theo thứ tự đó hàng ngày).
@@ -473,5 +468,5 @@ Thêm hàng trong `cron_schedules`:
 - Backtest và Live cùng dùng chung logic, chỉ khác nguồn dữ liệu đầu vào.
 
 ### Về so sánh
-- VN30 và Fuel dùng VND, các sàn khác dùng USD — **không nên so sánh absolute P&L**, chỉ so sánh **%Return và Sharpe Ratio**.
+- VN30 dùng VND, các sàn khác dùng USD — **không nên so sánh absolute P&L**, chỉ so sánh **%Return và Sharpe Ratio**.
 - Leaderboard nên có 2 tab: VND markets và USD markets.

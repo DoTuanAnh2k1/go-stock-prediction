@@ -500,6 +500,52 @@ definitions:
       volume:
         type: integer
     type: object
+  modelsdb.SimBot:
+    properties:
+      algorithm:
+        type: string
+      buy_threshold:
+        type: number
+      created_at:
+        type: string
+      currency:
+        type: string
+      display_name:
+        type: string
+      id:
+        type: string
+      initial_capital:
+        type: number
+      is_active:
+        type: boolean
+      market:
+        type: string
+      max_position_pct:
+        type: number
+      max_positions:
+        type: integer
+      min_confidence:
+        type: number
+      sell_threshold:
+        type: number
+      stop_loss:
+        type: number
+      take_profit:
+        type: number
+      updated_at:
+        type: string
+    type: object
+  server.BackupInfo:
+    properties:
+      created_at:
+        type: string
+      filename:
+        type: string
+      size:
+        type: integer
+      size_human:
+        type: string
+    type: object
   server.ErrorDistributionDTO:
     properties:
       data:
@@ -619,6 +665,8 @@ definitions:
         items:
           type: string
         type: array
+      granularity:
+        type: string
       prices:
         items:
           type: number
@@ -654,6 +702,8 @@ definitions:
     properties:
       actual_price:
         type: number
+      algorithm_name:
+        type: string
       confidence:
         type: number
       date:
@@ -739,118 +789,24 @@ definitions:
           $ref: '#/definitions/server.cryptoPricePoint'
         type: array
     type: object
-  server.fuelChartResponse:
-    properties:
-      dates:
-        items:
-          type: string
-        type: array
-      prices:
-        items:
-          type: number
-        type: array
-      product_type:
-        type: string
-    type: object
-  server.fuelLatestItem:
-    properties:
-      price:
-        type: number
-      product_type:
-        type: string
-      trading_date:
-        type: string
-    type: object
-  server.fuelLatestResponse:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/server.fuelLatestItem'
-        type: array
-      updated_at:
-        type: string
-    type: object
-  server.fuelPredictionChartPoint:
-    properties:
-      actual_price:
-        type: number
-      confidence:
-        type: number
-      date:
-        type: string
-      predicted_price:
-        type: number
-    type: object
-  server.fuelPredictionChartResponse:
+  server.directionAccuracyAlgoDTO:
     properties:
       algorithm:
         type: string
-      data:
-        items:
-          $ref: '#/definitions/server.fuelPredictionChartPoint'
-        type: array
-      product_type:
-        type: string
-    type: object
-  server.fuelPredictionItem:
-    properties:
-      accuracy:
-        type: number
-      actual_price:
-        type: number
-      algorithm_name:
-        type: string
-      confidence:
-        type: number
-      current_price:
-        type: number
-      id:
+      correct:
         type: integer
-      predicted_price:
+      direction_accuracy:
         type: number
-      prediction_date:
-        type: string
-      product_type:
-        type: string
-      target_date:
-        type: string
-    type: object
-  server.fuelPredictionsPageResponse:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/server.fuelPredictionItem'
-        type: array
-      limit:
-        type: integer
-      page:
-        type: integer
       total:
         type: integer
     type: object
-  server.fuelPredictionsResponse:
+  server.directionAccuracyResponseDTO:
     properties:
-      data:
+      algorithms:
         items:
-          $ref: '#/definitions/server.fuelPredictionItem'
+          $ref: '#/definitions/server.directionAccuracyAlgoDTO'
         type: array
-      total:
-        type: integer
-    type: object
-  server.fuelPricePoint:
-    properties:
-      date:
-        type: string
-      price:
-        type: number
-    type: object
-  server.fuelPricesResponse:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/server.fuelPricePoint'
-        type: array
-      product_type:
+      market:
         type: string
     type: object
   server.goldChartResponse:
@@ -859,6 +815,8 @@ definitions:
         items:
           type: number
         type: array
+      granularity:
+        type: string
       labels:
         items:
           type: string
@@ -970,6 +928,63 @@ definitions:
       source:
         type: string
     type: object
+  server.leaderboardEntry:
+    properties:
+      algorithm:
+        type: string
+      annualized_return_pct:
+        type: number
+      bot_id:
+        type: string
+      currency:
+        type: string
+      display_name:
+        type: string
+      final_value:
+        type: number
+      initial_capital:
+        type: number
+      is_active:
+        type: boolean
+      market:
+        type: string
+      max_drawdown_pct:
+        type: number
+      profit_factor:
+        type: number
+      rank:
+        type: integer
+      sharpe_ratio:
+        type: number
+      simulation_period:
+        $ref: '#/definitions/server.simPeriod'
+      total_return_pct:
+        type: number
+      total_trades:
+        type: integer
+      win_rate_pct:
+        type: number
+    type: object
+  server.leaderboardResponse:
+    properties:
+      leaderboard:
+        items:
+          $ref: '#/definitions/server.leaderboardEntry'
+        type: array
+      summary:
+        $ref: '#/definitions/server.leaderboardSummary'
+    type: object
+  server.leaderboardSummary:
+    properties:
+      avg_return_pct:
+        type: number
+      best_algorithm:
+        type: string
+      best_market:
+        type: string
+      total_bots:
+        type: integer
+    type: object
   server.loginRequest:
     properties:
       password:
@@ -1018,6 +1033,8 @@ definitions:
         items:
           type: string
         type: array
+      granularity:
+        type: string
       prices:
         items:
           type: number
@@ -1051,6 +1068,8 @@ definitions:
     properties:
       actual_price:
         type: number
+      algorithm_name:
+        type: string
       confidence:
         type: number
       date:
@@ -1151,6 +1170,328 @@ definitions:
       updated_at:
         type: string
     type: object
+  server.simBotDetail:
+    properties:
+      algorithm:
+        type: string
+      buy_threshold:
+        type: number
+      created_at:
+        type: string
+      currency:
+        type: string
+      display_name:
+        type: string
+      id:
+        type: string
+      initial_capital:
+        type: number
+      is_active:
+        type: boolean
+      kpis:
+        $ref: '#/definitions/server.simBotKPIs'
+      last_session:
+        $ref: '#/definitions/server.simSessionSummary'
+      market:
+        type: string
+      max_position_pct:
+        type: number
+      max_positions:
+        type: integer
+      min_confidence:
+        type: number
+      sell_threshold:
+        type: number
+      stop_loss:
+        type: number
+      take_profit:
+        type: number
+      updated_at:
+        type: string
+    type: object
+  server.simBotKPIs:
+    properties:
+      annualized_return_pct:
+        type: number
+      avg_trade_duration_days:
+        type: number
+      best_trade_pct:
+        type: number
+      max_drawdown_pct:
+        type: number
+      profit_factor:
+        type: number
+      sharpe_ratio:
+        type: number
+      total_return_pct:
+        type: number
+      total_trades:
+        type: integer
+      win_rate_pct:
+        type: number
+      worst_trade_pct:
+        type: number
+    type: object
+  server.simBotListItem:
+    properties:
+      algorithm:
+        type: string
+      buy_threshold:
+        type: number
+      created_at:
+        type: string
+      currency:
+        type: string
+      display_name:
+        type: string
+      id:
+        type: string
+      initial_capital:
+        type: number
+      is_active:
+        type: boolean
+      last_session:
+        $ref: '#/definitions/server.simSessionSummary'
+      market:
+        type: string
+      max_position_pct:
+        type: number
+      max_positions:
+        type: integer
+      min_confidence:
+        type: number
+      sell_threshold:
+        type: number
+      stop_loss:
+        type: number
+      take_profit:
+        type: number
+      total_return_pct:
+        type: number
+      total_trades:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  server.simChartResponse:
+    properties:
+      bot_id:
+        type: string
+      dates:
+        items:
+          type: string
+        type: array
+      returns_pct:
+        items:
+          type: number
+        type: array
+      session_id:
+        type: integer
+      values:
+        items:
+          type: number
+        type: array
+    type: object
+  server.simPeriod:
+    properties:
+      end:
+        type: string
+      start:
+        type: string
+    type: object
+  server.simSessionSummary:
+    properties:
+      end_date:
+        type: string
+      id:
+        type: integer
+      start_date:
+        type: string
+      status:
+        type: string
+    type: object
+  server.simTradeJSON:
+    properties:
+      action:
+        type: string
+      bot_id:
+        type: string
+      close_reason:
+        type: string
+      confidence:
+        type: number
+      created_at:
+        type: string
+      entry_trade_id:
+        type: integer
+      id:
+        type: integer
+      pnl:
+        type: number
+      pnl_pct:
+        type: number
+      price:
+        type: number
+      quantity:
+        type: number
+      session_id:
+        type: integer
+      signal_strength:
+        type: number
+      symbol:
+        type: string
+      trade_date:
+        type: string
+      trade_value:
+        type: number
+    type: object
+  server.simTradesPage:
+    properties:
+      bot_id:
+        type: string
+      data:
+        items:
+          $ref: '#/definitions/server.simTradeJSON'
+        type: array
+      limit:
+        type: integer
+      page:
+        type: integer
+      session_id:
+        type: integer
+      total:
+        type: integer
+    type: object
+  server.sp500ChartResponse:
+    properties:
+      dates:
+        items:
+          type: string
+        type: array
+      granularity:
+        type: string
+      prices:
+        items:
+          type: number
+        type: array
+      symbol:
+        type: string
+    type: object
+  server.sp500LatestItem:
+    properties:
+      close_price:
+        type: number
+      company_name:
+        type: string
+      currency:
+        type: string
+      symbol:
+        type: string
+      trading_date:
+        type: string
+    type: object
+  server.sp500LatestResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/server.sp500LatestItem'
+        type: array
+      updated_at:
+        type: string
+    type: object
+  server.sp500PredictionChartPoint:
+    properties:
+      actual_price:
+        type: number
+      algorithm_name:
+        type: string
+      confidence:
+        type: number
+      date:
+        type: string
+      predicted_price:
+        type: number
+    type: object
+  server.sp500PredictionChartResponse:
+    properties:
+      algorithm:
+        type: string
+      data:
+        items:
+          $ref: '#/definitions/server.sp500PredictionChartPoint'
+        type: array
+      symbol:
+        type: string
+    type: object
+  server.sp500PredictionItem:
+    properties:
+      accuracy:
+        type: number
+      actual_price:
+        type: number
+      algorithm_name:
+        type: string
+      confidence:
+        type: number
+      current_price:
+        type: number
+      id:
+        type: integer
+      predicted_price:
+        type: number
+      prediction_date:
+        type: string
+      symbol:
+        type: string
+      target_date:
+        type: string
+    type: object
+  server.sp500PredictionsPageResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/server.sp500PredictionItem'
+        type: array
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+    type: object
+  server.sp500PredictionsResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/server.sp500PredictionItem'
+        type: array
+      total:
+        type: integer
+    type: object
+  server.sp500PricePoint:
+    properties:
+      close_price:
+        type: number
+      date:
+        type: string
+      high_price:
+        type: number
+      low_price:
+        type: number
+      open_price:
+        type: number
+      volume:
+        type: integer
+    type: object
+  server.sp500PricesResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/server.sp500PricePoint'
+        type: array
+      symbol:
+        type: string
+    type: object
   server.updateScheduleRequest:
     properties:
       cron_expression:
@@ -1180,16 +1521,16 @@ host: localhost:8118
 info:
   contact: {}
   description: Vietnamese stock market prediction system — ML algorithms (VWMA, EMA,
-    LSTM, ARIMA-GARCH, Ensemble) for VN30 stocks, gold, NASDAQ, crypto, and fuel prices.
+    LSTM, ARIMA-GARCH, Ensemble) for VN30 stocks, gold, NASDAQ, crypto, and S&P 500.
   title: Go Stock Prediction API
   version: "1.0"
 paths:
   /api/algorithms/backtest:
     get:
-      description: Runs a walk-forward backtest on up to 500 recent price points for
-        the given stock symbol using Moving Average, LSTM, and ARIMA-GARCH algorithms.
-        Returns MAE, RMSE, MAPE, and directional accuracy for each algorithm. Requires
-        at least 150 historical data points.
+      description: Returns walk-forward backtest metrics (MAE, RMSE, MAPE, directional
+        accuracy) per algorithm derived from confirmed predictions (status='confirmed')
+        stored in the database. Requires at least 10 confirmed predictions for the
+        symbol.
       parameters:
       - description: Stock symbol (e.g. VCB)
         in: query
@@ -1341,16 +1682,109 @@ paths:
       summary: Change password
       tags:
       - Auth
+  /api/backups:
+    get:
+      description: Returns a list of all available database backup files, sorted newest
+        first.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/server.BackupInfo'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: List database backups
+      tags:
+      - Backup
+  /api/backups/{filename}:
+    delete:
+      description: Deletes a backup file from the backup directory. Requires admin
+        role.
+      parameters:
+      - description: Backup filename (e.g. backup_20260605_120000.sql.gz)
+        in: path
+        name: filename
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Delete a backup file
+      tags:
+      - Backup
+    get:
+      description: Streams a backup file as an application/gzip download.
+      parameters:
+      - description: Backup filename (e.g. backup_20260605_120000.sql.gz)
+        in: path
+        name: filename
+        required: true
+        type: string
+      produces:
+      - application/gzip
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Download a backup file
+      tags:
+      - Backup
   /api/crypto/chart:
     get:
       description: Returns chronologically ordered date labels and closing prices
-        for charting
+        for charting. When days=1, returns hourly intraday data; otherwise returns
+        daily data.
       parameters:
       - description: Coin ID (e.g. bitcoin, ethereum)
         in: query
         name: coin
         type: string
-      - description: Number of days to look back (default 30)
+      - description: Number of days to look back (default 30); use 1 for intraday
+          hourly data
         in: query
         name: days
         type: integer
@@ -1481,6 +1915,24 @@ paths:
       summary: Get latest crypto predictions
       tags:
       - Crypto Predictions
+  /api/crypto/predictions/latest-results:
+    get:
+      description: Returns the most recent confirmed prediction (actual_price IS NOT
+        NULL) per (coin_id, algorithm) combination, showing how predictions performed
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.cryptoPredictionsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: Get latest confirmed crypto prediction results
+      tags:
+      - Crypto Predictions
   /api/crypto/prices:
     get:
       description: Returns close price, market cap, and 24h volume for a given coin
@@ -1527,177 +1979,11 @@ paths:
       summary: Get dashboard statistics
       tags:
       - Dashboard
-  /api/fuel/chart:
-    get:
-      description: Returns chronologically ordered date labels and prices for charting
-      parameters:
-      - description: Fuel product type (e.g. ron95_iii, ron95_v, diezel_005s, dau_hoa)
-        in: query
-        name: product
-        type: string
-      - description: Number of days to look back (default 180)
-        in: query
-        name: days
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/server.fuelChartResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/server.ResponseFailure'
-      summary: Get fuel price chart data
-      tags:
-      - Fuel
-  /api/fuel/latest:
-    get:
-      description: Returns the most recent retail price for each Vietnamese fuel product
-        type (ron95_iii, ron95_v, diezel_005s, dau_hoa)
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/server.fuelLatestResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/server.ResponseFailure'
-      summary: Get latest fuel prices
-      tags:
-      - Fuel
-  /api/fuel/predictions:
-    get:
-      description: Returns paginated fuel predictions with optional filtering by product
-        type, algorithm, and status
-      parameters:
-      - description: Filter by fuel product type
-        in: query
-        name: product
-        type: string
-      - description: Filter by algorithm name
-        in: query
-        name: algorithm
-        type: string
-      - description: Filter by status (pending, confirmed, wrong)
-        in: query
-        name: status
-        type: string
-      - description: Sort field
-        in: query
-        name: sort_by
-        type: string
-      - description: Sort direction (asc, desc)
-        in: query
-        name: sort_dir
-        type: string
-      - description: Page number (default 1)
-        in: query
-        name: page
-        type: integer
-      - description: Items per page, max 100 (default 20)
-        in: query
-        name: limit
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/server.fuelPredictionsPageResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/server.ResponseFailure'
-      summary: List fuel predictions with pagination
-      tags:
-      - Fuel Predictions
-  /api/fuel/predictions/chart:
-    get:
-      description: Returns chronologically ordered predicted vs actual price data
-        for charting, optionally filtered by algorithm
-      parameters:
-      - description: Fuel product type (e.g. ron95_iii, ron95_v)
-        in: query
-        name: product
-        type: string
-      - description: Algorithm name (e.g. lstm_nn)
-        in: query
-        name: algorithm
-        type: string
-      - description: Number of days to look back (default 180)
-        in: query
-        name: days
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/server.fuelPredictionChartResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/server.ResponseFailure'
-      summary: Get fuel prediction chart data
-      tags:
-      - Fuel Predictions
-  /api/fuel/predictions/latest:
-    get:
-      description: Returns the most recent prediction per (product_type, algorithm)
-        combination
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/server.fuelPredictionsResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/server.ResponseFailure'
-      summary: Get latest fuel predictions
-      tags:
-      - Fuel Predictions
-  /api/fuel/prices:
-    get:
-      description: Returns retail price history for a given fuel product type over
-        the specified number of days
-      parameters:
-      - description: Fuel product type (e.g. ron95_iii, ron95_v, diezel_005s, dau_hoa)
-        in: query
-        name: product
-        type: string
-      - description: Number of days to look back (default 180)
-        in: query
-        name: days
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/server.fuelPricesResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/server.ResponseFailure'
-      summary: Get historical fuel prices
-      tags:
-      - Fuel
   /api/gold/chart:
     get:
       description: Returns chronologically ordered labels and buy/sell price arrays
-        suitable for charting
+        suitable for charting. When days=1, returns hourly intraday data; otherwise
+        returns daily data.
       parameters:
       - description: Gold source (e.g. SJC, BTMC)
         in: query
@@ -1707,7 +1993,8 @@ paths:
         in: query
         name: product_type
         type: string
-      - description: Number of days to look back (default 30)
+      - description: Number of days to look back (default 30); use 1 for intraday
+          hourly data
         in: query
         name: days
         type: integer
@@ -1829,6 +2116,24 @@ paths:
           schema:
             $ref: '#/definitions/server.ResponseFailure'
       summary: Get latest gold predictions
+      tags:
+      - Gold Predictions
+  /api/gold/predictions/latest-results:
+    get:
+      description: Returns the most recent confirmed prediction (actual_price IS NOT
+        NULL) per (source, product_type, algorithm) combination
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.goldPredictionsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: Get latest confirmed gold prediction results
       tags:
       - Gold Predictions
   /api/gold/prices:
@@ -2019,13 +2324,15 @@ paths:
   /api/nasdaq/chart:
     get:
       description: Returns chronologically ordered date labels and closing prices
-        for charting
+        for charting. When days=1, returns hourly intraday data; otherwise returns
+        daily data.
       parameters:
       - description: NASDAQ symbol (e.g. AAPL, MSFT)
         in: query
         name: symbol
         type: string
-      - description: Number of days to look back (default 30)
+      - description: Number of days to look back (default 30); use 1 for intraday
+          hourly data
         in: query
         name: days
         type: integer
@@ -2153,6 +2460,24 @@ paths:
           schema:
             $ref: '#/definitions/server.ResponseFailure'
       summary: Get latest NASDAQ predictions
+      tags:
+      - NASDAQ Predictions
+  /api/nasdaq/predictions/latest-results:
+    get:
+      description: Returns the most recent confirmed prediction (actual_price IS NOT
+        NULL) per (symbol, algorithm) combination
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.nasdaqPredictionsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: Get latest confirmed NASDAQ prediction results
       tags:
       - NASDAQ Predictions
   /api/nasdaq/prices:
@@ -2376,6 +2701,40 @@ paths:
       summary: Compare predicted vs actual prices for a stock
       tags:
       - Predictions
+  /api/predictions/direction-accuracy:
+    get:
+      description: Returns the fraction of predictions where the price movement direction
+        was correct, grouped by algorithm, for the specified market.
+      parameters:
+      - description: Market key
+        enum:
+        - VN30
+        - GOLD
+        - NASDAQ
+        - CRYPTO
+        - SP500
+        in: query
+        name: market
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.directionAccuracyResponseDTO'
+        "400":
+          description: missing or unknown market
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: Direction accuracy per algorithm
+      tags:
+      - predictions
   /api/predictions/error-distribution:
     get:
       description: Returns scatter plot data of predicted change % vs actual change
@@ -2478,10 +2837,522 @@ paths:
       summary: Update cron schedule
       tags:
       - Schedules
+  /api/simulation/bots:
+    get:
+      description: Returns all trading bots with their latest session status and summary
+        KPIs.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/server.simBotListItem'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: List all simulation bots
+      tags:
+      - Simulation
+  /api/simulation/bots/{id}:
+    get:
+      description: Returns full details and KPIs for a single bot identified by {id}.
+      parameters:
+      - description: Bot ID (e.g. vn30_lstm_nn)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.simBotDetail'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: Get simulation bot details
+      tags:
+      - Simulation
+  /api/simulation/bots/{id}/chart:
+    get:
+      description: Returns daily portfolio value and cumulative return percentages
+        for chart rendering.
+      parameters:
+      - description: Bot ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.simChartResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: Get bot portfolio value time series
+      tags:
+      - Simulation
+  /api/simulation/bots/{id}/config:
+    put:
+      consumes:
+      - application/json
+      description: Updates trading parameters for a single bot. Requires admin role.
+      parameters:
+      - description: Bot ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Bot configuration fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/modelsdb.SimBot'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Update bot configuration
+      tags:
+      - Simulation
+  /api/simulation/bots/{id}/run:
+    post:
+      consumes:
+      - application/json
+      description: Sends a gRPC request to run backtest simulation for the specified
+        bot. Accepts optional JSON body with start_date and end_date.
+      parameters:
+      - description: Bot ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 'Optional: {start_date: ''2024-01-01'', end_date: ''2026-05-31''}'
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Trigger backtest for a single bot
+      tags:
+      - Simulation
+  /api/simulation/bots/{id}/toggle:
+    post:
+      description: Flips the is_active flag for a bot. Requires admin role.
+      parameters:
+      - description: Bot ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Toggle bot active status
+      tags:
+      - Simulation
+  /api/simulation/bots/{id}/trades:
+    get:
+      description: 'Returns paginated trade history for a bot''s latest session. Query:
+        ?page=1&limit=50'
+      parameters:
+      - description: Bot ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Results per page (default 50, max 500)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.simTradesPage'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: Get bot trade history
+      tags:
+      - Simulation
+  /api/simulation/leaderboard:
+    get:
+      description: Returns all bots sorted by total_return_pct. Supports filtering
+        by market, algorithm, and currency.
+      parameters:
+      - description: Filter by market (e.g. VN30, CRYPTO)
+        in: query
+        name: market
+        type: string
+      - description: Filter by algorithm key (e.g. lstm_nn)
+        in: query
+        name: algorithm
+        type: string
+      - description: Filter by currency (VND or USD)
+        in: query
+        name: currency
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.leaderboardResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: Get simulation leaderboard
+      tags:
+      - Simulation
+  /api/simulation/run-all:
+    post:
+      consumes:
+      - application/json
+      description: Sends a gRPC request to run backtest simulation for all active
+        bots. Accepts optional JSON body with start_date and end_date.
+      parameters:
+      - description: 'Optional: {start_date: ''2024-01-01'', end_date: ''2026-05-31''}'
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Trigger backtest for all bots
+      tags:
+      - Simulation
+  /api/sp500/chart:
+    get:
+      description: Returns chronologically ordered date labels and closing prices
+        for charting. When days=1, returns hourly intraday data; otherwise returns
+        daily data.
+      parameters:
+      - description: S&P 500 symbol (e.g. SPY, AAPL)
+        in: query
+        name: symbol
+        type: string
+      - description: Number of days to look back (default 30); use 1 for intraday
+          hourly data
+        in: query
+        name: days
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.sp500ChartResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: Get S&P 500 price chart data
+      tags:
+      - SP500
+  /api/sp500/latest:
+    get:
+      description: Returns the most recent closing price for each tracked S&P 500
+        symbol
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.sp500LatestResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: Get latest S&P 500 prices
+      tags:
+      - SP500
+  /api/sp500/predictions:
+    get:
+      description: Returns paginated S&P 500 predictions with optional filtering by
+        symbol, algorithm, and status
+      parameters:
+      - description: Filter by S&P 500 symbol
+        in: query
+        name: symbol
+        type: string
+      - description: Filter by algorithm name
+        in: query
+        name: algorithm
+        type: string
+      - description: Filter by status (pending, confirmed, wrong)
+        in: query
+        name: status
+        type: string
+      - description: Sort field
+        in: query
+        name: sort_by
+        type: string
+      - description: Sort direction (asc, desc)
+        in: query
+        name: sort_dir
+        type: string
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Items per page, max 100 (default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.sp500PredictionsPageResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: List S&P 500 predictions with pagination
+      tags:
+      - SP500 Predictions
+  /api/sp500/predictions/chart:
+    get:
+      description: Returns chronologically ordered predicted vs actual price data
+        for charting, optionally filtered by algorithm
+      parameters:
+      - description: S&P 500 symbol (e.g. SPY, AAPL)
+        in: query
+        name: symbol
+        type: string
+      - description: Algorithm name (e.g. lstm_nn)
+        in: query
+        name: algorithm
+        type: string
+      - description: Number of days to look back (default 30)
+        in: query
+        name: days
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.sp500PredictionChartResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: Get S&P 500 prediction chart data
+      tags:
+      - SP500 Predictions
+  /api/sp500/predictions/latest:
+    get:
+      description: Returns the most recent prediction per (symbol, algorithm) combination
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.sp500PredictionsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: Get latest S&P 500 predictions
+      tags:
+      - SP500 Predictions
+  /api/sp500/predictions/latest-results:
+    get:
+      description: Returns the most recent confirmed prediction (actual_price IS NOT
+        NULL) per (symbol, algorithm) combination
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.sp500PredictionsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: Get latest confirmed S&P 500 prediction results
+      tags:
+      - SP500 Predictions
+  /api/sp500/prices:
+    get:
+      description: Returns OHLCV price data for a given S&P 500 symbol over the specified
+        number of days
+      parameters:
+      - description: S&P 500 symbol (e.g. SPY, AAPL)
+        in: query
+        name: symbol
+        type: string
+      - description: Number of days to look back (default 30)
+        in: query
+        name: days
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.sp500PricesResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      summary: Get historical S&P 500 prices
+      tags:
+      - SP500
   /api/stocks/{symbol}/chart:
     get:
       description: Returns candlestick (OHLCV) and volume data for the given stock
-        symbol over the specified period and interval.
+        symbol over the specified period and interval. When period=1D and interval=1h,
+        returns hourly intraday data from the intraday table.
       parameters:
       - description: Stock symbol (e.g. VCB)
         in: path
@@ -2834,6 +3705,36 @@ paths:
       summary: Get current training status
       tags:
       - Training
+  /api/trigger/backup:
+    post:
+      description: Runs mysqldump, compresses the output with gzip, and saves it to
+        the backup directory. Keeps only the 10 most recent backups. Requires admin
+        role.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Trigger a database backup
+      tags:
+      - Backup
   /api/trigger/crawler:
     post:
       consumes:
@@ -2916,62 +3817,6 @@ paths:
       security:
       - BearerAuth: []
       summary: Trigger crypto prediction
-      tags:
-      - Triggers
-  /api/trigger/fuel-crawler:
-    post:
-      consumes:
-      - application/json
-      description: Starts a fuel price crawl in the background via the prediction
-        service. Returns 202 immediately.
-      produces:
-      - application/json
-      responses:
-        "202":
-          description: Accepted
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/server.ResponseFailure'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/server.ResponseFailure'
-        "503":
-          description: Service Unavailable
-          schema:
-            $ref: '#/definitions/server.ResponseFailure'
-      security:
-      - BearerAuth: []
-      summary: Trigger fuel price crawler
-      tags:
-      - Triggers
-  /api/trigger/fuel-predict:
-    post:
-      consumes:
-      - application/json
-      description: Runs a prediction for all registered fuel instruments in the background
-        via the prediction service. Returns 202 immediately.
-      produces:
-      - application/json
-      responses:
-        "202":
-          description: Accepted
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/server.ResponseFailure'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/server.ResponseFailure'
-        "503":
-          description: Service Unavailable
-          schema:
-            $ref: '#/definitions/server.ResponseFailure'
-      security:
-      - BearerAuth: []
-      summary: Trigger fuel price prediction
       tags:
       - Triggers
   /api/trigger/gold-crawler:
@@ -3106,7 +3951,7 @@ paths:
       description: 'Starts a walk-forward backtest in the background via the prediction
         service. Accepts optional query params: train_window (default 30), step_size
         (default 6), and market (one of "", "VN30", "GOLD", "NASDAQ100", "CRYPTO",
-        "FUEL"). Returns 409 if a backtest is already running.'
+        "SP500", "ALL"). Returns 409 if a backtest is already running.'
       parameters:
       - description: Minimum data points before first prediction (default 30)
         in: query
@@ -3116,8 +3961,8 @@ paths:
         in: query
         name: step_size
         type: integer
-      - description: 'Target market key: VN30, GOLD, NASDAQ100, CRYPTO, FUEL (default:
-          all)'
+      - description: 'Target market key: VN30, GOLD, NASDAQ100, CRYPTO, SP500, ALL
+          (default: all)'
         in: query
         name: market
         type: string
@@ -3270,6 +4115,165 @@ paths:
       security:
       - BearerAuth: []
       summary: Trigger prediction reconciliation
+      tags:
+      - Triggers
+  /api/trigger/sim-reset:
+    post:
+      description: Closes stale live sessions and creates fresh running sessions for
+        all active bots. Use when bots stop trading after the first day.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Reset all active simulation bots
+      tags:
+      - Triggers
+  /api/trigger/simulation-backtest:
+    post:
+      consumes:
+      - application/json
+      description: Sends a gRPC request to run backtest simulation for a specific
+        bot or all bots. Accepts optional JSON body with bot_id, start_date, end_date.
+      parameters:
+      - description: 'Optional: {bot_id: '''', start_date: ''2024-01-01'', end_date:
+          ''''}'
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Trigger trading simulation backtest
+      tags:
+      - Triggers
+  /api/trigger/simulation-live-step:
+    post:
+      description: Sends a gRPC request to advance all live simulation bots by one
+        step using the latest available predictions.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Trigger simulation live step
+      tags:
+      - Triggers
+  /api/trigger/sp500-crawler:
+    post:
+      description: Starts S&P 500 price crawler in the background via the prediction
+        service.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Trigger S&P 500 price crawler
+      tags:
+      - Triggers
+  /api/trigger/sp500-predict:
+    post:
+      description: Runs prediction for all S&P 500 symbols in the background via the
+        prediction service.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Trigger S&P 500 prediction
       tags:
       - Triggers
   /api/trigger/stock-history:

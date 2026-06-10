@@ -153,7 +153,6 @@ export default function MarketTraining() {
   const marketLabel = marketKey === 'gold' ? 'Vàng'
     : marketKey === 'nasdaq100' ? 'NASDAQ 100'
     : marketKey === 'crypto'    ? 'Crypto'
-    : marketKey === 'fuel'      ? 'Giá Xăng'
     : 'VN30';
 
   return (

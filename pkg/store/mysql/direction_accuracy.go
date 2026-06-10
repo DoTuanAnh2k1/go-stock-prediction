@@ -17,7 +17,6 @@ var marketTableMap = map[string]struct {
 	"GOLD":   {table: "gold_predictions", algoCol: "algorithm_name"},
 	"NASDAQ": {table: "nasdaq_predictions", algoCol: "algorithm_name"},
 	"CRYPTO": {table: "crypto_predictions", algoCol: "algorithm_name"},
-	"FUEL":   {table: "fuel_predictions", algoCol: "algorithm_name"},
 	"SP500":  {table: "sp500_predictions", algoCol: "algorithm_name"},
 }
 
@@ -26,7 +25,7 @@ var marketTableMap = map[string]struct {
 func (c *Client) GetDirectionAccuracy(market string) ([]modelsapi.DirectionAccuracyRow, error) {
 	info, ok := marketTableMap[strings.ToUpper(market)]
 	if !ok {
-		return nil, fmt.Errorf("unknown market: %q (valid: VN30, GOLD, NASDAQ, CRYPTO, FUEL, SP500)", market)
+		return nil, fmt.Errorf("unknown market: %q (valid: VN30, GOLD, NASDAQ, CRYPTO, SP500)", market)
 	}
 
 	// Raw SQL to avoid GORM model binding — the query shape is identical for every table.

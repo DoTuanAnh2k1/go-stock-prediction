@@ -225,7 +225,7 @@ func GetGoldPredictionChart(w http.ResponseWriter, r *http.Request) {
 	// DB returns prediction_date ASC — iterate forward
 	for _, p := range filtered {
 		data = append(data, goldPredictionChartPoint{
-			Date:           p.PredictionDate.Format("2006-01-02T15:04:05"),
+			Date:           p.TargetDate.Format("2006-01-02T15:04:05"),
 			PredictedPrice: p.PredictedPrice,
 			ActualPrice:    p.ActualPrice,
 			Confidence:     p.Confidence,

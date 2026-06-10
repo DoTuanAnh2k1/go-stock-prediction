@@ -98,12 +98,6 @@ def test_api_trigger_crypto_crawler(api_base_url, auth_headers):
     assert resp.status_code == 200
 
 
-def test_api_trigger_fuel_crawler(api_base_url, auth_headers):
-    """POST /api/trigger/fuel-crawler returns 200."""
-    resp = requests.post(f"{api_base_url}/api/trigger/fuel-crawler", headers=auth_headers, timeout=15)
-    assert resp.status_code == 200
-
-
 def test_api_trigger_train(api_base_url, auth_headers):
     """POST /api/trigger/train with JSON body returns 200."""
     resp = requests.post(

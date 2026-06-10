@@ -115,14 +115,20 @@ function buildMultiAlgoData(
     return it[dateField] || '';
   };
   const fmtLabel = useIntraday
-    ? (s: string) => {
-        if (!s) return '';
-        try {
-          const d = new Date(s);
-          if (isNaN(d.getTime())) return s.slice(11, 16) || s;
-          return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
-        } catch { return s.slice(11, 16) || s; }
-      }
+    ? (() => {
+        let prevDay = '';
+        return (s: string) => {
+          if (!s) return '';
+          try {
+            const d = new Date(s);
+            if (isNaN(d.getTime())) return s.slice(11, 16) || s;
+            const hhmm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+            const day = ('0' + (d.getMonth() + 1)).slice(-2) + '/' + ('0' + d.getDate()).slice(-2);
+            if (day !== prevDay) { prevDay = day; return day + ' ' + hhmm; }
+            return hhmm;
+          } catch { return s.slice(11, 16) || s; }
+        };
+      })()
     : fmtDate;
   const sorted = [...list].sort((a, b) => (getKey(a)) < (getKey(b)) ? -1 : 1);
   const uniqueDates: string[] = [];
@@ -565,6 +571,7 @@ export default function Crypto() {
                     <th className="r">{t.common.current}</th>
                     <th className="r">{t.common.predicted}</th>
                     <th className="r">±%</th>
+                    <th className="r">{t.common.accuracy}</th>
                     <th className="r">{t.common.confidence}</th>
                   </tr>
                 </thead>
@@ -584,6 +591,17 @@ export default function Crypto() {
                         <td className="r num" style={{ color: 'var(--text-2)', fontSize: 12 }}>{fmtCrypto(cur)}</td>
                         <td className="r num" style={{ fontWeight: 600, fontSize: 12 }}>{fmtCrypto(pred)}</td>
                         <td className="r"><Chg pct={deltaPct} /></td>
+                        <td className="r">
+                          {(() => {
+                            let acc = p.accuracy != null ? num(p.accuracy) : null;
+                            if (acc != null && acc > 0 && acc <= 1) acc = Math.round(acc * 100);
+                            if (acc != null) {
+                              const color = acc >= 60 ? 'var(--up)' : acc >= 50 ? 'oklch(0.78 0.18 80)' : 'var(--dn)';
+                              return <span style={{ color, fontWeight: 600, fontSize: 12 }}>{acc}%</span>;
+                            }
+                            return <span style={{ color: 'var(--text-3)' }}>—</span>;
+                          })()}
+                        </td>
                         <td className="r"><ConfBar v={conf} /></td>
                       </tr>
                     );
@@ -642,8 +660,8 @@ export default function Crypto() {
                     let acc = r.accuracy != null ? num(r.accuracy) : null;
                     if (acc != null && acc > 0 && acc <= 1) acc = Math.round(acc * 100);
                     const accColor = acc == null ? 'var(--text-3)'
-                      : acc >= 95 ? 'var(--up)'
-                      : acc >= 80 ? 'oklch(0.78 0.18 80)'
+                      : acc >= 60 ? 'var(--up)'
+                      : acc >= 50 ? 'oklch(0.78 0.18 80)'
                       : 'var(--dn)';
                     const { short, cls } = algoShort(r.algorithm_name);
                     const sym = r.symbol || r.coin_id || '—';
@@ -755,10 +773,11 @@ export default function Crypto() {
                 })),
               ]}
               labels={predChart.labels}
-              height={540}
+              height={680}
               yFmt={fmtCryptoShort}
               valueFmt={fmtCrypto}
               padL={70}
+              highlightable
             />
             <Legend items={[
               [t.common.actual, 'var(--text-2)'],
@@ -766,7 +785,7 @@ export default function Crypto() {
             ]} />
           </>
         ) : (
-          <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div className="empty" style={{ height: 680, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
             <p>{t.crypto.noCompareData} {predChartCoinDef.label}</p>
           </div>

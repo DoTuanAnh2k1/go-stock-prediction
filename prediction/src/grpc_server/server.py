@@ -50,12 +50,6 @@ class PredictionServicer:
         threading.Thread(target=_bg_crawl_crypto, daemon=True).start()
         return pb2.TriggerResponse(success=True, message="Crypto crawler started in background")
 
-    def TriggerFuelCrawler(self, request, context):
-        pb2, _ = _get_pb()
-        log.info("grpc.TriggerFuelCrawler")
-        threading.Thread(target=_bg_crawl_fuel, daemon=True).start()
-        return pb2.TriggerResponse(success=True, message="Fuel crawler started in background")
-
     def TriggerStockHistory(self, request, context):
         pb2, _ = _get_pb()
         days = request.days or 365
@@ -86,12 +80,6 @@ class PredictionServicer:
         log.info("grpc.TriggerCryptoPredict")
         threading.Thread(target=_bg_predict_crypto, daemon=True).start()
         return pb2.TriggerResponse(success=True, message="Crypto prediction started in background")
-
-    def TriggerFuelPredict(self, request, context):
-        pb2, _ = _get_pb()
-        log.info("grpc.TriggerFuelPredict")
-        threading.Thread(target=_bg_predict_fuel, daemon=True).start()
-        return pb2.TriggerResponse(success=True, message="Fuel prediction started in background")
 
     def TriggerSP500Crawler(self, request, context):
         pb2, _ = _get_pb()
@@ -357,15 +345,6 @@ def _bg_crawl_crypto():
         log.error("bg.crypto.error", error=str(exc))
 
 
-def _bg_crawl_fuel():
-    try:
-        from src.crawlers.fuel import FuelCrawler
-        saved = FuelCrawler().crawl()
-        log.info("bg.fuel.done", saved=saved)
-    except Exception as exc:
-        log.error("bg.fuel.error", error=str(exc))
-
-
 def _bg_stock_history(days: int):
     try:
         from src.crawlers.vn30 import VN30Crawler
@@ -409,15 +388,6 @@ def _bg_predict_crypto():
         log.info("bg.predict_crypto.done", count=n)
     except Exception as exc:
         log.error("bg.predict_crypto.error", error=str(exc))
-
-
-def _bg_predict_fuel():
-    try:
-        from src.orchestrator.runner import run_for_market
-        n = run_for_market("FUEL")
-        log.info("bg.predict_fuel.done", count=n)
-    except Exception as exc:
-        log.error("bg.predict_fuel.error", error=str(exc))
 
 
 def _bg_crawl_sp500():

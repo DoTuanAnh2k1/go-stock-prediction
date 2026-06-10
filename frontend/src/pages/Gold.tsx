@@ -280,7 +280,7 @@ export default function Gold() {
               </div>
             : <div style={{ overflowX: 'auto' }}>
                 <table className="tbl">
-                  <thead><tr><th>{t.common.source}</th><th className="c">TT</th><th className="r">{t.common.current}</th><th className="r">{t.common.predicted}</th><th className="r">±%</th><th className="r">{t.common.confidence}</th></tr></thead>
+                  <thead><tr><th>{t.common.source}</th><th className="c">TT</th><th className="r">{t.common.current}</th><th className="r">{t.common.predicted}</th><th className="r">±%</th><th className="r">{t.common.accuracy}</th><th className="r">{t.common.confidence}</th></tr></thead>
                   <tbody>
                     {predPagedItems.map((p, i) => {
                       return (
@@ -290,6 +290,17 @@ export default function Gold() {
                           <td className="r num" style={{ color: 'var(--text-2)', fontSize: 12 }}>{p.isOz ? '$' + p.cur : fmt.goldShort(p.cur)}</td>
                           <td className="r num" style={{ fontWeight: 600, fontSize: 12 }}>{p.isOz ? '$' + p.pred : fmt.goldShort(p.pred)}</td>
                           <td className="r"><Chg pct={p.deltaPct} /></td>
+                          <td className="r">
+                            {(() => {
+                              let acc = p.accuracy != null ? num(p.accuracy) : null;
+                              if (acc != null && acc > 0 && acc <= 1) acc = Math.round(acc * 100);
+                              if (acc != null) {
+                                const color = acc >= 60 ? 'var(--up)' : acc >= 50 ? 'oklch(0.78 0.18 80)' : 'var(--dn)';
+                                return <span style={{ color, fontWeight: 600, fontSize: 12 }}>{acc}%</span>;
+                              }
+                              return <span style={{ color: 'var(--text-3)' }}>—</span>;
+                            })()}
+                          </td>
                           <td className="r"><ConfBar v={p.conf} /></td>
                         </tr>
                       );
@@ -350,8 +361,8 @@ export default function Gold() {
                     let acc = r.accuracy != null ? num(r.accuracy) : null;
                     if (acc != null && acc > 0 && acc <= 1) acc = Math.round(acc * 100);
                     const accColor = acc == null ? 'var(--text-3)'
-                      : acc >= 95 ? 'var(--up)'
-                      : acc >= 80 ? 'oklch(0.78 0.18 80)'
+                      : acc >= 60 ? 'var(--up)'
+                      : acc >= 50 ? 'oklch(0.78 0.18 80)'
                       : 'var(--dn)';
                     const { short, cls } = algoShort(r.algorithm_name);
                     const label = r.source || r.symbol || r.product_type || '—';
@@ -422,11 +433,12 @@ export default function Gold() {
                   { name: t.common.predicted, data: D.goldPredActual.pred, color: 'var(--gold)', dash: '5 4', w: 2 },
                 ]}
                 labels={D.goldPredActual.labels}
-                height={540} yFmt={(v) => (v / 1e6).toFixed(1) + 'tr'} valueFmt={(v) => fmt.vnd(Math.round(v))} padL={50}
+                height={680} yFmt={(v) => (v / 1e6).toFixed(1) + 'tr'} valueFmt={(v) => fmt.vnd(Math.round(v))} padL={50}
+                highlightable
               />
               <Legend items={[[t.common.actual, 'var(--text-2)'], [t.common.predicted, 'var(--gold)']]} />
             </>
-          : <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          : <div className="empty" style={{ height: 680, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div className="empty__icon"><Icon name="layers" size={18} /></div>
               <p>{t.gold.noCompareData}</p>
             </div>

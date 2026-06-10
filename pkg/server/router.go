@@ -89,17 +89,6 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("/api/crypto/predictions/chart", GetCryptoPredictionsChart)
 	mux.HandleFunc("/api/crypto/predictions", GetCryptoPredictions)
 
-	// Fuel data APIs
-	mux.HandleFunc("/api/fuel/latest", GetFuelLatest)
-	mux.HandleFunc("/api/fuel/prices", GetFuelPrices)
-	mux.HandleFunc("/api/fuel/chart", GetFuelChart)
-
-	// Fuel prediction APIs
-	mux.HandleFunc("/api/fuel/predictions/latest-results", GetFuelPredictionsLatestResults)
-	mux.HandleFunc("/api/fuel/predictions/latest", GetFuelPredictionsLatest)
-	mux.HandleFunc("/api/fuel/predictions/chart", GetFuelPredictionsChart)
-	mux.HandleFunc("/api/fuel/predictions", GetFuelPredictions)
-
 	// S&P 500 data APIs
 	mux.HandleFunc("/api/sp500/latest", GetSP500Latest)
 	mux.HandleFunc("/api/sp500/prices", GetSP500Prices)
@@ -134,8 +123,6 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("POST /api/trigger/nasdaq-predict", AuthRequired(TriggerNasdaqPredictHandler))
 	mux.HandleFunc("POST /api/trigger/crypto-crawler", AuthRequired(TriggerCryptoCrawlerHandler))
 	mux.HandleFunc("POST /api/trigger/crypto-predict", AuthRequired(TriggerCryptoPredictHandler))
-	mux.HandleFunc("POST /api/trigger/fuel-crawler", AuthRequired(TriggerFuelCrawlerHandler))
-	mux.HandleFunc("POST /api/trigger/fuel-predict", AuthRequired(TriggerFuelPredictHandler))
 	mux.HandleFunc("POST /api/trigger/sp500-crawler", AuthRequired(TriggerSP500CrawlerHandler))
 	mux.HandleFunc("POST /api/trigger/sp500-predict", AuthRequired(TriggerSP500PredictHandler))
 
@@ -252,19 +239,10 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  GET  /api/crypto/predictions/latest")
 	logger.Logger.Info("  GET  /api/crypto/predictions/chart")
 	logger.Logger.Info("  GET  /api/crypto/predictions")
-	logger.Logger.Info("  GET  /api/fuel/latest")
-	logger.Logger.Info("  GET  /api/fuel/prices")
-	logger.Logger.Info("  GET  /api/fuel/chart")
-	logger.Logger.Info("  GET  /api/fuel/predictions/latest-results")
-	logger.Logger.Info("  GET  /api/fuel/predictions/latest")
-	logger.Logger.Info("  GET  /api/fuel/predictions/chart")
-	logger.Logger.Info("  GET  /api/fuel/predictions")
 	logger.Logger.Info("  POST /api/trigger/nasdaq-crawler")
 	logger.Logger.Info("  POST /api/trigger/nasdaq-predict")
 	logger.Logger.Info("  POST /api/trigger/crypto-crawler")
 	logger.Logger.Info("  POST /api/trigger/crypto-predict")
-	logger.Logger.Info("  POST /api/trigger/fuel-crawler")
-	logger.Logger.Info("  POST /api/trigger/fuel-predict")
 	logger.Logger.Info("  POST /api/trigger/sp500-crawler")
 	logger.Logger.Info("  POST /api/trigger/sp500-predict")
 	logger.Logger.Info("  POST /api/trigger/backup")

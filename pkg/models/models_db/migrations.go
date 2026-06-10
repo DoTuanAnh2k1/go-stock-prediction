@@ -17,8 +17,6 @@ var AllModels = []interface{}{
 	&NasdaqPrediction{},
 	&CryptoPrice{},
 	&CryptoPrediction{},
-	&FuelPrice{},
-	&FuelPrediction{},
 	&SP500Price{},
 	&SP500Prediction{},
 	&NasdaqIntradayPrice{},

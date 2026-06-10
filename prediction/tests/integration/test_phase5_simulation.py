@@ -41,7 +41,7 @@ def test_sim_bots_all_markets_present():
 
     with session_scope() as session:
         markets = {b.market for b in session.query(SimBot).all()}
-    assert markets == {"VN30", "GOLD", "NASDAQ", "SP500", "CRYPTO", "FUEL"}
+    assert markets == {"VN30", "GOLD", "NASDAQ", "SP500", "CRYPTO"}
 
 
 def test_sim_bots_all_algorithms_present():
@@ -59,7 +59,7 @@ def test_sim_bots_all_algorithms_present():
 
 
 def test_sim_bots_vnd_markets_have_correct_capital():
-    """VN30 and FUEL bots must have 1,000,000,000 VND initial capital."""
+    """VN30 bots must have 1,000,000,000 VND initial capital."""
     from src.database.connection import session_scope
     from src.database.models import SimBot
 

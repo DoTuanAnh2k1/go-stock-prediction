@@ -72,8 +72,7 @@ services/prediction/
 │   │   ├── vn30.py             # VietStock VN30 crawler
 │   │   ├── gold.py             # SJC + XAU crawler
 │   │   ├── nasdaq.py           # Yahoo Finance NASDAQ
-│   │   ├── crypto.py           # CoinGecko BTC/ETH
-│   │   └── fuel.py             # giaxanghomnay.com
+│   │   └── crypto.py           # CoinGecko BTC/ETH
 │   ├── scheduler/
 │   │   ├── __init__.py
 │   │   ├── manager.py          # APScheduler + DB-backed schedule
@@ -182,7 +181,7 @@ Python service khởi động, kết nối MySQL, phục vụ tất cả 18 gRPC
 ### Tasks
 - [ ] `src/config.py` — Pydantic Settings load env vars (mirror Go config)
 - [ ] `src/database/connection.py` — SQLAlchemy async engine, session factory
-- [ ] `src/database/models.py` — ORM models cho tất cả tables (stocks, stock_prices, predictions, gold_prices, nasdaq_prices, crypto_prices, fuel_prices, training_logs, cron_schedules, sync_logs)
+- [ ] `src/database/models.py` — ORM models cho tất cả tables (stocks, stock_prices, predictions, gold_prices, nasdaq_prices, crypto_prices, training_logs, cron_schedules, sync_logs)
 - [ ] `src/database/repository.py` — Repository class với tất cả query methods
 - [ ] `src/grpc_server/server.py` — gRPC servicer với 18 RPCs (stub: return success=True, message="not implemented yet")
 - [ ] `src/main.py` — Entry point: config → logger → DB → gRPC start → signal wait
@@ -259,7 +258,7 @@ def test_api_trigger_predict():
 ## Phase 2: Crawlers ✅ HOÀN THÀNH (2026-05-31)
 
 ### Muc tieu
-Tất cả 5 crawlers hoạt động: VN30, Gold, NASDAQ, Crypto, Fuel. Dữ liệu được lưu đúng vào MySQL.
+Tất cả 4 crawlers hoạt động: VN30, Gold, NASDAQ, Crypto. Dữ liệu được lưu đúng vào MySQL.
 
 ### Tasks
 - [x] `src/crawlers/base.py` — Abstract BaseCrawler (crawl, crawl_history, parse)
@@ -267,15 +266,13 @@ Tất cả 5 crawlers hoạt động: VN30, Gold, NASDAQ, Crypto, Fuel. Dữ li�
 - [x] `src/crawlers/gold.py` — Yahoo Finance XAU, BTMC API, BTMH/giavang.org, vang.today, Phú Quý
 - [x] `src/crawlers/nasdaq.py` — Yahoo Finance, 15 NASDAQ symbols
 - [x] `src/crawlers/crypto.py` — CoinGecko BTC/ETH (schema fixed: removed open/high/low/volume, renamed volume_24h→volume24h)
-- [x] `src/crawlers/fuel.py` — giaxanghomnay.com/api/pvdate + /api/chart
 - [x] `src/utils/number_parser.py` — Vietnamese number format (1.234,56 → 1234.56)
-- [x] Kết nối gRPC handlers: TriggerCrawler, TriggerGoldCrawler, TriggerNasdaqCrawler, TriggerCryptoCrawler, TriggerFuelCrawler, TriggerStockHistory, TriggerGoldHistory, TriggerStockCrawl
+- [x] Kết nối gRPC handlers: TriggerCrawler, TriggerGoldCrawler, TriggerNasdaqCrawler, TriggerCryptoCrawler, TriggerStockHistory, TriggerGoldHistory, TriggerStockCrawl
 - [x] Integration tests: 36 tests (19 gRPC + 17 API), tất cả pass — `make test-phase2`
 
 ### Ghi chú kỹ thuật
 - VN30 crawler dùng VNDirect public API thay vì Gocolly (Go version dùng VietStock scraping)
 - BTMC API thường timeout trong môi trường restricted network — handled gracefully, không crash service
-- Fuel crawler saved=0 là đúng vì giá xăng chỉ thay đổi mỗi ~2 tuần
 - `crypto_prices` DB schema (từ Go) chỉ có: `coin_id, symbol, close_price, market_cap, volume24h` — Python model đã sync với schema này
 - Tests chạy qua `docker exec prediction_service python -m pytest ...` (port 8119 không expose ra host)
 
@@ -367,7 +364,7 @@ def test_api_market_overview():
 - [x] `src/algorithms/arima_garch.py` — **statsmodels ARIMA(2,1,2) + arch GARCH(1,1)**
 - [x] `src/algorithms/lightgbm_model.py` — **LightGBM** (mới — feature: returns, RSI, volume, MA ratios)
 - [x] `src/algorithms/ensemble.py` — Weighted ensemble (accuracy-based weights)
-- [x] Kết nối gRPC: TriggerPredict, TriggerStockPredict, TriggerGoldPredict, TriggerNasdaqPredict, TriggerCryptoPredict, TriggerFuelPredict
+- [x] Kết nối gRPC: TriggerPredict, TriggerStockPredict, TriggerGoldPredict, TriggerNasdaqPredict, TriggerCryptoPredict
 - [x] Unit tests: 6 test files (test_moving_average, test_ema_macd, test_lstm, test_arima_garch, test_lightgbm_model, test_ensemble) — 71 tests pass, 3 skipped (optional deps)
 - [x] Integration tests: test_phase3_predictions.py (12 tests), test_phase3_api_backend.py (13 tests) — all pass via `make test-phase3`
 
@@ -714,7 +711,7 @@ Full regression test, performance benchmark, và chuyển đổi production.
 
 Covers:
 - Auth + JWT flow
-- Tất cả 5 crawlers (VN30, Gold, NASDAQ, Crypto, Fuel)
+- Tất cả 4 crawlers (VN30, Gold, NASDAQ, Crypto)
 - gRPC contract (tất cả RPC)
 - API read endpoints (predictions, gold, stocks, training)
 - Trigger endpoints (crawl, predict, train, reconcile, backtest)
@@ -746,7 +743,7 @@ class TestFullPipeline:
         """All 5 crawlers run successfully."""
         token = get_token()
         for endpoint in ["crawler", "gold-crawler", "nasdaq-crawler", 
-                        "crypto-crawler", "fuel-crawler"]:
+                        "crypto-crawler"]:
             resp = requests.post(f"{BASE_URL}/api/trigger/{endpoint}",
                                headers={"Authorization": f"Bearer {token}"})
             assert resp.status_code == 200, f"Failed: {endpoint}"

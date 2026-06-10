@@ -79,14 +79,6 @@ function SortTh({ label, field, sortBy, sortDir, onSort, className }: {
   );
 }
 
-// ── Fuel product labels ───────────────────────────────────────────────────────
-const FUEL_LABELS: Record<string, string> = {
-  ron95_iii: 'RON 95-III',
-  e5_ron92:  'E5 RON 92',
-  do_005s:   'Diesel',
-  kerosene:  'Dầu hỏa',
-};
-
 // ── Sub-nav tabs ──────────────────────────────────────────────────────────────
 function MarketTabs({ marketKey }: { marketKey: string }) {
   const { t } = useLanguage();
@@ -193,11 +185,9 @@ export default function MarketPredictions() {
   const isGold    = marketKey === 'gold';
   const isNasdaq  = marketKey === 'nasdaq100';
   const isCrypto  = marketKey === 'crypto';
-  const isFuel    = marketKey === 'fuel';
   const marketLabel = isGold ? 'Vàng'
     : isNasdaq ? 'NASDAQ 100'
     : isCrypto ? 'Crypto'
-    : isFuel   ? 'Giá Xăng'
     : 'VN30';
 
   const FALLBACK_ALGOS = [
@@ -282,8 +272,6 @@ export default function MarketPredictions() {
                           <SortTh label={t.marketPredictions.colSource} field="source" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                           <th>{t.marketPredictions.colProduct}</th>
                         </>
-                      : isFuel
-                      ? <th>{t.marketPredictions.colProduct}</th>
                       : isCrypto
                       ? <SortTh label={t.marketPredictions.colCoin} field="symbol" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                       : <SortTh label={t.marketPredictions.colSymbol} field="symbol" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
@@ -308,8 +296,6 @@ export default function MarketPredictions() {
                       ? fmtGold
                       : (isNasdaq || isCrypto)
                       ? (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                      : isFuel
-                      ? (n: number) => { const p2 = n > 1000 ? n : n * 1000; return p2.toLocaleString('vi-VN') + ' đ'; }
                       : fmtPrice;
                     return (
                       <tr key={i}>
@@ -318,8 +304,6 @@ export default function MarketPredictions() {
                               <td><div className="sym">{row.source || '—'}</div></td>
                               <td><span style={{ color: 'var(--text-2)', fontSize: 12 }}>{row.product_type || '—'}</span></td>
                             </>
-                          : isFuel
-                          ? <td><span style={{ color: 'var(--text-2)', fontSize: 12 }}>{FUEL_LABELS[row.product_type] || row.product_type || '—'}</span></td>
                           : isCrypto
                           ? <td><div className="sym">{(row.symbol || row.coin_id || '—').toUpperCase()}</div></td>
                           : isNasdaq

@@ -3,12 +3,21 @@
 Port of the Go EMAPredictor — MACD(12, 26, 9) with Vietnamese session adjustment.
 Step 2 improvement: predict actual price via EMA trend slope + MACD momentum
 instead of the old BUY/SELL signal → tiny %.
+Step 3 improvement: Bollinger %B overlay for mean-reversion bias near band extremes.
 """
 from __future__ import annotations
 
 import numpy as np
 
 from src.algorithms.base import PredictionAlgorithm, PredictionResult, get_max_change_pct
+
+# Try to import pandas_ta for Bollinger %B; graceful fallback if absent
+try:
+    import pandas as pd
+    import pandas_ta as ta  # noqa: F401
+    _PANDAS_TA_AVAILABLE = True
+except ImportError:
+    _PANDAS_TA_AVAILABLE = False
 
 
 class EMAMACDPredictor(PredictionAlgorithm):
@@ -106,14 +115,17 @@ class EMAMACDPredictor(PredictionAlgorithm):
         macd_line: float,
         signal_line: float,
     ) -> float:
-        """Predict next price using EMA slope + MACD momentum boost.
+        """Predict next price using EMA slope + MACD momentum boost + Bollinger %B bias.
 
         Strategy:
           1. Compute the EMA(12) slope from the last few values of the series.
           2. MACD momentum: if MACD > signal → upward boost proportional to
              (macd - signal) / current; if MACD < signal → downward.
           3. predicted = current + ema_slope + macd_boost
-          4. Apply market-aware clamp.
+          4. Bollinger %B mean-reversion overlay:
+               %B > 0.9 (near upper band) → slight bearish nudge
+               %B < 0.1 (near lower band) → slight bullish nudge
+          5. Apply market-aware clamp.
         """
         # EMA slope: average change over last min(3, available) steps
         slope_window = min(4, len(short_ema_series))
@@ -132,9 +144,48 @@ class EMAMACDPredictor(PredictionAlgorithm):
 
         predicted = current + ema_slope + macd_momentum
 
+        # Bollinger %B overlay — mean-reversion adjustment
+        bb_pct = self._calc_bb_pct(arr)
+        if bb_pct is not None:
+            if bb_pct > 0.9:
+                # Near upper band: bearish mean-reversion nudge
+                extreme_factor = min(1.0, (bb_pct - 0.9) / 0.1)   # 0 … 1
+                # Nudge predicted toward (or below) current
+                predicted = predicted - (predicted - current) * extreme_factor * 0.2
+            elif bb_pct < 0.1:
+                # Near lower band: bullish mean-reversion nudge
+                extreme_factor = min(1.0, (0.1 - bb_pct) / 0.1)   # 0 … 1
+                # Nudge predicted toward (or above) current
+                predicted = predicted + (current - predicted) * extreme_factor * 0.2
+
         # Market-aware clamp
         max_change = current * get_max_change_pct(self._market_key)
         predicted = max(current - max_change, min(current + max_change, predicted))
         if predicted <= 0:
             predicted = current * 0.01
         return predicted
+
+    @staticmethod
+    def _calc_bb_pct(arr: np.ndarray, length: int = 20) -> float | None:
+        """Return Bollinger %B for the last price using pandas_ta, or None if unavailable."""
+        if not _PANDAS_TA_AVAILABLE or len(arr) < length + 5:
+            return None
+        try:
+            import pandas as pd
+            import pandas_ta as ta  # noqa: F811
+
+            close = pd.Series(arr, dtype=float)
+            bb_df = ta.bbands(close, length=length, std=2.0)
+            if bb_df is None or bb_df.empty:
+                return None
+            # %B column starts with "BBP"
+            pct_b_cols = [c for c in bb_df.columns if c.startswith("BBP")]
+            if not pct_b_cols:
+                return None
+            pct_b_series = bb_df[pct_b_cols[0]].dropna()
+            if pct_b_series.empty:
+                return None
+            val = float(pct_b_series.iloc[-1])
+            return val if not (val != val) else None   # NaN check
+        except Exception:
+            return None

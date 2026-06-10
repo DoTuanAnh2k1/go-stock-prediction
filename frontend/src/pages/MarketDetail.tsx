@@ -66,13 +66,6 @@ const CRYPTO_INSTRUMENTS = [
   { key: 'ethereum', label: 'Ethereum (ETH)' },
 ];
 
-const FUEL_INSTRUMENTS = [
-  { key: 'ron95_iii', label: 'RON 95-III'  },
-  { key: 'e5_ron92',  label: 'E5 RON 92'   },
-  { key: 'do_005s',   label: 'Diesel'       },
-  { key: 'kerosene',  label: 'Dầu hỏa'     },
-];
-
 // PERIOD_OPTIONS is computed inside the component using t for i18n
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -90,13 +83,11 @@ export default function MarketDetail() {
   const isGold   = marketKey === 'gold';
   const isNasdaq = marketKey === 'nasdaq100';
   const isCrypto = marketKey === 'crypto';
-  const isFuel   = marketKey === 'fuel';
 
   // Default symbol per market
   const defaultSymbol = isGold ? 'XAU'
     : isNasdaq ? 'QQQ'
     : isCrypto ? 'bitcoin'
-    : isFuel   ? 'ron95_iii'
     : 'VCB';
 
   const [symbol, setSymbol] = useState(defaultSymbol);
@@ -111,7 +102,6 @@ export default function MarketDetail() {
       isGold ? 'XAU'
       : isNasdaq ? 'QQQ'
       : isCrypto ? 'bitcoin'
-      : isFuel   ? 'ron95_iii'
       : 'VCB'
     );
   }, [marketKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -196,8 +186,6 @@ export default function MarketDetail() {
     ? (n: number) => n >= 1e6 ? (n / 1e6).toFixed(1) + 'tr' : n.toLocaleString('vi-VN')
     : (isNasdaq || isCrypto)
     ? (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : isFuel
-    ? (n: number) => { const p2 = n > 1000 ? n : n * 1000; return p2.toLocaleString('vi-VN') + ' đ'; }
     : (n: number) => n.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // Display label for the selected symbol
@@ -207,8 +195,6 @@ export default function MarketDetail() {
     ? (NASDAQ_INSTRUMENTS.find(i => i.key === symbol)?.label ?? symbol)
     : isCrypto
     ? (CRYPTO_INSTRUMENTS.find(i => i.key === symbol)?.label ?? symbol)
-    : isFuel
-    ? (FUEL_INSTRUMENTS.find(i => i.key === symbol)?.label ?? symbol)
     : symbol;
 
   // VN30 stock options (use D.stocks if available, else show just VCB as fallback)
@@ -239,12 +225,6 @@ export default function MarketDetail() {
           ) : isCrypto ? (
             <select className="sel" value={symbol} onChange={e => setSymbol(e.target.value)}>
               {CRYPTO_INSTRUMENTS.map(i => (
-                <option key={i.key} value={i.key}>{i.label}</option>
-              ))}
-            </select>
-          ) : isFuel ? (
-            <select className="sel" value={symbol} onChange={e => setSymbol(e.target.value)}>
-              {FUEL_INSTRUMENTS.map(i => (
                 <option key={i.key} value={i.key}>{i.label}</option>
               ))}
             </select>

@@ -14,7 +14,6 @@ MARKET_MAX_CHANGE: dict[str, float] = {
     "NASDAQ100": 0.20,
     "SP500": 0.15,
     "CRYPTO": 0.50,
-    "FUEL": 0.20,
 }
 DEFAULT_MAX_CHANGE = 0.15
 

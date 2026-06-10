@@ -3,12 +3,21 @@
 Port of the Go MovingAveragePredictor, translated to NumPy-vectorized operations.
 Step 2 improvement: predict actual price via VWMA trend slope projection +
 RSI momentum scaling instead of the old BUY/SELL signal → tiny %.
+Step 3 improvement: Stochastic RSI overlay for overbought/oversold adjustment.
 """
 from __future__ import annotations
 
 import numpy as np
 
 from src.algorithms.base import PredictionAlgorithm, PredictionResult, get_max_change_pct
+
+# Try to import pandas_ta for StochRSI; graceful fallback if absent
+try:
+    import pandas as pd
+    import pandas_ta as ta  # noqa: F401
+    _PANDAS_TA_AVAILABLE = True
+except ImportError:
+    _PANDAS_TA_AVAILABLE = False
 
 
 class MovingAveragePredictor(PredictionAlgorithm):
@@ -99,10 +108,13 @@ class MovingAveragePredictor(PredictionAlgorithm):
           1. Build a rolling VWMA series and measure its recent slope (last N steps).
           2. Extrapolate 1 period forward: predicted = current + slope.
           3. Scale by RSI momentum:
-               RSI > 60 → bullish boost (0.8 … 1.2 multiplier on slope)
-               RSI < 40 → bearish (0.8 … 1.2 multiplier on slope in negative direction)
+               RSI > 60 → bullish boost (0.8 … 1.4 multiplier on slope)
+               RSI < 40 → bearish (0.8 … 1.4 multiplier on slope in negative direction)
                40-60    → neutral (slope unmodified, slight dampen)
-          4. Apply market-aware clamp.
+          4. Apply StochRSI overlay for overbought/oversold mean-reversion bias:
+               StochRSI %K > 80 (overbought) → reduce bullish / increase bearish bias
+               StochRSI %K < 20 (oversold)   → increase bullish / reduce bearish bias
+          5. Apply market-aware clamp.
         """
         slope_window = min(5, self.SHORT_PERIOD)
         vwma_series = self._vwma_series(arr, vol_arr, self.SHORT_PERIOD)
@@ -132,6 +144,18 @@ class MovingAveragePredictor(PredictionAlgorithm):
 
         predicted = current + slope * momentum_mult
 
+        # StochRSI overlay — mean-reversion adjustment
+        stoch_k = self._calc_stochrsi_k(arr)
+        if stoch_k is not None:
+            if stoch_k > 80:
+                # Overbought: nudge prediction toward current (dampen bullish overshoot)
+                overbought_factor = (stoch_k - 80) / 20   # 0 … 1
+                predicted = predicted - (predicted - current) * overbought_factor * 0.3
+            elif stoch_k < 20:
+                # Oversold: nudge prediction upward toward current (dampen bearish overshoot)
+                oversold_factor = (20 - stoch_k) / 20   # 0 … 1
+                predicted = predicted + (current - predicted) * oversold_factor * 0.3
+
         # Market-aware clamp
         max_change = current * get_max_change_pct(self._market_key)
         predicted = max(current - max_change, min(current + max_change, predicted))
@@ -140,6 +164,27 @@ class MovingAveragePredictor(PredictionAlgorithm):
             predicted = current * 0.01
 
         return predicted
+
+    @staticmethod
+    def _calc_stochrsi_k(arr: np.ndarray, length: int = 14) -> float | None:
+        """Return StochRSI %K using pandas_ta, or None if unavailable/insufficient data."""
+        if not _PANDAS_TA_AVAILABLE or len(arr) < length * 2 + 5:
+            return None
+        try:
+            import pandas as pd
+            import pandas_ta as ta  # noqa: F811
+
+            close = pd.Series(arr, dtype=float)
+            df = ta.stochrsi(close, length=length, rsi_length=length, k=3, d=3)
+            if df is None or df.empty:
+                return None
+            k_col = df.iloc[:, 0]
+            last_k = k_col.dropna().iloc[-1] if not k_col.dropna().empty else None
+            if last_k is None or (hasattr(last_k, "__float__") and float(last_k) != float(last_k)):
+                return None
+            return float(last_k)
+        except Exception:
+            return None
 
     # Additional indicators used by enhanced_predict and ensemble
     @staticmethod

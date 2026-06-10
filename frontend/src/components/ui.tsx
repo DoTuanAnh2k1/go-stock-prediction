@@ -12,7 +12,6 @@ const I: Record<string, React.ReactNode> = {
   grid:      <><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></>,
   candles:   <><line x1="6" y1="3" x2="6" y2="21"/><rect x="3.5" y="8" width="5" height="8"/><line x1="16" y1="3" x2="16" y2="21"/><rect x="13.5" y="6" width="5" height="7"/></>,
   nasdaq:    <><polyline points="2 12 6 7 10 11 14 6 18 9 22 5"/><line x1="2" y1="19" x2="22" y2="19"/></>,
-  fuel:      <><path d="M3 22V8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v14"/><path d="M15 8h3a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-3"/><line x1="3" y1="22" x2="17" y2="22"/><line x1="8" y1="6" x2="8" y2="2"/><line x1="12" y1="6" x2="12" y2="2"/></>,
   pulse:     <polyline points="2,13 7,13 10,5 14,19 17,11 22,11"/>,
   cpu:       <><rect x="6" y="6" width="12" height="12"/><line x1="9" y1="3" x2="9" y2="6"/><line x1="15" y1="3" x2="15" y2="6"/><line x1="9" y1="18" x2="9" y2="21"/><line x1="15" y1="18" x2="15" y2="21"/><line x1="3" y1="9" x2="6" y2="9"/><line x1="3" y1="15" x2="6" y2="15"/><line x1="18" y1="9" x2="21" y2="9"/><line x1="18" y1="15" x2="21" y2="15"/></>,
   gold:      <><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6"/><path d="M5 12v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-6"/></>,
@@ -169,7 +168,6 @@ function getMarkets(t: Translations): MarketDef[] {
     { key: 'nasdaq100', label: 'NASDAQ 100',    icon: 'nasdaq',  color: 'oklch(0.74 0.13 200)'     },
     { key: 'sp500',     label: 'S&P 500',       icon: 'nasdaq',  color: 'oklch(0.72 0.15 145)'     },
     { key: 'crypto',    label: 'Crypto',        icon: 'crypto',  color: '#F7931A'                  },
-    { key: 'fuel',      label: t.markets.fuel,  icon: 'fuel',    color: 'var(--up)'                },
   ];
 }
 
@@ -189,7 +187,6 @@ function getNav(t: Translations): NavItem[] {
     { id: 'nasdaq100',  path: '/markets/nasdaq100', label: 'NASDAQ',           icon: 'nasdaq'  },
     { id: 'sp500',      path: '/markets/sp500',     label: 'S&P 500',          icon: 'nasdaq'  },
     { id: 'crypto',     path: '/markets/crypto',    label: 'Crypto',           icon: 'crypto'  },
-    { id: 'fuel',       path: '/markets/fuel',      label: t.markets.fuel,     icon: 'fuel'    },
     { id: 'simulation', path: '/simulation',        label: t.nav.leaderboard,  icon: 'trophy'  },
     { id: 'guide',      path: '/guide',             label: t.nav.guide,        icon: 'book'    },
   ];
@@ -261,7 +258,7 @@ export function Sidebar({ status, collapsed = false, onToggle }: {
               {/* Sub-items — only render when expanded and market has sub-routes */}
               {expanded && !m.comingSoon && MARKET_SUBS.map((sub) => {
                 const subPath = base + sub.path;
-                const overviewIcon = m.key === 'gold' ? 'gold' : m.key === 'nasdaq100' ? 'nasdaq' : m.key === 'crypto' ? 'crypto' : m.key === 'fuel' ? 'fuel' : 'candles';
+                const overviewIcon = m.key === 'gold' ? 'gold' : m.key === 'nasdaq100' ? 'nasdaq' : m.key === 'crypto' ? 'crypto' : 'candles';
                 const subIcon = sub.path === '' ? overviewIcon : sub.path === '/predictions' ? 'pulse' : 'cpu';
                 return (
                   <NavLink

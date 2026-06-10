@@ -14,13 +14,13 @@ import (
 // TriggerHistoricalBacktestHandler godoc
 //
 //	@Summary      Trigger walk-forward historical backtest
-//	@Description  Starts a walk-forward backtest in the background via the prediction service. Accepts optional query params: train_window (default 30), step_size (default 6), and market (one of "", "VN30", "GOLD", "NASDAQ100", "CRYPTO", "FUEL"). Returns 409 if a backtest is already running.
+//	@Description  Starts a walk-forward backtest in the background via the prediction service. Accepts optional query params: train_window (default 30), step_size (default 6), and market (one of "", "VN30", "GOLD", "NASDAQ100", "CRYPTO", "SP500", "ALL"). Returns 409 if a backtest is already running.
 //	@Tags         Triggers
 //	@Accept       json
 //	@Produce      json
 //	@Param        train_window  query     int     false  "Minimum data points before first prediction (default 30)"
 //	@Param        step_size     query     int     false  "Fold size — data points between retraining (default 6)"
-//	@Param        market        query     string  false  "Target market key: VN30, GOLD, NASDAQ100, CRYPTO, FUEL (default: all)"
+//	@Param        market        query     string  false  "Target market key: VN30, GOLD, NASDAQ100, CRYPTO, SP500, ALL (default: all)"
 //	@Success      202           {object}  map[string]string
 //	@Failure      401           {object}  ResponseFailure
 //	@Failure      409           {object}  ResponseFailure

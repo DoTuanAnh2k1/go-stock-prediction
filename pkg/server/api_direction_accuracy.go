@@ -28,7 +28,7 @@ type directionAccuracyResponseDTO struct {
 // @Description  Returns the fraction of predictions where the price movement direction was correct, grouped by algorithm, for the specified market.
 // @Tags         predictions
 // @Produce      json
-// @Param        market  query  string  true  "Market key"  Enums(VN30,GOLD,NASDAQ,CRYPTO,FUEL,SP500)
+// @Param        market  query  string  true  "Market key"  Enums(VN30,GOLD,NASDAQ,CRYPTO,SP500)
 // @Success      200  {object}  directionAccuracyResponseDTO
 // @Failure      400  {object}  ResponseFailure  "missing or unknown market"
 // @Failure      500  {object}  ResponseFailure
@@ -36,7 +36,7 @@ type directionAccuracyResponseDTO struct {
 func GetDirectionAccuracy(w http.ResponseWriter, r *http.Request) {
 	market := strings.TrimSpace(r.URL.Query().Get("market"))
 	if market == "" {
-		ResponseError(w, http.StatusBadRequest, "query param 'market' is required (VN30, GOLD, NASDAQ, CRYPTO, FUEL, SP500)")
+		ResponseError(w, http.StatusBadRequest, "query param 'market' is required (VN30, GOLD, NASDAQ, CRYPTO, SP500)")
 		return
 	}
 

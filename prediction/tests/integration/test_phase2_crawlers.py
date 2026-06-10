@@ -1,4 +1,4 @@
-"""Phase 2 integration tests — verify all 5 crawlers via gRPC.
+"""Phase 2 integration tests — verify all 4 crawlers via gRPC.
 
 Requirements:
   - Python prediction service running on localhost:8119
@@ -193,27 +193,6 @@ def test_btc_price_is_reasonable():
 
 
 # ---------------------------------------------------------------------------
-# Fuel crawler
-# ---------------------------------------------------------------------------
-
-def test_trigger_fuel_crawler_returns_success(grpc_stub):
-    """TriggerFuelCrawler must return success=True immediately (background)."""
-    from src.proto.prediction import prediction_pb2
-
-    resp = grpc_stub.TriggerFuelCrawler(prediction_pb2.Empty())
-    assert resp.success is True
-
-
-def test_fuel_data_in_db():
-    """After fuel history import, fuel_prices must have RON95 data."""
-    from src.database import repository as repo
-
-    prices = repo.get_fuel_prices_asc("ron95_iii", limit=5)
-    assert len(prices) > 0, "No RON95 fuel prices in DB — run fuel history import first"
-    assert float(prices[-1].price) > 0
-
-
-# ---------------------------------------------------------------------------
 # Error handling — crawlers must not crash service
 # ---------------------------------------------------------------------------
 
@@ -235,7 +214,6 @@ def test_concurrent_crawlers_do_not_crash(grpc_stub):
     grpc_stub.TriggerCrawler(prediction_pb2.Empty())
     grpc_stub.TriggerNasdaqCrawler(prediction_pb2.Empty())
     grpc_stub.TriggerCryptoCrawler(prediction_pb2.Empty())
-    grpc_stub.TriggerFuelCrawler(prediction_pb2.Empty())
 
     # Service must still respond
     resp = grpc_stub.GetTrainingStatus(prediction_pb2.Empty())

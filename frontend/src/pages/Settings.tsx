@@ -278,7 +278,6 @@ const MARKET_PRED_ENDPOINT: Record<string, string> = {
   gold:      '/api/gold/predictions/latest',
   nasdaq100: '/api/nasdaq/predictions?limit=40',
   crypto:    '/api/crypto/predictions?limit=40',
-  fuel:      '/api/fuel/predictions?limit=40',
   sp500:     '/api/sp500/predictions?limit=40',
   vn30:      '/api/predictions?limit=40',
 };
@@ -287,7 +286,6 @@ const MARKET_SIM_KEY: Record<string, string> = {
   gold:      'GOLD',
   nasdaq100: 'NASDAQ100',
   crypto:    'CRYPTO',
-  fuel:      'FUEL',
   sp500:     'SP500',
   vn30:      'VN30',
 };
@@ -1380,7 +1378,7 @@ function PastReportsPanel() {
   };
 
   const MARKET_ICON: Record<string, string> = {
-    gold: 'gold', nasdaq100: 'nasdaq', sp500: 'pulse', crypto: 'crypto', fuel: 'fuel', vn30: 'candles',
+    gold: 'gold', nasdaq100: 'nasdaq', sp500: 'pulse', crypto: 'crypto', vn30: 'candles',
   };
 
   return (
@@ -1812,11 +1810,6 @@ export default function Settings() {
               { label: t.settings.pipelinePredict,    endpoint: 'crypto-predict'       },
               { label: t.settings.pipelineBotTrading, endpoint: 'simulation-live-step' },
             ]} marketKey="crypto" marketRoute="/markets/crypto" />
-            <PipelineTriggerBtn label="Xăng" icon="fuel" steps={[
-              { label: t.settings.pipelineCrawl,      endpoint: 'fuel-crawler'         },
-              { label: t.settings.pipelinePredict,    endpoint: 'fuel-predict'         },
-              { label: t.settings.pipelineBotTrading, endpoint: 'simulation-live-step' },
-            ]} marketKey="fuel" marketRoute="/markets/fuel" />
             <PipelineTriggerBtn label="VN30" icon="candles" steps={[
               { label: t.settings.pipelineCrawl,      endpoint: 'crawler'              },
               { label: t.settings.pipelinePredict,    endpoint: 'predict'              },

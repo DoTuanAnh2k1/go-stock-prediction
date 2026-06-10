@@ -31,7 +31,6 @@ def _get_simulation_dates(market: str, algorithm: str, start_date: date, end_dat
         "NASDAQ": "nasdaq_predictions",
         "SP500": "sp500_predictions",
         "CRYPTO": "crypto_predictions",
-        "FUEL": "fuel_predictions",
     }
     table = market_to_table.get(market, "predictions")
 
@@ -65,19 +64,20 @@ def _restore_portfolio_state(bot, db_trades: list, initial_capital: float) -> No
     open_buys: dict[str, list] = {}  # symbol → list of buy dicts
 
     for t in db_trades:  # ordered by id ASC = insertion order
-        tv = float(t.trade_value)
-        symbol = t.symbol
+        tv = float(t["trade_value"])
+        symbol = t["symbol"]
 
-        if t.action == "BUY":
+        if t["action"] == "BUY":
             cash -= tv
+            td = t["trade_date"]
             open_buys.setdefault(symbol, []).append({
-                'quantity': float(t.quantity),
-                'price': float(t.price),
-                'date': t.trade_date.date() if hasattr(t.trade_date, 'date') else t.trade_date,
-                'id': t.id,
+                'quantity': float(t["quantity"]),
+                'price': float(t["price"]),
+                'date': td.date() if hasattr(td, 'date') else td,
+                'id': t["id"],
                 'trade_value': tv,
             })
-        elif t.action == "SELL":
+        elif t["action"] == "SELL":
             cash += tv
             # FIFO: match against earliest open buy
             if symbol in open_buys and open_buys[symbol]:
@@ -106,7 +106,7 @@ def _restore_portfolio_state(bot, db_trades: list, initial_capital: float) -> No
 
     # Set counter to avoid in-memory ID conflicts
     if db_trades:
-        max_id = max(t.id for t in db_trades)
+        max_id = max(t["id"] for t in db_trades)
         bot.portfolio._trade_id_counter = max_id
 
     log.debug(
@@ -385,9 +385,20 @@ class SimulationEngine:
 
                 # Restore portfolio state from existing live session trades
                 with session_scope() as _sess:
-                    prior_trades = _sess.query(SimTrade).filter(
-                        SimTrade.session_id == session_id
-                    ).order_by(SimTrade.id.asc()).all()
+                    prior_trades = [
+                        {
+                            "id": t.id,
+                            "symbol": t.symbol,
+                            "action": t.action,
+                            "quantity": t.quantity,
+                            "price": t.price,
+                            "trade_value": t.trade_value,
+                            "trade_date": t.trade_date,
+                        }
+                        for t in _sess.query(SimTrade).filter(
+                            SimTrade.session_id == session_id
+                        ).order_by(SimTrade.id.asc()).all()
+                    ]
                 if prior_trades:
                     _restore_portfolio_state(bot, prior_trades, config.initial_capital)
 

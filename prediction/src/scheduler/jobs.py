@@ -93,11 +93,6 @@ def job_crawl_crypto() -> None:
         log.warning("job.crawl_crypto.intraday.error", error=str(exc))
 
 
-def job_crawl_fuel() -> None:
-    from src.crawlers.fuel import FuelCrawler
-    _run_pipeline("FUEL", lambda: FuelCrawler().crawl())
-
-
 def job_weekly_training() -> None:
     from src.orchestrator.training import train_all_algorithms
     try:
@@ -144,16 +139,6 @@ def job_gold_predict() -> None:
         log.error("job.gold_predict.error", error=str(exc))
 
 
-def job_simulation_daily() -> None:
-    from src.simulation.engine import SimulationEngine
-    try:
-        engine = SimulationEngine()
-        engine.run_live_step()
-        log.info("job.simulation.done")
-    except Exception as exc:
-        log.error("job.simulation.error", error=str(exc))
-
-
 def job_predict_vn30() -> None:
     from src.orchestrator.runner import run_for_market
     try:
@@ -179,15 +164,6 @@ def job_predict_crypto() -> None:
         log.info("job.predict_crypto.done", count=count)
     except Exception as exc:
         log.error("job.predict_crypto.error", error=str(exc))
-
-
-def job_predict_fuel() -> None:
-    from src.orchestrator.runner import run_for_market
-    try:
-        count = run_for_market("FUEL")
-        log.info("job.predict_fuel.done", count=count)
-    except Exception as exc:
-        log.error("job.predict_fuel.error", error=str(exc))
 
 
 def job_predict_sp500() -> None:
@@ -237,15 +213,6 @@ def job_train_crypto() -> None:
         log.info("job.train_crypto.done", success=success, session_id=sid)
     except Exception as exc:
         log.error("job.train_crypto.error", error=str(exc))
-
-
-def job_train_fuel() -> None:
-    from src.orchestrator.training import train_for_market
-    try:
-        success, sid = train_for_market("FUEL")
-        log.info("job.train_fuel.done", success=success, session_id=sid)
-    except Exception as exc:
-        log.error("job.train_fuel.error", error=str(exc))
 
 
 def job_train_sp500() -> None:
@@ -329,24 +296,20 @@ JOB_FUNCTIONS = {
     "crawler_gold": job_crawl_gold,
     "crawler_nasdaq": job_crawl_nasdaq,
     "crawler_crypto": job_crawl_crypto,
-    "crawler_fuel": job_crawl_fuel,
     "crawler_sp500": job_crawl_sp500,
     "weekly_training": job_weekly_training,
     "daily_prediction": job_daily_prediction,
     "daily_reconcile": job_daily_reconcile,
     "gold_predict": job_gold_predict,
-    "simulation_daily": job_simulation_daily,
     "predict_vn30": job_predict_vn30,
     "predict_nasdaq": job_predict_nasdaq,
     "predict_crypto": job_predict_crypto,
-    "predict_fuel": job_predict_fuel,
     "predict_sp500": job_predict_sp500,
     # Per-market training jobs
     "train_vn30": job_train_vn30,
     "train_gold": job_train_gold,
     "train_nasdaq": job_train_nasdaq,
     "train_crypto": job_train_crypto,
-    "train_fuel": job_train_fuel,
     "train_sp500": job_train_sp500,
     "daily_backup": job_backup_database,
 }

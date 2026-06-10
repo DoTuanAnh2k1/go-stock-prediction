@@ -19,8 +19,9 @@ dependencies = [
     "beautifulsoup4==4.13.4",
     "lxml==5.4.0",
     "apscheduler==3.11.0",
-    "numpy==2.2.5",
-    "pandas==2.2.3",
+    "numpy>=2.2.6",
+    "pandas>=2.3.2",
+    "pandas-ta>=0.3.14b",
     "scikit-learn==1.6.1",
     # pymysql kept for sync SQLAlchemy sessions used by existing repository layer
     "pymysql>=1.1.0",
@@ -42,6 +43,7 @@ ml = [
     "arch>=7.0.0",
     "lightgbm>=4.5.0",
     "xgboost>=2.0.0",
+    "optuna>=3.6.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -85,3 +87,4 @@ ignore = [
 "tests/unit/test_sarima.py" = ["E402"]
 "tests/unit/test_egarch.py" = ["E402"]
 "tests/unit/test_gru.py" = ["E402"]
+"tests/unit/test_features.py" = ["E402"]

@@ -17,7 +17,6 @@ from src.utils.logger import get_logger
 log = get_logger("training")
 
 GOLD_INSTRUMENTS = [("XAU", "spot"), ("BTMC", "sjc"), ("BTMC", "nhan_tron")]
-FUEL_PRODUCTS = ["ron95_iii", "e5_ron92", "do_005s", "kerosene"]
 
 
 def _collect_all_training_series() -> list[tuple[list[float], list[float], str]]:
@@ -65,16 +64,6 @@ def _collect_all_training_series() -> list[tuple[list[float], list[float], str]]
                 f"crypto/{symbol}",
             ))
 
-    # FUEL
-    for product_type in FUEL_PRODUCTS:
-        prices = repo.get_fuel_prices_asc(product_type, limit=200)
-        if len(prices) >= 20:
-            series.append((
-                [float(p.price) for p in prices],
-                [],
-                f"fuel/{product_type}",
-            ))
-
     # SP500
     sp_symbols = repo.get_sp500_symbols() or SP500_SYMBOLS
     for symbol in sp_symbols:
@@ -93,7 +82,7 @@ def _collect_series_for_market(mk: str) -> list[tuple[list[float], list[float], 
     """Collect (price_list, vol_list, label) for a single market.
 
     Args:
-        mk: Market key in UPPER case — one of VN30, GOLD, NASDAQ100, CRYPTO, FUEL, SP500.
+        mk: Market key in UPPER case — one of VN30, GOLD, NASDAQ100, CRYPTO, SP500.
 
     Returns:
         List of (price_list, vol_list, label) tuples where price_list is ASC order.
@@ -139,16 +128,6 @@ def _collect_series_for_market(mk: str) -> list[tuple[list[float], list[float], 
                     [float(p.close_price) for p in prices],
                     [],
                     f"crypto/{symbol}",
-                ))
-
-    elif mk == "FUEL":
-        for product_type in FUEL_PRODUCTS:
-            prices = repo.get_fuel_prices_asc(product_type, limit=200)
-            if len(prices) >= 20:
-                series.append((
-                    [float(p.price) for p in prices],
-                    [],
-                    f"fuel/{product_type}",
                 ))
 
     elif mk == "SP500":
@@ -300,7 +279,7 @@ def train_all_algorithms() -> tuple[bool, str]:
         _current_phase = "Initializing"
         _done_algorithms = 0
 
-    markets = ["VN30", "GOLD", "NASDAQ100", "CRYPTO", "FUEL", "SP500"]
+    markets = ["VN30", "GOLD", "NASDAQ100", "CRYPTO", "SP500"]
     session_id = str(uuid.uuid4())
     started_at = datetime.utcnow()
 
@@ -650,54 +629,6 @@ def reconcile_predictions() -> int:
     except Exception as exc:
         log.error("reconcile.crypto.error", error=str(exc))
 
-    # --- Fuel predictions ---
-    try:
-        fuel_pending = repo.get_pending_fuel_predictions(days_back=14)
-        log.info("reconcile.fuel.pending", count=len(fuel_pending))
-
-        for pred in fuel_pending:
-            target_d = pred.target_date.date() if isinstance(pred.target_date, datetime) else pred.target_date
-
-            prices = repo.get_fuel_prices_asc(pred.product_type, limit=60)
-            if not prices:
-                continue
-
-            closest = min(
-                prices,
-                key=lambda p: abs((p.trading_date - target_d).days)
-                if isinstance(p.trading_date, date_type)
-                else 999,
-            )
-            diff_days = (
-                abs((closest.trading_date - target_d).days)
-                if isinstance(closest.trading_date, date_type)
-                else 999
-            )
-            if diff_days > 7:
-                continue
-
-            actual = Decimal(str(closest.price))
-            if actual == 0:
-                continue
-
-            predicted = Decimal(str(pred.predicted_price))
-            current = Decimal(str(pred.current_price))
-            accuracy = max(Decimal("0"), Decimal("1") - abs(actual - predicted) / actual)
-            accuracy = accuracy.quantize(Decimal("0.0001"))
-            status = "confirmed" if float(accuracy) >= 0.70 else "wrong"
-
-            pred_diff = predicted - current
-            actual_diff = actual - current
-            direction_correct: bool | None = None
-            if pred_diff != 0 and actual_diff != 0:
-                direction_correct = (pred_diff > 0) == (actual_diff > 0)
-
-            repo.update_fuel_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
-            total_updated += 1
-
-    except Exception as exc:
-        log.error("reconcile.fuel.error", error=str(exc))
-
     log.info("reconcile.done", updated=total_updated)
     return total_updated
 
@@ -730,8 +661,6 @@ def run_historical_backtest(train_window: int, step_size: int, market_key: str =
         total_preds, items_processed = _backtest_nasdaq(algos, train_window, step_size)
     elif mk == "CRYPTO":
         total_preds, items_processed = _backtest_crypto(algos, train_window, step_size)
-    elif mk == "FUEL":
-        total_preds, items_processed = _backtest_fuel(algos, train_window, step_size)
     elif mk == "SP500":
         total_preds, items_processed = _backtest_sp500(algos, train_window, step_size)
     elif mk == "ALL":
@@ -740,7 +669,6 @@ def run_historical_backtest(train_window: int, step_size: int, market_key: str =
             ("GOLD",      lambda: _backtest_gold(algos, train_window, step_size)),
             ("NASDAQ100", lambda: _backtest_nasdaq(algos, train_window, step_size)),
             ("CRYPTO",    lambda: _backtest_crypto(algos, train_window, step_size)),
-            ("FUEL",      lambda: _backtest_fuel(algos, train_window, step_size)),
             ("SP500",     lambda: _backtest_sp500(algos, train_window, step_size)),
         ]:
             try:
@@ -1026,56 +954,6 @@ def _bulk_crypto_predictions(batch: list) -> None:
         session.bulk_save_objects([CryptoPrediction(**r) for r in batch])
 
 
-def _backtest_fuel(algos: dict, train_window: int, step_size: int) -> tuple[int, int]:
-    total = 0
-    items = 0
-    for product_type in FUEL_PRODUCTS:
-        prices_asc = repo.get_fuel_prices_asc(product_type, limit=500)
-        if len(prices_asc) < train_window + 1:
-            continue
-        items += 1
-        price_floats = [float(p.price) for p in prices_asc]
-        dates = [p.trading_date for p in prices_asc]
-        n = len(price_floats)
-        for key, algo in algos.items():
-            batch = []
-            for window_end in range(train_window, n, step_size):
-                hist_end = min(window_end, 270)
-                price_list = price_floats[window_end - hist_end:window_end]
-                for t in range(window_end, min(window_end + step_size, n)):
-                    try:
-                        result = algo.predict(price_list)
-                        actual = Decimal(str(price_floats[t])).quantize(Decimal("0.001"))
-                        predicted = Decimal(str(result.predicted_price)).quantize(Decimal("0.001"))
-                        accuracy = max(Decimal("0"), Decimal("1") - abs(actual - predicted) / actual)
-                        accuracy = accuracy.quantize(Decimal("0.0001"))
-                        status = "confirmed" if float(accuracy) >= 0.70 else "wrong"
-                        batch.append(dict(
-                            product_type=product_type, predicted_price=predicted,
-                            current_price=Decimal(str(price_floats[window_end - 1])).quantize(Decimal("0.001")),
-                            confidence=Decimal(str(round(result.confidence, 4))), algorithm_name=key,
-                            prediction_date=dates[window_end - 1], target_date=dates[t],
-                            actual_price=actual, accuracy=accuracy, status=status,
-                        ))
-                        if len(batch) >= 200:
-                            _bulk_fuel_predictions(batch)
-                            total += len(batch)
-                            batch = []
-                    except Exception:
-                        pass
-            if batch:
-                _bulk_fuel_predictions(batch)
-                total += len(batch)
-    return total, items
-
-
-def _bulk_fuel_predictions(batch: list) -> None:
-    from src.database.connection import session_scope
-    from src.database.models import FuelPrediction
-    with session_scope() as session:
-        session.bulk_save_objects([FuelPrediction(**r) for r in batch])
-
-
 def _backtest_sp500(algos: dict, train_window: int, step_size: int) -> tuple[int, int]:
     from src.crawlers.sp500 import SP500_SYMBOLS
     symbols = repo.get_sp500_symbols() or SP500_SYMBOLS
@@ -1126,6 +1004,3 @@ def _bulk_sp500_predictions(batch: list) -> None:
     from src.database.models import SP500Prediction
     with session_scope() as session:
         session.bulk_save_objects([SP500Prediction(**r) for r in batch])
-
-
-FUEL_PRODUCTS = ["ron95_iii", "e5_ron92", "do_005s", "kerosene"]

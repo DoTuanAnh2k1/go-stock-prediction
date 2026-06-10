@@ -22,13 +22,11 @@ export const translations: Record<Lang, Translations> = {
     // Market labels
     markets: {
       gold: 'Vàng',
-      fuel: 'Giá Xăng',
     },
     // MobNav labels
     mob: {
       overview: 'Tổng quan',
       gold: 'Vàng',
-      fuel: 'Xăng',
       guide: 'Hướng dẫn',
     },
     // Topbar
@@ -58,9 +56,6 @@ export const translations: Record<Lang, Translations> = {
       '/markets/sp500/training': ['Huấn luyện S&P 500', 'TRAINING · S&P 500'],
       '/markets/crypto/predictions': ['Dự đoán Crypto', 'PREDICTIONS · CRYPTO'],
       '/markets/crypto/training': ['Huấn luyện Crypto', 'TRAINING · CRYPTO'],
-      '/markets/fuel': ['Giá Xăng Dầu', 'FUEL · VIETNAM'],
-      '/markets/fuel/predictions': ['Dự đoán Xăng Dầu', 'PREDICTIONS · FUEL'],
-      '/markets/fuel/training': ['Huấn luyện Xăng Dầu', 'TRAINING · FUEL'],
       '/simulation': ['Simulation Leaderboard', 'SIMULATION · LEADERBOARD'],
       '/guide': ['Hướng dẫn sử dụng', 'USER GUIDE'],
       '/settings': ['Cài đặt', 'SETTINGS'],
@@ -71,7 +66,6 @@ export const translations: Record<Lang, Translations> = {
       '/gold': ['Giá vàng', 'GOLD'],
       '/crypto': ['Cryptocurrency', 'CRYPTO'],
       '/nasdaq': ['NASDAQ 100', 'NASDAQ 100 · US EQUITIES'],
-      '/fuel': ['Giá Xăng Dầu', 'FUEL · VIETNAM'],
     },
     // Sidebar footer
     footer: {
@@ -93,7 +87,7 @@ export const translations: Record<Lang, Translations> = {
       fontSize: 'Cỡ chữ',
       ticker: 'Thanh ticker',
     },
-    // MarketTabs (shared across Crypto, Nasdaq, SP500, Fuel, MarketPredictions, MarketTraining, MarketDetail)
+    // MarketTabs (shared across Crypto, Nasdaq, SP500, MarketPredictions, MarketTraining, MarketDetail)
     marketTabs: {
       overview: 'Tổng quan',
       predictions: 'Dự đoán',
@@ -269,27 +263,6 @@ export const translations: Record<Lang, Translations> = {
       noChartData: 'Chưa có dữ liệu biểu đồ. Hãy thu thập dữ liệu trước.',
       noDataForSymbol: 'Không có dữ liệu cho mã này.',
       noConfirmed: 'Chưa có kết quả đã xác nhận. Kết quả sẽ xuất hiện sau khi dự đoán được đối chiếu với giá thực tế.',
-    },
-    // Fuel page
-    fuel: {
-      priceChart: 'Biểu đồ giá xăng dầu',
-      loadingData: 'Đang tải dữ liệu giá xăng...',
-      noDataKpi: 'Chưa có dữ liệu',
-      tomorrowPred: 'Dự đoán giá xăng kỳ tới',
-      priceTable: 'Bảng giá xăng dầu hiện tại',
-      collectRequest: 'Đã gửi yêu cầu thu thập giá xăng',
-      collectFail: 'Không thể gửi yêu cầu thu thập',
-      predictRequest: 'Đã gửi yêu cầu chạy dự đoán giá xăng',
-      predictFail: 'Không thể gửi yêu cầu dự đoán',
-      noChartData: 'Chưa có dữ liệu biểu đồ. Hãy thu thập dữ liệu trước.',
-      noDataForProduct: 'Không có dữ liệu cho sản phẩm này.',
-      noConfirmedForProduct: 'Không có dữ liệu cho sản phẩm này.',
-      infoBanner: 'Giá xăng điều chỉnh theo chu kỳ ~7 ngày (quyết định của Bộ Công Thương). Dữ liệu thưa hơn thị trường chứng khoán — khoảng 52 chu kỳ/năm.',
-      colProduct: 'Sản phẩm',
-      colRetailPrice: 'Giá bán lẻ (VND/lít)',
-      colAdjustDate: 'Ngày điều chỉnh',
-      perLiter: '/ lít',
-      allProducts: 'Tất cả',
     },
     // Stocks page
     stocks: {
@@ -632,12 +605,10 @@ export const translations: Record<Lang, Translations> = {
     },
     markets: {
       gold: 'Gold',
-      fuel: 'Fuel',
     },
     mob: {
       overview: 'Overview',
       gold: 'Gold',
-      fuel: 'Fuel',
       guide: 'Guide',
     },
     topbar: {
@@ -665,9 +636,6 @@ export const translations: Record<Lang, Translations> = {
       '/markets/sp500/training': ['S&P 500 Training', 'TRAINING · S&P 500'],
       '/markets/crypto/predictions': ['Crypto Predictions', 'PREDICTIONS · CRYPTO'],
       '/markets/crypto/training': ['Crypto Training', 'TRAINING · CRYPTO'],
-      '/markets/fuel': ['Fuel Prices', 'FUEL · VIETNAM'],
-      '/markets/fuel/predictions': ['Fuel Predictions', 'PREDICTIONS · FUEL'],
-      '/markets/fuel/training': ['Fuel Training', 'TRAINING · FUEL'],
       '/simulation': ['Simulation Leaderboard', 'SIMULATION · LEADERBOARD'],
       '/guide': ['User Guide', 'USER GUIDE'],
       '/settings': ['Settings', 'SETTINGS'],
@@ -678,7 +646,6 @@ export const translations: Record<Lang, Translations> = {
       '/gold': ['Gold Price', 'GOLD'],
       '/crypto': ['Cryptocurrency', 'CRYPTO'],
       '/nasdaq': ['NASDAQ 100', 'NASDAQ 100 · US EQUITIES'],
-      '/fuel': ['Fuel Prices', 'FUEL · VIETNAM'],
     },
     footer: {
       liveData: 'Live data',
@@ -865,26 +832,6 @@ export const translations: Record<Lang, Translations> = {
       noChartData: 'No chart data. Please collect data first.',
       noDataForSymbol: 'No data for this symbol.',
       noConfirmed: 'No confirmed results yet. Results will appear after predictions are reconciled with actual prices.',
-    },
-    fuel: {
-      priceChart: 'Fuel Price Chart',
-      loadingData: 'Loading fuel price data...',
-      noDataKpi: 'No data',
-      tomorrowPred: 'Next Period Fuel Predictions',
-      priceTable: 'Current Fuel Price Table',
-      collectRequest: 'Fuel collection request sent',
-      collectFail: 'Cannot send collection request',
-      predictRequest: 'Fuel prediction request sent',
-      predictFail: 'Cannot send prediction request',
-      noChartData: 'No chart data. Please collect data first.',
-      noDataForProduct: 'No data for this product.',
-      noConfirmedForProduct: 'No data for this product.',
-      infoBanner: 'Fuel prices are adjusted approximately every 7 days (Ministry of Industry and Trade decision). Data is sparser than stock markets — about 52 cycles/year.',
-      colProduct: 'Product',
-      colRetailPrice: 'Retail Price (VND/L)',
-      colAdjustDate: 'Adjustment Date',
-      perLiter: '/ liter',
-      allProducts: 'All',
     },
     stocks: {
       colSymbol: 'Symbol',
@@ -1218,12 +1165,10 @@ export interface Translations {
   };
   markets: {
     gold: string;
-    fuel: string;
   };
   mob: {
     overview: string;
     gold: string;
-    fuel: string;
     guide: string;
   };
   topbar: {
@@ -1420,26 +1365,6 @@ export interface Translations {
     noChartData: string;
     noDataForSymbol: string;
     noConfirmed: string;
-  };
-  fuel: {
-    priceChart: string;
-    loadingData: string;
-    noDataKpi: string;
-    tomorrowPred: string;
-    priceTable: string;
-    collectRequest: string;
-    collectFail: string;
-    predictRequest: string;
-    predictFail: string;
-    noChartData: string;
-    noDataForProduct: string;
-    noConfirmedForProduct: string;
-    infoBanner: string;
-    colProduct: string;
-    colRetailPrice: string;
-    colAdjustDate: string;
-    perLiter: string;
-    allProducts: string;
   };
   stocks: {
     colSymbol: string;

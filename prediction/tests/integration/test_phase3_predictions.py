@@ -1,7 +1,7 @@
 """Phase 3 integration tests — verify prediction gRPC handlers.
 
 Tests all market prediction RPCs: TriggerPredict, TriggerStockPredict,
-TriggerGoldPredict, TriggerNasdaqPredict, TriggerCryptoPredict, TriggerFuelPredict.
+TriggerGoldPredict, TriggerNasdaqPredict, TriggerCryptoPredict.
 
 Run:
     make test-phase3
@@ -133,19 +133,6 @@ def test_trigger_crypto_predict_returns_success(grpc_stub):
 
 
 # ---------------------------------------------------------------------------
-# TriggerFuelPredict
-# ---------------------------------------------------------------------------
-
-def test_trigger_fuel_predict_returns_success(grpc_stub):
-    """TriggerFuelPredict must return success=True."""
-    from src.proto.prediction import prediction_pb2
-
-    resp = grpc_stub.TriggerFuelPredict(prediction_pb2.Empty())
-    assert resp is not None
-    assert resp.success is True
-
-
-# ---------------------------------------------------------------------------
 # Service resilience — predictions must not crash service
 # ---------------------------------------------------------------------------
 
@@ -157,7 +144,6 @@ def test_service_still_alive_after_predictions(grpc_stub):
     grpc_stub.TriggerGoldPredict(prediction_pb2.Empty())
     grpc_stub.TriggerNasdaqPredict(prediction_pb2.Empty())
     grpc_stub.TriggerCryptoPredict(prediction_pb2.Empty())
-    grpc_stub.TriggerFuelPredict(prediction_pb2.Empty())
 
     # Must still respond
     resp = grpc_stub.GetTrainingStatus(prediction_pb2.Empty())

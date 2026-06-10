@@ -141,26 +141,6 @@ def test_api_trigger_crypto_crawler_succeeds(api_base_url, auth_headers):
 
 
 # ---------------------------------------------------------------------------
-# Fuel endpoints
-# ---------------------------------------------------------------------------
-
-def test_api_fuel_latest(api_base_url, auth_headers):
-    """GET /api/fuel/latest must return fuel data."""
-    resp = requests.get(f"{api_base_url}/api/fuel/latest", timeout=10)
-    assert resp.status_code == 200
-
-
-def test_api_trigger_fuel_crawler_succeeds(api_base_url, auth_headers):
-    """POST /api/trigger/fuel-crawler must return 2xx."""
-    resp = requests.post(
-        f"{api_base_url}/api/trigger/fuel-crawler",
-        headers=auth_headers,
-        timeout=10,
-    )
-    assert resp.status_code in (200, 202), f"Unexpected status: {resp.status_code}"
-
-
-# ---------------------------------------------------------------------------
 # Dashboard stats (reads data from all crawled sources)
 # ---------------------------------------------------------------------------
 
@@ -177,11 +157,11 @@ def test_api_dashboard_stats(api_base_url, auth_headers):
 # ---------------------------------------------------------------------------
 
 def test_api_schedules_list_has_all_crawlers(api_base_url, auth_headers):
-    """GET /api/schedules must list all 5 crawler jobs."""
+    """GET /api/schedules must list all 4 crawler jobs."""
     resp = requests.get(f"{api_base_url}/api/schedules", headers=auth_headers, timeout=10)
     assert resp.status_code == 200
     schedules = resp.json()
     job_keys = {s["job_key"] for s in schedules}
-    expected = {"crawler_stock", "crawler_gold", "crawler_nasdaq", "crawler_crypto", "crawler_fuel"}
+    expected = {"crawler_stock", "crawler_gold", "crawler_nasdaq", "crawler_crypto"}
     missing = expected - job_keys
     assert missing == set(), f"Missing schedule keys: {missing}"

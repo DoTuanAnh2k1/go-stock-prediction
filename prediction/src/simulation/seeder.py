@@ -29,7 +29,6 @@ MARKETS = [
     ("NASDAQ", "NASDAQ", Decimal("100000"), "USD"),
     ("SP500", "S&P 500", Decimal("100000"), "USD"),
     ("CRYPTO", "Crypto", Decimal("100000"), "USD"),
-    ("FUEL", "Fuel", Decimal("1000000000"), "VND"),
 ]
 
 

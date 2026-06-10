@@ -5,7 +5,6 @@ Markets:
   GOLD     — gold instruments (XAU, BTMC/sjc, BTMC/nhan_tron) × 6 algorithms
   NASDAQ100 — 15 NASDAQ symbols × 6 algorithms
   CRYPTO   — BTC, ETH, SOL × 6 algorithms
-  FUEL     — ron95_iii, e5_ron92, do_005s, kerosene × 6 algorithms
   SP500    — 16 S&P 500 symbols × 6 algorithms
 """
 from __future__ import annotations
@@ -28,13 +27,11 @@ GOLD_INSTRUMENTS = [
     ("BTMC", "nhan_tron"),
 ]
 
-FUEL_PRODUCTS = ["ron95_iii", "e5_ron92", "do_005s", "kerosene"]
-
 
 def run_all_markets() -> int:
     """Run predictions for ALL markets. Returns total prediction count."""
     total = 0
-    for market_key in ("VN30", "GOLD", "NASDAQ100", "CRYPTO", "FUEL", "SP500"):
+    for market_key in ("VN30", "GOLD", "NASDAQ100", "CRYPTO", "SP500"):
         try:
             n = run_for_market(market_key)
             total += n
@@ -57,8 +54,6 @@ def run_for_market(market_key: str) -> int:
         count = _predict_nasdaq(algos)
     elif mk == "CRYPTO":
         count = _predict_crypto(algos)
-    elif mk == "FUEL":
-        count = _predict_fuel(algos)
     elif mk == "SP500":
         count = _predict_sp500(algos)
     else:
@@ -75,6 +70,7 @@ def run_for_market(market_key: str) -> int:
 def _predict_vn30(algos: dict) -> int:
     stocks = repo.get_vn30_stocks()
     log.info("predict.vn30.start", stocks=len(stocks), algorithms=len(algos))
+    dir_acc = repo.get_direction_accuracy("VN30")
     count = 0
     now = datetime.now()
     target = now + timedelta(days=1)
@@ -92,6 +88,9 @@ def _predict_vn30(algos: dict) -> int:
         for key, algo in algos.items():
             try:
                 result = algo.predict(price_list, vol_list)
+                algo_acc_pct = dir_acc.get(key, None)
+                algo_acc = Decimal(str(round(algo_acc_pct / 100, 4))) if algo_acc_pct is not None else None
+                repo.delete_pending_vn30_predictions_for_stock(stock.id, key)
                 repo.create_prediction(
                     stock_id=stock.id,
                     predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.01")),
@@ -100,6 +99,7 @@ def _predict_vn30(algos: dict) -> int:
                     algorithm_name=key,
                     prediction_date=now,
                     target_date=target,
+                    accuracy=algo_acc,
                     status="pending",
                 )
                 count += 1
@@ -112,9 +112,10 @@ def _predict_vn30(algos: dict) -> int:
 
 def _predict_gold(algos: dict) -> int:
     log.info("predict.gold.start", instruments=len(GOLD_INSTRUMENTS), algorithms=len(algos))
+    dir_acc = repo.get_direction_accuracy("GOLD")
     count = 0
     now = datetime.now()
-    target = now + timedelta(days=1)
+    target = now + timedelta(hours=1)
 
     for source, product_type in GOLD_INSTRUMENTS:
         prices_asc = repo.get_gold_prices_asc(source, product_type, limit=270)
@@ -128,6 +129,9 @@ def _predict_gold(algos: dict) -> int:
         for key, algo in algos.items():
             try:
                 result = algo.predict(price_list)
+                algo_acc_pct = dir_acc.get(key, None)
+                algo_acc = Decimal(str(round(algo_acc_pct / 100, 4))) if algo_acc_pct is not None else None
+                repo.delete_pending_gold_predictions_for_symbol(source, product_type, key)
                 repo.create_gold_prediction(
                     source=source,
                     product_type=product_type,
@@ -137,6 +141,7 @@ def _predict_gold(algos: dict) -> int:
                     algorithm_name=key,
                     prediction_date=now,
                     target_date=target,
+                    accuracy=algo_acc,
                     status="pending",
                 )
                 count += 1
@@ -150,9 +155,10 @@ def _predict_gold(algos: dict) -> int:
 def _predict_nasdaq(algos: dict) -> int:
     symbols = repo.get_nasdaq_symbols() or NASDAQ_SYMBOLS
     log.info("predict.nasdaq.start", symbols=len(symbols), algorithms=len(algos))
+    dir_acc = repo.get_direction_accuracy("NASDAQ100")
     count = 0
     now = datetime.now()
-    target = now + timedelta(days=1)
+    target = now + timedelta(hours=1)
 
     for symbol in symbols:
         prices_asc = repo.get_nasdaq_prices_asc(symbol, limit=270)
@@ -167,6 +173,9 @@ def _predict_nasdaq(algos: dict) -> int:
         for key, algo in algos.items():
             try:
                 result = algo.predict(price_list, vol_list)
+                algo_acc_pct = dir_acc.get(key, None)
+                algo_acc = Decimal(str(round(algo_acc_pct / 100, 4))) if algo_acc_pct is not None else None
+                repo.delete_pending_nasdaq_predictions_for_symbol(symbol, key)
                 repo.create_nasdaq_prediction(
                     symbol=symbol,
                     predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.0001")),
@@ -175,6 +184,7 @@ def _predict_nasdaq(algos: dict) -> int:
                     algorithm_name=key,
                     prediction_date=now,
                     target_date=target,
+                    accuracy=algo_acc,
                     status="pending",
                 )
                 count += 1
@@ -187,9 +197,10 @@ def _predict_nasdaq(algos: dict) -> int:
 
 def _predict_crypto(algos: dict) -> int:
     log.info("predict.crypto.start", coins=len(CRYPTO_COINS), algorithms=len(algos))
+    dir_acc = repo.get_direction_accuracy("CRYPTO")
     count = 0
     now = datetime.now()
-    target = now + timedelta(days=1)
+    target = now + timedelta(hours=1)
 
     for coin_id, symbol in CRYPTO_COINS:
         prices_asc = repo.get_crypto_prices_asc(coin_id, limit=270)
@@ -203,6 +214,9 @@ def _predict_crypto(algos: dict) -> int:
         for key, algo in algos.items():
             try:
                 result = algo.predict(price_list)
+                algo_acc_pct = dir_acc.get(key, None)
+                algo_acc = Decimal(str(round(algo_acc_pct / 100, 4))) if algo_acc_pct is not None else None
+                repo.delete_pending_crypto_predictions_for_symbol(coin_id, key)
                 repo.create_crypto_prediction(
                     coin_id=coin_id,
                     symbol=symbol,
@@ -212,6 +226,7 @@ def _predict_crypto(algos: dict) -> int:
                     algorithm_name=key,
                     prediction_date=now,
                     target_date=target,
+                    accuracy=algo_acc,
                     status="pending",
                 )
                 count += 1
@@ -222,48 +237,13 @@ def _predict_crypto(algos: dict) -> int:
     return count
 
 
-def _predict_fuel(algos: dict) -> int:
-    log.info("predict.fuel.start", products=len(FUEL_PRODUCTS), algorithms=len(algos))
-    count = 0
-    now = datetime.now()
-    target = now + timedelta(days=1)
-
-    for product_type in FUEL_PRODUCTS:
-        prices_asc = repo.get_fuel_prices_asc(product_type, limit=270)
-        if len(prices_asc) < 20:
-            log.debug("predict.fuel.insufficient", product=product_type, points=len(prices_asc))
-            continue
-
-        price_list = [float(p.price) for p in prices_asc]
-        current = price_list[-1]
-
-        for key, algo in algos.items():
-            try:
-                result = algo.predict(price_list)
-                repo.create_fuel_prediction(
-                    product_type=product_type,
-                    predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.001")),
-                    current_price=Decimal(str(current)).quantize(Decimal("0.001")),
-                    confidence=Decimal(str(round(result.confidence, 4))),
-                    algorithm_name=key,
-                    prediction_date=now,
-                    target_date=target,
-                    status="pending",
-                )
-                count += 1
-            except Exception as exc:
-                log.warning("predict.fuel.algo_failed", product=product_type, algo=key, error=str(exc))
-
-    log.info("predict.fuel.done", count=count)
-    return count
-
-
 def _predict_sp500(algos: dict) -> int:
     symbols = repo.get_sp500_symbols() or SP500_SYMBOLS
     log.info("predict.sp500.start", symbols=len(symbols), algorithms=len(algos))
+    dir_acc = repo.get_direction_accuracy("SP500")
     count = 0
     now = datetime.now()
-    target = now + timedelta(days=1)
+    target = now + timedelta(hours=1)
 
     for symbol in symbols:
         prices_asc = repo.get_sp500_prices_asc(symbol, limit=270)
@@ -278,6 +258,9 @@ def _predict_sp500(algos: dict) -> int:
         for key, algo in algos.items():
             try:
                 result = algo.predict(price_list, vol_list)
+                algo_acc_pct = dir_acc.get(key, None)
+                algo_acc = Decimal(str(round(algo_acc_pct / 100, 4))) if algo_acc_pct is not None else None
+                repo.delete_pending_sp500_predictions_for_symbol(symbol, key)
                 repo.create_sp500_prediction(
                     symbol=symbol,
                     predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.0001")),
@@ -286,6 +269,7 @@ def _predict_sp500(algos: dict) -> int:
                     algorithm_name=key,
                     prediction_date=now,
                     target_date=target,
+                    accuracy=algo_acc,
                     status="pending",
                 )
                 count += 1

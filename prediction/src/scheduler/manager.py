@@ -31,23 +31,19 @@ DEFAULT_SCHEDULES = [
     ("gold_predict", "Dự đoán vàng (disabled — trong pipeline)", "0 0 11 * * *", False),
     ("crawler_nasdaq", "Pipeline NASDAQ (mỗi giờ, phút 15)", "0 15 * * * *", True),
     ("crawler_crypto", "Pipeline Crypto (mỗi giờ, phút 45)", "0 45 * * * *", True),
-    ("crawler_fuel", "Crawl giá xăng (9PM hàng ngày)", "0 0 21 * * *", True),
     ("weekly_training", "Huấn luyện mô hình (Chủ nhật 9AM)", "0 0 9 * * 0", False),
     # Per-market training jobs — staggered on Sunday to avoid overlap
     ("train_vn30",   "Training VN30 (Chủ nhật 2AM)",          "0 0 2 * * 0", True),
     ("train_gold",   "Training Gold (Chủ nhật 3AM)",           "0 0 3 * * 0", True),
     ("train_nasdaq", "Training NASDAQ (Chủ nhật 4AM)",         "0 0 4 * * 0", True),
     ("train_crypto", "Training Crypto (Chủ nhật 5AM)",         "0 0 5 * * 0", True),
-    ("train_fuel",   "Training Fuel (Chủ nhật 6AM)",           "0 0 6 * * 0", True),
     ("train_sp500",  "Training S&P 500 (Chủ nhật 7AM)",        "0 0 7 * * 0", True),
     ("daily_prediction", "Dự đoán tất cả thị trường (mỗi giờ)", "0 0 */1 * * *", False),
     ("predict_vn30",   "Dự đoán VN30 (3PM ngày thường)",          "0 0 15 * * 1-5",  True),
     ("predict_nasdaq", "Dự đoán NASDAQ (disabled — trong pipeline)",  "0 30 23 * * 1-5", False),
     ("predict_crypto", "Dự đoán Crypto (disabled — trong pipeline)", "0 0 */6 * * *",   False),
-    ("predict_fuel",   "Dự đoán Fuel (10PM hàng ngày)",            "0 0 22 * * *",    True),
     ("predict_sp500",  "Dự đoán S&P 500 (disabled — trong pipeline)", "0 0 13 * * 1-5",  False),
     ("daily_reconcile", "Reconcile dự đoán (6AM hàng ngày)", "0 0 6 * * *", True),
-    ("simulation_daily", "Bot trading hàng ngày (8PM)", "0 0 20 * * *", True),
     ("daily_backup", "Backup database (3AM hàng ngày)", "0 0 3 * * *", True),
 ]
 

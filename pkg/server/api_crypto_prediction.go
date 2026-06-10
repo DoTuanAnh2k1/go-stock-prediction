@@ -170,7 +170,7 @@ func GetCryptoPredictionsChart(w http.ResponseWriter, r *http.Request) {
 	// DB returns prediction_date ASC — iterate forward
 	for _, p := range filtered {
 		data = append(data, cryptoPredictionChartPoint{
-			Date:           p.PredictionDate.Format("2006-01-02T15:04:05"),
+			Date:           p.TargetDate.Format("2006-01-02T15:04:05"),
 			AlgorithmName:  p.AlgorithmName,
 			PredictedPrice: p.PredictedPrice,
 			ActualPrice:    p.ActualPrice,

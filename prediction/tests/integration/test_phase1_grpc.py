@@ -89,14 +89,6 @@ def test_trigger_crypto_crawler(grpc_stub):
     assert resp.success is True
 
 
-def test_trigger_fuel_crawler(grpc_stub):
-    """TriggerFuelCrawler acknowledges the request."""
-    from src.proto.prediction import prediction_pb2
-
-    resp = grpc_stub.TriggerFuelCrawler(prediction_pb2.Empty())
-    assert resp.success is True
-
-
 def test_trigger_train_all(grpc_stub):
     """TriggerTrain with empty algorithm trains all — returns non-empty session_id."""
     from src.proto.prediction import prediction_pb2
@@ -176,14 +168,6 @@ def test_trigger_crypto_predict(grpc_stub):
     from src.proto.prediction import prediction_pb2
 
     resp = grpc_stub.TriggerCryptoPredict(prediction_pb2.Empty())
-    assert resp.success is True
-
-
-def test_trigger_fuel_predict(grpc_stub):
-    """TriggerFuelPredict acknowledges the request."""
-    from src.proto.prediction import prediction_pb2
-
-    resp = grpc_stub.TriggerFuelPredict(prediction_pb2.Empty())
     assert resp.success is True
 
 

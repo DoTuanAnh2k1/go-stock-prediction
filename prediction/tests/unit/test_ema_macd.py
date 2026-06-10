@@ -99,19 +99,20 @@ class TestEMAMACDPredictor:
         series = EMAMACDPredictor._ema_series(arr, 12)
         assert len(series) == 0
 
-    def test_macd_signal_buy(self):
-        sig = EMAMACDPredictor._macd_signal(1.0, 0.5, 0.5)
-        assert sig["direction"] == "BUY"
+    def test_calc_confidence_bullish(self):
+        """Strong positive histogram relative to MACD yields higher confidence."""
+        conf = EMAMACDPredictor._calc_confidence(2.0, 1.0, 1.0)
+        assert 0.30 <= conf <= 0.85
 
-    def test_macd_signal_sell(self):
-        sig = EMAMACDPredictor._macd_signal(-1.0, -0.5, -0.5)
-        assert sig["direction"] == "SELL"
+    def test_calc_confidence_bearish(self):
+        """Strong negative histogram relative to MACD yields valid confidence."""
+        conf = EMAMACDPredictor._calc_confidence(-2.0, -1.0, -1.0)
+        assert 0.30 <= conf <= 0.85
 
-    def test_macd_signal_hold(self):
-        # HOLD when macd > signal but histogram <= 0, OR macd < signal but histogram >= 0
-        # macd_line=1.5, signal_line=1.0 → macd > signal, but histogram=-0.5 → NOT (both positive) → HOLD
-        sig = EMAMACDPredictor._macd_signal(1.5, 1.0, -0.5)
-        assert sig["direction"] == "HOLD"
+    def test_calc_confidence_zero_macd(self):
+        """Zero MACD line returns default strength of 0.5 → valid confidence."""
+        conf = EMAMACDPredictor._calc_confidence(0.0, 0.0, 0.0)
+        assert 0.30 <= conf <= 0.85
 
     def test_multiple_predictions_stable(self):
         prices = make_prices(300)

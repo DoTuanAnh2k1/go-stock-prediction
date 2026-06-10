@@ -95,9 +95,9 @@ class TestLightGBMPredictor:
     def test_build_features_returns_correct_shape(self):
         arr = np.array(make_prices(100), dtype=float)
         features, targets = LightGBMPredictor._build_features(arr, None)
-        # Should have: 14 features per row (10 lags + RSI + MA5 + MA20 + vol_ratio)
+        # Should have: 30 features per row (enhanced feature set)
         assert len(features) > 0
-        assert len(features[0]) == 14
+        assert len(features[0]) == 30
         assert len(features) == len(targets)
 
     def test_build_features_with_volumes(self):
@@ -105,21 +105,24 @@ class TestLightGBMPredictor:
         vol_arr = np.array(make_volumes(100), dtype=float)
         features, targets = LightGBMPredictor._build_features(arr, vol_arr)
         assert len(features) > 0
-        assert len(features[0]) == 14
+        assert len(features[0]) == 30
 
     def test_ema_fallback_returns_valid_result(self):
         """_ema_fallback must always return a valid PredictionResult."""
         prices = make_prices(100)
         current = prices[-1]
-        result = LightGBMPredictor._ema_fallback(prices, current)
+        algo = LightGBMPredictor()
+        result = algo._ema_fallback(prices, current)
         assert result.algorithm_name == "lightgbm"
         assert 0.0 <= result.confidence <= 1.0
-        assert result.predicted_price >= current * 0.93 - 1e-9
-        assert result.predicted_price <= current * 1.07 + 1e-9
+        # Default market key yields ±15% clamp — check within that range
+        assert result.predicted_price >= current * 0.85 - 1e-9
+        assert result.predicted_price <= current * 1.15 + 1e-9
 
     def test_fallback_confidence_fixed_at_035(self):
         """EMA fallback confidence should be 0.35."""
         prices = make_prices(100)
         current = prices[-1]
-        result = LightGBMPredictor._ema_fallback(prices, current)
+        algo = LightGBMPredictor()
+        result = algo._ema_fallback(prices, current)
         assert result.confidence == pytest.approx(0.35, abs=0.01)

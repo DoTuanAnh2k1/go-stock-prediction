@@ -114,6 +114,7 @@ export interface GoldPred {
   conf: number;
   date: string;
   isOz: boolean;
+  accuracy?: number | null;
 }
 
 export interface GoldPredActual {

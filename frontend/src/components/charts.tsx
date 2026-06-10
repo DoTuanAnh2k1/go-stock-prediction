@@ -27,6 +27,7 @@ interface LineChartProps {
   area?: boolean;
   showGrid?: boolean;
   padL?: number;
+  highlightable?: boolean;
 }
 
 interface BarChartProps {
@@ -111,9 +112,11 @@ export function Sparkline({ data, w = 120, h = 34, color, fill = true, strokeW =
 }
 
 // ── LineChart ─────────────────────────────────────────────────────────────────
-export function LineChart({ series, labels, height = 620, yFmt, valueFmt, area = false, showGrid = true, padL = 46 }: LineChartProps) {
+export function LineChart({ series, labels, height = 620, yFmt, valueFmt, area = false, showGrid = true, padL = 46, highlightable = false }: LineChartProps) {
   const ref = useRef<SVGSVGElement>(null);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [activeSeries, setActiveSeries] = useState<number | null>(null);
+  const [hoverSeries, setHoverSeries] = useState<number | null>(null);
   const W = 800, H = height;
   const padR = 14, padT = 14, padB = 26;
   const all = series.flatMap((s) => (s.data || []).filter((v): v is number => v != null));
@@ -136,6 +139,28 @@ export function LineChart({ series, labels, height = 620, yFmt, valueFmt, area =
     const px = ((e.clientX - r.left) / r.width) * W;
     const idx = Math.max(0, Math.min(n - 1, Math.round(((px - padL) / (W - padL - padR)) * (n - 1))));
     setHoverIdx(idx);
+  }
+
+  const focusedSeries = hoverSeries ?? activeSeries;
+
+  function getSeriesOpacity(si: number): number {
+    if (!highlightable || focusedSeries === null) return 1;
+    return (si === focusedSeries || si === 0) ? 1 : 0.12;
+  }
+
+  function getSeriesWidth(s: SeriesItem, si: number): number {
+    const base = s.w || 1.8;
+    if (!highlightable || focusedSeries === null) return base;
+    return (si === focusedSeries || si === 0) ? base + 0.5 : base;
+  }
+
+  function buildPath(s: SeriesItem): string {
+    const pts = s.data.map((v, i) => v == null ? null : [x(i), y(v as number)]);
+    const segs: [number, number][][] = [];
+    let cur: [number, number][] = [];
+    pts.forEach((p) => { if (p) cur.push(p as [number, number]); else { if (cur.length) segs.push(cur); cur = []; } });
+    if (cur.length) segs.push(cur);
+    return segs.map((seg) => seg.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ')).join(' ');
   }
 
   // Tooltip x as % of SVG width (viewBox fraction), clamped so tooltip stays inside chart
@@ -167,7 +192,17 @@ export function LineChart({ series, labels, height = 620, yFmt, valueFmt, area =
 
   return (
     <div style={{ position: 'relative' }}>
-      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" onMouseMove={move} onMouseLeave={() => setHoverIdx(null)} style={{ display: 'block', overflow: 'visible' }}>
+      <svg
+        ref={ref}
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        height={H}
+        preserveAspectRatio="none"
+        onMouseMove={move}
+        onMouseLeave={() => { setHoverIdx(null); setHoverSeries(null); }}
+        onClick={() => highlightable && setActiveSeries(null)}
+        style={{ display: 'block', overflow: 'visible', cursor: highlightable ? 'crosshair' : undefined }}
+      >
         <defs>
           {series.map((s, si) => (
             <linearGradient key={si} id={`lg${si}`} x1="0" y1="0" x2="0" y2="1">
@@ -186,19 +221,17 @@ export function LineChart({ series, labels, height = 620, yFmt, valueFmt, area =
           <text key={i} x={x(i)} y={H - 8} textAnchor="middle" fontSize="10" fill="var(--text-3)" fontFamily="var(--font-mono)">{l}</text>
         ))}
         {series.map((s, si) => {
+          const path = buildPath(s);
           const pts = s.data.map((v, i) => v == null ? null : [x(i), y(v as number)]);
-          const segs: [number, number][][] = [];
-          let cur: [number, number][] = [];
-          pts.forEach((p) => { if (p) cur.push(p as [number, number]); else { if (cur.length) segs.push(cur); cur = []; } });
-          if (cur.length) segs.push(cur);
-          const path = segs.map((seg) => seg.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ')).join(' ');
           const last = pts.filter(Boolean).slice(-1)[0] as [number, number] | undefined;
+          const opacity = getSeriesOpacity(si);
+          const sw = getSeriesWidth(s, si);
           return (
-            <g key={si}>
+            <g key={si} style={{ opacity }}>
               {area && s.data[0] != null && (
                 <path d={`${path} L${x(s.data.length - 1)},${H - padB} L${padL},${H - padB} Z`} fill={`url(#lg${si})`} />
               )}
-              <path d={path} fill="none" stroke={s.color} strokeWidth={s.w || 1.8} strokeDasharray={s.dash || 'none'} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+              <path d={path} fill="none" stroke={s.color} strokeWidth={sw} strokeDasharray={s.dash || 'none'} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
               {last && <circle cx={last[0]} cy={last[1]} r="2.5" fill={s.color} />}
             </g>
           );
@@ -209,10 +242,34 @@ export function LineChart({ series, labels, height = 620, yFmt, valueFmt, area =
           <g>
             <line x1={x(hoverIdx)} x2={x(hoverIdx)} y1={padT} y2={H - padB} stroke="var(--border-strong)" strokeWidth="1" />
             {series.map((s, si) => s.data[hoverIdx] != null && (
-              <circle key={si} cx={x(hoverIdx)} cy={y(s.data[hoverIdx] as number)} r="3.5" fill="var(--surface)" stroke={s.color} strokeWidth="2" />
+              <circle key={si} cx={x(hoverIdx)} cy={y(s.data[hoverIdx] as number)} r="3.5" fill="var(--surface)" stroke={s.color} strokeWidth="2"
+                style={{ opacity: getSeriesOpacity(si) }} />
             ))}
           </g>
         )}
+        {highlightable && series.map((s, si) => {
+          const path = buildPath(s);
+          return (
+            <path
+              key={si}
+              d={path}
+              fill="none"
+              stroke="transparent"
+              strokeWidth={12}
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={() => setHoverSeries(si)}
+              onMouseLeave={() => setHoverSeries(null)}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (si === 0) {
+                  setActiveSeries(null);
+                } else {
+                  setActiveSeries(activeSeries === si ? null : si);
+                }
+              }}
+            />
+          );
+        })}
       </svg>
       {hoverIdx != null && (
         <div style={{
@@ -232,7 +289,7 @@ export function LineChart({ series, labels, height = 620, yFmt, valueFmt, area =
         }}>
           <div style={{ color: 'var(--text-3)', fontSize: 10, marginBottom: 2 }}>{labels[hoverIdx]}</div>
           {series.map((s, si) => s.data[hoverIdx] != null && (
-            <div key={si} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div key={si} style={{ display: 'flex', gap: 8, alignItems: 'center', opacity: getSeriesOpacity(si) }}>
               <span style={{ width: 8, height: 2, background: s.color, display: 'inline-block' }}></span>
               <span style={{ color: 'var(--text-3)' }}>{s.name}</span>
               <span style={{ marginLeft: 'auto', paddingLeft: 12, color: 'var(--text)' }}>{fmtV(s.data[hoverIdx] as number)}</span>

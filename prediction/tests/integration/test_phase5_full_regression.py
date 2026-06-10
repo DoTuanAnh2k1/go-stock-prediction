@@ -32,7 +32,6 @@ CRAWLER_ENDPOINTS = [
     "gold-crawler",
     "nasdaq-crawler",
     "crypto-crawler",
-    "fuel-crawler",
 ]
 
 
@@ -93,10 +92,6 @@ class TestAllCrawlersRespond:
         resp = _trigger(api_base_url, auth_headers, "crypto-crawler")
         assert resp.status_code in (200, 202), resp.text[:300]
 
-    def test_fuel_crawler(self, api_base_url, auth_headers):
-        resp = _trigger(api_base_url, auth_headers, "fuel-crawler")
-        assert resp.status_code in (200, 202), resp.text[:300]
-
 
 # ===========================================================================
 # 3. gRPC contract — all RPCs registered
@@ -131,11 +126,6 @@ class TestGRPCContractAllRPCs:
         resp = grpc_stub.TriggerCryptoCrawler(prediction_pb2.Empty())
         assert resp.success is True
 
-    def test_trigger_fuel_crawler(self, grpc_stub):
-        from src.proto.prediction import prediction_pb2
-        resp = grpc_stub.TriggerFuelCrawler(prediction_pb2.Empty())
-        assert resp.success is True
-
     def test_trigger_predict(self, grpc_stub):
         from src.proto.prediction import prediction_pb2
         resp = grpc_stub.TriggerPredict(prediction_pb2.Empty())
@@ -154,11 +144,6 @@ class TestGRPCContractAllRPCs:
     def test_trigger_crypto_predict(self, grpc_stub):
         from src.proto.prediction import prediction_pb2
         resp = grpc_stub.TriggerCryptoPredict(prediction_pb2.Empty())
-        assert resp.success is True
-
-    def test_trigger_fuel_predict(self, grpc_stub):
-        from src.proto.prediction import prediction_pb2
-        resp = grpc_stub.TriggerFuelPredict(prediction_pb2.Empty())
         assert resp.success is True
 
     def test_trigger_reconcile(self, grpc_stub):
@@ -356,10 +341,6 @@ class TestTriggerEndpoints:
         resp = _trigger(api_base_url, auth_headers, "crypto-crawler")
         assert resp.status_code in (200, 202), resp.text[:300]
 
-    def test_trigger_fuel_crawler_returns_2xx(self, api_base_url, auth_headers):
-        resp = _trigger(api_base_url, auth_headers, "fuel-crawler")
-        assert resp.status_code in (200, 202), resp.text[:300]
-
     def test_trigger_gold_predict_returns_2xx(self, api_base_url, auth_headers):
         resp = _trigger(api_base_url, auth_headers, "gold-predict")
         assert resp.status_code in (200, 202), resp.text[:300]
@@ -370,10 +351,6 @@ class TestTriggerEndpoints:
 
     def test_trigger_crypto_predict_returns_2xx(self, api_base_url, auth_headers):
         resp = _trigger(api_base_url, auth_headers, "crypto-predict")
-        assert resp.status_code in (200, 202), resp.text[:300]
-
-    def test_trigger_fuel_predict_returns_2xx(self, api_base_url, auth_headers):
-        resp = _trigger(api_base_url, auth_headers, "fuel-predict")
         assert resp.status_code in (200, 202), resp.text[:300]
 
 

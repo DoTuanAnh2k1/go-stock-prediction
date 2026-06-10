@@ -92,20 +92,23 @@ class TestXGBoostPredictor:
         arr = np.array(make_prices(100), dtype=float)
         features, targets = XGBoostPredictor._build_features(arr, None)
         assert len(features) > 0
-        assert len(features[0]) == 14
+        assert len(features[0]) == 30
         assert len(features) == len(targets)
 
     def test_ema_fallback_returns_valid_result(self):
         prices = make_prices(100)
         current = prices[-1]
-        result = XGBoostPredictor._ema_fallback(prices, current)
+        algo = XGBoostPredictor()
+        result = algo._ema_fallback(prices, current)
         assert result.algorithm_name == "xgboost"
         assert 0.0 <= result.confidence <= 1.0
-        assert result.predicted_price >= current * 0.93 - 1e-9
-        assert result.predicted_price <= current * 1.07 + 1e-9
+        # Default market key yields ±15% clamp — check within that range
+        assert result.predicted_price >= current * 0.85 - 1e-9
+        assert result.predicted_price <= current * 1.15 + 1e-9
 
     def test_fallback_confidence_fixed_at_035(self):
         prices = make_prices(100)
         current = prices[-1]
-        result = XGBoostPredictor._ema_fallback(prices, current)
+        algo = XGBoostPredictor()
+        result = algo._ema_fallback(prices, current)
         assert result.confidence == pytest.approx(0.35, abs=0.01)

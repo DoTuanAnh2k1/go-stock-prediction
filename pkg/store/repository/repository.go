@@ -33,8 +33,6 @@ type DatabaseStore interface {
 	CryptoPriceStore
 	CryptoPredictionStore
 	CryptoIntradayStore
-	FuelPriceStore
-	FuelPredictionStore
 	SP500PriceStore
 	SP500PredictionStore
 	SP500IntradayStore

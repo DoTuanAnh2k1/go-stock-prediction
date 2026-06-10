@@ -264,41 +264,6 @@ class CryptoPrediction(Base):
     deleted_at = Column(DateTime)
 
 
-class FuelPrice(Base):
-    __tablename__ = "fuel_prices"
-    __table_args__ = (
-        UniqueConstraint("product_type", "trading_date", name="idx_fuel_product_date"),
-    )
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    product_type = Column(String(30), nullable=False)
-    price = Column(Numeric(10, 3), nullable=False)
-    trading_date = Column(Date, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    deleted_at = Column(DateTime)
-
-
-class FuelPrediction(Base):
-    __tablename__ = "fuel_predictions"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    product_type = Column(String(30), nullable=False)
-    algorithm_name = Column(String(100), nullable=False)
-    predicted_price = Column(Numeric(10, 3), nullable=False)
-    current_price = Column(Numeric(10, 3), nullable=False)
-    confidence = Column(Numeric(5, 4))
-    prediction_date = Column(DateTime, nullable=False)
-    target_date = Column(DateTime, nullable=False)
-    actual_price = Column(Numeric(10, 3))
-    accuracy = Column(Numeric(5, 4))
-    direction_correct = Column(Boolean, nullable=True)
-    status = Column(String(20), default="pending")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    deleted_at = Column(DateTime)
-
-
 class TrainingLog(Base):
     __tablename__ = "training_logs"
 

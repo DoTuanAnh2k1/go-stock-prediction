@@ -55,7 +55,11 @@
       "Bash(protoc:*)",
       "Bash(cd frontend:*)",
       "WebSearch(*)",
-      "WebFetch(*)"
+      "WebFetch(*)",
+      "Bash(sudo grep -i \"bot_error\\\\|DetachedInstance\\\\|detached instance\\\\|sim\\\\.live\" /var/lib/docker/containers/071088f7068dbeda959742bd860f78cc3bdbbcf35f9f5827ec4f78656056b8ee/071088f7068dbeda959742bd860f78cc3bdbbcf35f9f5827ec4f78656056b8ee-json.log)",
+      "Bash(ls /var/lib/docker/containers/ 2>/dev/null || echo \"no access\")",
+      "Read(//var/lib/docker/**)",
+      "Bash(journalctl -u docker --since \"2026-06-08 00:00:00\" --until \"2026-06-09 16:47:00\")"
     ]
   }
 }

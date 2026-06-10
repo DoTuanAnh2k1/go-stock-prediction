@@ -34,7 +34,6 @@ class SignalGenerator:
         "NASDAQ": "nasdaq_predictions",
         "SP500": "sp500_predictions",
         "CRYPTO": "crypto_predictions",
-        "FUEL": "fuel_predictions",
     }
 
     def get_signals(self, market: str, algorithm: str, for_date: date,
@@ -159,19 +158,6 @@ class SignalGenerator:
             ).fetchall()
             return [{"symbol": r[0], "predicted_price": r[1], "current_price": r[2], "confidence": r[3]} for r in result]
 
-        elif market == "FUEL":
-            result = session.execute(
-                sqlalchemy.text("""
-                    SELECT product_type as symbol, predicted_price, current_price, confidence
-                    FROM fuel_predictions
-                    WHERE algorithm_name = :algo
-                      AND prediction_date BETWEEN :d_start AND :d_end
-                      AND deleted_at IS NULL
-                """),
-                {"algo": algorithm, "d_start": date_start, "d_end": date_end}
-            ).fetchall()
-            return [{"symbol": r[0], "predicted_price": r[1], "current_price": r[2], "confidence": r[3]} for r in result]
-
         return []
 
     def get_current_prices(self, market: str, symbols: list[str], for_date: date) -> dict[str, float]:
@@ -230,20 +216,6 @@ class SignalGenerator:
                         sqlalchemy.text(f"""
                             SELECT close_price FROM {table}
                             WHERE symbol = :sym
-                              AND trading_date BETWEEN :d_start AND :d_end
-                            ORDER BY trading_date DESC LIMIT 1
-                        """),
-                        {"sym": symbol, "d_start": date_start, "d_end": date_end}
-                    ).fetchone()
-                    if result:
-                        prices[symbol] = float(result[0])
-
-            elif market == "FUEL":
-                for symbol in symbols:
-                    result = session.execute(
-                        sqlalchemy.text("""
-                            SELECT price FROM fuel_prices
-                            WHERE product_type = :sym
                               AND trading_date BETWEEN :d_start AND :d_end
                             ORDER BY trading_date DESC LIMIT 1
                         """),

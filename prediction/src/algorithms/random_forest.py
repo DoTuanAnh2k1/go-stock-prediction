@@ -1,6 +1,8 @@
 """Random Forest prediction algorithm.
 
-Features: lag returns (1-10 days), RSI(14), MA5 ratio, MA20 ratio, volume ratio.
+Features: enhanced ~30-feature set via features.build_enhanced_features()
+  (lag returns 1-10, RSI, StochRSI, Bollinger %B, MACD, volatility, ROC,
+  momentum, MA ratios 5/10/20/50, multi-timeframe returns, volume ratio).
 Target: next-day log return (regression).
 Supports per-market model caching via train(). When a cached model exists,
 predict() uses it directly without refitting.
@@ -10,6 +12,7 @@ from __future__ import annotations
 import numpy as np
 
 from src.algorithms.base import PredictionAlgorithm, PredictionResult, get_max_change_pct
+from src.algorithms.features import build_enhanced_features, build_basic_features
 from src.utils.logger import get_logger
 
 log = get_logger("random_forest")
@@ -18,7 +21,7 @@ MIN_DATA_POINTS = 80  # need enough data to build lag features
 
 
 class RandomForestPredictor(PredictionAlgorithm):
-    """scikit-learn RandomForestRegressor with technical feature engineering."""
+    """scikit-learn RandomForestRegressor with enhanced technical feature engineering."""
 
     def __init__(self) -> None:
         self._model = None  # cached RandomForestRegressor
@@ -94,7 +97,11 @@ class RandomForestPredictor(PredictionAlgorithm):
                     all_targets.extend(targets[:-1])
 
             if len(all_features) < 20:
-                log.warning("random_forest.batch_train_skip", reason="insufficient rows", rows=len(all_features))
+                log.warning(
+                    "random_forest.batch_train_skip",
+                    reason="insufficient rows",
+                    rows=len(all_features),
+                )
                 return
 
             X = np.array(all_features)
@@ -125,7 +132,6 @@ class RandomForestPredictor(PredictionAlgorithm):
                 return self._inference(prices, volumes, current)
             except Exception as exc:
                 log.warning("random_forest.inference_failed", error=str(exc))
-                # fall through to fresh train-and-predict
 
         try:
             return self._train_and_predict(prices, volumes, current)
@@ -172,7 +178,11 @@ class RandomForestPredictor(PredictionAlgorithm):
         from sklearn.ensemble import RandomForestRegressor
 
         arr = np.array(prices, dtype=float)
-        vol_arr = np.array(volumes, dtype=float) if volumes and len(volumes) == len(prices) else None
+        vol_arr = (
+            np.array(volumes, dtype=float)
+            if volumes and len(volumes) == len(prices)
+            else None
+        )
 
         features, targets = self._build_features(arr, vol_arr)
         if len(features) < 20:
@@ -197,7 +207,6 @@ class RandomForestPredictor(PredictionAlgorithm):
         predicted_price = current * (1 + pred_return)
         max_change = current * get_max_change_pct(self._market_key)
         predicted_price = max(current - max_change, min(current + max_change, predicted_price))
-
         confidence = max(0.3, min(0.9, 0.5 + abs(pred_return) * 5))
 
         return PredictionResult(
@@ -209,48 +218,11 @@ class RandomForestPredictor(PredictionAlgorithm):
 
     @staticmethod
     def _build_features(arr: np.ndarray, vol_arr: np.ndarray | None) -> tuple[list, list]:
-        log_returns = np.diff(np.log(arr))
-        features, targets = [], []
-
-        for i in range(10, len(log_returns)):
-            row = []
-
-            # Lag returns: 1..10
-            for lag in range(1, 11):
-                row.append(float(log_returns[i - lag]))
-
-            # RSI(14)
-            if i >= 14:
-                subset = arr[i - 14 : i + 1]
-                deltas = np.diff(subset)
-                gains = np.where(deltas > 0, deltas, 0.0)
-                losses = np.where(deltas < 0, -deltas, 0.0)
-                avg_g = np.mean(gains) if len(gains) > 0 else 1e-9
-                avg_l = np.mean(losses) if len(losses) > 0 else 1e-9
-                rsi = 100 - 100 / (1 + avg_g / (avg_l + 1e-9))
-            else:
-                rsi = 50.0
-            row.append(float(rsi))
-
-            # MA ratios: price / MA5, price / MA20
-            price_now = float(arr[i + 1])
-            ma5 = float(np.mean(arr[max(0, i - 4) : i + 1])) if i >= 4 else price_now
-            ma20 = float(np.mean(arr[max(0, i - 19) : i + 1])) if i >= 19 else price_now
-            row.append(price_now / ma5 if ma5 > 0 else 1.0)
-            row.append(price_now / ma20 if ma20 > 0 else 1.0)
-
-            # Volume ratio: current vol / avg vol (10)
-            if vol_arr is not None and len(vol_arr) > i + 1:
-                vol_now = float(vol_arr[i + 1])
-                vol_avg = float(np.mean(vol_arr[max(0, i - 9) : i + 1]))
-                row.append(vol_now / vol_avg if vol_avg > 0 else 1.0)
-            else:
-                row.append(1.0)
-
-            features.append(row)
-            targets.append(float(log_returns[i]))
-
-        return features, targets
+        """Thin wrapper — use enhanced features, fall back to basic on error."""
+        try:
+            return build_enhanced_features(arr, vol_arr)
+        except Exception:
+            return build_basic_features(arr, vol_arr)
 
     def _ema_fallback(self, prices: list[float], current: float) -> PredictionResult:
         arr = np.array(prices, dtype=float)

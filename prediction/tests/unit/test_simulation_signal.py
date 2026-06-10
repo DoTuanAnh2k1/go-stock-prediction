@@ -201,4 +201,3 @@ class TestTradeSignalImport:
         assert "NASDAQ" in sg.MARKET_TO_TABLE
         assert "SP500" in sg.MARKET_TO_TABLE
         assert "CRYPTO" in sg.MARKET_TO_TABLE
-        assert "FUEL" in sg.MARKET_TO_TABLE

@@ -13,8 +13,6 @@ from src.database.models import (
     CryptoIntradayPrice,
     CryptoPrice,
     Exchange,
-    FuelPrediction,
-    FuelPrice,
     GoldIntradayPrice,
     GoldPrediction,
     GoldPrice,
@@ -205,6 +203,57 @@ def delete_predictions_before(target_date: datetime) -> None:
         session.query(Prediction).filter(
             Prediction.target_date < target_date,
             Prediction.deleted_at.is_(None),
+        ).delete(synchronize_session=False)
+
+
+def delete_pending_vn30_predictions_for_stock(stock_id: int, algorithm_name: str) -> None:
+    with session_scope() as session:
+        session.query(Prediction).filter(
+            Prediction.stock_id == stock_id,
+            Prediction.algorithm_name == algorithm_name,
+            Prediction.actual_price.is_(None),
+            Prediction.deleted_at.is_(None),
+        ).delete(synchronize_session=False)
+
+
+def delete_pending_gold_predictions_for_symbol(source: str, product_type: str, algorithm_name: str) -> None:
+    with session_scope() as session:
+        session.query(GoldPrediction).filter(
+            GoldPrediction.source == source,
+            GoldPrediction.product_type == product_type,
+            GoldPrediction.algorithm_name == algorithm_name,
+            GoldPrediction.actual_price.is_(None),
+            GoldPrediction.deleted_at.is_(None),
+        ).delete(synchronize_session=False)
+
+
+def delete_pending_nasdaq_predictions_for_symbol(symbol: str, algorithm_name: str) -> None:
+    with session_scope() as session:
+        session.query(NasdaqPrediction).filter(
+            NasdaqPrediction.symbol == symbol,
+            NasdaqPrediction.algorithm_name == algorithm_name,
+            NasdaqPrediction.actual_price.is_(None),
+            NasdaqPrediction.deleted_at.is_(None),
+        ).delete(synchronize_session=False)
+
+
+def delete_pending_crypto_predictions_for_symbol(coin_id: str, algorithm_name: str) -> None:
+    with session_scope() as session:
+        session.query(CryptoPrediction).filter(
+            CryptoPrediction.coin_id == coin_id,
+            CryptoPrediction.algorithm_name == algorithm_name,
+            CryptoPrediction.actual_price.is_(None),
+            CryptoPrediction.deleted_at.is_(None),
+        ).delete(synchronize_session=False)
+
+
+def delete_pending_sp500_predictions_for_symbol(symbol: str, algorithm_name: str) -> None:
+    with session_scope() as session:
+        session.query(SP500Prediction).filter(
+            SP500Prediction.symbol == symbol,
+            SP500Prediction.algorithm_name == algorithm_name,
+            SP500Prediction.actual_price.is_(None),
+            SP500Prediction.deleted_at.is_(None),
         ).delete(synchronize_session=False)
 
 
@@ -610,102 +659,6 @@ def update_crypto_prediction_actual(
 
 
 # ---------------------------------------------------------------------------
-# Fuel
-# ---------------------------------------------------------------------------
-
-def upsert_fuel_price(product_type: str, trading_date, price: Decimal) -> None:
-    with session_scope() as session:
-        existing = (
-            session.query(FuelPrice)
-            .filter_by(product_type=product_type, trading_date=trading_date)
-            .first()
-        )
-        if existing:
-            existing.price = price
-            existing.updated_at = datetime.utcnow()
-        else:
-            session.add(FuelPrice(product_type=product_type, trading_date=trading_date, price=price))
-
-
-def get_fuel_prices_asc(product_type: str, limit: int = 270) -> list[FuelPrice]:
-    session = get_session()
-    try:
-        rows = (
-            session.query(FuelPrice)
-            .filter(FuelPrice.product_type == product_type, FuelPrice.deleted_at.is_(None))
-            .order_by(FuelPrice.trading_date.desc())
-            .limit(limit)
-            .all()
-        )
-        return list(reversed(rows))
-    finally:
-        session.close()
-
-
-def get_pending_fuel_predictions(days_back: int = 14) -> list[FuelPrediction]:
-    session = get_session()
-    try:
-        cutoff = datetime.now() - timedelta(days=days_back)
-        return (
-            session.query(FuelPrediction)
-            .filter(
-                FuelPrediction.status == "pending",
-                FuelPrediction.actual_price.is_(None),
-                FuelPrediction.target_date <= datetime.now(),
-                FuelPrediction.target_date >= cutoff,
-                FuelPrediction.deleted_at.is_(None),
-            )
-            .all()
-        )
-    finally:
-        session.close()
-
-
-def update_fuel_prediction_actual(
-    pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str, direction_correct: bool | None = None
-) -> None:
-    with session_scope() as session:
-        session.query(FuelPrediction).filter_by(id=pred_id).update(
-            {
-                "actual_price": actual_price,
-                "accuracy": accuracy,
-                "status": status,
-                "direction_correct": direction_correct,
-                "updated_at": datetime.utcnow(),
-            }
-        )
-
-
-def create_fuel_prediction(
-    product_type: str,
-    predicted_price: Decimal,
-    current_price: Decimal,
-    confidence: Decimal,
-    algorithm_name: str,
-    prediction_date: datetime,
-    target_date: datetime,
-    actual_price: Decimal | None = None,
-    accuracy: Decimal | None = None,
-    status: str = "pending",
-) -> None:
-    with session_scope() as session:
-        session.add(
-            FuelPrediction(
-                product_type=product_type,
-                predicted_price=predicted_price,
-                current_price=current_price,
-                confidence=confidence,
-                algorithm_name=algorithm_name,
-                prediction_date=prediction_date,
-                target_date=target_date,
-                actual_price=actual_price,
-                accuracy=accuracy,
-                status=status,
-            )
-        )
-
-
-# ---------------------------------------------------------------------------
 # S&P 500
 # ---------------------------------------------------------------------------
 
@@ -979,7 +932,6 @@ _MARKET_MODEL_MAP: dict[str, tuple] = {
     "GOLD": (GoldPrediction, "algorithm_name"),
     "NASDAQ100": (NasdaqPrediction, "algorithm_name"),
     "CRYPTO": (CryptoPrediction, "algorithm_name"),
-    "FUEL": (FuelPrediction, "algorithm_name"),
     "SP500": (SP500Prediction, "algorithm_name"),
 }
 

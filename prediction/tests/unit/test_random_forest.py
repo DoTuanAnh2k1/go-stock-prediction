@@ -91,13 +91,14 @@ class TestRandomForestPredictor:
         arr = np.array(make_prices(100), dtype=float)
         features, targets = RandomForestPredictor._build_features(arr, None)
         assert len(features) > 0
-        assert len(features[0]) == 14
+        assert len(features[0]) == 30
         assert len(features) == len(targets)
 
     def test_ema_fallback_returns_valid_result(self):
         prices = make_prices(100)
         current = prices[-1]
-        result = RandomForestPredictor._ema_fallback(prices, current)
+        algo = RandomForestPredictor()
+        result = algo._ema_fallback(prices, current)
         assert result.algorithm_name == "random_forest"
         assert 0.0 <= result.confidence <= 1.0
         assert result.predicted_price >= current * 0.93 - 1e-9
@@ -106,5 +107,6 @@ class TestRandomForestPredictor:
     def test_fallback_confidence_fixed_at_035(self):
         prices = make_prices(100)
         current = prices[-1]
-        result = RandomForestPredictor._ema_fallback(prices, current)
+        algo = RandomForestPredictor()
+        result = algo._ema_fallback(prices, current)
         assert result.confidence == pytest.approx(0.35, abs=0.01)

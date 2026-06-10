@@ -362,6 +362,7 @@ function buildGoldPreds(res: any): GoldPred[] | null {
       conf: conf(p.confidence),
       date: ddmm(p.prediction_date),
       isOz: p.source === 'XAU',
+      accuracy: p.accuracy != null ? p.accuracy : null,
     };
   });
 }
@@ -505,10 +506,6 @@ export const predictNasdaq = () => trigger('/trigger/nasdaq-predict');
 export const crawlCrypto   = () => trigger('/trigger/crypto-crawler');
 export const predictCrypto = () => trigger('/trigger/crypto-predict');
 
-// ── Fuel ─────────────────────────────────────────────────────────────────────
-export const crawlFuel   = () => trigger('/trigger/fuel-crawler');
-export const predictFuel = () => trigger('/trigger/fuel-predict');
-
 // ── Schedule management ──────────────────────────────────────────────────────
 export interface ScheduleItem {
   job_key: string;
@@ -593,7 +590,6 @@ export function fetchMarketPredictions(
   switch (marketKey) {
     case 'nasdaq100': endpoint = '/nasdaq/predictions';  break;
     case 'crypto':    endpoint = '/crypto/predictions';  break;
-    case 'fuel':      endpoint = '/fuel/predictions';    break;
     case 'gold':      endpoint = '/gold/predictions';    break;
     default:          endpoint = '/predictions';         break; // vn30
   }

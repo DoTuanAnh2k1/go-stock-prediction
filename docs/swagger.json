@@ -1,7 +1,7 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "Vietnamese stock market prediction system — ML algorithms (VWMA, EMA, LSTM, ARIMA-GARCH, Ensemble) for VN30 stocks, gold, NASDAQ, crypto, and fuel prices.",
+        "description": "Vietnamese stock market prediction system — ML algorithms (VWMA, EMA, LSTM, ARIMA-GARCH, Ensemble) for VN30 stocks, gold, NASDAQ, crypto, and S\u0026P 500.",
         "title": "Go Stock Prediction API",
         "contact": {},
         "version": "1.0"
@@ -11,7 +11,7 @@
     "paths": {
         "/api/algorithms/backtest": {
             "get": {
-                "description": "Runs a walk-forward backtest on up to 500 recent price points for the given stock symbol using Moving Average, LSTM, and ARIMA-GARCH algorithms. Returns MAE, RMSE, MAPE, and directional accuracy for each algorithm. Requires at least 150 historical data points.",
+                "description": "Returns walk-forward backtest metrics (MAE, RMSE, MAPE, directional accuracy) per algorithm derived from confirmed predictions (status='confirmed') stored in the database. Requires at least 10 confirmed predictions for the symbol.",
                 "produces": [
                     "application/json"
                 ],
@@ -240,9 +240,149 @@
                 }
             }
         },
+        "/api/backups": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a list of all available database backup files, sorted newest first.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Backup"
+                ],
+                "summary": "List database backups",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/server.BackupInfo"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/backups/{filename}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams a backup file as an application/gzip download.",
+                "produces": [
+                    "application/gzip"
+                ],
+                "tags": [
+                    "Backup"
+                ],
+                "summary": "Download a backup file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Backup filename (e.g. backup_20260605_120000.sql.gz)",
+                        "name": "filename",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a backup file from the backup directory. Requires admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Backup"
+                ],
+                "summary": "Delete a backup file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Backup filename (e.g. backup_20260605_120000.sql.gz)",
+                        "name": "filename",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
         "/api/crypto/chart": {
             "get": {
-                "description": "Returns chronologically ordered date labels and closing prices for charting",
+                "description": "Returns chronologically ordered date labels and closing prices for charting. When days=1, returns hourly intraday data; otherwise returns daily data.",
                 "produces": [
                     "application/json"
                 ],
@@ -259,7 +399,7 @@
                     },
                     {
                         "type": "integer",
-                        "description": "Number of days to look back (default 30)",
+                        "description": "Number of days to look back (default 30); use 1 for intraday hourly data",
                         "name": "days",
                         "in": "query"
                     }
@@ -448,6 +588,32 @@
                 }
             }
         },
+        "/api/crypto/predictions/latest-results": {
+            "get": {
+                "description": "Returns the most recent confirmed prediction (actual_price IS NOT NULL) per (coin_id, algorithm) combination, showing how predictions performed",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Crypto Predictions"
+                ],
+                "summary": "Get latest confirmed crypto prediction results",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.cryptoPredictionsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
         "/api/crypto/prices": {
             "get": {
                 "description": "Returns close price, market cap, and 24h volume for a given coin over the specified number of days",
@@ -514,257 +680,9 @@
                 }
             }
         },
-        "/api/fuel/chart": {
-            "get": {
-                "description": "Returns chronologically ordered date labels and prices for charting",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Fuel"
-                ],
-                "summary": "Get fuel price chart data",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Fuel product type (e.g. ron95_iii, ron95_v, diezel_005s, dau_hoa)",
-                        "name": "product",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Number of days to look back (default 180)",
-                        "name": "days",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/server.fuelChartResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/fuel/latest": {
-            "get": {
-                "description": "Returns the most recent retail price for each Vietnamese fuel product type (ron95_iii, ron95_v, diezel_005s, dau_hoa)",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Fuel"
-                ],
-                "summary": "Get latest fuel prices",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/server.fuelLatestResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/fuel/predictions": {
-            "get": {
-                "description": "Returns paginated fuel predictions with optional filtering by product type, algorithm, and status",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Fuel Predictions"
-                ],
-                "summary": "List fuel predictions with pagination",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Filter by fuel product type",
-                        "name": "product",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by algorithm name",
-                        "name": "algorithm",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by status (pending, confirmed, wrong)",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Sort field",
-                        "name": "sort_by",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Sort direction (asc, desc)",
-                        "name": "sort_dir",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Page number (default 1)",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Items per page, max 100 (default 20)",
-                        "name": "limit",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/server.fuelPredictionsPageResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/fuel/predictions/chart": {
-            "get": {
-                "description": "Returns chronologically ordered predicted vs actual price data for charting, optionally filtered by algorithm",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Fuel Predictions"
-                ],
-                "summary": "Get fuel prediction chart data",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Fuel product type (e.g. ron95_iii, ron95_v)",
-                        "name": "product",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Algorithm name (e.g. lstm_nn)",
-                        "name": "algorithm",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Number of days to look back (default 180)",
-                        "name": "days",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/server.fuelPredictionChartResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/fuel/predictions/latest": {
-            "get": {
-                "description": "Returns the most recent prediction per (product_type, algorithm) combination",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Fuel Predictions"
-                ],
-                "summary": "Get latest fuel predictions",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/server.fuelPredictionsResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/fuel/prices": {
-            "get": {
-                "description": "Returns retail price history for a given fuel product type over the specified number of days",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Fuel"
-                ],
-                "summary": "Get historical fuel prices",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Fuel product type (e.g. ron95_iii, ron95_v, diezel_005s, dau_hoa)",
-                        "name": "product",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Number of days to look back (default 180)",
-                        "name": "days",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/server.fuelPricesResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
-                        }
-                    }
-                }
-            }
-        },
         "/api/gold/chart": {
             "get": {
-                "description": "Returns chronologically ordered labels and buy/sell price arrays suitable for charting",
+                "description": "Returns chronologically ordered labels and buy/sell price arrays suitable for charting. When days=1, returns hourly intraday data; otherwise returns daily data.",
                 "produces": [
                     "application/json"
                 ],
@@ -787,7 +705,7 @@
                     },
                     {
                         "type": "integer",
-                        "description": "Number of days to look back (default 30)",
+                        "description": "Number of days to look back (default 30); use 1 for intraday hourly data",
                         "name": "days",
                         "in": "query"
                     }
@@ -948,6 +866,32 @@
                     "Gold Predictions"
                 ],
                 "summary": "Get latest gold predictions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.goldPredictionsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/gold/predictions/latest-results": {
+            "get": {
+                "description": "Returns the most recent confirmed prediction (actual_price IS NOT NULL) per (source, product_type, algorithm) combination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Gold Predictions"
+                ],
+                "summary": "Get latest confirmed gold prediction results",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1236,7 +1180,7 @@
         },
         "/api/nasdaq/chart": {
             "get": {
-                "description": "Returns chronologically ordered date labels and closing prices for charting",
+                "description": "Returns chronologically ordered date labels and closing prices for charting. When days=1, returns hourly intraday data; otherwise returns daily data.",
                 "produces": [
                     "application/json"
                 ],
@@ -1253,7 +1197,7 @@
                     },
                     {
                         "type": "integer",
-                        "description": "Number of days to look back (default 30)",
+                        "description": "Number of days to look back (default 30); use 1 for intraday hourly data",
                         "name": "days",
                         "in": "query"
                     }
@@ -1426,6 +1370,32 @@
                     "NASDAQ Predictions"
                 ],
                 "summary": "Get latest NASDAQ predictions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.nasdaqPredictionsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/nasdaq/predictions/latest-results": {
+            "get": {
+                "description": "Returns the most recent confirmed prediction (actual_price IS NOT NULL) per (symbol, algorithm) combination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "NASDAQ Predictions"
+                ],
+                "summary": "Get latest confirmed NASDAQ prediction results",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1714,6 +1684,54 @@
                 }
             }
         },
+        "/api/predictions/direction-accuracy": {
+            "get": {
+                "description": "Returns the fraction of predictions where the price movement direction was correct, grouped by algorithm, for the specified market.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "predictions"
+                ],
+                "summary": "Direction accuracy per algorithm",
+                "parameters": [
+                    {
+                        "enum": [
+                            "VN30",
+                            "GOLD",
+                            "NASDAQ",
+                            "CRYPTO",
+                            "SP500"
+                        ],
+                        "type": "string",
+                        "description": "Market key",
+                        "name": "market",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.directionAccuracyResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "missing or unknown market",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
         "/api/predictions/error-distribution": {
             "get": {
                 "description": "Returns scatter plot data of predicted change % vs actual change % for all confirmed predictions. Optionally filtered by algorithm.",
@@ -1914,6 +1932,771 @@
                 }
             }
         },
+        "/api/simulation/bots": {
+            "get": {
+                "description": "Returns all trading bots with their latest session status and summary KPIs.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Simulation"
+                ],
+                "summary": "List all simulation bots",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/server.simBotListItem"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/simulation/bots/{id}": {
+            "get": {
+                "description": "Returns full details and KPIs for a single bot identified by {id}.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Simulation"
+                ],
+                "summary": "Get simulation bot details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bot ID (e.g. vn30_lstm_nn)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.simBotDetail"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/simulation/bots/{id}/chart": {
+            "get": {
+                "description": "Returns daily portfolio value and cumulative return percentages for chart rendering.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Simulation"
+                ],
+                "summary": "Get bot portfolio value time series",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bot ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.simChartResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/simulation/bots/{id}/config": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates trading parameters for a single bot. Requires admin role.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Simulation"
+                ],
+                "summary": "Update bot configuration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bot ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Bot configuration fields to update",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/modelsdb.SimBot"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/simulation/bots/{id}/run": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sends a gRPC request to run backtest simulation for the specified bot. Accepts optional JSON body with start_date and end_date.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Simulation"
+                ],
+                "summary": "Trigger backtest for a single bot",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bot ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Optional: {start_date: '2024-01-01', end_date: '2026-05-31'}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/simulation/bots/{id}/toggle": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Flips the is_active flag for a bot. Requires admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Simulation"
+                ],
+                "summary": "Toggle bot active status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bot ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/simulation/bots/{id}/trades": {
+            "get": {
+                "description": "Returns paginated trade history for a bot's latest session. Query: ?page=1\u0026limit=50",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Simulation"
+                ],
+                "summary": "Get bot trade history",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bot ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Results per page (default 50, max 500)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.simTradesPage"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/simulation/leaderboard": {
+            "get": {
+                "description": "Returns all bots sorted by total_return_pct. Supports filtering by market, algorithm, and currency.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Simulation"
+                ],
+                "summary": "Get simulation leaderboard",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by market (e.g. VN30, CRYPTO)",
+                        "name": "market",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by algorithm key (e.g. lstm_nn)",
+                        "name": "algorithm",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by currency (VND or USD)",
+                        "name": "currency",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.leaderboardResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/simulation/run-all": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sends a gRPC request to run backtest simulation for all active bots. Accepts optional JSON body with start_date and end_date.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Simulation"
+                ],
+                "summary": "Trigger backtest for all bots",
+                "parameters": [
+                    {
+                        "description": "Optional: {start_date: '2024-01-01', end_date: '2026-05-31'}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sp500/chart": {
+            "get": {
+                "description": "Returns chronologically ordered date labels and closing prices for charting. When days=1, returns hourly intraday data; otherwise returns daily data.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SP500"
+                ],
+                "summary": "Get S\u0026P 500 price chart data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "S\u0026P 500 symbol (e.g. SPY, AAPL)",
+                        "name": "symbol",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days to look back (default 30); use 1 for intraday hourly data",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.sp500ChartResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sp500/latest": {
+            "get": {
+                "description": "Returns the most recent closing price for each tracked S\u0026P 500 symbol",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SP500"
+                ],
+                "summary": "Get latest S\u0026P 500 prices",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.sp500LatestResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sp500/predictions": {
+            "get": {
+                "description": "Returns paginated S\u0026P 500 predictions with optional filtering by symbol, algorithm, and status",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SP500 Predictions"
+                ],
+                "summary": "List S\u0026P 500 predictions with pagination",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by S\u0026P 500 symbol",
+                        "name": "symbol",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by algorithm name",
+                        "name": "algorithm",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status (pending, confirmed, wrong)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort direction (asc, desc)",
+                        "name": "sort_dir",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page, max 100 (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.sp500PredictionsPageResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sp500/predictions/chart": {
+            "get": {
+                "description": "Returns chronologically ordered predicted vs actual price data for charting, optionally filtered by algorithm",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SP500 Predictions"
+                ],
+                "summary": "Get S\u0026P 500 prediction chart data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "S\u0026P 500 symbol (e.g. SPY, AAPL)",
+                        "name": "symbol",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Algorithm name (e.g. lstm_nn)",
+                        "name": "algorithm",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days to look back (default 30)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.sp500PredictionChartResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sp500/predictions/latest": {
+            "get": {
+                "description": "Returns the most recent prediction per (symbol, algorithm) combination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SP500 Predictions"
+                ],
+                "summary": "Get latest S\u0026P 500 predictions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.sp500PredictionsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sp500/predictions/latest-results": {
+            "get": {
+                "description": "Returns the most recent confirmed prediction (actual_price IS NOT NULL) per (symbol, algorithm) combination",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SP500 Predictions"
+                ],
+                "summary": "Get latest confirmed S\u0026P 500 prediction results",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.sp500PredictionsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sp500/prices": {
+            "get": {
+                "description": "Returns OHLCV price data for a given S\u0026P 500 symbol over the specified number of days",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SP500"
+                ],
+                "summary": "Get historical S\u0026P 500 prices",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "S\u0026P 500 symbol (e.g. SPY, AAPL)",
+                        "name": "symbol",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of days to look back (default 30)",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/server.sp500PricesResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
         "/api/stocks/watchlist": {
             "get": {
                 "description": "Returns current price, change, volume and market status for a comma-separated list of stock symbols.",
@@ -1951,7 +2734,7 @@
         },
         "/api/stocks/{symbol}/chart": {
             "get": {
-                "description": "Returns candlestick (OHLCV) and volume data for the given stock symbol over the specified period and interval.",
+                "description": "Returns candlestick (OHLCV) and volume data for the given stock symbol over the specified period and interval. When period=1D and interval=1h, returns hourly intraday data from the intraday table.",
                 "produces": [
                     "application/json"
                 ],
@@ -2427,6 +3210,50 @@
                 }
             }
         },
+        "/api/trigger/backup": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Runs mysqldump, compresses the output with gzip, and saves it to the backup directory. Keeps only the 10 most recent backups. Requires admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Backup"
+                ],
+                "summary": "Trigger a database backup",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
         "/api/trigger/crawler": {
             "post": {
                 "security": [
@@ -2531,92 +3358,6 @@
                     "Triggers"
                 ],
                 "summary": "Trigger crypto prediction",
-                "responses": {
-                    "202": {
-                        "description": "Accepted"
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
-                        }
-                    },
-                    "503": {
-                        "description": "Service Unavailable",
-                        "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/trigger/fuel-crawler": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Starts a fuel price crawl in the background via the prediction service. Returns 202 immediately.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Triggers"
-                ],
-                "summary": "Trigger fuel price crawler",
-                "responses": {
-                    "202": {
-                        "description": "Accepted"
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
-                        }
-                    },
-                    "503": {
-                        "description": "Service Unavailable",
-                        "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/trigger/fuel-predict": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Runs a prediction for all registered fuel instruments in the background via the prediction service. Returns 202 immediately.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Triggers"
-                ],
-                "summary": "Trigger fuel price prediction",
                 "responses": {
                     "202": {
                         "description": "Accepted"
@@ -2839,7 +3580,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Starts a walk-forward backtest in the background via the prediction service. Accepts optional query params: train_window (default 30), step_size (default 6), and market (one of \"\", \"VN30\", \"GOLD\", \"NASDAQ100\", \"CRYPTO\", \"FUEL\"). Returns 409 if a backtest is already running.",
+                "description": "Starts a walk-forward backtest in the background via the prediction service. Accepts optional query params: train_window (default 30), step_size (default 6), and market (one of \"\", \"VN30\", \"GOLD\", \"NASDAQ100\", \"CRYPTO\", \"SP500\", \"ALL\"). Returns 409 if a backtest is already running.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2865,7 +3606,7 @@
                     },
                     {
                         "type": "string",
-                        "description": "Target market key: VN30, GOLD, NASDAQ100, CRYPTO, FUEL (default: all)",
+                        "description": "Target market key: VN30, GOLD, NASDAQ100, CRYPTO, SP500, ALL (default: all)",
                         "name": "market",
                         "in": "query"
                     }
@@ -3060,6 +3801,249 @@
                     "Triggers"
                 ],
                 "summary": "Trigger prediction reconciliation",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/sim-reset": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Closes stale live sessions and creates fresh running sessions for all active bots. Use when bots stop trading after the first day.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Reset all active simulation bots",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/simulation-backtest": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sends a gRPC request to run backtest simulation for a specific bot or all bots. Accepts optional JSON body with bot_id, start_date, end_date.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger trading simulation backtest",
+                "parameters": [
+                    {
+                        "description": "Optional: {bot_id: '', start_date: '2024-01-01', end_date: ''}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/simulation-live-step": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sends a gRPC request to advance all live simulation bots by one step using the latest available predictions.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger simulation live step",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/sp500-crawler": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Starts S\u0026P 500 price crawler in the background via the prediction service.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger S\u0026P 500 price crawler",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/sp500-predict": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Runs prediction for all S\u0026P 500 symbols in the background via the prediction service.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger S\u0026P 500 prediction",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -4227,6 +5211,76 @@
                 }
             }
         },
+        "modelsdb.SimBot": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "buy_threshold": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "initial_capital": {
+                    "type": "number"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "market": {
+                    "type": "string"
+                },
+                "max_position_pct": {
+                    "type": "number"
+                },
+                "max_positions": {
+                    "type": "integer"
+                },
+                "min_confidence": {
+                    "type": "number"
+                },
+                "sell_threshold": {
+                    "type": "number"
+                },
+                "stop_loss": {
+                    "type": "number"
+                },
+                "take_profit": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.BackupInfo": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "filename": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "size_human": {
+                    "type": "string"
+                }
+            }
+        },
         "server.ErrorDistributionDTO": {
             "type": "object",
             "properties": {
@@ -4411,6 +5465,9 @@
                         "type": "string"
                     }
                 },
+                "granularity": {
+                    "type": "string"
+                },
                 "prices": {
                     "type": "array",
                     "items": {
@@ -4464,6 +5521,9 @@
             "properties": {
                 "actual_price": {
                     "type": "number"
+                },
+                "algorithm_name": {
+                    "type": "string"
                 },
                 "confidence": {
                     "type": "number"
@@ -4596,178 +5656,33 @@
                 }
             }
         },
-        "server.fuelChartResponse": {
-            "type": "object",
-            "properties": {
-                "dates": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "prices": {
-                    "type": "array",
-                    "items": {
-                        "type": "number"
-                    }
-                },
-                "product_type": {
-                    "type": "string"
-                }
-            }
-        },
-        "server.fuelLatestItem": {
-            "type": "object",
-            "properties": {
-                "price": {
-                    "type": "number"
-                },
-                "product_type": {
-                    "type": "string"
-                },
-                "trading_date": {
-                    "type": "string"
-                }
-            }
-        },
-        "server.fuelLatestResponse": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/server.fuelLatestItem"
-                    }
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "server.fuelPredictionChartPoint": {
-            "type": "object",
-            "properties": {
-                "actual_price": {
-                    "type": "number"
-                },
-                "confidence": {
-                    "type": "number"
-                },
-                "date": {
-                    "type": "string"
-                },
-                "predicted_price": {
-                    "type": "number"
-                }
-            }
-        },
-        "server.fuelPredictionChartResponse": {
+        "server.directionAccuracyAlgoDTO": {
             "type": "object",
             "properties": {
                 "algorithm": {
                     "type": "string"
                 },
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/server.fuelPredictionChartPoint"
-                    }
-                },
-                "product_type": {
-                    "type": "string"
-                }
-            }
-        },
-        "server.fuelPredictionItem": {
-            "type": "object",
-            "properties": {
-                "accuracy": {
-                    "type": "number"
-                },
-                "actual_price": {
-                    "type": "number"
-                },
-                "algorithm_name": {
-                    "type": "string"
-                },
-                "confidence": {
-                    "type": "number"
-                },
-                "current_price": {
-                    "type": "number"
-                },
-                "id": {
+                "correct": {
                     "type": "integer"
                 },
-                "predicted_price": {
+                "direction_accuracy": {
                     "type": "number"
-                },
-                "prediction_date": {
-                    "type": "string"
-                },
-                "product_type": {
-                    "type": "string"
-                },
-                "target_date": {
-                    "type": "string"
-                }
-            }
-        },
-        "server.fuelPredictionsPageResponse": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/server.fuelPredictionItem"
-                    }
-                },
-                "limit": {
-                    "type": "integer"
-                },
-                "page": {
-                    "type": "integer"
                 },
                 "total": {
                     "type": "integer"
                 }
             }
         },
-        "server.fuelPredictionsResponse": {
+        "server.directionAccuracyResponseDTO": {
             "type": "object",
             "properties": {
-                "data": {
+                "algorithms": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.fuelPredictionItem"
+                        "$ref": "#/definitions/server.directionAccuracyAlgoDTO"
                     }
                 },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "server.fuelPricePoint": {
-            "type": "object",
-            "properties": {
-                "date": {
-                    "type": "string"
-                },
-                "price": {
-                    "type": "number"
-                }
-            }
-        },
-        "server.fuelPricesResponse": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/server.fuelPricePoint"
-                    }
-                },
-                "product_type": {
+                "market": {
                     "type": "string"
                 }
             }
@@ -4780,6 +5695,9 @@
                     "items": {
                         "type": "number"
                     }
+                },
+                "granularity": {
+                    "type": "string"
                 },
                 "labels": {
                     "type": "array",
@@ -4952,6 +5870,93 @@
                 }
             }
         },
+        "server.leaderboardEntry": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "annualized_return_pct": {
+                    "type": "number"
+                },
+                "bot_id": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "final_value": {
+                    "type": "number"
+                },
+                "initial_capital": {
+                    "type": "number"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "market": {
+                    "type": "string"
+                },
+                "max_drawdown_pct": {
+                    "type": "number"
+                },
+                "profit_factor": {
+                    "type": "number"
+                },
+                "rank": {
+                    "type": "integer"
+                },
+                "sharpe_ratio": {
+                    "type": "number"
+                },
+                "simulation_period": {
+                    "$ref": "#/definitions/server.simPeriod"
+                },
+                "total_return_pct": {
+                    "type": "number"
+                },
+                "total_trades": {
+                    "type": "integer"
+                },
+                "win_rate_pct": {
+                    "type": "number"
+                }
+            }
+        },
+        "server.leaderboardResponse": {
+            "type": "object",
+            "properties": {
+                "leaderboard": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.leaderboardEntry"
+                    }
+                },
+                "summary": {
+                    "$ref": "#/definitions/server.leaderboardSummary"
+                }
+            }
+        },
+        "server.leaderboardSummary": {
+            "type": "object",
+            "properties": {
+                "avg_return_pct": {
+                    "type": "number"
+                },
+                "best_algorithm": {
+                    "type": "string"
+                },
+                "best_market": {
+                    "type": "string"
+                },
+                "total_bots": {
+                    "type": "integer"
+                }
+            }
+        },
         "server.loginRequest": {
             "type": "object",
             "properties": {
@@ -5025,6 +6030,9 @@
                         "type": "string"
                     }
                 },
+                "granularity": {
+                    "type": "string"
+                },
                 "prices": {
                     "type": "array",
                     "items": {
@@ -5075,6 +6083,9 @@
             "properties": {
                 "actual_price": {
                     "type": "number"
+                },
+                "algorithm_name": {
+                    "type": "string"
                 },
                 "confidence": {
                     "type": "number"
@@ -5226,6 +6237,498 @@
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.simBotDetail": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "buy_threshold": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "initial_capital": {
+                    "type": "number"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "kpis": {
+                    "$ref": "#/definitions/server.simBotKPIs"
+                },
+                "last_session": {
+                    "$ref": "#/definitions/server.simSessionSummary"
+                },
+                "market": {
+                    "type": "string"
+                },
+                "max_position_pct": {
+                    "type": "number"
+                },
+                "max_positions": {
+                    "type": "integer"
+                },
+                "min_confidence": {
+                    "type": "number"
+                },
+                "sell_threshold": {
+                    "type": "number"
+                },
+                "stop_loss": {
+                    "type": "number"
+                },
+                "take_profit": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.simBotKPIs": {
+            "type": "object",
+            "properties": {
+                "annualized_return_pct": {
+                    "type": "number"
+                },
+                "avg_trade_duration_days": {
+                    "type": "number"
+                },
+                "best_trade_pct": {
+                    "type": "number"
+                },
+                "max_drawdown_pct": {
+                    "type": "number"
+                },
+                "profit_factor": {
+                    "type": "number"
+                },
+                "sharpe_ratio": {
+                    "type": "number"
+                },
+                "total_return_pct": {
+                    "type": "number"
+                },
+                "total_trades": {
+                    "type": "integer"
+                },
+                "win_rate_pct": {
+                    "type": "number"
+                },
+                "worst_trade_pct": {
+                    "type": "number"
+                }
+            }
+        },
+        "server.simBotListItem": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "buy_threshold": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "initial_capital": {
+                    "type": "number"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "last_session": {
+                    "$ref": "#/definitions/server.simSessionSummary"
+                },
+                "market": {
+                    "type": "string"
+                },
+                "max_position_pct": {
+                    "type": "number"
+                },
+                "max_positions": {
+                    "type": "integer"
+                },
+                "min_confidence": {
+                    "type": "number"
+                },
+                "sell_threshold": {
+                    "type": "number"
+                },
+                "stop_loss": {
+                    "type": "number"
+                },
+                "take_profit": {
+                    "type": "number"
+                },
+                "total_return_pct": {
+                    "type": "number"
+                },
+                "total_trades": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.simChartResponse": {
+            "type": "object",
+            "properties": {
+                "bot_id": {
+                    "type": "string"
+                },
+                "dates": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "returns_pct": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "session_id": {
+                    "type": "integer"
+                },
+                "values": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                }
+            }
+        },
+        "server.simPeriod": {
+            "type": "object",
+            "properties": {
+                "end": {
+                    "type": "string"
+                },
+                "start": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.simSessionSummary": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.simTradeJSON": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "bot_id": {
+                    "type": "string"
+                },
+                "close_reason": {
+                    "type": "string"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "entry_trade_id": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "pnl": {
+                    "type": "number"
+                },
+                "pnl_pct": {
+                    "type": "number"
+                },
+                "price": {
+                    "type": "number"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "session_id": {
+                    "type": "integer"
+                },
+                "signal_strength": {
+                    "type": "number"
+                },
+                "symbol": {
+                    "type": "string"
+                },
+                "trade_date": {
+                    "type": "string"
+                },
+                "trade_value": {
+                    "type": "number"
+                }
+            }
+        },
+        "server.simTradesPage": {
+            "type": "object",
+            "properties": {
+                "bot_id": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.simTradeJSON"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "session_id": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.sp500ChartResponse": {
+            "type": "object",
+            "properties": {
+                "dates": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "granularity": {
+                    "type": "string"
+                },
+                "prices": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "symbol": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.sp500LatestItem": {
+            "type": "object",
+            "properties": {
+                "close_price": {
+                    "type": "number"
+                },
+                "company_name": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "symbol": {
+                    "type": "string"
+                },
+                "trading_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.sp500LatestResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.sp500LatestItem"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.sp500PredictionChartPoint": {
+            "type": "object",
+            "properties": {
+                "actual_price": {
+                    "type": "number"
+                },
+                "algorithm_name": {
+                    "type": "string"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "predicted_price": {
+                    "type": "number"
+                }
+            }
+        },
+        "server.sp500PredictionChartResponse": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.sp500PredictionChartPoint"
+                    }
+                },
+                "symbol": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.sp500PredictionItem": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "actual_price": {
+                    "type": "number"
+                },
+                "algorithm_name": {
+                    "type": "string"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "current_price": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "predicted_price": {
+                    "type": "number"
+                },
+                "prediction_date": {
+                    "type": "string"
+                },
+                "symbol": {
+                    "type": "string"
+                },
+                "target_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "server.sp500PredictionsPageResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.sp500PredictionItem"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.sp500PredictionsResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.sp500PredictionItem"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.sp500PricePoint": {
+            "type": "object",
+            "properties": {
+                "close_price": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "high_price": {
+                    "type": "number"
+                },
+                "low_price": {
+                    "type": "number"
+                },
+                "open_price": {
+                    "type": "number"
+                },
+                "volume": {
+                    "type": "integer"
+                }
+            }
+        },
+        "server.sp500PricesResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/server.sp500PricePoint"
+                    }
+                },
+                "symbol": {
                     "type": "string"
                 }
             }
