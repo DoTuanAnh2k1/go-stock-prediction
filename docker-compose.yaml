@@ -55,8 +55,8 @@ services:
   # API Backend (HTTP)
   api:
     build:
-      context: .
-      dockerfile: Dockerfile.api
+      context: ./api
+      dockerfile: Dockerfile
     container_name: api_backend
     depends_on:
       db:

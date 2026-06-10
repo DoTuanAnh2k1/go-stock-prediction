@@ -8,14 +8,14 @@ RUN pip install --no-cache-dir grpcio-tools==1.70.0 protobuf==5.29.4
 WORKDIR /app
 
 # Copy proto file from repo root (build context must be the repo root)
-COPY proto/prediction/prediction.proto proto/prediction/prediction.proto
+COPY api/proto/prediction/prediction.proto api/proto/prediction/prediction.proto
 
 RUN mkdir -p src/proto/prediction && \
     python -m grpc_tools.protoc \
-        -Iproto \
+        -Iapi/proto \
         --python_out=src/proto \
         --grpc_python_out=src/proto \
-        proto/prediction/prediction.proto && \
+        api/proto/prediction/prediction.proto && \
     touch src/__init__.py && \
     touch src/proto/__init__.py && \
     touch src/proto/prediction/__init__.py && \
@@ -42,8 +42,8 @@ COPY prediction/pyproject.toml pyproject.toml
 RUN pip install --no-cache-dir -e ".[dev,ml]"
 
 # Copy pre-generated proto stubs (committed to repo alongside prediction.proto)
-# To regenerate: python -m grpc_tools.protoc -Iproto --python_out=prediction/src/proto
-#                --grpc_python_out=prediction/src/proto proto/prediction/prediction.proto
+# To regenerate: python -m grpc_tools.protoc -Iapi/proto --python_out=prediction/src/proto
+#                --grpc_python_out=prediction/src/proto api/proto/prediction/prediction.proto
 #                then fix import: sed -i 's/from prediction import/from src.proto.prediction import/' ...
 COPY prediction/src/proto src/proto/
 

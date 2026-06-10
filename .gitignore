@@ -52,5 +52,5 @@ __pycache__/
 .pytest_cache/
 
 # Go binaries (built artifacts)
-/api
+/api/api-server
 /prediction-server

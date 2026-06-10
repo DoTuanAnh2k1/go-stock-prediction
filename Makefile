@@ -1,24 +1,24 @@
 .PHONY: test test-unit test-integration test-coverage build test-db-up test-db-down vet swagger test-phase5
 
 build:
-	go build -o api-server ./cmd/api
+	cd api && go build -o api-server ./cmd
 
 vet:
-	go vet ./...
+	cd api && go vet ./...
 
 test:
-	go test ./... -v -count=1
+	cd api && go test ./... -v -count=1
 
 test-unit:
-	go test ./... -v -count=1 -short
+	cd api && go test ./... -v -count=1 -short
 
 test-integration:
-	go test ./... -v -count=1 -run Integration
+	cd api && go test ./... -v -count=1 -run Integration
 
 test-coverage:
-	go test ./... -coverprofile=coverage.out -count=1
-	go tool cover -html=coverage.out -o coverage.html
-	go tool cover -func=coverage.out | grep total
+	cd api && go test ./... -coverprofile=coverage.out -count=1
+	cd api && go tool cover -html=coverage.out -o coverage.html
+	cd api && go tool cover -func=coverage.out | grep total
 
 test-db-up:
 	docker compose -f docker-compose.test.yml up -d
@@ -44,6 +44,6 @@ up:
 	docker compose up -d
 
 swagger:
-	swag init -g cmd/api/main.go -o docs/
-	@echo "Swagger docs generated at docs/"
+	cd api && swag init -g cmd/main.go -o docs/
+	@echo "Swagger docs generated at api/docs/"
 	@echo "UI available at http://localhost:8118/swagger/"
