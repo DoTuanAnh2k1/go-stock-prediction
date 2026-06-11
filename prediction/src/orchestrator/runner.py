@@ -131,7 +131,6 @@ def _predict_gold(algos: dict) -> int:
                 result = algo.predict(price_list)
                 algo_acc_pct = dir_acc.get(key, None)
                 algo_acc = Decimal(str(round(algo_acc_pct / 100, 4))) if algo_acc_pct is not None else None
-                repo.delete_pending_gold_predictions_for_symbol(source, product_type, key)
                 repo.create_gold_prediction(
                     source=source,
                     product_type=product_type,
@@ -175,7 +174,6 @@ def _predict_nasdaq(algos: dict) -> int:
                 result = algo.predict(price_list, vol_list)
                 algo_acc_pct = dir_acc.get(key, None)
                 algo_acc = Decimal(str(round(algo_acc_pct / 100, 4))) if algo_acc_pct is not None else None
-                repo.delete_pending_nasdaq_predictions_for_symbol(symbol, key)
                 repo.create_nasdaq_prediction(
                     symbol=symbol,
                     predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.0001")),
@@ -216,7 +214,6 @@ def _predict_crypto(algos: dict) -> int:
                 result = algo.predict(price_list)
                 algo_acc_pct = dir_acc.get(key, None)
                 algo_acc = Decimal(str(round(algo_acc_pct / 100, 4))) if algo_acc_pct is not None else None
-                repo.delete_pending_crypto_predictions_for_symbol(coin_id, key)
                 repo.create_crypto_prediction(
                     coin_id=coin_id,
                     symbol=symbol,
@@ -260,7 +257,6 @@ def _predict_sp500(algos: dict) -> int:
                 result = algo.predict(price_list, vol_list)
                 algo_acc_pct = dir_acc.get(key, None)
                 algo_acc = Decimal(str(round(algo_acc_pct / 100, 4))) if algo_acc_pct is not None else None
-                repo.delete_pending_sp500_predictions_for_symbol(symbol, key)
                 repo.create_sp500_prediction(
                     symbol=symbol,
                     predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.0001")),

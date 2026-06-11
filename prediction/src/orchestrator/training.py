@@ -408,6 +408,24 @@ def reconcile_predictions() -> int:
     log.info("reconcile.start")
     total_updated = 0
 
+    # --- Backfill direction_correct for already-reconciled predictions ---
+    # Records that have actual_price but direction_correct=NULL were reconciled before
+    # this field was introduced; compute it from existing data without re-fetching prices.
+    for market, backfill_fn in [
+        ("stock", repo.backfill_direction_correct_stock),
+        ("gold", repo.backfill_direction_correct_gold),
+        ("nasdaq", repo.backfill_direction_correct_nasdaq),
+        ("sp500", repo.backfill_direction_correct_sp500),
+        ("crypto", repo.backfill_direction_correct_crypto),
+    ]:
+        try:
+            n = backfill_fn()
+            if n:
+                log.info("reconcile.backfill.done", market=market, updated=n)
+                total_updated += n
+        except Exception as exc:
+            log.error("reconcile.backfill.error", market=market, error=str(exc))
+
     # --- Stock predictions ---
     try:
         pending = repo.get_pending_predictions(days_back=10)
@@ -438,9 +456,12 @@ def reconcile_predictions() -> int:
             # direction_correct: both predicted and actual move in the same direction vs current_price
             pred_diff = predicted - current
             actual_diff = actual - current
-            direction_correct: bool | None = None
-            if pred_diff != 0 and actual_diff != 0:
+            if actual_diff == 0:
+                direction_correct: bool | None = (pred_diff == 0)
+            elif pred_diff != 0:
                 direction_correct = (pred_diff > 0) == (actual_diff > 0)
+            else:
+                direction_correct = False  # flat prediction but actual moved
 
             repo.update_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
             total_updated += 1
@@ -474,9 +495,12 @@ def reconcile_predictions() -> int:
 
             pred_diff = predicted - current
             actual_diff = actual - current
-            direction_correct: bool | None = None
-            if pred_diff != 0 and actual_diff != 0:
+            if actual_diff == 0:
+                direction_correct: bool | None = (pred_diff == 0)
+            elif pred_diff != 0:
                 direction_correct = (pred_diff > 0) == (actual_diff > 0)
+            else:
+                direction_correct = False
 
             repo.update_gold_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
             total_updated += 1
@@ -523,9 +547,12 @@ def reconcile_predictions() -> int:
 
             pred_diff = predicted - current
             actual_diff = actual - current
-            direction_correct: bool | None = None
-            if pred_diff != 0 and actual_diff != 0:
+            if actual_diff == 0:
+                direction_correct: bool | None = (pred_diff == 0)
+            elif pred_diff != 0:
                 direction_correct = (pred_diff > 0) == (actual_diff > 0)
+            else:
+                direction_correct = False
 
             repo.update_nasdaq_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
             total_updated += 1
@@ -571,9 +598,12 @@ def reconcile_predictions() -> int:
 
             pred_diff = predicted - current
             actual_diff = actual - current
-            direction_correct: bool | None = None
-            if pred_diff != 0 and actual_diff != 0:
+            if actual_diff == 0:
+                direction_correct: bool | None = (pred_diff == 0)
+            elif pred_diff != 0:
                 direction_correct = (pred_diff > 0) == (actual_diff > 0)
+            else:
+                direction_correct = False
 
             repo.update_sp500_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
             total_updated += 1
@@ -619,9 +649,12 @@ def reconcile_predictions() -> int:
 
             pred_diff = predicted - current
             actual_diff = actual - current
-            direction_correct: bool | None = None
-            if pred_diff != 0 and actual_diff != 0:
+            if actual_diff == 0:
+                direction_correct: bool | None = (pred_diff == 0)
+            elif pred_diff != 0:
                 direction_correct = (pred_diff > 0) == (actual_diff > 0)
+            else:
+                direction_correct = False
 
             repo.update_crypto_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
             total_updated += 1

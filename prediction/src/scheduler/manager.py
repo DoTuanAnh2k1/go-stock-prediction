@@ -26,11 +26,11 @@ _lock = threading.Lock()
 # Default schedules (mirrors Go constants)
 DEFAULT_SCHEDULES = [
     ("crawler_stock", "Crawl cổ phiếu VN30 (hàng ngày)", "0 0 12 * * *", True),
-    ("crawler_sp500", "Pipeline S&P 500 (mỗi giờ, phút 30)", "0 30 * * * *", True),
+    ("crawler_sp500", "Pipeline S&P 500 (30 phút, phút 0 và 30)", "0 0,30 * * * *", True),
     ("crawler_gold", "Pipeline Gold (mỗi giờ, phút 0)", "0 0 * * * *", True),
     ("gold_predict", "Dự đoán vàng (disabled — trong pipeline)", "0 0 11 * * *", False),
     ("crawler_nasdaq", "Pipeline NASDAQ (mỗi giờ, phút 15)", "0 15 * * * *", True),
-    ("crawler_crypto", "Pipeline Crypto (mỗi giờ, phút 45)", "0 45 * * * *", True),
+    ("crawler_crypto", "Pipeline Crypto (30 phút, phút 15 và 45)", "0 15,45 * * * *", True),
     ("weekly_training", "Huấn luyện mô hình (Chủ nhật 9AM)", "0 0 9 * * 0", False),
     # Per-market training jobs — staggered on Sunday to avoid overlap
     ("train_vn30",   "Training VN30 (Chủ nhật 2AM)",          "0 0 2 * * 0", True),
@@ -45,6 +45,7 @@ DEFAULT_SCHEDULES = [
     ("predict_sp500",  "Dự đoán S&P 500 (disabled — trong pipeline)", "0 0 13 * * 1-5",  False),
     ("daily_reconcile", "Reconcile dự đoán (6AM hàng ngày)", "0 0 6 * * *", True),
     ("daily_backup", "Backup database (3AM hàng ngày)", "0 0 3 * * *", True),
+    ("simulation_daily", "Bot trading hàng ngày (8PM)", "0 0 20 * * *", True),
 ]
 
 

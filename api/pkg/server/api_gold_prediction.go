@@ -200,8 +200,7 @@ func GetGoldPredictionChart(w http.ResponseWriter, r *http.Request) {
 
 	store := repository.GetSingleton()
 	to := time.Now()
-	from := to.AddDate(0, 0, -days)
-	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
+	from := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, to.Location()).AddDate(0, 0, -(days - 1))
 
 	preds, err := store.GetGoldPredictionsByDateRange(source, productType, from, to)
 	if err != nil {

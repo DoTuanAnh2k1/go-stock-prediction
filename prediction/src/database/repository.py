@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from decimal import Decimal
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from src.database.connection import get_session, session_scope
@@ -264,11 +265,13 @@ def get_pending_predictions(days_back: int = 7) -> list[Prediction]:
         return (
             session.query(Prediction)
             .filter(
-                Prediction.status == "pending",
-                Prediction.actual_price.is_(None),
+                Prediction.deleted_at.is_(None),
                 Prediction.target_date <= datetime.now(),
                 Prediction.target_date >= cutoff,
-                Prediction.deleted_at.is_(None),
+                or_(
+                    Prediction.actual_price.is_(None),
+                    Prediction.direction_correct.is_(None),
+                ),
             )
             .all()
         )
@@ -289,6 +292,30 @@ def update_prediction_actual(
                 "updated_at": datetime.utcnow(),
             }
         )
+
+
+def backfill_direction_correct_stock() -> int:
+    """Compute direction_correct for stock predictions that have actual_price but no direction_correct."""
+    with session_scope() as session:
+        rows = (
+            session.query(Prediction)
+            .filter(
+                Prediction.actual_price.isnot(None),
+                Prediction.direction_correct.is_(None),
+                Prediction.deleted_at.is_(None),
+            )
+            .all()
+        )
+        updated = 0
+        for pred in rows:
+            pred_diff = Decimal(str(pred.predicted_price)) - Decimal(str(pred.current_price))
+            actual_diff = Decimal(str(pred.actual_price)) - Decimal(str(pred.current_price))
+            if actual_diff == 0:
+                pred.direction_correct = (pred_diff == 0)
+            else:
+                pred.direction_correct = (pred_diff > 0) == (actual_diff > 0)
+            updated += 1
+        return updated
 
 
 # ---------------------------------------------------------------------------
@@ -379,11 +406,13 @@ def get_pending_gold_predictions(days_back: int = 3) -> list[GoldPrediction]:
         return (
             session.query(GoldPrediction)
             .filter(
-                GoldPrediction.status == "pending",
-                GoldPrediction.actual_price.is_(None),
+                GoldPrediction.deleted_at.is_(None),
                 GoldPrediction.target_date <= datetime.now(),
                 GoldPrediction.target_date >= cutoff,
-                GoldPrediction.deleted_at.is_(None),
+                or_(
+                    GoldPrediction.actual_price.is_(None),
+                    GoldPrediction.direction_correct.is_(None),
+                ),
             )
             .all()
         )
@@ -404,6 +433,30 @@ def update_gold_prediction_actual(
                 "updated_at": datetime.utcnow(),
             }
         )
+
+
+def backfill_direction_correct_gold() -> int:
+    """Compute direction_correct for gold predictions that have actual_price but no direction_correct."""
+    with session_scope() as session:
+        rows = (
+            session.query(GoldPrediction)
+            .filter(
+                GoldPrediction.actual_price.isnot(None),
+                GoldPrediction.direction_correct.is_(None),
+                GoldPrediction.deleted_at.is_(None),
+            )
+            .all()
+        )
+        updated = 0
+        for pred in rows:
+            pred_diff = Decimal(str(pred.predicted_price)) - Decimal(str(pred.current_price))
+            actual_diff = Decimal(str(pred.actual_price)) - Decimal(str(pred.current_price))
+            if actual_diff == 0:
+                pred.direction_correct = (pred_diff == 0)
+            else:
+                pred.direction_correct = (pred_diff > 0) == (actual_diff > 0)
+            updated += 1
+        return updated
 
 
 # ---------------------------------------------------------------------------
@@ -513,11 +566,13 @@ def get_pending_nasdaq_predictions(days_back: int = 7) -> list[NasdaqPrediction]
         return (
             session.query(NasdaqPrediction)
             .filter(
-                NasdaqPrediction.status == "pending",
-                NasdaqPrediction.actual_price.is_(None),
+                NasdaqPrediction.deleted_at.is_(None),
                 NasdaqPrediction.target_date <= datetime.now(),
                 NasdaqPrediction.target_date >= cutoff,
-                NasdaqPrediction.deleted_at.is_(None),
+                or_(
+                    NasdaqPrediction.actual_price.is_(None),
+                    NasdaqPrediction.direction_correct.is_(None),
+                ),
             )
             .all()
         )
@@ -538,6 +593,30 @@ def update_nasdaq_prediction_actual(
                 "updated_at": datetime.utcnow(),
             }
         )
+
+
+def backfill_direction_correct_nasdaq() -> int:
+    """Compute direction_correct for NASDAQ predictions that have actual_price but no direction_correct."""
+    with session_scope() as session:
+        rows = (
+            session.query(NasdaqPrediction)
+            .filter(
+                NasdaqPrediction.actual_price.isnot(None),
+                NasdaqPrediction.direction_correct.is_(None),
+                NasdaqPrediction.deleted_at.is_(None),
+            )
+            .all()
+        )
+        updated = 0
+        for pred in rows:
+            pred_diff = Decimal(str(pred.predicted_price)) - Decimal(str(pred.current_price))
+            actual_diff = Decimal(str(pred.actual_price)) - Decimal(str(pred.current_price))
+            if actual_diff == 0:
+                pred.direction_correct = (pred_diff == 0)
+            else:
+                pred.direction_correct = (pred_diff > 0) == (actual_diff > 0)
+            updated += 1
+        return updated
 
 
 # ---------------------------------------------------------------------------
@@ -631,11 +710,13 @@ def get_pending_crypto_predictions(days_back: int = 7) -> list[CryptoPrediction]
         return (
             session.query(CryptoPrediction)
             .filter(
-                CryptoPrediction.status == "pending",
-                CryptoPrediction.actual_price.is_(None),
+                CryptoPrediction.deleted_at.is_(None),
                 CryptoPrediction.target_date <= datetime.now(),
                 CryptoPrediction.target_date >= cutoff,
-                CryptoPrediction.deleted_at.is_(None),
+                or_(
+                    CryptoPrediction.actual_price.is_(None),
+                    CryptoPrediction.direction_correct.is_(None),
+                ),
             )
             .all()
         )
@@ -656,6 +737,30 @@ def update_crypto_prediction_actual(
                 "updated_at": datetime.utcnow(),
             }
         )
+
+
+def backfill_direction_correct_crypto() -> int:
+    """Compute direction_correct for crypto predictions that have actual_price but no direction_correct."""
+    with session_scope() as session:
+        rows = (
+            session.query(CryptoPrediction)
+            .filter(
+                CryptoPrediction.actual_price.isnot(None),
+                CryptoPrediction.direction_correct.is_(None),
+                CryptoPrediction.deleted_at.is_(None),
+            )
+            .all()
+        )
+        updated = 0
+        for pred in rows:
+            pred_diff = Decimal(str(pred.predicted_price)) - Decimal(str(pred.current_price))
+            actual_diff = Decimal(str(pred.actual_price)) - Decimal(str(pred.current_price))
+            if actual_diff == 0:
+                pred.direction_correct = (pred_diff == 0)
+            else:
+                pred.direction_correct = (pred_diff > 0) == (actual_diff > 0)
+            updated += 1
+        return updated
 
 
 # ---------------------------------------------------------------------------
@@ -765,11 +870,13 @@ def get_pending_sp500_predictions(days_back: int = 7) -> list[SP500Prediction]:
         return (
             session.query(SP500Prediction)
             .filter(
-                SP500Prediction.status == "pending",
-                SP500Prediction.actual_price.is_(None),
+                SP500Prediction.deleted_at.is_(None),
                 SP500Prediction.target_date <= datetime.now(),
                 SP500Prediction.target_date >= cutoff,
-                SP500Prediction.deleted_at.is_(None),
+                or_(
+                    SP500Prediction.actual_price.is_(None),
+                    SP500Prediction.direction_correct.is_(None),
+                ),
             )
             .all()
         )
@@ -790,6 +897,30 @@ def update_sp500_prediction_actual(
                 "updated_at": datetime.utcnow(),
             }
         )
+
+
+def backfill_direction_correct_sp500() -> int:
+    """Compute direction_correct for SP500 predictions that have actual_price but no direction_correct."""
+    with session_scope() as session:
+        rows = (
+            session.query(SP500Prediction)
+            .filter(
+                SP500Prediction.actual_price.isnot(None),
+                SP500Prediction.direction_correct.is_(None),
+                SP500Prediction.deleted_at.is_(None),
+            )
+            .all()
+        )
+        updated = 0
+        for pred in rows:
+            pred_diff = Decimal(str(pred.predicted_price)) - Decimal(str(pred.current_price))
+            actual_diff = Decimal(str(pred.actual_price)) - Decimal(str(pred.current_price))
+            if actual_diff == 0:
+                pred.direction_correct = (pred_diff == 0)
+            else:
+                pred.direction_correct = (pred_diff > 0) == (actual_diff > 0)
+            updated += 1
+        return updated
 
 
 # ---------------------------------------------------------------------------

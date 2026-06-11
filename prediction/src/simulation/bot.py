@@ -41,6 +41,7 @@ class TradingBot:
         trades = []
 
         # Get current prices for SL/TP check
+        closed_this_step: set[str] = set()
         if self.portfolio.positions:
             current_prices = self.signal_gen.get_current_prices(
                 self.config.market,
@@ -49,6 +50,9 @@ class TradingBot:
             )
             sl_tp_trades = self.portfolio.check_stop_loss_take_profit(current_prices, sim_date)
             trades.extend(sl_tp_trades)
+            # Block same-step re-entry: a stale prediction signal on a symbol
+            # that just hit SL/TP would re-open the position at the same bad price.
+            closed_this_step = {t.symbol for t in sl_tp_trades}
 
         # Get new signals
         signals = self.signal_gen.get_signals(
@@ -62,6 +66,8 @@ class TradingBot:
 
         for signal in signals:
             if signal.action == "BUY":
+                if signal.symbol in closed_this_step:
+                    continue
                 trade = self.portfolio.buy(
                     symbol=signal.symbol,
                     price=signal.current_price,
@@ -80,6 +86,17 @@ class TradingBot:
                 )
                 if trade:
                     trades.append(trade)
+            else:
+                trades.append(Trade(
+                    symbol=signal.symbol,
+                    action="HOLD",
+                    quantity=0,
+                    price=signal.current_price,
+                    trade_value=0,
+                    trade_date=sim_date,
+                    signal_strength=signal.signal_strength,
+                    confidence=signal.confidence,
+                ))
 
         return trades
 
