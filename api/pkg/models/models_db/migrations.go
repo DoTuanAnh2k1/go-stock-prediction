@@ -2,10 +2,6 @@ package modelsdb
 
 // AllModels - danh sách tất cả models để migrate
 var AllModels = []interface{}{
-	&Exchange{},
-	&Stock{},
-	&StockPrice{},
-	&Prediction{},
 	&SyncLog{},
 	&GoldPrice{},
 	&GoldPrediction{},
@@ -23,7 +19,6 @@ var AllModels = []interface{}{
 	&SP500IntradayPrice{},
 	&CryptoIntradayPrice{},
 	&GoldIntradayPrice{},
-	&StockIntradayPrice{},
 	&SimBot{},
 	&SimSession{},
 	&SimTrade{},
