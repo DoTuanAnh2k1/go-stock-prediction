@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
 
 from src.database.connection import get_session, session_scope
 from src.database.models import (
@@ -13,20 +12,15 @@ from src.database.models import (
     CryptoPrediction,
     CryptoIntradayPrice,
     CryptoPrice,
-    Exchange,
     GoldIntradayPrice,
     GoldPrediction,
     GoldPrice,
     NasdaqIntradayPrice,
     NasdaqPrediction,
     NasdaqPrice,
-    Prediction,
     SP500IntradayPrice,
     SP500Prediction,
     SP500Price,
-    Stock,
-    StockIntradayPrice,
-    StockPrice,
     SyncLog,
     TrainingLog,
 )
@@ -34,188 +28,10 @@ from src.utils.logger import get_logger
 
 log = get_logger("repository")
 
-HOSE_EXCHANGE_CODE = "HOSE"
-
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Gold
 # ---------------------------------------------------------------------------
-
-def _get_or_create_exchange(session: Session, name: str, code: str) -> Exchange:
-    ex = session.query(Exchange).filter_by(code=code).first()
-    if ex is None:
-        ex = Exchange(name=name, code=code)
-        session.add(ex)
-        session.flush()
-    return ex
-
-
-def _get_or_create_stock(session: Session, symbol: str, exchange_id: int) -> Stock:
-    stock = session.query(Stock).filter_by(symbol=symbol).first()
-    if stock is None:
-        stock = Stock(symbol=symbol, company_name=symbol, exchange_id=exchange_id)
-        session.add(stock)
-        session.flush()
-    return stock
-
-
-# ---------------------------------------------------------------------------
-# VN30 / Stock
-# ---------------------------------------------------------------------------
-
-def upsert_stock_price(
-    symbol: str,
-    trading_date: datetime,
-    open_price: Decimal,
-    high_price: Decimal,
-    low_price: Decimal,
-    close_price: Decimal,
-    volume: int,
-    value: Decimal,
-    change: Decimal,
-    change_percent: Decimal,
-) -> None:
-    with session_scope() as session:
-        exchange = _get_or_create_exchange(session, "Ho Chi Minh Stock Exchange", HOSE_EXCHANGE_CODE)
-        stock = _get_or_create_stock(session, symbol, exchange.id)
-
-        existing = (
-            session.query(StockPrice)
-            .filter_by(stock_id=stock.id, trading_date=trading_date)
-            .first()
-        )
-        if existing:
-            existing.open_price = open_price
-            existing.high_price = high_price
-            existing.low_price = low_price
-            existing.close_price = close_price
-            existing.volume = volume
-            existing.value = value
-            existing.change = change
-            existing.change_percent = change_percent
-            existing.updated_at = datetime.utcnow()
-        else:
-            sp = StockPrice(
-                stock_id=stock.id,
-                trading_date=trading_date,
-                open_price=open_price,
-                high_price=high_price,
-                low_price=low_price,
-                close_price=close_price,
-                volume=volume,
-                value=value,
-                change=change,
-                change_percent=change_percent,
-            )
-            session.add(sp)
-
-
-def get_vn30_stocks() -> list[Stock]:
-    with get_session() as session:
-        return session.query(Stock).all()
-
-
-def get_stock_by_symbol(symbol: str) -> Stock | None:
-    session = get_session()
-    try:
-        return session.query(Stock).filter_by(symbol=symbol).first()
-    finally:
-        session.close()
-
-
-def get_stock_prices_asc(stock_id: int, limit: int = 270) -> list[StockPrice]:
-    """Return stock prices in ASC order (oldest first). DB stores DESC."""
-    session = get_session()
-    try:
-        rows = (
-            session.query(StockPrice)
-            .filter(
-                StockPrice.stock_id == stock_id,
-                StockPrice.deleted_at.is_(None),
-            )
-            .order_by(StockPrice.trading_date.desc())
-            .limit(limit)
-            .all()
-        )
-        return list(reversed(rows))
-    finally:
-        session.close()
-
-
-def get_stock_prices_range_asc(stock_id: int, from_date: datetime, to_date: datetime) -> list[StockPrice]:
-    session = get_session()
-    try:
-        rows = (
-            session.query(StockPrice)
-            .filter(
-                StockPrice.stock_id == stock_id,
-                StockPrice.trading_date >= from_date,
-                StockPrice.trading_date <= to_date,
-                StockPrice.deleted_at.is_(None),
-            )
-            .order_by(StockPrice.trading_date.desc())
-            .all()
-        )
-        return list(reversed(rows))
-    finally:
-        session.close()
-
-
-def create_prediction(
-    stock_id: int,
-    predicted_price: Decimal,
-    current_price: Decimal,
-    confidence: Decimal,
-    algorithm_name: str,
-    prediction_date: datetime,
-    target_date: datetime,
-    actual_price: Decimal | None = None,
-    accuracy: Decimal | None = None,
-    status: str = "pending",
-) -> None:
-    with session_scope() as session:
-        pred = Prediction(
-            stock_id=stock_id,
-            predicted_price=predicted_price,
-            current_price=current_price,
-            confidence=confidence,
-            algorithm_name=algorithm_name,
-            prediction_date=prediction_date,
-            target_date=target_date,
-            actual_price=actual_price,
-            accuracy=accuracy,
-            status=status,
-        )
-        session.add(pred)
-
-
-def bulk_create_predictions(predictions: list[dict]) -> int:
-    """Insert multiple prediction rows; returns count inserted."""
-    if not predictions:
-        return 0
-    with session_scope() as session:
-        objs = [Prediction(**p) for p in predictions]
-        session.bulk_save_objects(objs)
-        return len(objs)
-
-
-def delete_predictions_before(target_date: datetime) -> None:
-    with session_scope() as session:
-        session.query(Prediction).filter(
-            Prediction.target_date < target_date,
-            Prediction.deleted_at.is_(None),
-        ).delete(synchronize_session=False)
-
-
-def delete_pending_vn30_predictions_for_stock(stock_id: int, algorithm_name: str) -> None:
-    with session_scope() as session:
-        session.query(Prediction).filter(
-            Prediction.stock_id == stock_id,
-            Prediction.algorithm_name == algorithm_name,
-            Prediction.actual_price.is_(None),
-            Prediction.deleted_at.is_(None),
-        ).delete(synchronize_session=False)
-
 
 def delete_pending_gold_predictions_for_symbol(source: str, product_type: str, algorithm_name: str) -> None:
     with session_scope() as session:
@@ -257,70 +73,6 @@ def delete_pending_sp500_predictions_for_symbol(symbol: str, algorithm_name: str
             SP500Prediction.deleted_at.is_(None),
         ).delete(synchronize_session=False)
 
-
-def get_pending_predictions(days_back: int = 7) -> list[Prediction]:
-    session = get_session()
-    try:
-        cutoff = datetime.now() - timedelta(days=days_back)
-        return (
-            session.query(Prediction)
-            .filter(
-                Prediction.deleted_at.is_(None),
-                Prediction.target_date <= datetime.now(),
-                Prediction.target_date >= cutoff,
-                or_(
-                    Prediction.actual_price.is_(None),
-                    Prediction.direction_correct.is_(None),
-                ),
-            )
-            .all()
-        )
-    finally:
-        session.close()
-
-
-def update_prediction_actual(
-    pred_id: int, actual_price: Decimal, accuracy: Decimal, status: str, direction_correct: bool | None = None
-) -> None:
-    with session_scope() as session:
-        session.query(Prediction).filter_by(id=pred_id).update(
-            {
-                "actual_price": actual_price,
-                "accuracy": accuracy,
-                "status": status,
-                "direction_correct": direction_correct,
-                "updated_at": datetime.utcnow(),
-            }
-        )
-
-
-def backfill_direction_correct_stock() -> int:
-    """Compute direction_correct for stock predictions that have actual_price but no direction_correct."""
-    with session_scope() as session:
-        rows = (
-            session.query(Prediction)
-            .filter(
-                Prediction.actual_price.isnot(None),
-                Prediction.direction_correct.is_(None),
-                Prediction.deleted_at.is_(None),
-            )
-            .all()
-        )
-        updated = 0
-        for pred in rows:
-            pred_diff = Decimal(str(pred.predicted_price)) - Decimal(str(pred.current_price))
-            actual_diff = Decimal(str(pred.actual_price)) - Decimal(str(pred.current_price))
-            if actual_diff == 0:
-                pred.direction_correct = (pred_diff == 0)
-            else:
-                pred.direction_correct = (pred_diff > 0) == (actual_diff > 0)
-            updated += 1
-        return updated
-
-
-# ---------------------------------------------------------------------------
-# Gold
-# ---------------------------------------------------------------------------
 
 def upsert_gold_price(
     source: str,
@@ -1027,39 +779,12 @@ def upsert_gold_intraday(record: GoldIntradayPrice) -> None:
             session.add(new)
 
 
-def upsert_stock_intraday(record: StockIntradayPrice) -> None:
-    with session_scope() as session:
-        existing = (
-            session.query(StockIntradayPrice)
-            .filter_by(symbol=record.symbol, timestamp=record.timestamp)
-            .first()
-        )
-        if existing:
-            existing.open_price = record.open_price
-            existing.high_price = record.high_price
-            existing.low_price = record.low_price
-            existing.close_price = record.close_price
-            existing.volume = record.volume
-            existing.updated_at = datetime.utcnow()
-        else:
-            new = StockIntradayPrice(
-                symbol=record.symbol,
-                timestamp=record.timestamp,
-                open_price=record.open_price,
-                high_price=record.high_price,
-                low_price=record.low_price,
-                close_price=record.close_price,
-                volume=record.volume,
-            )
-            session.add(new)
-
 
 # ---------------------------------------------------------------------------
 # Direction accuracy
 # ---------------------------------------------------------------------------
 
 _MARKET_MODEL_MAP: dict[str, tuple] = {
-    "VN30": (Prediction, "algorithm_name"),
     "GOLD": (GoldPrediction, "algorithm_name"),
     "NASDAQ100": (NasdaqPrediction, "algorithm_name"),
     "CRYPTO": (CryptoPrediction, "algorithm_name"),

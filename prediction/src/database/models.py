@@ -10,98 +10,14 @@ from sqlalchemy import (
     Column,
     Date,
     DateTime,
-    ForeignKey,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import relationship
 
 from src.database.connection import Base
-
-
-class Exchange(Base):
-    __tablename__ = "exchanges"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    code = Column(String(10), nullable=False, unique=True)
-    name = Column(String(100), nullable=False)
-    timezone = Column(String(50), default="Asia/Ho_Chi_Minh")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    deleted_at = Column(DateTime)
-
-    stocks = relationship("Stock", back_populates="exchange")
-
-
-class Stock(Base):
-    __tablename__ = "stocks"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    symbol = Column(String(10), nullable=False, unique=True)
-    company_name = Column(String(200), nullable=False)
-    exchange_id = Column(Integer, ForeignKey("exchanges.id"), nullable=False)
-    is_vn30 = Column(Boolean, default=False)
-    is_vn100 = Column(Boolean, default=False)
-    listing_date = Column(DateTime)
-    sector = Column(String(100))
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    deleted_at = Column(DateTime)
-
-    exchange = relationship("Exchange", back_populates="stocks")
-    prices = relationship("StockPrice", back_populates="stock")
-    predictions = relationship("Prediction", back_populates="stock")
-
-
-class StockPrice(Base):
-    __tablename__ = "stock_prices"
-    __table_args__ = (
-        UniqueConstraint("stock_id", "trading_date", name="uq_stock_price_date"),
-    )
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
-    trading_date = Column(DateTime, nullable=False)
-    open_price = Column(Numeric(15, 2), nullable=False)
-    high_price = Column(Numeric(15, 2), nullable=False)
-    low_price = Column(Numeric(15, 2), nullable=False)
-    close_price = Column(Numeric(15, 2), nullable=False)
-    volume = Column(BigInteger, nullable=False)
-    value = Column(Numeric(20, 2))
-    change = Column(Numeric(15, 2))
-    change_percent = Column(Numeric(5, 4))
-    foreign_buy = Column(BigInteger, default=0)
-    foreign_sell = Column(BigInteger, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    deleted_at = Column(DateTime)
-
-    stock = relationship("Stock", back_populates="prices")
-
-
-class Prediction(Base):
-    __tablename__ = "predictions"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
-    predicted_price = Column(Numeric(15, 2), nullable=False)
-    current_price = Column(Numeric(15, 2), nullable=False)
-    confidence = Column(Numeric(5, 4))
-    algorithm_name = Column(String(50), nullable=False)
-    prediction_date = Column(DateTime, nullable=False)
-    target_date = Column(DateTime, nullable=False)
-    actual_price = Column(Numeric(15, 2))
-    accuracy = Column(Numeric(5, 4))
-    direction_correct = Column(Boolean, nullable=True)
-    status = Column(String(20), default="pending")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    deleted_at = Column(DateTime)
-
-    stock = relationship("Stock", back_populates="predictions")
 
 
 class GoldPrice(Base):
@@ -466,19 +382,3 @@ class GoldIntradayPrice(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-class StockIntradayPrice(Base):
-    __tablename__ = "stock_intraday_prices"
-    __table_args__ = (
-        UniqueConstraint("symbol", "timestamp", name="idx_stock_intraday_symbol_ts"),
-    )
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    symbol = Column(String(20), nullable=False)
-    timestamp = Column(DateTime, nullable=False)
-    open_price = Column(Numeric(20, 6))
-    high_price = Column(Numeric(20, 6))
-    low_price = Column(Numeric(20, 6))
-    close_price = Column(Numeric(20, 6))
-    volume = Column(BigInteger)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
