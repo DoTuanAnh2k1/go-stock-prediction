@@ -55,45 +55,6 @@ def test_trigger_predict_returns_success(grpc_stub):
 
 
 # ---------------------------------------------------------------------------
-# TriggerStockPredict — VN30 market
-# ---------------------------------------------------------------------------
-
-def test_trigger_stock_predict_vcb_returns_success(grpc_stub):
-    """TriggerStockPredict('VCB') must return success=True."""
-    from src.proto.prediction import prediction_pb2
-
-    req = prediction_pb2.StockRequest(symbol="VCB")
-    resp = grpc_stub.TriggerStockPredict(req)
-    assert resp is not None
-    assert resp.symbol == "VCB"
-    assert resp.success is True
-
-
-def test_trigger_stock_predict_returns_predictions_count(grpc_stub):
-    """TriggerStockPredict must return predictions_count >= 0.
-
-    May be 0 if no price data exists for the symbol.
-    """
-    from src.proto.prediction import prediction_pb2
-
-    req = prediction_pb2.StockRequest(symbol="VCB")
-    resp = grpc_stub.TriggerStockPredict(req)
-    assert hasattr(resp, "predictions_count")
-    assert resp.predictions_count >= 0
-
-
-def test_trigger_stock_predict_unknown_symbol_does_not_crash(grpc_stub):
-    """An unknown symbol must return a response, not crash the service."""
-    from src.proto.prediction import prediction_pb2
-
-    req = prediction_pb2.StockRequest(symbol="UNKNOWN_XYZ_999")
-    resp = grpc_stub.TriggerStockPredict(req)
-    assert resp is not None
-    assert resp.symbol == "UNKNOWN_XYZ_999"
-    # success may be False for unknown symbol — that's acceptable
-
-
-# ---------------------------------------------------------------------------
 # TriggerGoldPredict
 # ---------------------------------------------------------------------------
 

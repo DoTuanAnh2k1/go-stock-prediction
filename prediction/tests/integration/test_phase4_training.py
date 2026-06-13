@@ -187,8 +187,8 @@ def test_trigger_reconcile_idempotent(grpc_stub):
 # TriggerHistoricalBacktest
 # ---------------------------------------------------------------------------
 
-def test_trigger_historical_backtest_vn30_success(grpc_stub):
-    """TriggerHistoricalBacktest with VN30 market must return success=True.
+def test_trigger_historical_backtest_gold_success(grpc_stub):
+    """TriggerHistoricalBacktest with GOLD market must return success=True.
 
     If a backtest is already running (from a previous test), that is acceptable.
     """
@@ -197,7 +197,7 @@ def test_trigger_historical_backtest_vn30_success(grpc_stub):
     req = prediction_pb2.BacktestRequest(
         train_window=30,
         step_size=6,
-        market_key="VN30",
+        market_key="GOLD",
     )
     resp = grpc_stub.TriggerHistoricalBacktest(req)
     assert resp is not None
@@ -220,7 +220,7 @@ def test_trigger_historical_backtest_concurrent_guard(grpc_stub):
     req = prediction_pb2.BacktestRequest(
         train_window=30,
         step_size=6,
-        market_key="VN30",
+        market_key="GOLD",
     )
 
     resp1 = grpc_stub.TriggerHistoricalBacktest(req)
@@ -269,7 +269,7 @@ def test_service_alive_after_all_operations(grpc_stub):
     # Fire a few ops
     grpc_stub.TriggerReconcile(prediction_pb2.Empty())
     grpc_stub.TriggerHistoricalBacktest(
-        prediction_pb2.BacktestRequest(train_window=30, step_size=6, market_key="VN30")
+        prediction_pb2.BacktestRequest(train_window=30, step_size=6, market_key="GOLD")
     )
 
     # Service must still respond

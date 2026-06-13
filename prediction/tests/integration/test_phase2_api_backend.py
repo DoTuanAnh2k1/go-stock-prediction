@@ -162,6 +162,6 @@ def test_api_schedules_list_has_all_crawlers(api_base_url, auth_headers):
     assert resp.status_code == 200
     schedules = resp.json()
     job_keys = {s["job_key"] for s in schedules}
-    expected = {"crawler_stock", "crawler_gold", "crawler_nasdaq", "crawler_crypto"}
+    expected = {"crawler_gold", "crawler_nasdaq", "crawler_crypto"}
     missing = expected - job_keys
     assert missing == set(), f"Missing schedule keys: {missing}"

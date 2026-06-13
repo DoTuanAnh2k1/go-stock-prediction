@@ -70,18 +70,12 @@ init_scheduler(JOB_FUNCTIONS)
 log.info("scheduler.ready")
 
 # ---------------------------------------------------------------------------
-# 7. Startup data sync — run VN30 crawler once after 5-second delay
+# 7. Startup data sync
 # ---------------------------------------------------------------------------
 
 def _startup_sync():
     time.sleep(5)
     log.info("startup.sync.begin")
-    try:
-        from src.crawlers.vn30 import VN30Crawler
-        saved = VN30Crawler().crawl()
-        log.info("startup.sync.vn30.done", saved=saved)
-    except Exception as exc:
-        log.warning("startup.sync.vn30.error", error=str(exc))
 
     # Seed simulation bots
     try:

@@ -34,9 +34,8 @@ class PredictionServicer:
 
     def TriggerCrawler(self, request, context):
         pb2, _ = _get_pb()
-        log.info("grpc.TriggerCrawler")
-        threading.Thread(target=_bg_crawl_vn30, daemon=True).start()
-        return pb2.TriggerResponse(success=True, message="Stock crawler started in background")
+        log.info("grpc.TriggerCrawler.removed")
+        return pb2.TriggerResponse(success=False, message="VN30 crawler removed")
 
     def TriggerNasdaqCrawler(self, request, context):
         pb2, _ = _get_pb()
@@ -52,10 +51,8 @@ class PredictionServicer:
 
     def TriggerStockHistory(self, request, context):
         pb2, _ = _get_pb()
-        days = request.days or 365
-        log.info("grpc.TriggerStockHistory", days=days)
-        threading.Thread(target=_bg_stock_history, args=(days,), daemon=True).start()
-        return pb2.TriggerResponse(success=True, message=f"Historical stock crawl started (days={days})")
+        log.info("grpc.TriggerStockHistory.removed")
+        return pb2.TriggerResponse(success=False, message="VN30 stock history removed")
 
     def TriggerGoldHistory(self, request, context):
         pb2, _ = _get_pb()
@@ -104,7 +101,7 @@ class PredictionServicer:
 
         train_window = request.train_window or 30
         step_size = request.step_size or 6
-        market_key = request.market_key or "VN30"
+        market_key = request.market_key or "GOLD"
 
         log.info("grpc.TriggerHistoricalBacktest", market=market_key, train_window=train_window, step_size=step_size)
 
@@ -185,75 +182,14 @@ class PredictionServicer:
     def TriggerStockCrawl(self, request, context):
         pb2, _ = _get_pb()
         symbol = request.symbol
-        log.info("grpc.TriggerStockCrawl", symbol=symbol)
-        try:
-            from src.crawlers.vn30 import VN30Crawler
-            saved = VN30Crawler().crawl_single(symbol)
-            return pb2.StockCrawlResponse(
-                success=True,
-                symbol=symbol,
-                message=f"Stock {symbol} crawled: {saved} price(s) saved",
-            )
-        except Exception as exc:
-            log.error("grpc.TriggerStockCrawl.error", symbol=symbol, error=str(exc))
-            return pb2.StockCrawlResponse(success=False, symbol=symbol, error=str(exc))
+        log.info("grpc.TriggerStockCrawl.removed", symbol=symbol)
+        return pb2.StockCrawlResponse(success=False, symbol=symbol, message="VN30 crawler removed")
 
     def TriggerStockPredict(self, request, context):
         pb2, _ = _get_pb()
         symbol = request.symbol
-        log.info("grpc.TriggerStockPredict", symbol=symbol)
-        try:
-            from datetime import datetime, timedelta
-            from decimal import Decimal
-
-            from src.algorithms.registry import build_algorithms
-            from src.database import repository as repo
-
-            stock = repo.get_stock_by_symbol(symbol)
-            if not stock:
-                return pb2.StockPredictResponse(success=False, symbol=symbol, error=f"stock {symbol} not found")
-
-            prices_asc = repo.get_stock_prices_asc(stock.id, limit=270)
-            if len(prices_asc) < 20:
-                return pb2.StockPredictResponse(
-                    success=False, symbol=symbol,
-                    error=f"insufficient data: {len(prices_asc)} prices",
-                )
-
-            price_list = [float(p.close_price) for p in prices_asc]
-            vol_list = [float(p.volume or 0) for p in prices_asc]
-            current = price_list[-1]
-            now = datetime.now()
-            target = now + timedelta(days=1)
-
-            algos = build_algorithms()
-            count = 0
-            for key, algo in algos.items():
-                try:
-                    result = algo.predict(price_list, vol_list)
-                    repo.create_prediction(
-                        stock_id=stock.id,
-                        predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.01")),
-                        current_price=Decimal(str(current)).quantize(Decimal("0.01")),
-                        confidence=Decimal(str(round(result.confidence, 4))),
-                        algorithm_name=key,
-                        prediction_date=now,
-                        target_date=target,
-                        status="pending",
-                    )
-                    count += 1
-                except Exception as exc2:
-                    log.debug("grpc.StockPredict.algo_failed", symbol=symbol, algo=key, error=str(exc2))
-
-            return pb2.StockPredictResponse(
-                success=True,
-                symbol=symbol,
-                predictions_count=count,
-                message=f"Generated {count} predictions for {symbol}",
-            )
-        except Exception as exc:
-            log.error("grpc.TriggerStockPredict.error", symbol=symbol, error=str(exc))
-            return pb2.StockPredictResponse(success=False, symbol=symbol, error=str(exc))
+        log.info("grpc.TriggerStockPredict.removed", symbol=symbol)
+        return pb2.StockPredictResponse(success=False, symbol=symbol, message="VN30 predict removed")
 
     def GetTrainingStatus(self, request, context):
         pb2, _ = _get_pb()
@@ -309,20 +245,6 @@ class PredictionServicer:
 # Background worker functions
 # -------------------------------------------------------------------
 
-def _bg_crawl_vn30():
-    try:
-        from src.crawlers.vn30 import VN30Crawler
-        crawler = VN30Crawler()
-        saved = crawler.crawl()
-        try:
-            crawler.crawl_intraday()
-        except Exception as exc:
-            log.warning("bg.vn30.intraday.error", error=str(exc))
-        log.info("bg.vn30.done", saved=saved)
-    except Exception as exc:
-        log.error("bg.vn30.error", error=str(exc))
-
-
 def _bg_crawl_nasdaq():
     try:
         from src.crawlers.nasdaq import NasdaqCrawler
@@ -343,15 +265,6 @@ def _bg_crawl_crypto():
         crawler.crawl_intraday()
     except Exception as exc:
         log.error("bg.crypto.error", error=str(exc))
-
-
-def _bg_stock_history(days: int):
-    try:
-        from src.crawlers.vn30 import VN30Crawler
-        saved = VN30Crawler().crawl_history(days=days)
-        log.info("bg.stock_history.done", saved=saved)
-    except Exception as exc:
-        log.error("bg.stock_history.error", error=str(exc))
 
 
 def _bg_gold_history():

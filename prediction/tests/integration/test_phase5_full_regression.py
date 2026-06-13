@@ -76,10 +76,6 @@ class TestAllCrawlersRespond:
     Crawlers run in background → HTTP 202 Accepted is the expected success code.
     """
 
-    def test_vn30_crawler(self, api_base_url, auth_headers):
-        resp = _trigger(api_base_url, auth_headers, "crawler")
-        assert resp.status_code in (200, 202), resp.text[:300]
-
     def test_gold_crawler(self, api_base_url, auth_headers):
         resp = _trigger(api_base_url, auth_headers, "gold-crawler")
         assert resp.status_code in (200, 202), resp.text[:300]
@@ -109,7 +105,7 @@ class TestGRPCContractAllRPCs:
     def test_trigger_crawler(self, grpc_stub):
         from src.proto.prediction import prediction_pb2
         resp = grpc_stub.TriggerCrawler(prediction_pb2.Empty())
-        assert resp.success is True
+        assert resp is not None  # VN30 removed — success=False expected
 
     def test_trigger_gold_crawler(self, grpc_stub):
         from src.proto.prediction import prediction_pb2
@@ -154,7 +150,7 @@ class TestGRPCContractAllRPCs:
     def test_trigger_stock_history(self, grpc_stub):
         from src.proto.prediction import prediction_pb2
         resp = grpc_stub.TriggerStockHistory(prediction_pb2.StockHistoryRequest(days=7))
-        assert resp.success is True
+        assert resp is not None  # VN30 removed — success=False expected
 
     def test_trigger_gold_history(self, grpc_stub):
         from src.proto.prediction import prediction_pb2
@@ -191,7 +187,7 @@ class TestGRPCContractAllRPCs:
     def test_trigger_historical_backtest(self, grpc_stub):
         from src.proto.prediction import prediction_pb2
         resp = grpc_stub.TriggerHistoricalBacktest(
-            prediction_pb2.BacktestRequest(train_window=30, step_size=6, market_key="VN30")
+            prediction_pb2.BacktestRequest(train_window=30, step_size=6, market_key="GOLD")
         )
         assert resp is not None
         assert resp.success is True or "already running" in (resp.error or "").lower()
@@ -392,7 +388,6 @@ class TestScheduleCRUD:
         keys = {s["job_key"] for s in resp.json()}
         # Python service seeds these job keys (may differ from old Go keys)
         expected = {
-            "crawler_stock",
             "crawler_gold",
             "daily_prediction",
             "daily_reconcile",

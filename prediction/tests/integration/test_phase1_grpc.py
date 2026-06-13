@@ -46,11 +46,12 @@ def test_get_training_status(grpc_stub):
 
 
 def test_trigger_crawler(grpc_stub):
-    """TriggerCrawler acknowledges the request."""
+    """TriggerCrawler returns a response (VN30 removed — success=False expected)."""
     from src.proto.prediction import prediction_pb2
 
     resp = grpc_stub.TriggerCrawler(prediction_pb2.Empty())
-    assert resp.success is True
+    assert resp is not None
+    assert hasattr(resp, "success")
 
 
 def test_trigger_gold_crawler(grpc_stub):
@@ -141,7 +142,7 @@ def test_trigger_historical_backtest(grpc_stub):
     """TriggerHistoricalBacktest returns a TriggerResponse."""
     from src.proto.prediction import prediction_pb2
 
-    req = prediction_pb2.BacktestRequest(train_window=30, step_size=6, market_key="VN30")
+    req = prediction_pb2.BacktestRequest(train_window=30, step_size=6, market_key="GOLD")
     resp = grpc_stub.TriggerHistoricalBacktest(req)
     assert resp is not None
     assert hasattr(resp, "success")

@@ -26,13 +26,12 @@ _MARKET_KEY_NORM: dict[str, str] = {
 def _get_simulation_dates(market: str, algorithm: str, start_date: date, end_date: date) -> list[date]:
     """Get all dates that have predictions for this market/algorithm in the given range."""
     market_to_table = {
-        "VN30": "predictions",
         "GOLD": "gold_predictions",
         "NASDAQ": "nasdaq_predictions",
         "SP500": "sp500_predictions",
         "CRYPTO": "crypto_predictions",
     }
-    table = market_to_table.get(market, "predictions")
+    table = market_to_table.get(market, "gold_predictions")
 
     start_dt = datetime.combine(start_date, datetime.min.time())
     end_dt = datetime.combine(end_date, datetime.max.time())

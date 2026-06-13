@@ -1,4 +1,4 @@
-"""Phase 2 integration tests — verify all 4 crawlers via gRPC.
+"""Phase 2 integration tests — verify all crawlers via gRPC.
 
 Requirements:
   - Python prediction service running on localhost:8119
@@ -15,64 +15,6 @@ from __future__ import annotations
 import pytest
 
 pytestmark = pytest.mark.integration
-
-
-# ---------------------------------------------------------------------------
-# VN30 crawler
-# ---------------------------------------------------------------------------
-
-def test_trigger_crawler_returns_success(grpc_stub):
-    """TriggerCrawler must return success=True immediately (background)."""
-    from src.proto.prediction import prediction_pb2
-
-    resp = grpc_stub.TriggerCrawler(prediction_pb2.Empty())
-    assert resp.success is True
-    assert "background" in resp.message.lower() or "crawl" in resp.message.lower()
-
-
-def test_trigger_stock_history_returns_success(grpc_stub):
-    """TriggerStockHistory(days=7) must return success=True immediately."""
-    from src.proto.prediction import prediction_pb2
-
-    req = prediction_pb2.StockHistoryRequest(days=7)
-    resp = grpc_stub.TriggerStockHistory(req)
-    assert resp.success is True
-
-
-def test_trigger_stock_crawl_single_symbol(grpc_stub):
-    """TriggerStockCrawl('VCB') must echo symbol and return success."""
-    from src.proto.prediction import prediction_pb2
-
-    req = prediction_pb2.StockRequest(symbol="VCB")
-    resp = grpc_stub.TriggerStockCrawl(req)
-    assert resp.symbol == "VCB"
-    assert resp.success is True
-
-
-def test_vn30_data_in_db():
-    """After crawl, stock_prices must have VN30 data (at least last trading day)."""
-    from src.database import repository as repo
-
-    stock = repo.get_stock_by_symbol("VCB")
-    assert stock is not None, "VCB stock not found — run crawler first"
-
-    prices = repo.get_stock_prices_asc(stock.id, limit=5)
-    assert len(prices) > 0, "No price data for VCB"
-    assert float(prices[-1].close_price) > 0, "Last price is zero"
-
-
-def test_vn30_all_30_stocks_present():
-    """All 30 VN30 stocks must be present in DB after crawl."""
-    from src.crawlers.vn30 import VN30_SYMBOLS
-    from src.database import repository as repo
-
-    missing = []
-    for symbol in VN30_SYMBOLS:
-        stock = repo.get_stock_by_symbol(symbol)
-        if stock is None:
-            missing.append(symbol)
-
-    assert missing == [], f"Missing stocks: {missing}"
 
 
 # ---------------------------------------------------------------------------
@@ -210,8 +152,7 @@ def test_concurrent_crawlers_do_not_crash(grpc_stub):
     """Triggering multiple crawlers simultaneously must not crash service."""
     from src.proto.prediction import prediction_pb2
 
-    # Fire all background crawlers at once
-    grpc_stub.TriggerCrawler(prediction_pb2.Empty())
+    # Fire background crawlers at once
     grpc_stub.TriggerNasdaqCrawler(prediction_pb2.Empty())
     grpc_stub.TriggerCryptoCrawler(prediction_pb2.Empty())
 

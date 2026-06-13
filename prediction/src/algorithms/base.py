@@ -9,7 +9,6 @@ from dataclasses import dataclass
 # ---------------------------------------------------------------------------
 
 MARKET_MAX_CHANGE: dict[str, float] = {
-    "VN30": 0.07,
     "GOLD": 0.15,
     "NASDAQ100": 0.20,
     "SP500": 0.15,
