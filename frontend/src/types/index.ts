@@ -25,7 +25,6 @@ export interface StockItem {
   chgPct: number;
   volume: number;
   value: number;
-  vn30: boolean;
   spark: number[];
   hist: number[];
 }
@@ -160,7 +159,7 @@ export interface AppData {
   goldPredActual: GoldPredActual | null;
   goldDetail: GoldDetailItem[];
   stats: { total: number; acc: number };
-  indices: { vnindex: IndexData; vn30: IndexData };
+  indices: { vnindex: IndexData };
   /** Dynamic trend series — one entry per algorithm returned by the API. */
   accTrend: { labels: string[]; series: AccTrendSeries[] };
   dailyCounts: { labels: string[]; values: number[] };

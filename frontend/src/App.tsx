@@ -7,7 +7,6 @@ import { Sidebar, Topbar, Ticker, MobNav, ErrorBoundary } from './components/ui'
 import { TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakSlider, TweakToggle, useTweaks } from './components/tweaks-panel';
 import { LoginModal } from './components/LoginModal';
 import Dashboard from './pages/Dashboard';
-import Stocks from './pages/Stocks';
 import Predictions from './pages/Predictions';
 import Training from './pages/Training';
 import Gold from './pages/Gold';
@@ -83,7 +82,6 @@ function AppInner() {
             <Route path="/dashboard" element={<Navigate to="/" replace />} />
 
             {/* ── Market routes ────────────────────────────────── */}
-            <Route path="/markets/vn30" element={<ErrorBoundary><Stocks /></ErrorBoundary>} />
             <Route path="/markets/gold" element={<ErrorBoundary><Gold /></ErrorBoundary>} />
 
             <Route path="/markets/:marketKey/predictions" element={<ErrorBoundary><MarketPredictions /></ErrorBoundary>} />
@@ -106,12 +104,9 @@ function AppInner() {
             <Route path="/admin/users" element={<ErrorBoundary><Users /></ErrorBoundary>} />
 
             {/* ── Legacy redirects (keep bookmarks working) ────── */}
-            <Route path="/stocks" element={<Navigate to="/markets/vn30" replace />} />
             <Route path="/gold" element={<Navigate to="/markets/gold" replace />} />
             <Route path="/crypto" element={<Navigate to="/markets/crypto" replace />} />
             <Route path="/nasdaq" element={<Navigate to="/markets/nasdaq100" replace />} />
-            <Route path="/predictions" element={<Navigate to="/markets/vn30/predictions" replace />} />
-            <Route path="/training" element={<Navigate to="/markets/vn30/training" replace />} />
           </Routes>
         </div>
       </div>

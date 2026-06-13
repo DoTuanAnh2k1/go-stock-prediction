@@ -114,7 +114,6 @@ export function buildEmpty(): AppData {
     stats: { total: 0, acc: 0 },
     indices: {
       vnindex: { val: 0, chg: 0, chgPct: 0, vol: 0, series: [] },
-      vn30:    { val: 0, chg: 0, chgPct: 0, vol: 0, series: [] },
     },
     accTrend: { labels: [], series: [] },
     dailyCounts: { labels: [], values: [] },
@@ -187,7 +186,6 @@ function buildStocks(ov: any): StockItem[] | null {
     chgPct: num(s.change_percent),
     volume: num(s.volume) / 1e6,
     value: num(s.value) / 1e12,
-    vn30: s.is_vn30 !== false,
     spark: [],
     hist: [],
   }));
@@ -425,11 +423,10 @@ export function loadAll(): Promise<{ data: AppData; raw: Record<string, any> }> 
         if (!out.losers.length)  out.losers  = st.slice().sort((a, b) => a.chgPct - b.chgPct).slice(0, 6);
         if (!out.active.length)  out.active  = st.slice().sort((a, b) => b.volume - a.volume).slice(0, 6);
       }
-      const v = num(R.market.vn30_index);
+      const v = num(R.market.vnindex);
       if (v) {
         out.indices = {
-          vnindex: { val: num(R.market.vnindex), chg: num(R.market.index_change), chgPct: num(R.market.index_percent), vol: num(R.market.total_volume) / 1e6, series: [] },
-          vn30:    { val: v, chg: num(R.market.index_change), chgPct: num(R.market.index_percent), vol: 0, series: [] },
+          vnindex: { val: v, chg: num(R.market.index_change), chgPct: num(R.market.index_percent), vol: num(R.market.total_volume) / 1e6, series: [] },
         };
       }
     }

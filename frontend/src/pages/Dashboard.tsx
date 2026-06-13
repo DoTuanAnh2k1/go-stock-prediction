@@ -1,98 +1,51 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useData } from '../context/DataContext';
-import { Panel, KPI, Seg, Icon, Chg, ConfBar } from '../components/ui';
-import { Sparkline, LineChart, BarChart, HBars, Donut } from '../components/charts';
+import { Panel, KPI, Icon, Chg, ConfBar } from '../components/ui';
+import { LineChart, BarChart, HBars } from '../components/charts';
 import { useLanguage } from '../context/LangContext';
 
 export default function Dashboard() {
   const { data: D } = useData();
   const { fmt } = D;
   const { t } = useLanguage();
-  const [idx, setIdx] = useState('vnindex');
-  const index = D.indices[idx as 'vnindex' | 'vn30'];
-  const watch = D.stocks.slice(0, 8);
+  const index = D.indices.vnindex;
   const ens = (D.algos || []).find((a) => a.cls === 'ens');
   const ensAcc = ens ? ens.acc : (D.stats && D.stats.acc ? D.stats.acc : 0);
   const ensAccDisplay = ensAcc ? (+ensAcc).toFixed(1) + '%' : '—%';
 
   const indexVal = index.val;
   const indexDisplay = indexVal ? fmt.price(indexVal) : '—';
-  const vnindexVal = D.indices.vnindex.val;
-  const vnindexDisplay = vnindexVal ? fmt.price(vnindexVal) : '—';
-  const vn30Val = D.indices.vn30.val;
-  const vn30Display = vn30Val ? fmt.price(vn30Val) : '—';
-  const volSource = D.indices.vn30.vol || D.indices.vnindex.vol;
-  const volDisplay = volSource ? fmt.compact(volSource * 1e6) : '—';
+  const volDisplay = index.vol ? fmt.compact(index.vol * 1e6) : '—';
 
   return (
     <div className="content__inner fade">
       <div className="grid grid--kpis section-gap">
-        <KPI label="VN-Index" value={vnindexDisplay} chgPct={D.indices.vnindex.chgPct} chgAbs={D.indices.vnindex.chg} spark={D.indices.vnindex.series.slice(-22)} />
-        <KPI label="VN30" value={vn30Display} chgPct={D.indices.vn30.chgPct} chgAbs={D.indices.vn30.chg} spark={D.indices.vn30.series.slice(-22)} />
+        <KPI label="VN-Index" value={indexDisplay} chgPct={index.chgPct} chgAbs={index.chg} spark={index.series.slice(-22)} />
         <KPI label={t.dashboard.liquidity} value={volDisplay} sub={t.dashboard.stocksMatched} />
         <KPI label={t.dashboard.ensAccuracy} value={ensAccDisplay} sub={t.dashboard.ensModel} chgPct={ens ? ens.accDelta : 0} accent />
       </div>
 
-      <div className="grid grid--main section-gap">
-        <Panel
-          title={t.dashboard.indexChart}
-          dot={idx === 'vnindex' ? 'VN-Index' : 'VN30'}
-          tools={<Seg options={[{ value: 'vnindex', label: 'VN-Index' }, { value: 'vn30', label: 'VN30' }]} value={idx} onChange={setIdx} />}
-        >
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
-            <span className="num" style={{ fontSize: 28, fontWeight: 600, letterSpacing: '-1px' }}>{indexDisplay}</span>
-            {indexVal ? <Chg pct={index.chgPct} abs={index.chg} /> : null}
-            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{t.dashboard.sessionToday}</span>
-          </div>
-          {index.series.length > 0
-            ? <LineChart
-                series={[{ name: idx === 'vnindex' ? 'VN-Index' : 'VN30', data: index.series, color: 'var(--accent)' }]}
-                labels={index.series.map((_, i) => `${9 + Math.floor(i / 7)}h`)}
-                height={580} area yFmt={(v) => v.toFixed(0)} valueFmt={(v) => fmt.price(v)} padL={52}
-              />
-            : <div className="empty" style={{ height: 580, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <div className="empty__icon"><Icon name="layers" size={18} /></div>
-                <p>{t.dashboard.noIndexData}</p>
-              </div>
-          }
-        </Panel>
-        <Panel title={t.dashboard.marketBreadth} sub="VN30">
-          <Breadth stocks={D.stocks} fmt={fmt} />
-        </Panel>
-      </div>
+      <Panel title={t.dashboard.indexChart} dot="VN-Index" className="section-gap">
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
+          <span className="num" style={{ fontSize: 28, fontWeight: 600, letterSpacing: '-1px' }}>{indexDisplay}</span>
+          {indexVal ? <Chg pct={index.chgPct} abs={index.chg} /> : null}
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{t.dashboard.sessionToday}</span>
+        </div>
+        {index.series.length > 0
+          ? <LineChart
+              series={[{ name: 'VN-Index', data: index.series, color: 'var(--accent)' }]}
+              labels={index.series.map((_, i) => `${9 + Math.floor(i / 7)}h`)}
+              height={580} area yFmt={(v) => v.toFixed(0)} valueFmt={(v) => fmt.price(v)} padL={52}
+            />
+          : <div className="empty" style={{ height: 580, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div className="empty__icon"><Icon name="layers" size={18} /></div>
+              <p>{t.dashboard.noIndexData}</p>
+            </div>
+        }
+      </Panel>
 
-      <div className="grid grid--side section-gap">
-        <Panel
-          title={t.dashboard.watchlist}
-          tools={<button className="btn btn--sm btn--ghost"><Icon name="refresh" size={13} />{t.common.refresh}</button>}
-          flush
-        >
-          {watch.length === 0
-            ? <div className="empty">
-                <div className="empty__icon"><Icon name="layers" size={18} /></div>
-                <p>{t.dashboard.noWatchData}</p>
-              </div>
-            : <div style={{ overflowX: 'auto' }}>
-                <table className="tbl">
-                  <thead><tr><th>{t.dashboard.colSymbol}</th><th className="r">{t.dashboard.colPrice}</th><th className="r">{t.dashboard.colChangePct}</th><th className="r">{t.dashboard.colVolume}</th><th className="c" style={{ width: 110 }}>{t.dashboard.col7Sessions}</th></tr></thead>
-                  <tbody>
-                    {watch.map((s) => (
-                      <tr key={s.sym} className="clickable">
-                        <td><div className="sym">{s.sym}</div><div className="co">{s.name}</div></td>
-                        <td className="r num">{fmt.price(s.price)}</td>
-                        <td className="r"><Chg pct={s.chgPct} /></td>
-                        <td className="r num" style={{ color: 'var(--text-2)' }}>{s.volume.toFixed(1)}</td>
-                        <td className="c"><div style={{ display: 'flex', justifyContent: 'center' }}><Sparkline data={s.spark} w={92} h={28} fill={false} /></div></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-          }
-        </Panel>
-
-        <Panel title={t.dashboard.mlModelStatus} sub={D.algos.length ? D.algos.length + ' ' + t.dashboard.algorithms : '—'} flush>
+      <Panel title={t.dashboard.mlModelStatus} sub={D.algos.length ? D.algos.length + ' ' + t.dashboard.algorithms : '—'} flush className="section-gap">
           {D.algos.length === 0
             ? <div className="empty">
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
@@ -114,8 +67,7 @@ export default function Dashboard() {
               </div>
             ))
           }
-        </Panel>
-      </div>
+      </Panel>
 
       <div className="sec-head"><h2>{t.dashboard.latestPredictions}</h2><div className="line"></div></div>
       <Panel flush className="section-gap">
@@ -251,59 +203,3 @@ function TopSimulationBots() {
   );
 }
 
-function Breadth({ stocks, fmt }: { stocks: any[]; fmt: any }) {
-  const { t } = useLanguage();
-  if (!stocks.length) {
-    return (
-      <div className="empty">
-        <div className="empty__icon"><Icon name="layers" size={18} /></div>
-        <p>{t.dashboard.noMarketData}</p>
-      </div>
-    );
-  }
-  const up   = stocks.filter((s) => s.chgPct > 0).length;
-  const down = stocks.filter((s) => s.chgPct < 0).length;
-  const flat = stocks.length - up - down;
-  const total = stocks.length || 1;
-  const sectors = [...new Set(stocks.map((s) => s.sector))].map((name) => {
-    const items = stocks.filter((s) => s.sector === name);
-    const avg = items.reduce((a: number, s: any) => a + s.chgPct, 0) / items.length;
-    return { name, avg };
-  }).sort((a, b) => b.avg - a.avg);
-  return (
-    <div>
-      <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 14 }}>
-        <Donut value={up / total * 100} color="var(--up)" label={t.dashboard.rising} />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 9 }}>
-          <StatRow dot="var(--up)"   label={t.dashboard.up}   value={up} />
-          <StatRow dot="var(--down)" label={t.dashboard.down} value={down} />
-          <StatRow dot="var(--flat)" label={t.dashboard.ref}  value={flat} />
-        </div>
-      </div>
-      <div className="bar" style={{ height: 8, display: 'flex' }}>
-        <div style={{ width: up   / total * 100 + '%', background: 'var(--up)' }}></div>
-        <div style={{ width: flat / total * 100 + '%', background: 'var(--flat)' }}></div>
-        <div style={{ width: down / total * 100 + '%', background: 'var(--down)' }}></div>
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, margin: '16px 0 8px' }}>{t.dashboard.leadingSectors}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-        {sectors.slice(0, 5).map((s) => (
-          <div key={s.name} style={{ display: 'flex', alignItems: 'center', fontSize: 12.5 }}>
-            <span style={{ color: 'var(--text-2)' }}>{s.name}</span>
-            <span className="num" style={{ marginLeft: 'auto', color: s.avg > 0 ? 'var(--up)' : 'var(--down)' }}>{fmt.pct(s.avg)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function StatRow({ dot, label, value }: { dot: string; label: string; value: number }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-      <span style={{ width: 8, height: 8, background: dot }}></span>
-      <span style={{ color: 'var(--text-2)' }}>{label}</span>
-      <span className="num" style={{ marginLeft: 'auto', fontWeight: 600 }}>{value}</span>
-    </div>
-  );
-}

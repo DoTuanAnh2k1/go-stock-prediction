@@ -197,9 +197,8 @@ export default function MarketDetail() {
     ? (CRYPTO_INSTRUMENTS.find(i => i.key === symbol)?.label ?? symbol)
     : symbol;
 
-  // VN30 stock options (use D.stocks if available, else show just VCB as fallback)
   const stockOptions = D.stocks.length > 0
-    ? D.stocks.filter(s => s.vn30).map(s => ({ key: s.sym, label: s.sym }))
+    ? D.stocks.map(s => ({ key: s.sym, label: s.sym }))
     : [{ key: 'VCB', label: 'VCB' }];
 
   return (

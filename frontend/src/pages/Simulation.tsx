@@ -121,7 +121,7 @@ function algoClass(algo: string): string {
   return map[(algo || '').toLowerCase()] || 'unknown';
 }
 
-const MARKETS = ['ALL', 'VN30', 'GOLD', 'NASDAQ', 'SP500', 'CRYPTO'];
+const MARKETS = ['ALL', 'GOLD', 'NASDAQ', 'SP500', 'CRYPTO'];
 const ALGORITHMS = ['ALL', 'ensemble', 'lstm_nn', 'arima_garch', 'moving_average', 'ema_macd', 'lightgbm'];
 const CURRENCIES = ['ALL', 'USD', 'VND'];
 

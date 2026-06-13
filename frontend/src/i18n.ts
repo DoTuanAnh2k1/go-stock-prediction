@@ -41,9 +41,6 @@ export const translations: Record<Lang, Translations> = {
     // Page titles [display, breadcrumb]
     titles: {
       '/': ['Tổng quan thị trường', 'DASHBOARD'],
-      '/markets/vn30': ['VN30', 'EQUITIES · VN30'],
-      '/markets/vn30/predictions': ['Dự đoán VN30', 'PREDICTIONS · VN30'],
-      '/markets/vn30/training': ['Huấn luyện VN30', 'TRAINING · VN30'],
       '/markets/gold': ['Vàng', 'GOLD'],
       '/markets/gold/predictions': ['Dự đoán Vàng', 'PREDICTIONS · GOLD'],
       '/markets/gold/training': ['Huấn luyện Vàng', 'TRAINING · GOLD'],
@@ -60,9 +57,6 @@ export const translations: Record<Lang, Translations> = {
       '/guide': ['Hướng dẫn sử dụng', 'USER GUIDE'],
       '/settings': ['Cài đặt', 'SETTINGS'],
       '/admin/users': ['Quản lý người dùng', 'ADMIN · USERS'],
-      '/stocks': ['VN30', 'EQUITIES · VN30'],
-      '/predictions': ['Dự đoán', 'FORECASTS'],
-      '/training': ['Huấn luyện mô hình', 'ML TRAINING'],
       '/gold': ['Giá vàng', 'GOLD'],
       '/crypto': ['Cryptocurrency', 'CRYPTO'],
       '/nasdaq': ['NASDAQ 100', 'NASDAQ 100 · US EQUITIES'],
@@ -263,45 +257,6 @@ export const translations: Record<Lang, Translations> = {
       noChartData: 'Chưa có dữ liệu biểu đồ. Hãy thu thập dữ liệu trước.',
       noDataForSymbol: 'Không có dữ liệu cho mã này.',
       noConfirmed: 'Chưa có kết quả đã xác nhận. Kết quả sẽ xuất hiện sau khi dự đoán được đối chiếu với giá thực tế.',
-    },
-    // Stocks page
-    stocks: {
-      colSymbol: 'Mã',
-      colSector: 'Ngành',
-      colPrice: 'Giá',
-      colDelta: 'Δ',
-      colChangePct: '±%',
-      colVolume: 'KL (M)',
-      colValue: 'GT (Ngàn tỷ)',
-      col7Sessions: '7 phiên',
-      priceTable: 'Bảng giá cổ phiếu',
-      updatedAt: 'cập nhật cuối 15:00',
-      searchPlaceholder: 'Tìm mã CK (VD: VCB, FPT...)',
-      allSectors: 'Tất cả ngành',
-      allExchanges: 'Tất cả sàn',
-      biggestGainers: 'Tăng mạnh nhất',
-      biggestLosers: 'Giảm mạnh nhất',
-      mostActive: 'Giao dịch nhiều nhất',
-      byVolume: 'theo khối lượng',
-      shares: 'cp',
-      loadingData: 'Đang tải...',
-      noStockData: 'Chưa có dữ liệu cổ phiếu. Hãy bấm crawl để lấy data.',
-      totalSymbols: 'mã tổng',
-      symbolsLoaded: 'đã tải',
-      upDown: 'Tăng / Giảm',
-      overTotal: 'trên tổng số mã',
-      priceChart: 'Biểu đồ giá VN30',
-      noChartData: 'Chưa có dữ liệu biểu đồ. Hãy thu thập dữ liệu trước.',
-      loadingChart: 'Đang tải biểu đồ...',
-      collectRequest: 'Đã gửi yêu cầu thu thập VN30',
-      collectFail: 'Không thể gửi yêu cầu thu thập',
-      predictRequest: 'Đã gửi yêu cầu chạy dự đoán VN30',
-      predictFail: 'Không thể gửi yêu cầu dự đoán',
-      thousandVnd: 'nghìn đ / cp',
-      noHistPrice: 'Chưa có lịch sử giá',
-      nextSessionPred: 'Dự đoán phiên kế',
-      predPrice: 'Giá dự đoán',
-      noData: 'Chưa có dữ liệu',
     },
     // Simulation page
     simulation: {
@@ -621,9 +576,6 @@ export const translations: Record<Lang, Translations> = {
     },
     titles: {
       '/': ['Market Overview', 'DASHBOARD'],
-      '/markets/vn30': ['VN30', 'EQUITIES · VN30'],
-      '/markets/vn30/predictions': ['VN30 Predictions', 'PREDICTIONS · VN30'],
-      '/markets/vn30/training': ['VN30 Training', 'TRAINING · VN30'],
       '/markets/gold': ['Gold', 'GOLD'],
       '/markets/gold/predictions': ['Gold Predictions', 'PREDICTIONS · GOLD'],
       '/markets/gold/training': ['Gold Training', 'TRAINING · GOLD'],
@@ -640,9 +592,6 @@ export const translations: Record<Lang, Translations> = {
       '/guide': ['User Guide', 'USER GUIDE'],
       '/settings': ['Settings', 'SETTINGS'],
       '/admin/users': ['User Management', 'ADMIN · USERS'],
-      '/stocks': ['VN30', 'EQUITIES · VN30'],
-      '/predictions': ['Predictions', 'FORECASTS'],
-      '/training': ['ML Training', 'ML TRAINING'],
       '/gold': ['Gold Price', 'GOLD'],
       '/crypto': ['Cryptocurrency', 'CRYPTO'],
       '/nasdaq': ['NASDAQ 100', 'NASDAQ 100 · US EQUITIES'],
@@ -832,44 +781,6 @@ export const translations: Record<Lang, Translations> = {
       noChartData: 'No chart data. Please collect data first.',
       noDataForSymbol: 'No data for this symbol.',
       noConfirmed: 'No confirmed results yet. Results will appear after predictions are reconciled with actual prices.',
-    },
-    stocks: {
-      colSymbol: 'Symbol',
-      colSector: 'Sector',
-      colPrice: 'Price',
-      colDelta: 'Δ',
-      colChangePct: '±%',
-      colVolume: 'Vol (M)',
-      colValue: 'Value (Tril)',
-      col7Sessions: '7 sessions',
-      priceTable: 'Stock Price Board',
-      updatedAt: 'last updated 15:00',
-      searchPlaceholder: 'Search symbol (e.g. VCB, FPT...)',
-      allSectors: 'All sectors',
-      allExchanges: 'All exchanges',
-      biggestGainers: 'Biggest Gainers',
-      biggestLosers: 'Biggest Losers',
-      mostActive: 'Most Active',
-      byVolume: 'by volume',
-      shares: 'shares',
-      loadingData: 'Loading...',
-      noStockData: 'No stock data. Please crawl to get data.',
-      totalSymbols: 'symbols total',
-      symbolsLoaded: 'loaded',
-      upDown: 'Up / Down',
-      overTotal: 'over total symbols',
-      priceChart: 'VN30 Price Chart',
-      noChartData: 'No chart data. Please collect data first.',
-      loadingChart: 'Loading chart...',
-      collectRequest: 'VN30 collection request sent',
-      collectFail: 'Cannot send collection request',
-      predictRequest: 'VN30 prediction request sent',
-      predictFail: 'Cannot send prediction request',
-      thousandVnd: 'K VND / share',
-      noHistPrice: 'No price history',
-      nextSessionPred: 'Next Session Prediction',
-      predPrice: 'Predicted price',
-      noData: 'No data',
     },
     simulation: {
       totalBots: 'Total Bots',
@@ -1365,44 +1276,6 @@ export interface Translations {
     noChartData: string;
     noDataForSymbol: string;
     noConfirmed: string;
-  };
-  stocks: {
-    colSymbol: string;
-    colSector: string;
-    colPrice: string;
-    colDelta: string;
-    colChangePct: string;
-    colVolume: string;
-    colValue: string;
-    col7Sessions: string;
-    priceTable: string;
-    updatedAt: string;
-    searchPlaceholder: string;
-    allSectors: string;
-    allExchanges: string;
-    biggestGainers: string;
-    biggestLosers: string;
-    mostActive: string;
-    byVolume: string;
-    shares: string;
-    loadingData: string;
-    noStockData: string;
-    totalSymbols: string;
-    symbolsLoaded: string;
-    upDown: string;
-    overTotal: string;
-    priceChart: string;
-    noChartData: string;
-    loadingChart: string;
-    collectRequest: string;
-    collectFail: string;
-    predictRequest: string;
-    predictFail: string;
-    thousandVnd: string;
-    noHistPrice: string;
-    nextSessionPred: string;
-    predPrice: string;
-    noData: string;
   };
   simulation: {
     totalBots: string;
