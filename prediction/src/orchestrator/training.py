@@ -23,16 +23,6 @@ def _collect_all_training_series() -> list[tuple[list[float], list[float], str]]
     """Collect (price_list, vol_list, market_label) for all markets."""
     series = []
 
-    # VN30
-    for stock in repo.get_vn30_stocks():
-        prices = repo.get_stock_prices_asc(stock.id, limit=200)
-        if len(prices) >= 20:
-            series.append((
-                [float(p.close_price) for p in prices],
-                [float(p.volume or 0) for p in prices],
-                f"vn30/{stock.symbol}",
-            ))
-
     # GOLD
     for source, product_type in GOLD_INSTRUMENTS:
         prices = repo.get_gold_prices_asc(source, product_type, limit=200)
@@ -82,24 +72,14 @@ def _collect_series_for_market(mk: str) -> list[tuple[list[float], list[float], 
     """Collect (price_list, vol_list, label) for a single market.
 
     Args:
-        mk: Market key in UPPER case — one of VN30, GOLD, NASDAQ100, CRYPTO, SP500.
+        mk: Market key in UPPER case — one of GOLD, NASDAQ100, CRYPTO, SP500.
 
     Returns:
         List of (price_list, vol_list, label) tuples where price_list is ASC order.
     """
     series: list[tuple[list[float], list[float], str]] = []
 
-    if mk == "VN30":
-        for stock in repo.get_vn30_stocks():
-            prices = repo.get_stock_prices_asc(stock.id, limit=200)
-            if len(prices) >= 20:
-                series.append((
-                    [float(p.close_price) for p in prices],
-                    [float(p.volume or 0) for p in prices],
-                    f"vn30/{stock.symbol}",
-                ))
-
-    elif mk == "GOLD":
+    if mk == "GOLD":
         for source, product_type in GOLD_INSTRUMENTS:
             prices = repo.get_gold_prices_asc(source, product_type, limit=200)
             if len(prices) >= 20:
@@ -279,7 +259,7 @@ def train_all_algorithms() -> tuple[bool, str]:
         _current_phase = "Initializing"
         _done_algorithms = 0
 
-    markets = ["VN30", "GOLD", "NASDAQ100", "CRYPTO", "SP500"]
+    markets = ["GOLD", "NASDAQ100", "CRYPTO", "SP500"]
     session_id = str(uuid.uuid4())
     started_at = datetime.utcnow()
 
@@ -673,7 +653,7 @@ def run_historical_backtest(train_window: int, step_size: int, market_key: str =
     """
     from src.algorithms.registry import build_algorithms
 
-    mk = market_key.upper() if market_key else "VN30"
+    mk = market_key.upper() if market_key else ""
     algos = build_algorithms()
 
     if train_window <= 0:
@@ -686,9 +666,7 @@ def run_historical_backtest(train_window: int, step_size: int, market_key: str =
     total_preds = 0
     items_processed = 0
 
-    if mk in ("", "VN30"):
-        total_preds, items_processed = _backtest_vn30(algos, train_window, step_size)
-    elif mk == "GOLD":
+    if mk == "GOLD":
         total_preds, items_processed = _backtest_gold(algos, train_window, step_size)
     elif mk == "NASDAQ100":
         total_preds, items_processed = _backtest_nasdaq(algos, train_window, step_size)
@@ -698,7 +676,6 @@ def run_historical_backtest(train_window: int, step_size: int, market_key: str =
         total_preds, items_processed = _backtest_sp500(algos, train_window, step_size)
     elif mk == "ALL":
         for _mkey, _fn in [
-            ("VN30",      lambda: _backtest_vn30(algos, train_window, step_size)),
             ("GOLD",      lambda: _backtest_gold(algos, train_window, step_size)),
             ("NASDAQ100", lambda: _backtest_nasdaq(algos, train_window, step_size)),
             ("CRYPTO",    lambda: _backtest_crypto(algos, train_window, step_size)),
@@ -711,6 +688,8 @@ def run_historical_backtest(train_window: int, step_size: int, market_key: str =
                 log.info("backtest.market_done", market=_mkey, predictions=preds, items=items)
             except Exception as exc:
                 log.error("backtest.market_failed", market=_mkey, error=str(exc))
+    else:
+        raise ValueError(f"Unknown market key for backtest: {market_key!r}. Valid values: GOLD, NASDAQ100, CRYPTO, SP500, ALL")
 
     duration_ms = int((datetime.utcnow() - started_at).total_seconds() * 1000)
     log.info("backtest.done", market=mk, predictions=total_preds, items=items_processed, duration_ms=duration_ms)
@@ -767,68 +746,6 @@ def _walk_forward_prices(prices_asc: list, algos: dict, train_window: int, step_
             total += len(batch)
 
     return total
-
-
-def _backtest_vn30(algos: dict, train_window: int, step_size: int) -> tuple[int, int]:
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    repo.delete_predictions_before(today)
-
-    stocks = repo.get_vn30_stocks()
-    total = 0
-    items = 0
-
-    for stock in stocks:
-        prices_asc = repo.get_stock_prices_asc(stock.id, limit=500)
-        if len(prices_asc) < train_window + 1:
-            continue
-
-        price_floats = [float(p.close_price) for p in prices_asc]
-        dates = [p.trading_date for p in prices_asc]
-
-        items += 1
-        for key, algo in algos.items():
-            batch: list[dict] = []
-            n = len(price_floats)
-            for window_end in range(train_window, n, step_size):
-                hist_end = min(window_end, 270)
-                hist_start = window_end - hist_end
-                price_list = price_floats[hist_start:window_end]
-
-                fold_end = min(window_end + step_size, n)
-                for t in range(window_end, fold_end):
-                    try:
-                        result = algo.predict(price_list)
-                        actual = Decimal(str(price_floats[t])).quantize(Decimal("0.01"))
-                        predicted = Decimal(str(result.predicted_price)).quantize(Decimal("0.01"))
-                        accuracy = max(Decimal("0"), Decimal("1") - abs(actual - predicted) / actual)
-                        accuracy = accuracy.quantize(Decimal("0.0001"))
-                        status = "confirmed" if float(accuracy) >= 0.70 else "wrong"
-
-                        batch.append(dict(
-                            stock_id=stock.id,
-                            predicted_price=predicted,
-                            current_price=Decimal(str(price_floats[window_end - 1])).quantize(Decimal("0.01")),
-                            confidence=Decimal(str(round(result.confidence, 4))),
-                            algorithm_name=key,
-                            prediction_date=dates[window_end - 1],
-                            target_date=dates[t],
-                            actual_price=actual,
-                            accuracy=accuracy,
-                            status=status,
-                        ))
-
-                        if len(batch) >= 200:
-                            repo.bulk_create_predictions(batch)
-                            total += len(batch)
-                            batch = []
-                    except Exception:
-                        pass
-
-            if batch:
-                repo.bulk_create_predictions(batch)
-                total += len(batch)
-
-    return total, items
 
 
 def _backtest_gold(algos: dict, train_window: int, step_size: int) -> tuple[int, int]:

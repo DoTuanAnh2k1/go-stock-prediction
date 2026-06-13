@@ -1,7 +1,6 @@
 """Orchestrator — runs predictions for all markets or a specific market.
 
 Markets:
-  VN30     — 30 Vietnamese stocks × 6 algorithms
   GOLD     — gold instruments (XAU, BTMC/sjc, BTMC/nhan_tron) × 6 algorithms
   NASDAQ100 — 15 NASDAQ symbols × 6 algorithms
   CRYPTO   — BTC, ETH, SOL × 6 algorithms
@@ -31,7 +30,7 @@ GOLD_INSTRUMENTS = [
 def run_all_markets() -> int:
     """Run predictions for ALL markets. Returns total prediction count."""
     total = 0
-    for market_key in ("VN30", "GOLD", "NASDAQ100", "CRYPTO", "SP500"):
+    for market_key in ("GOLD", "NASDAQ100", "CRYPTO", "SP500"):
         try:
             n = run_for_market(market_key)
             total += n
@@ -46,9 +45,7 @@ def run_for_market(market_key: str) -> int:
     mk = market_key.upper()
     algos = get_algos_for_market(mk)
 
-    if mk in ("VN30", ""):
-        count = _predict_vn30(algos)
-    elif mk == "GOLD":
+    if mk == "GOLD":
         count = _predict_gold(algos)
     elif mk == "NASDAQ100":
         count = _predict_nasdaq(algos)
@@ -66,49 +63,6 @@ def run_for_market(market_key: str) -> int:
 # ---------------------------------------------------------------------------
 # Market-specific prediction runners
 # ---------------------------------------------------------------------------
-
-def _predict_vn30(algos: dict) -> int:
-    stocks = repo.get_vn30_stocks()
-    log.info("predict.vn30.start", stocks=len(stocks), algorithms=len(algos))
-    dir_acc = repo.get_direction_accuracy("VN30")
-    count = 0
-    now = datetime.now()
-    target = now + timedelta(days=1)
-
-    for stock in stocks:
-        prices_asc = repo.get_stock_prices_asc(stock.id, limit=270)
-        if len(prices_asc) < 20:
-            log.debug("predict.vn30.insufficient", symbol=stock.symbol, points=len(prices_asc))
-            continue
-
-        price_list = [float(p.close_price) for p in prices_asc]
-        vol_list = [float(p.volume or 0) for p in prices_asc]
-        current = price_list[-1]
-
-        for key, algo in algos.items():
-            try:
-                result = algo.predict(price_list, vol_list)
-                algo_acc_pct = dir_acc.get(key, None)
-                algo_acc = Decimal(str(round(algo_acc_pct / 100, 4))) if algo_acc_pct is not None else None
-                repo.delete_pending_vn30_predictions_for_stock(stock.id, key)
-                repo.create_prediction(
-                    stock_id=stock.id,
-                    predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.01")),
-                    current_price=Decimal(str(current)).quantize(Decimal("0.01")),
-                    confidence=Decimal(str(round(result.confidence, 4))),
-                    algorithm_name=key,
-                    prediction_date=now,
-                    target_date=target,
-                    accuracy=algo_acc,
-                    status="pending",
-                )
-                count += 1
-            except Exception as exc:
-                log.warning("predict.vn30.algo_failed", symbol=stock.symbol, algo=key, error=str(exc))
-
-    log.info("predict.vn30.done", count=count)
-    return count
-
 
 def _predict_gold(algos: dict) -> int:
     log.info("predict.gold.start", instruments=len(GOLD_INSTRUMENTS), algorithms=len(algos))
