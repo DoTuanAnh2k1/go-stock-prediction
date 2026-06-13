@@ -21,7 +21,7 @@ def get_max_change_pct(market_key: str) -> float:
     """Return the maximum allowed price-change fraction for a given market.
 
     Args:
-        market_key: Market identifier string (e.g. "VN30", "GOLD", "CRYPTO").
+        market_key: Market identifier string (e.g. "GOLD", "NASDAQ100", "CRYPTO").
                     Case-insensitive. Returns DEFAULT_MAX_CHANGE for unknown keys.
 
     Returns:
