@@ -2,11 +2,11 @@
 
 ## Tổng quan dự án
 
-Hệ thống dự đoán giá cổ phiếu Việt Nam. Thu thập dữ liệu từ nhiều nguồn (VN30, Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, S&P 500), chạy 11 thuật toán ML (Moving Average, EMA/MACD, LSTM PyTorch, GRU PyTorch, ARIMA-GARCH, EGARCH, SARIMA, LightGBM, XGBoost, Random Forest, Ensemble), và hiển thị kết quả qua web dashboard.
+Hệ thống dự đoán giá tài sản tài chính. Thu thập dữ liệu từ 4 nguồn (Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, S&P 500), chạy 11 thuật toán ML (Moving Average, EMA/MACD, LSTM PyTorch, GRU PyTorch, ARIMA-GARCH, EGARCH, SARIMA, LightGBM, XGBoost, Random Forest, Ensemble), và hiển thị kết quả qua web dashboard.
 
 **Kiến trúc hiện tại: microservice (2 service + nginx)**
 - **API Backend** (`api/cmd`) — Go HTTP trên `:8118`, phục vụ toàn bộ `/api/*`. Gọi Prediction Service qua gRPC để trigger crawler/training; đọc DB trực tiếp cho các query dữ liệu.
-- **Prediction Service** (`prediction/`) — **Python** gRPC trên `:8119`. Xử lý crawling (VN30, Gold, NASDAQ, Crypto BTC/ETH/SOL, S&P 500), 11 thuật toán ML, training, APScheduler cron jobs.
+- **Prediction Service** (`prediction/`) — **Python** gRPC trên `:8119`. Xử lý crawling (Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, S&P 500), 11 thuật toán ML, training, APScheduler cron jobs.
 - **Nginx** — Reverse proxy trên `:80`, forward tất cả request về API Backend.
 
 
@@ -55,30 +55,35 @@ nginx/nginx.conf                        # Nginx reverse proxy: :80 → api:8118
 api/Dockerfile                          # Docker build cho API Backend (Go)
 api/pkg/server/router.go                # Đăng ký tất cả routes (API)
 api/pkg/server/api_*.go                 # Mỗi file = một nhóm API endpoint
-api/pkg/server/api_prediction_compare.go    # GET /api/predictions/compare/{symbol} và /api/predictions/error-distribution
 api/pkg/server/api_direction_accuracy.go    # GET /api/predictions/direction-accuracy — direction accuracy per algorithm per market
 api/pkg/server/api_training_algorithms.go   # GET /api/training/algorithms
 api/pkg/server/api_training_metrics.go      # GET /api/training/metrics
 api/pkg/server/api_gold.go                  # GET /api/gold/latest, /api/gold/prices, /api/gold/chart
 api/pkg/server/api_gold_prediction.go       # GET /api/gold/predictions/latest, /api/gold/predictions/chart, /api/gold/predictions
+api/pkg/server/api_nasdaq.go                # GET /api/nasdaq/latest, /api/nasdaq/prices, /api/nasdaq/chart
+api/pkg/server/api_nasdaq_prediction.go     # GET /api/nasdaq/predictions/*
+api/pkg/server/api_crypto.go                # GET /api/crypto/latest, /api/crypto/prices, /api/crypto/chart
+api/pkg/server/api_crypto_prediction.go     # GET /api/crypto/predictions/*
+api/pkg/server/api_sp500.go                 # GET /api/sp500/latest, /api/sp500/prices, /api/sp500/chart
+api/pkg/server/api_sp500_prediction.go      # GET /api/sp500/predictions/*
+api/pkg/server/api_markets.go               # GET /api/markets/{key}/predictions, GET /api/markets/{key}/training
 api/pkg/server/api_training_status.go       # GET /api/training/status (gọi gRPC GetTrainingStatus)
-api/pkg/server/api_stock_detail.go          # GET /api/stocks/{symbol}/detail
-api/pkg/server/api_stock_actions.go         # POST /api/stocks/{symbol}/crawl, POST /api/stocks/{symbol}/predict
 api/pkg/server/api_dashboard_stats.go       # GET /api/dashboard/stats
-api/pkg/server/api_accuracy_trend.go        # GET /api/predictions/accuracy-trend
-api/pkg/server/api_trigger_crawler.go       # POST /api/trigger/crawler (→ gRPC TriggerCrawler)
-api/pkg/server/api_trigger_predict.go       # POST /api/trigger/predict (→ gRPC TriggerPredict)
 api/pkg/server/api_trigger_train.go         # POST /api/trigger/train (→ gRPC TriggerTrain)
 api/pkg/server/api_trigger_gold_crawler.go  # POST /api/trigger/gold-crawler (→ gRPC TriggerGoldCrawler)
-api/pkg/server/api_trigger_gold_history.go  # POST /api/trigger/gold-history (→ gRPC TriggerGoldHistory)
+api/pkg/server/api_trigger_gold_history.go  # POST /api/trigger/gold-history, POST /api/trigger/gold-predict (→ gRPC)
 api/pkg/server/api_trigger_reconcile.go     # POST /api/trigger/reconcile (→ gRPC TriggerReconcile)
-api/pkg/server/api_trigger_stock_history.go # POST /api/trigger/stock-history (→ gRPC TriggerStockHistory)
 api/pkg/server/api_trigger_historical_backtest.go # POST /api/trigger/historical-backtest (→ gRPC TriggerHistoricalBacktest, trả 202, 409 nếu đang chạy)
-api/pkg/server/api_trigger_sp500.go         # POST /api/trigger/sp500-crawler (→ gRPC TriggerSP500Crawler), POST /api/trigger/sp500-predict (→ gRPC TriggerSP500Predict)
+api/pkg/server/api_trigger_gold_historical_backtest.go # POST /api/trigger/gold-historical-backtest (→ gRPC)
+api/pkg/server/api_trigger_nasdaq_crawler.go  # POST /api/trigger/nasdaq-crawler, POST /api/trigger/nasdaq-predict (→ gRPC)
+api/pkg/server/api_trigger_crypto_crawler.go  # POST /api/trigger/crypto-crawler, POST /api/trigger/crypto-predict (→ gRPC)
+api/pkg/server/api_trigger_sp500.go          # POST /api/trigger/sp500-crawler (→ gRPC TriggerSP500Crawler), POST /api/trigger/sp500-predict (→ gRPC TriggerSP500Predict)
+api/pkg/server/api_trigger_simulation.go     # POST /api/trigger/simulation-backtest, POST /api/trigger/simulation-live-step, POST /api/trigger/sim-reset (→ gRPC)
 api/pkg/server/api_auth.go                  # POST /api/auth/login (DB + bcrypt), GET /api/auth/me — JWT authentication
 api/pkg/server/api_users.go                 # GET/POST /api/users, DELETE /api/users/{id} — quản lý user (admin only)
 api/pkg/server/api_schedules.go             # GET /api/schedules, PUT /api/schedules/{key} — quản lý lịch cron động
 api/pkg/server/api_backup.go                # GET /api/backups, POST /api/trigger/backup, GET/DELETE /api/backups/{filename}
+api/pkg/server/api_simulation.go            # GET /api/simulation/leaderboard, bots, trades, chart; PUT config; POST toggle/run
 api/pkg/server/middleware_jwt.go            # JWTMiddleware (non-blocking, inject claims vào context), getClaims(), requireAuth(), requireAdmin(), AuthRequired()
 api/pkg/server/helper.go                    # requireGRPCClient(), ResponseError(), ResponseSuccess() và các helper
 api/pkg/service/predict/registry/registry.go   # AlgorithmDef struct (metadata only — không có Factory), Register(), All()
@@ -89,14 +94,14 @@ api/pkg/store/repository/user.go           # UserStore interface — CreateUser,
 api/pkg/store/mysql/                        # Triển khai MySQL dùng GORM
 api/pkg/store/mysql/user.go                 # MySQL implementation của UserStore
 api/pkg/store/mysql/cron_schedule.go        # MySQL implementation của CronScheduleStore — GetAllCronSchedules, GetCronScheduleByKey, UpsertCronSchedule
-api/pkg/store/mysql/direction_accuracy.go   # MySQL implementation của DirectionAccuracyStore — raw SQL query GROUP BY algorithm trên 5 prediction tables
-api/pkg/models/models_db/                   # GORM struct: Stock, StockPrice, Prediction, SyncLog, Exchange, GoldPrice, TrainingLog, TrainingMetrics, User, CronSchedule
+api/pkg/store/mysql/direction_accuracy.go   # MySQL implementation của DirectionAccuracyStore — raw SQL query GROUP BY algorithm trên 4 prediction tables
+api/pkg/models/models_db/                   # GORM struct: GoldPrice, GoldPrediction, NasdaqPrice, Sp500Price, CryptoPrice, intraday prices, SyncLog, TrainingLog, TrainingMetrics, User, CronSchedule
 api/pkg/models/models_db/cron_schedule.go   # CronSchedule GORM struct (JobKey, JobName, CronExpression, Enabled, UpdatedAt)
 api/pkg/models/models_db/user.go            # User GORM struct (Username, PasswordHash, Role)
 api/pkg/models/models_db/gold_price.go      # GoldPrice GORM struct
 api/pkg/models/models_db/training_log.go    # TrainingLog GORM struct
 api/pkg/models/models_db/training_metrics.go # TrainingMetrics struct
-# Tất cả 5 prediction structs (Prediction, GoldPrediction, NasdaqPrediction, Sp500Prediction, CryptoPrediction)
+# Tất cả 4 prediction structs (GoldPrediction, NasdaqPrediction, Sp500Prediction, CryptoPrediction)
 # đều có trường DirectionCorrect *bool (nullable, cột direction_correct trong DB)
 api/pkg/models/models_api/                  # DTO cho JSON response — bao gồm DirectionAccuracyRow{Algorithm, Total, Correct}
 api/pkg/models/models_config/config.go      # Config struct — bao gồm GRPCConfig (ServerPort, ClientTarget) và ServerConfig (AdminUsername, AdminPassword, JWTSecret)
@@ -142,7 +147,6 @@ prediction/
 │   │   └── ensemble.py                 # Equal-weight ensemble của tất cả 10 base models
 │   ├── crawlers/
 │   │   ├── base.py                     # Abstract BaseCrawler
-│   │   ├── vn30.py                     # VNDirect API — 30 stocks HOSE
 │   │   ├── gold.py                     # Yahoo Finance XAU + BTMC API + Phú Quý
 │   │   ├── nasdaq.py                   # Yahoo Finance — 15 NASDAQ symbols
 │   │   ├── crypto.py                   # CoinGecko — BTC/ETH/SOL
@@ -151,8 +155,8 @@ prediction/
 │   │   ├── manager.py                  # APScheduler + DB-backed CronSchedule; poll mỗi 60s để phát hiện thay đổi
 │   │   └── jobs.py                     # Định nghĩa tất cả jobs (crawlers + predictions + training + reconcile)
 │   ├── orchestrator/
-│   │   ├── runner.py                   # run_all_markets() — VN30/GOLD/NASDAQ100/CRYPTO/SP500; run_for_market(key)
-│   │   └── training.py                 # reconcile_predictions() — tính direction_correct cho tất cả 5 markets (VN30/GOLD/NASDAQ/SP500/CRYPTO); train_for_market()
+│   │   ├── runner.py                   # run_all_markets() — GOLD/NASDAQ100/CRYPTO/SP500; run_for_market(key)
+│   │   └── training.py                 # reconcile_predictions() — tính direction_correct cho 4 markets (GOLD/NASDAQ/SP500/CRYPTO); train_for_market()
 │   └── utils/
 │       ├── logger.py                   # structlog config
 │       ├── timezone.py                 # Asia/Ho_Chi_Minh helpers
@@ -187,7 +191,7 @@ prediction/
 4. `init_db()` — SQLAlchemy engine + session factory
 5. `start_grpc_server(port)` — gRPC server trên `:8119` (thread)
 6. `init_scheduler(JOB_FUNCTIONS)` — APScheduler với DB-backed schedules, poll mỗi 60s
-7. Startup data sync sau 5 giây delay — chạy `VN30Crawler().crawl()` một lần (daemon thread)
+7. Startup data sync — không còn chạy crawler tự động khi khởi động (đã bỏ VN30 startup sync)
 8. Chờ SIGTERM/SIGINT → `stop_grpc_server()` + `shutdown_scheduler()` → exit
 
 ## Biến môi trường (.env)
@@ -231,10 +235,10 @@ BACKUP_DIR=/backups              # Thư mục lưu file backup mysqldump (mount 
 - **Decimal:** Dùng `shopspring/decimal` trong Go API Backend cho mọi phép tính số thực liên quan đến giá — tránh float64. Python service dùng `Decimal` từ stdlib hoặc pandas float64 (được làm tròn trước khi lưu DB).
 - **API handlers (Go):** Mỗi nhóm endpoint có file riêng `api_<topic>.go` trong `api/pkg/server/`.
 - **Algorithms (Python):** Mỗi thuật toán implement abstract class `PredictionAlgorithm` trong `prediction/src/algorithms/base.py` với method `predict(prices, volumes) -> PredictionResult`. Đăng ký metadata tương ứng trong `api/pkg/service/predict/registry/algorithms.go` (Go) để `/api/training/algorithms` trả đúng danh sách. Tổng cộng 11 thuật toán: moving_average, ema, lstm_nn, gru_nn, arima_garch, egarch, sarima, lightgbm, xgboost, random_forest, ensemble.
-- **Market-aware clamp:** Tất cả algorithms dùng `get_max_change_pct(self._market_key)` từ `base.py` để giới hạn thay đổi giá dự đoán. Giới hạn theo market: VN30 ±7%, GOLD/SP500 ±15%, NASDAQ100 ±20%, CRYPTO ±50%. Registry set `_market_key` trên instance trước khi gọi `predict()`. Market key không xác định dùng `DEFAULT_MAX_CHANGE = 0.15`.
-- **Direction accuracy:** Sau khi reconcile, trường `direction_correct` (nullable boolean) được lưu vào 5 prediction tables (`predictions`, `gold_predictions`, `nasdaq_predictions`, `sp500_predictions`, `crypto_predictions`). Giá trị `True` khi hướng dự đoán (tăng/giảm so với giá hiện tại) khớp với hướng thực tế; `NULL` khi chưa có giá thực tế. Query tổng hợp qua `DirectionAccuracyStore` (Go) hoặc `get_direction_accuracy()` (Python repository).
+- **Market-aware clamp:** Tất cả algorithms dùng `get_max_change_pct(self._market_key)` từ `base.py` để giới hạn thay đổi giá dự đoán. Giới hạn theo market: GOLD/SP500 ±15%, NASDAQ100 ±20%, CRYPTO ±50%. Registry set `_market_key` trên instance trước khi gọi `predict()`. Market key không xác định dùng `DEFAULT_MAX_CHANGE = 0.15`.
+- **Direction accuracy:** Sau khi reconcile, trường `direction_correct` (nullable boolean) được lưu vào 4 prediction tables (`gold_predictions`, `nasdaq_predictions`, `sp500_predictions`, `crypto_predictions`). Giá trị `True` khi hướng dự đoán (tăng/giảm so với giá hiện tại) khớp với hướng thực tế; `NULL` khi chưa có giá thực tế. Query tổng hợp qua `DirectionAccuracyStore` (Go) hoặc `get_direction_accuracy()` (Python repository).
 - **Logging:** Go API Backend dùng `api/pkg/logger` (zerolog). Python service dùng `structlog`.
-- **gRPC triggers:** Tất cả trigger handler trong `api/pkg/server/api_trigger_*.go` và `api/pkg/server/api_stock_actions.go` đều gọi `requireGRPCClient(w)` trước. Hàm này trả về 503 nếu gRPC client chưa init. Tất cả trigger endpoints được wrap bằng `AuthRequired()` trong router — yêu cầu JWT hợp lệ.
+- **gRPC triggers:** Tất cả trigger handler trong `api/pkg/server/api_trigger_*.go` đều gọi `requireGRPCClient(w)` trước. Hàm này trả về 503 nếu gRPC client chưa init. Tất cả trigger endpoints được wrap bằng `AuthRequired()` trong router — yêu cầu JWT hợp lệ.
 - **Dynamic cron schedules:** Lịch cron được lưu trong bảng `cron_schedules`. Python Prediction Service poll DB mỗi 60 giây để phát hiện thay đổi và tự reschedule qua APScheduler — không cần restart. Nguồn sự thật là `DEFAULT_SCHEDULES` trong `prediction/src/scheduler/manager.py`; mỗi lần Python service khởi động, `upsert_cron_schedule()` chạy true upsert — ghi đè DB nếu giá trị code khác. Go `seedCronSchedules()` chỉ insert-if-not-exists (không update). Dùng `CronScheduleStore` interface (Go) để truy cập từ API Backend.
 - **Proto regeneration:** Khi thay đổi `api/proto/prediction/prediction.proto`, cần tái sinh cả Go stubs (`protoc` chạy từ `api/`) lẫn Python stubs (lệnh `grpc_tools.protoc` trong Dockerfile stage 1). Không sửa tay các file generated.
 - **Data ordering — QUAN TRỌNG:** DB trả `stock_prices` với `ORDER BY trading_date DESC` (mới nhất trước). Python algorithms cần đảo ngược về ASC trước khi build feature sequences. Repository (Python) trả DESC — tầng algorithm tự xử lý (tương tự pattern Go cũ với `reverseStockPrices()`).
@@ -297,10 +301,10 @@ Các bước bắt buộc:
 ## Database
 
 - **ORM:** GORM v2
-- **Tables chính:** `exchanges`, `stocks`, `stock_prices`, `predictions`, `sync_logs`, `gold_prices`, `training_logs`, `users`, `cron_schedules`, `sp500_prices`, `sp500_predictions`
+- **Tables chính:** `sync_logs`, `gold_prices`, `gold_predictions`, `nasdaq_prices`, `nasdaq_predictions`, `sp500_prices`, `sp500_predictions`, `crypto_prices`, `crypto_predictions`, `training_logs`, `training_metrics`, `users`, `cron_schedules`
 - **Auto-migrate:** Chạy khi start app qua `api/pkg/models/models_db/migrations.go`
 - **Schema đầy đủ:** `database.sql` ở root
-- **direction_correct (nullable boolean):** Có mặt trong tất cả 5 prediction tables. Được set bởi `reconcile_predictions()` trong Python; `NULL` = chưa reconcile, `1` = hướng đúng, `0` = hướng sai. Dùng cho endpoint `/api/predictions/direction-accuracy`.
+- **direction_correct (nullable boolean):** Có mặt trong tất cả 4 prediction tables. Được set bởi `reconcile_predictions()` trong Python; `NULL` = chưa reconcile, `1` = hướng đúng, `0` = hướng sai. Dùng cho endpoint `/api/predictions/direction-accuracy`.
 
 ## Cron schedules
 
@@ -317,11 +321,8 @@ Go-side `seedCronSchedules()` trong `api/pkg/server/api_schedules.go` chỉ inse
 | `daily_reconcile` | `0 0 6 * * *` | bật | Reconcile dự đoán với giá thực tế |
 | `crawler_gold` | `0 0 * * * *` | bật | Pipeline Gold: crawl → train mỗi 10 lần → predict (mỗi giờ phút 0) |
 | `crawler_nasdaq` | `0 15 * * * *` | bật | Pipeline NASDAQ: crawl → train mỗi 10 lần → predict (mỗi giờ phút 15) |
-| `crawler_sp500` | `0 30 * * * *` | bật | Pipeline S&P 500: crawl → train mỗi 10 lần → predict (mỗi giờ phút 30) |
-| `crawler_crypto` | `0 45 * * * *` | bật | Pipeline Crypto: crawl → train mỗi 10 lần → predict (mỗi giờ phút 45) |
-| `crawler_stock` | `0 0 12 * * *` | bật | Pipeline VN30: crawl → train mỗi 10 lần → predict (12PM hàng ngày) |
-| `predict_vn30` | `0 0 15 * * 1-5` | bật | Dự đoán VN30 (3PM ngày thường) |
-| `train_vn30` | `0 0 2 * * 0` | bật | Training VN30 (Chủ nhật 2AM) |
+| `crawler_sp500` | `0 0,30 * * * *` | bật | Pipeline S&P 500: crawl → train mỗi 10 lần → predict (mỗi giờ phút 0 và 30) |
+| `crawler_crypto` | `0 0 */2 * * *` | bật | Pipeline Crypto: crawl → train mỗi 10 lần → predict (mỗi 2 giờ) |
 | `train_gold` | `0 0 3 * * 0` | bật | Training Gold (Chủ nhật 3AM) |
 | `train_nasdaq` | `0 0 4 * * 0` | bật | Training NASDAQ (Chủ nhật 4AM) |
 | `train_crypto` | `0 0 5 * * 0` | bật | Training Crypto (Chủ nhật 5AM) |
@@ -337,12 +338,10 @@ Go-side `seedCronSchedules()` trong `api/pkg/server/api_schedules.go` chỉ inse
 
 ### Pipeline logic
 
-Bốn markets chạy hourly pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`, `crawler_crypto`) đều dùng hàm `_run_pipeline()` trong `jobs.py`:
+Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`, `crawler_crypto`) đều dùng hàm `_run_pipeline()` trong `jobs.py`:
 1. Crawl dữ liệu mới
 2. Tăng counter per-market; mỗi 10 lần crawl → trigger `train_for_market()`
 3. Chạy `run_for_market()` để sinh dự đoán mới
-
-VN30 (`crawler_stock`) cũng dùng cùng pipeline nhưng chạy theo lịch ngày thay vì mỗi giờ.
 
 ## Ports
 
@@ -387,13 +386,7 @@ VN30 (`crawler_stock`) cũng dùng cùng pipeline nhưng chạy theo lịch ngà
 
 | Method | Path | Ghi chú |
 |--------|------|---------|
-| `GET` | `/api/predictions` | Danh sách dự đoán — query: `?status=confirmed` dùng `GetConfirmedPredictionsPage` (default from 6 tháng), mặc định from 30 ngày; response gồm `actual_price`, `accuracy`, `status` |
-| `GET` | `/api/predictions/accuracy` | Độ chính xác theo thuật toán |
-| `GET` | `/api/predictions/accuracy-trend` | Xu hướng độ chính xác theo thời gian |
-| `GET` | `/api/predictions/compare/{symbol}` | Cặp giá dự đoán vs thực tế theo thời gian — query: `?days=30&algorithm=lstm_nn` |
-| `GET` | `/api/predictions/error-distribution` | Scatter plot: predicted change % vs actual change % — query: `?algorithm=lstm_nn` |
-| `GET` | `/api/predictions/direction-accuracy` | Direction accuracy per algorithm — query: `?market=VN30\|GOLD\|NASDAQ\|SP500\|CRYPTO`; trả `{market, algorithms:[{algorithm, direction_accuracy, total, correct}]}`; chỉ đếm rows có `direction_correct IS NOT NULL` |
-| `GET` | `/api/predictions/{id}` | Chi tiết một dự đoán |
+| `GET` | `/api/predictions/direction-accuracy` | Direction accuracy per algorithm — query: `?market=GOLD\|NASDAQ\|SP500\|CRYPTO`; trả `{market, algorithms:[{algorithm, direction_accuracy, total, correct}]}`; chỉ đếm rows có `direction_correct IS NOT NULL` |
 
 ### Training
 
@@ -405,16 +398,12 @@ VN30 (`crawler_stock`) cũng dùng cùng pipeline nhưng chạy theo lịch ngà
 | `GET` | `/api/training/metrics` | Aggregate metrics: avg time, data quality, success rate |
 | `GET` | `/api/training/{id}` | Chi tiết một phiên huấn luyện |
 
-### Market & Stocks
+### Markets (per-market paginated)
 
 | Method | Path | Ghi chú |
 |--------|------|---------|
-| `GET` | `/api/market/overview` | Tổng quan thị trường — query: `?sector=ngan-hang&exchange=HOSE` |
-| `GET` | `/api/stocks/{symbol}/current` | Giá hiện tại |
-| `GET` | `/api/stocks/{symbol}/history` | Lịch sử giá |
-| `GET` | `/api/stocks/{symbol}/chart` | Dữ liệu biểu đồ |
-| `GET` | `/api/stocks/{symbol}/detail` | Chi tiết cổ phiếu |
-| `GET` | `/api/stocks/watchlist` | Danh sách theo dõi |
+| `GET` | `/api/markets/{key}/predictions` | Danh sách dự đoán phân trang cho market — key: `gold`, `nasdaq`, `crypto`, `sp500` |
+| `GET` | `/api/markets/{key}/training` | Danh sách training sessions cho market |
 
 ### Gold
 
@@ -423,17 +412,52 @@ VN30 (`crawler_stock`) cũng dùng cùng pipeline nhưng chạy theo lịch ngà
 | `GET` | `/api/gold/latest` | Giá vàng mới nhất |
 | `GET` | `/api/gold/prices` | Danh sách giá vàng |
 | `GET` | `/api/gold/chart` | Dữ liệu biểu đồ vàng |
+| `GET` | `/api/gold/predictions/latest-results` | Kết quả dự đoán mới nhất |
 | `GET` | `/api/gold/predictions/latest` | Dự đoán vàng mới nhất |
 | `GET` | `/api/gold/predictions/chart` | Biểu đồ dự đoán vs thực tế (vàng) |
 | `GET` | `/api/gold/predictions` | Danh sách dự đoán vàng |
 
-### Dashboard & Algorithms
+### NASDAQ
+
+| Method | Path | Ghi chú |
+|--------|------|---------|
+| `GET` | `/api/nasdaq/latest` | Giá NASDAQ mới nhất |
+| `GET` | `/api/nasdaq/prices` | Danh sách giá NASDAQ |
+| `GET` | `/api/nasdaq/chart` | Dữ liệu biểu đồ NASDAQ |
+| `GET` | `/api/nasdaq/predictions/latest` | Dự đoán NASDAQ mới nhất |
+| `GET` | `/api/nasdaq/predictions/chart` | Biểu đồ dự đoán vs thực tế (NASDAQ) |
+| `GET` | `/api/nasdaq/predictions/latest-results` | Kết quả dự đoán mới nhất |
+| `GET` | `/api/nasdaq/predictions` | Danh sách dự đoán NASDAQ |
+
+### Crypto
+
+| Method | Path | Ghi chú |
+|--------|------|---------|
+| `GET` | `/api/crypto/latest` | Giá Crypto mới nhất |
+| `GET` | `/api/crypto/prices` | Danh sách giá Crypto |
+| `GET` | `/api/crypto/chart` | Dữ liệu biểu đồ Crypto |
+| `GET` | `/api/crypto/predictions/latest` | Dự đoán Crypto mới nhất |
+| `GET` | `/api/crypto/predictions/chart` | Biểu đồ dự đoán vs thực tế (Crypto) |
+| `GET` | `/api/crypto/predictions/latest-results` | Kết quả dự đoán mới nhất |
+| `GET` | `/api/crypto/predictions` | Danh sách dự đoán Crypto |
+
+### S&P 500
+
+| Method | Path | Ghi chú |
+|--------|------|---------|
+| `GET` | `/api/sp500/latest` | Giá S&P 500 mới nhất |
+| `GET` | `/api/sp500/prices` | Danh sách giá S&P 500 |
+| `GET` | `/api/sp500/chart` | Dữ liệu biểu đồ S&P 500 |
+| `GET` | `/api/sp500/predictions/latest` | Dự đoán S&P 500 mới nhất |
+| `GET` | `/api/sp500/predictions/chart` | Biểu đồ dự đoán vs thực tế (S&P 500) |
+| `GET` | `/api/sp500/predictions/latest-results` | Kết quả dự đoán mới nhất |
+| `GET` | `/api/sp500/predictions` | Danh sách dự đoán S&P 500 |
+
+### Dashboard
 
 | Method | Path | Ghi chú |
 |--------|------|---------|
 | `GET` | `/api/dashboard/stats` | Thống kê tổng quan dashboard |
-| `GET` | `/api/algorithms/comparison` | So sánh các thuật toán |
-| `GET` | `/api/algorithms/backtest` | Backtest thuật toán |
 
 ### Schedules
 
@@ -457,17 +481,21 @@ Tất cả trigger endpoint đều yêu cầu JWT authentication (`Authorization
 
 | Method | Path | Ghi chú |
 |--------|------|---------|
-| `POST` | `/api/trigger/crawler` | Crawl VN30 (background) — yêu cầu JWT |
-| `POST` | `/api/trigger/predict` | Chạy dự đoán (background) — yêu cầu JWT |
 | `POST` | `/api/trigger/train` | Huấn luyện toàn bộ hoặc một thuật toán — body JSON `{"algorithm":"lstm_nn"}` (optional) — yêu cầu JWT |
 | `POST` | `/api/trigger/gold-crawler` | Crawl giá vàng đồng bộ — yêu cầu JWT |
 | `POST` | `/api/trigger/gold-history` | Import lịch sử XAU (background) — yêu cầu JWT |
 | `POST` | `/api/trigger/gold-predict` | Dự đoán vàng (background) — yêu cầu JWT |
 | `POST` | `/api/trigger/reconcile` | Reconcile dự đoán với giá thực tế — yêu cầu JWT |
-| `POST` | `/api/trigger/stock-history` | Crawl lịch sử stock (background) — body JSON `{"days":365}` — yêu cầu JWT |
-| `POST` | `/api/trigger/historical-backtest` | Walk-forward backtest (background) — query: `?train_window=30&step_size=6&market_key=VN30\|GOLD\|NASDAQ100\|CRYPTO\|SP500\|ALL`; trả 202; 409 nếu đang chạy — yêu cầu JWT |
+| `POST` | `/api/trigger/historical-backtest` | Walk-forward backtest (background) — query: `?train_window=30&step_size=6&market_key=GOLD\|NASDAQ100\|CRYPTO\|SP500\|ALL`; trả 202; 409 nếu đang chạy — yêu cầu JWT |
+| `POST` | `/api/trigger/gold-historical-backtest` | Walk-forward backtest chỉ Gold (background) — yêu cầu JWT |
+| `POST` | `/api/trigger/nasdaq-crawler` | Crawl NASDAQ (background) — yêu cầu JWT |
+| `POST` | `/api/trigger/nasdaq-predict` | Dự đoán NASDAQ (background) — yêu cầu JWT |
+| `POST` | `/api/trigger/crypto-crawler` | Crawl Crypto (background) — yêu cầu JWT |
+| `POST` | `/api/trigger/crypto-predict` | Dự đoán Crypto (background) — yêu cầu JWT |
 | `POST` | `/api/trigger/sp500-crawler` | Crawl S&P 500 (background) — yêu cầu JWT |
 | `POST` | `/api/trigger/sp500-predict` | Dự đoán S&P 500 (background) — yêu cầu JWT |
+| `POST` | `/api/trigger/simulation-backtest` | Chạy simulation backtest — yêu cầu JWT |
+| `POST` | `/api/trigger/simulation-live-step` | Chạy một bước live simulation — yêu cầu JWT |
 | `POST` | `/api/trigger/sim-reset` | Reset tất cả active bots — đóng live session cũ, tạo session mới — yêu cầu JWT |
 
 ## Trigger thủ công qua API
@@ -479,12 +507,6 @@ Tất cả trigger endpoint đều gọi gRPC sang Prediction Service. Tất c�
 TOKEN=$(curl -s -X POST http://localhost:8118/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
-
-# Chạy crawler stock ngay
-curl -X POST http://localhost:8118/api/trigger/crawler -H "Authorization: Bearer $TOKEN"
-
-# Chạy dự đoán ngay
-curl -X POST http://localhost:8118/api/trigger/predict -H "Authorization: Bearer $TOKEN"
 
 # Huấn luyện mô hình ngay (tất cả thuật toán)
 curl -X POST http://localhost:8118/api/trigger/train -H "Authorization: Bearer $TOKEN"
@@ -504,11 +526,14 @@ curl -X POST http://localhost:8118/api/trigger/gold-predict -H "Authorization: B
 # Reconcile dự đoán với giá thực tế
 curl -X POST http://localhost:8118/api/trigger/reconcile -H "Authorization: Bearer $TOKEN"
 
-# Crawl lịch sử cổ phiếu (mặc định 365 ngày)
-curl -X POST http://localhost:8118/api/trigger/stock-history -H "Authorization: Bearer $TOKEN" -d '{"days":365}'
-
 # Chạy historical backtest (query params, không phải body)
 curl -X POST "http://localhost:8118/api/trigger/historical-backtest?train_window=30&step_size=6" -H "Authorization: Bearer $TOKEN"
+
+# Crawl NASDAQ ngay
+curl -X POST http://localhost:8118/api/trigger/nasdaq-crawler -H "Authorization: Bearer $TOKEN"
+
+# Crawl Crypto ngay
+curl -X POST http://localhost:8118/api/trigger/crypto-crawler -H "Authorization: Bearer $TOKEN"
 
 # Crawl S&P 500 ngay
 curl -X POST http://localhost:8118/api/trigger/sp500-crawler -H "Authorization: Bearer $TOKEN"
@@ -519,18 +544,14 @@ curl -X POST http://localhost:8118/api/trigger/sp500-predict -H "Authorization: 
 # Backtest tất cả markets
 curl -X POST "http://localhost:8118/api/trigger/historical-backtest?train_window=30&step_size=6&market_key=ALL" -H "Authorization: Bearer $TOKEN"
 
-# Crawl và dự đoán một mã cụ thể
-curl -X POST http://localhost:8118/api/stocks/VCB/crawl
-curl -X POST http://localhost:8118/api/stocks/VCB/predict
-
 # Xem lịch cron
 curl http://localhost:8118/api/schedules -H "Authorization: Bearer $TOKEN"
 
-# Cập nhật lịch cron (ví dụ: đổi giờ crawl stock sang 1 PM)
-curl -X PUT http://localhost:8118/api/schedules/crawler_daily \
+# Cập nhật lịch cron (ví dụ: đổi giờ crawl gold sang 2AM)
+curl -X PUT http://localhost:8118/api/schedules/crawler_gold \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"cron_expression":"0 0 13 * * *","enabled":true}'
+  -d '{"cron_expression":"0 0 2 * * *","enabled":true}'
 ```
 
 ## gRPC Service Contract
@@ -539,19 +560,20 @@ curl -X PUT http://localhost:8118/api/schedules/crawler_daily \
 
 | RPC | Request | Response | Ghi chú |
 |-----|---------|----------|---------|
-| `TriggerCrawler` | `Empty` | `TriggerResponse` | Crawl VN30 trong background |
 | `TriggerGoldCrawler` | `Empty` | `TriggerResponse` | Crawl giá vàng đồng bộ |
-| `TriggerPredict` | `Empty` | `TriggerResponse` | Weekly training + daily prediction đồng bộ |
 | `TriggerTrain` | `TriggerTrainRequest` | `TriggerTrainResponse` | Train một hoặc tất cả thuật toán — field `algorithm` optional |
 | `TriggerReconcile` | `Empty` | `TriggerResponse` | Reconcile dự đoán với giá thực tế đồng bộ |
-| `TriggerStockHistory` | `StockHistoryRequest` | `TriggerResponse` | Crawl lịch sử stock trong background — field `days` |
 | `TriggerGoldHistory` | `Empty` | `TriggerResponse` | Import lịch sử XAU trong background |
 | `TriggerGoldPredict` | `Empty` | `TriggerResponse` | Dự đoán vàng trong background |
-| `TriggerHistoricalBacktest` | `BacktestRequest` | `TriggerResponse` | Walk-forward backtest trong background — concurrency guard; `market_key`: `""` hoặc `"VN30"`, `"GOLD"`, `"NASDAQ100"`, `"CRYPTO"`, `"SP500"`, `"ALL"` |
-| `TriggerStockCrawl` | `StockRequest` | `StockCrawlResponse` | Crawl và lưu một mã cổ phiếu đồng bộ |
-| `TriggerStockPredict` | `StockRequest` | `StockPredictResponse` | Dự đoán tất cả thuật toán cho một mã đồng bộ |
+| `TriggerHistoricalBacktest` | `BacktestRequest` | `TriggerResponse` | Walk-forward backtest trong background — concurrency guard; `market_key`: `""` hoặc `"GOLD"`, `"NASDAQ100"`, `"CRYPTO"`, `"SP500"`, `"ALL"` |
+| `TriggerNasdaqCrawler` | `Empty` | `TriggerResponse` | Crawl NASDAQ trong background |
+| `TriggerNasdaqPredict` | `Empty` | `TriggerResponse` | Dự đoán NASDAQ trong background |
+| `TriggerCryptoCrawler` | `Empty` | `TriggerResponse` | Crawl Crypto trong background |
+| `TriggerCryptoPredict` | `Empty` | `TriggerResponse` | Dự đoán Crypto trong background |
 | `TriggerSP500Crawler` | `Empty` | `TriggerResponse` | Crawl S&P 500 trong background |
 | `TriggerSP500Predict` | `Empty` | `TriggerResponse` | Dự đoán S&P 500 trong background |
+| `TriggerSimulationBacktest` | `SimulationRequest` | `TriggerResponse` | Chạy simulation backtest trong background |
+| `TriggerSimulationLiveStep` | `Empty` | `TriggerResponse` | Chạy một bước live simulation |
 | `ResetSimBots` | `Empty` | `TriggerResponse` | Đóng live sessions cũ, tạo fresh live session cho tất cả active bots |
 | `GetTrainingStatus` | `Empty` | `TrainingStatusResponse` | Trạng thái training: `is_training`, `progress`, `phase`, `total/done algorithms` |
 

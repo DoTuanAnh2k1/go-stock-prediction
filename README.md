@@ -1,53 +1,53 @@
 # go-stock-prediction
 
-Hệ thống dự đoán giá cổ phiếu thị trường chứng khoán Việt Nam (VN30), bao gồm crawl dữ liệu tự động, huấn luyện mô hình ML, và dashboard theo dõi.
+Hệ thống dự đoán giá tài sản tài chính (Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, S&P 500), bao gồm crawl dữ liệu tự động, huấn luyện mô hình ML, và dashboard theo dõi.
 
 ## Tính năng
 
-- **Thu thập dữ liệu:** Crawl giá cổ phiếu VN30 từ VietStock mỗi ngày lúc 12 PM; crawl giá vàng SJC/XAU/USD lúc 10 AM
-- **Backup tự động:** mysqldump toàn bộ DB mỗi ngày lúc 2 AM vào `BACKUP_DIR`; dọn file backup cũ hơn 7 ngày lúc 3 AM
-- **Dự đoán giá:** 4 thuật toán ML chạy song song — Moving Average (VWMA), LSTM Neural Network, ARIMA-GARCH, Ensemble
-- **Walk-forward Backtest:** Backtest lịch sử toàn bộ VN30 với cơ chế fold tự động (`/api/trigger/historical-backtest`)
-- **Huấn luyện tự động:** Mỗi Chủ nhật lúc 9 AM, hệ thống tự train lại toàn bộ mô hình
-- **Reconcile hàng ngày:** 6 AM cập nhật `actual_price` và `accuracy` vào các dự đoán đã qua `target_date`
-- **Dashboard web:** React SPA — tổng quan thị trường, biểu đồ, kết quả dự đoán, giá vàng
-- **REST API:** Endpoints đầy đủ cho dữ liệu cổ phiếu, dự đoán, trigger thủ công
+- **Thu thập dữ liệu:** Crawl giá vàng SJC/XAU/USD mỗi giờ; NASDAQ và S&P 500 mỗi giờ; Crypto BTC/ETH/SOL mỗi 2 giờ
+- **Backup tự động:** mysqldump toàn bộ DB hàng ngày lúc 3 AM vào `BACKUP_DIR`
+- **Dự đoán giá:** 11 thuật toán ML — Moving Average, EMA/MACD, LSTM, GRU, ARIMA-GARCH, EGARCH, SARIMA, LightGBM, XGBoost, Random Forest, Ensemble
+- **Walk-forward Backtest:** Backtest lịch sử với cơ chế fold tự động (`/api/trigger/historical-backtest`)
+- **Huấn luyện tự động:** Per-market training jobs mỗi Chủ nhật (staggered từ 3AM đến 7AM)
+- **Reconcile hàng ngày:** 6 AM cập nhật `actual_price` và `direction_correct` vào các dự đoán đã qua `target_date`
+- **Dashboard web:** React SPA — biểu đồ, kết quả dự đoán, giá vàng, NASDAQ, Crypto, S&P 500
+- **REST API:** Endpoints đầy đủ cho mọi market, dự đoán, trigger thủ công
 
 ## Kiến trúc
 
 ```
-Microservice: 2 Go services + Nginx reverse proxy
+Microservice: Go API Backend + Python Prediction Service + Nginx
 
-cmd/api/main.go          API Backend (:8118) — HTTP, đọc DB trực tiếp, gọi Prediction Service qua gRPC
-cmd/prediction/main.go   Prediction Service (:8119) — gRPC, crawling, thuật toán, training, cron jobs
-nginx/nginx.conf         Reverse proxy :80 → api:8118
+api/cmd/main.go              API Backend (:8118) — HTTP, đọc DB trực tiếp, gọi Prediction Service qua gRPC
+prediction/src/main.py       Prediction Service (:8119) — gRPC, crawling (Gold/NASDAQ/Crypto/SP500),
+                             11 thuật toán ML, training, APScheduler cron jobs
+nginx/nginx.conf             Reverse proxy :80 → api:8118
 
-pkg/
-  config/                Quản lý cấu hình (.env)
-  grpc/
-    server/server.go     gRPC server — implement PredictionServiceServer
-    client/client.go     gRPC client singleton dùng trong API Backend
-  server/                HTTP server, routes, handlers (api_*.go)
-  service/
-    crawler/             Thu thập dữ liệu từ VietStock (Gocolly) và giá vàng
-    predict/             Thuật toán dự đoán (MA, LSTM, ARIMA-GARCH, Ensemble)
-    predict/historical_backtest.go  Walk-forward backtesting
+api/pkg/
+  config/                    Quản lý cấu hình (.env)
+  grpc/client/client.go      gRPC client singleton dùng trong API Backend
+  server/                    HTTP server, routes, handlers (api_*.go)
   store/
-    repository/          Interface repository pattern (DatabaseStore)
-    mysql/               Triển khai MySQL (GORM)
+    repository/              Interface repository pattern (DatabaseStore)
+    mysql/                   Triển khai MySQL (GORM)
   models/
-    models_db/           GORM struct (Stock, StockPrice, Prediction, GoldPrice, TrainingLog, ...)
-    models_api/          DTO cho API response
-  utils/cron/            Hằng số và wrapper cho robfig/cron/v3
+    models_db/               GORM struct (GoldPrice, NasdaqPrice, CryptoPrice, Sp500Price, predictions, TrainingLog, ...)
+    models_api/              DTO cho API response
 
-proto/prediction/        gRPC service definitions + generated code
-frontend/                React SPA (Vite + TypeScript)
-cmd/crawdata/main.py     Script Python crawl dữ liệu lịch sử (vnstock API)
+prediction/src/
+  algorithms/                11 thuật toán ML (MA, EMA, LSTM, GRU, ARIMA-GARCH, EGARCH, SARIMA, LightGBM, XGBoost, RF, Ensemble)
+  crawlers/                  Gold, NASDAQ, Crypto, S&P 500
+  scheduler/                 APScheduler + DB-backed cron schedules
+  orchestrator/              run_all_markets(), train_for_market(), reconcile_predictions()
+
+api/proto/prediction/        gRPC service definitions + generated code
+frontend/                    React SPA (Vite + TypeScript)
 ```
 
 ## Yêu cầu
 
-- Go 1.23+
+- Go 1.23+ (API Backend)
+- Python 3.12+ (Prediction Service)
 - MySQL 8.0+ (hoặc dùng Docker Compose)
 - Docker + Docker Compose (khuyến nghị)
 - File `.env` cấu hình (xem bên dưới)
@@ -101,23 +101,14 @@ DB_LOG_LEVEL=DEBUG
 # Import schema
 mysql -u root -p go_stock_prediction < database.sql
 
-# Build và chạy Prediction Service trước
-go build -o prediction-server ./cmd/prediction
-./prediction-server
+# Chạy Prediction Service (Python) trước
+cd prediction && pip install -e ".[ml]"
+python -m src.main
 
-# Build và chạy API Backend
-go build -o api-server ./cmd/api
+# Build và chạy API Backend (Go) — từ thư mục api/
+cd api && go build -o api-server ./cmd
 ./api-server
 ```
-
-### (Tuỳ chọn) Crawl dữ liệu lịch sử bằng Python
-
-```bash
-pip install vnstock mysql-connector-python pandas
-python cmd/crawdata/main.py
-```
-
-Script dùng vnstock API để nhập dữ liệu giá lịch sử vào DB.
 
 ## Lần đầu khởi động (luồng bắt buộc)
 
@@ -130,13 +121,14 @@ TOKEN=$(curl -s -X POST http://localhost/api/auth/login \
   -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
 ```
 
-**Bước 1 — Crawl lịch sử (bắt buộc)**
+**Bước 1 — Crawl dữ liệu ban đầu**
 
 ```bash
-python cmd/crawdata/main.py
-# hoặc qua API (crawl 365 ngày gần nhất)
-curl -X POST "http://localhost/api/trigger/stock-history" \
-  -H "Authorization: Bearer $TOKEN" -d '{"days":365}'
+# Crawl Gold, NASDAQ, Crypto, S&P 500 ngay
+curl -X POST http://localhost/api/trigger/gold-crawler -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost/api/trigger/nasdaq-crawler -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost/api/trigger/crypto-crawler -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost/api/trigger/sp500-crawler -H "Authorization: Bearer $TOKEN"
 ```
 
 **Bước 2 — Huấn luyện mô hình**
@@ -148,14 +140,8 @@ curl -X POST http://localhost/api/trigger/train -H "Authorization: Bearer $TOKEN
 **Bước 3 — Chạy walk-forward backtest (tạo dữ liệu `confirmed` để xem chart)**
 
 ```bash
-curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&step_size=6" \
+curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&step_size=6&market_key=ALL" \
   -H "Authorization: Bearer $TOKEN"
-```
-
-**Bước 4 — Chạy dự đoán hiện tại**
-
-```bash
-curl -X POST http://localhost/api/trigger/predict -H "Authorization: Bearer $TOKEN"
 ```
 
 ## Trigger thủ công bằng curl
@@ -167,14 +153,15 @@ TOKEN=$(curl -s -X POST http://localhost/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
 
-curl -X POST http://localhost/api/trigger/crawler -H "Authorization: Bearer $TOKEN"             # crawl cổ phiếu
-curl -X POST http://localhost/api/trigger/predict -H "Authorization: Bearer $TOKEN"             # chạy dự đoán
 curl -X POST http://localhost/api/trigger/train -H "Authorization: Bearer $TOKEN"               # huấn luyện tất cả
 curl -X POST http://localhost/api/trigger/gold-crawler -H "Authorization: Bearer $TOKEN"        # crawl giá vàng
+curl -X POST http://localhost/api/trigger/nasdaq-crawler -H "Authorization: Bearer $TOKEN"      # crawl NASDAQ
+curl -X POST http://localhost/api/trigger/crypto-crawler -H "Authorization: Bearer $TOKEN"      # crawl Crypto
+curl -X POST http://localhost/api/trigger/sp500-crawler -H "Authorization: Bearer $TOKEN"       # crawl S&P 500
 curl -X POST http://localhost/api/trigger/reconcile -H "Authorization: Bearer $TOKEN"           # reconcile actual price
 
-# Backtest toàn bộ lịch sử VN30 (async, trả 202 ngay)
-curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&step_size=6" \
+# Backtest tất cả markets (async, trả 202 ngay)
+curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&step_size=6&market_key=ALL" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -191,12 +178,7 @@ curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&s
 
 | Method | Path | Mô tả |
 |--------|------|-------|
-| `GET` | `/api/predictions` | Danh sách dự đoán — query: `?symbol=VCB&algorithm=lstm_nn&status=confirmed&from=YYYY-MM-DD&page=1&limit=20` |
-| `GET` | `/api/predictions/accuracy` | Độ chính xác theo thuật toán |
-| `GET` | `/api/predictions/accuracy-trend` | Xu hướng độ chính xác theo thời gian |
-| `GET` | `/api/predictions/compare/{symbol}` | Dự đoán vs thực tế — query: `?days=90&algorithm=lstm_nn` |
-| `GET` | `/api/predictions/error-distribution` | Scatter plot predicted change % vs actual change % — query: `?algorithm=lstm_nn` |
-| `GET` | `/api/predictions/{id}` | Chi tiết một dự đoán |
+| `GET` | `/api/predictions/direction-accuracy` | Direction accuracy per algorithm — query: `?market=GOLD\|NASDAQ\|SP500\|CRYPTO` |
 
 ### Training
 
@@ -207,17 +189,6 @@ curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&s
 | `GET` | `/api/training/algorithms` | Chi tiết từng thuật toán: config, accuracy, last_trained |
 | `GET` | `/api/training/metrics` | Aggregate metrics: avg time, success rate |
 | `GET` | `/api/training/{id}` | Chi tiết một phiên huấn luyện |
-
-### Market & Stocks
-
-| Method | Path | Mô tả |
-|--------|------|-------|
-| `GET` | `/api/market/overview` | Tổng quan thị trường — query: `?sector=ngan-hang&exchange=HOSE` |
-| `GET` | `/api/stocks/{symbol}/current` | Giá hiện tại |
-| `GET` | `/api/stocks/{symbol}/history` | Lịch sử giá |
-| `GET` | `/api/stocks/{symbol}/chart` | Dữ liệu biểu đồ |
-| `GET` | `/api/stocks/{symbol}/detail` | Chi tiết cổ phiếu |
-| `GET` | `/api/stocks/watchlist` | Danh sách theo dõi |
 
 ### Gold
 
@@ -237,26 +208,27 @@ curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&s
 | `GET` | `/api/schedules` | Danh sách lịch tác vụ cron — yêu cầu JWT |
 | `PUT` | `/api/schedules/{key}` | Cập nhật lịch tác vụ — yêu cầu JWT; body: `{"cron_expression":"0 0 12 * * *","enabled":true}` |
 
-### Dashboard, Algorithms & Triggers
+### Dashboard & Triggers
 
 Tất cả `POST /api/trigger/*` yêu cầu JWT (`Authorization: Bearer <token>`).
 
 | Method | Path | Mô tả |
 |--------|------|-------|
 | `GET` | `/api/dashboard/stats` | Thống kê tổng quan |
-| `GET` | `/api/algorithms/comparison` | So sánh các thuật toán |
-| `GET` | `/api/algorithms/backtest` | Backtest thuật toán |
-| `POST` | `/api/trigger/crawler` | Crawl VN30 (background) — yêu cầu JWT |
-| `POST` | `/api/trigger/predict` | Chạy dự đoán (background) — yêu cầu JWT |
+| `GET` | `/api/training/status` | Trạng thái huấn luyện |
+| `GET` | `/api/training/algorithms` | Chi tiết từng thuật toán |
 | `POST` | `/api/trigger/train` | Huấn luyện — body: `{"algorithm":"lstm_nn"}` (optional) — yêu cầu JWT |
 | `POST` | `/api/trigger/gold-crawler` | Crawl giá vàng — yêu cầu JWT |
 | `POST` | `/api/trigger/gold-history` | Import lịch sử XAU — yêu cầu JWT |
 | `POST` | `/api/trigger/gold-predict` | Dự đoán vàng — yêu cầu JWT |
+| `POST` | `/api/trigger/nasdaq-crawler` | Crawl NASDAQ — yêu cầu JWT |
+| `POST` | `/api/trigger/nasdaq-predict` | Dự đoán NASDAQ — yêu cầu JWT |
+| `POST` | `/api/trigger/crypto-crawler` | Crawl Crypto — yêu cầu JWT |
+| `POST` | `/api/trigger/crypto-predict` | Dự đoán Crypto — yêu cầu JWT |
+| `POST` | `/api/trigger/sp500-crawler` | Crawl S&P 500 — yêu cầu JWT |
+| `POST` | `/api/trigger/sp500-predict` | Dự đoán S&P 500 — yêu cầu JWT |
 | `POST` | `/api/trigger/reconcile` | Reconcile actual prices — yêu cầu JWT |
-| `POST` | `/api/trigger/stock-history` | Crawl lịch sử stock — body: `{"days":365}` — yêu cầu JWT |
-| `POST` | `/api/trigger/historical-backtest` | Walk-forward backtest — query: `?train_window=30&step_size=6`; trả 202, 409 nếu đang chạy — yêu cầu JWT |
-| `POST` | `/api/stocks/{symbol}/crawl` | Crawl một mã cổ phiếu |
-| `POST` | `/api/stocks/{symbol}/predict` | Dự đoán một mã cổ phiếu |
+| `POST` | `/api/trigger/historical-backtest` | Walk-forward backtest — query: `?train_window=30&step_size=6&market_key=ALL`; trả 202, 409 nếu đang chạy — yêu cầu JWT |
 | `GET` | `/health` | Health check chi tiết |
 | `GET` | `/health/simple` | Health check đơn giản |
 
@@ -266,40 +238,39 @@ Lịch được lưu trong bảng DB `cron_schedules` và có thể chỉnh sử
 
 | Job Key | Thời gian mặc định | Công việc |
 |---------|-------------------|-----------|
-| `reconcile_daily` | Mỗi ngày 6:00 AM | Reconcile dự đoán với giá thực tế |
-| `gold_crawler_daily` | Mỗi ngày 10:00 AM | Crawl giá vàng SJC và XAU/USD |
-| `crawler_daily` | Mỗi ngày 12:00 PM | Crawl giá cổ phiếu từ VietStock |
-| `predict_daily` | Mỗi ngày 6:00 PM | Chạy dự đoán giá cho ngày giao dịch tiếp theo |
-| `train_weekly` | Chủ nhật 9:00 AM | Huấn luyện lại toàn bộ mô hình |
-| `db_backup_daily` | Mỗi ngày 2:00 AM | Backup database bằng mysqldump vào `BACKUP_DIR` |
-| `backup_cleanup_daily` | Mỗi ngày 3:00 AM | Xóa file backup cũ hơn 7 ngày |
+| `daily_reconcile` | Mỗi ngày 6:00 AM | Reconcile dự đoán với giá thực tế |
+| `crawler_gold` | Mỗi giờ (phút 0) | Pipeline Gold: crawl → train mỗi 10 lần → predict |
+| `crawler_nasdaq` | Mỗi giờ (phút 15) | Pipeline NASDAQ: crawl → train mỗi 10 lần → predict |
+| `crawler_sp500` | Mỗi giờ (phút 0 và 30) | Pipeline S&P 500: crawl → train mỗi 10 lần → predict |
+| `crawler_crypto` | Mỗi 2 giờ | Pipeline Crypto: crawl → train mỗi 10 lần → predict |
+| `train_gold` | Chủ nhật 3:00 AM | Huấn luyện lại mô hình Gold |
+| `train_nasdaq` | Chủ nhật 4:00 AM | Huấn luyện lại mô hình NASDAQ |
+| `train_crypto` | Chủ nhật 5:00 AM | Huấn luyện lại mô hình Crypto |
+| `train_sp500` | Chủ nhật 7:00 AM | Huấn luyện lại mô hình S&P 500 |
+| `simulation_daily` | Mỗi ngày 8:00 PM | Bot trading hàng ngày |
+| `daily_backup` | Mỗi ngày 3:00 AM | Backup database bằng mysqldump vào `BACKUP_DIR` |
 
-## Các thuật toán dự đoán
+## Các thuật toán dự đoán (11 thuật toán)
 
-### Moving Average (VWMA)
-- Volume-Weighted Moving Average
-- Short period: 5 ngày, Long period: 20 ngày
-- Tích hợp điều chỉnh phiên giao dịch Việt Nam
-
-### LSTM Neural Network
-- 2 lớp LSTM, 50 hidden units
-- Sequence length: 60 ngày (~3 tháng)
-- 8 features: giá, khối lượng, chỉ báo kỹ thuật
-- Chuẩn hóa dữ liệu bằng MinMaxScaler
-
-### ARIMA-GARCH
-- ARIMA để dự đoán xu hướng giá
-- GARCH để mô hình hoá biến động (volatility)
-
-### Ensemble
-- Kết hợp kết quả từ 3 thuật toán cơ sở (MA, LSTM, ARIMA-GARCH)
-- Trung bình có trọng số dựa trên accuracy từng thuật toán
+| Key | Tên | Mô tả ngắn |
+|-----|-----|-----------|
+| `moving_average` | Moving Average | VWMA trend slope + RSI momentum scaling + StochRSI overlay |
+| `ema` | EMA/MACD | EMA slope + MACD momentum boost + Bollinger %B mean-reversion |
+| `lstm_nn` | LSTM | PyTorch LSTM (2 layers, hidden=64, seq=60, dropout=0.2) |
+| `gru_nn` | GRU | PyTorch GRU (2 layers, hidden=64, seq=60, dropout=0.2) |
+| `arima_garch` | ARIMA-GARCH | statsmodels ARIMA(2,1,2) + arch GARCH(1,1) |
+| `egarch` | EGARCH | arch EGARCH(p=1, o=1, q=1) với HARX mean model |
+| `sarima` | SARIMA | statsmodels SARIMA(1,1,1)(1,0,1,5) — seasonal period 5 |
+| `lightgbm` | LightGBM | ~30 features; Optuna hyperopt (30 trials, timeout 120s) |
+| `xgboost` | XGBoost | ~30 features; Optuna hyperopt (30 trials, timeout 120s) |
+| `random_forest` | Random Forest | n_estimators=200, max_depth=8, min_samples_leaf=5 |
+| `ensemble` | Ensemble | Equal-weight average của 10 base models |
 
 ## Walk-forward Historical Backtest
 
-`POST /api/trigger/historical-backtest?train_window=30&step_size=6`
+`POST /api/trigger/historical-backtest?train_window=30&step_size=6&market_key=ALL`
 
-- Chạy walk-forward backtesting trên toàn bộ VN30
+- Chạy walk-forward backtesting trên một hoặc tất cả markets (GOLD, NASDAQ100, CRYPTO, SP500)
 - Fold 1: train trên `train_window` ngày đầu, predict `step_size` ngày tiếp theo
 - Mỗi fold expand thêm `step_size` ngày; lặp đến hết lịch sử
 - Mỗi fold dùng context cố định (không rolling) — simulate "dự đoán trước khi biết kết quả"
@@ -310,14 +281,14 @@ Lịch được lưu trong bảng DB `cron_schedules` và có thể chỉnh sử
 ## Test
 
 ```bash
-# Chạy tất cả test
-go test ./...
+# Go API Backend — chạy từ thư mục api/
+cd api && go test ./...
+cd api && make test-coverage   # tạo coverage.html
 
-# Chỉ unit test
-go test -short ./...
-
-# Coverage
-go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html
+# Python Prediction Service
+cd prediction && make test
+# hoặc trong container:
+docker exec prediction_service python -m pytest tests/ -v
 ```
 
 ## Ports
@@ -335,12 +306,15 @@ go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o 
 
 | Lĩnh vực | Thư viện |
 |----------|---------|
-| HTTP server | `net/http` (stdlib) |
+| HTTP server (Go) | `net/http` (stdlib) |
 | gRPC | `google.golang.org/grpc` + protobuf |
-| ORM | GORM v2 + MySQL driver |
-| Web scraping | Gocolly v2 |
-| Cron jobs | `robfig/cron/v3` |
-| Logging | ZeroLog |
-| Số thực tài chính | `shopspring/decimal` |
-| Config | `joho/godotenv` |
+| ORM (Go) | GORM v2 + MySQL driver |
+| Logging (Go) | ZeroLog |
+| Số thực tài chính (Go) | `shopspring/decimal` |
+| Config (Go) | `joho/godotenv` |
+| ML models (Python) | PyTorch, statsmodels, arch, scikit-learn, LightGBM, XGBoost |
+| Hyperopt (Python) | Optuna (Bayesian search) |
+| Cron jobs (Python) | APScheduler |
+| Data (Python) | pandas, pandas-ta, SQLAlchemy |
+| Crawling (Python) | yfinance, requests |
 | Frontend | React + TypeScript + Vite |
