@@ -84,17 +84,20 @@ api/pkg/server/api_users.go                 # GET/POST /api/users, DELETE /api/u
 api/pkg/server/api_schedules.go             # GET /api/schedules, PUT /api/schedules/{key} — quản lý lịch cron động
 api/pkg/server/api_backup.go                # GET /api/backups, POST /api/trigger/backup, GET/DELETE /api/backups/{filename}
 api/pkg/server/api_simulation.go            # GET /api/simulation/leaderboard, bots, trades, chart; PUT config; POST toggle/run
+api/pkg/server/api_monitoring.go            # GET /api/monitoring/overview — monitoring overview: crawl freshness, prediction activity per algo per market, bot win/loss (JWT required, cache 30s)
 api/pkg/server/middleware_jwt.go            # JWTMiddleware (non-blocking, inject claims vào context), getClaims(), requireAuth(), requireAdmin(), AuthRequired()
 api/pkg/server/helper.go                    # requireGRPCClient(), ResponseError(), ResponseSuccess() và các helper
 api/pkg/service/predict/registry/registry.go   # AlgorithmDef struct (metadata only — không có Factory), Register(), All()
 api/pkg/service/predict/registry/algorithms.go # FILE DUY NHẤT cần sửa khi thêm/bỏ thuật toán trong metadata registry
-api/pkg/store/repository/repository.go     # Interface DatabaseStore (composite) — bao gồm GetConfirmedPredictionsPage, DeletePredictionsBeforeDate, BulkCreatePredictions, CronScheduleStore
+api/pkg/store/repository/repository.go     # Interface DatabaseStore (composite) — bao gồm GetConfirmedPredictionsPage, DeletePredictionsBeforeDate, BulkCreatePredictions, CronScheduleStore, MonitoringStore
 api/pkg/store/repository/direction_accuracy.go # DirectionAccuracyStore interface — GetDirectionAccuracy(market)
 api/pkg/store/repository/user.go           # UserStore interface — CreateUser, GetUserByUsername, GetUserByID, GetAllUsers, DeleteUser, AdminExists
+api/pkg/store/repository/monitoring.go     # MonitoringStore interface — GetMarketCrawlStats(market), GetMarketPredStats(market)
 api/pkg/store/mysql/                        # Triển khai MySQL dùng GORM
 api/pkg/store/mysql/user.go                 # MySQL implementation của UserStore
 api/pkg/store/mysql/cron_schedule.go        # MySQL implementation của CronScheduleStore — GetAllCronSchedules, GetCronScheduleByKey, UpsertCronSchedule
 api/pkg/store/mysql/direction_accuracy.go   # MySQL implementation của DirectionAccuracyStore — raw SQL query GROUP BY algorithm trên 4 prediction tables
+api/pkg/store/mysql/monitoring.go           # MySQL implementation của MonitoringStore — raw SQL crawl freshness (daily+intraday tables) và per-algo pred counts per market
 api/pkg/models/models_db/                   # GORM struct: GoldPrice, GoldPrediction, NasdaqPrice, Sp500Price, CryptoPrice, intraday prices, SyncLog, TrainingLog, TrainingMetrics, User, CronSchedule
 api/pkg/models/models_db/cron_schedule.go   # CronSchedule GORM struct (JobKey, JobName, CronExpression, Enabled, UpdatedAt)
 api/pkg/models/models_db/user.go            # User GORM struct (Username, PasswordHash, Role)
@@ -103,7 +106,8 @@ api/pkg/models/models_db/training_log.go    # TrainingLog GORM struct
 api/pkg/models/models_db/training_metrics.go # TrainingMetrics struct
 # Tất cả 4 prediction structs (GoldPrediction, NasdaqPrediction, Sp500Prediction, CryptoPrediction)
 # đều có trường DirectionCorrect *bool (nullable, cột direction_correct trong DB)
-api/pkg/models/models_api/                  # DTO cho JSON response — bao gồm DirectionAccuracyRow{Algorithm, Total, Correct}
+api/pkg/models/models_api/                  # DTO cho JSON response — bao gồm DirectionAccuracyRow{Algorithm, Total, Correct}, MarketCrawlStats, AlgoPredStats
+api/pkg/models/models_api/monitoring_dto.go # MarketCrawlStats (LastDailyAt, LastIntradayAt, DailyToday, IntradayToday) và AlgoPredStats (AlgorithmName, TodayCount, LastPredictAt)
 api/pkg/models/models_config/config.go      # Config struct — bao gồm GRPCConfig (ServerPort, ClientTarget) và ServerConfig (AdminUsername, AdminPassword, JWTSecret)
 api/pkg/utils/cron/                         # Hằng số cron schedule + wrapper (dùng làm giá trị mặc định khi seed DB)
 api/pkg/testutil/                           # Test helpers (db, fixtures, http)
@@ -112,6 +116,7 @@ frontend/src/context/LangContext.tsx    # LangProvider + useLanguage hook — VI
 frontend/src/i18n.ts                    # Bảng dịch VI/EN cho toàn bộ UI shell (nav, topbar, sidebar, tweaks)
 frontend/src/components/LoginModal.tsx  # Login modal component — gọi POST /api/auth/login
 frontend/src/pages/Users.tsx            # Trang quản lý user — chỉ hiển thị với role admin
+frontend/src/pages/Monitoring.tsx       # Trang Data Pipeline — gọi GET /api/monitoring/overview; hiển thị 4 market cards (crawl freshness, per-algo prediction stats) + bots summary table + bots full table (sortable); route /monitoring, sidebar "Giám sát dữ liệu" (VI) / "Data Pipeline" (EN)
 ```
 
 ### Python Prediction Service
@@ -160,7 +165,8 @@ prediction/
 │   └── utils/
 │       ├── logger.py                   # structlog config
 │       ├── timezone.py                 # Asia/Ho_Chi_Minh helpers
-│       └── number_parser.py            # Vietnamese number format (1.234,56 → 1234.56)
+│       ├── number_parser.py            # Vietnamese number format (1.234,56 → 1234.56)
+│       └── market_calendar.py          # is_market_open(market_key, when) — GOLD/CRYPTO luôn True; NASDAQ/SP500 False vào cuối tuần + ngày lễ NYSE (US/Eastern); không phụ thuộc thư viện ngoài
 ├── tests/
 │   ├── conftest.py                     # Fixtures: DB session, gRPC stub, test data
 │   ├── unit/                           # Unit tests cho từng algorithm
@@ -248,6 +254,7 @@ BACKUP_DIR=/backups              # Thư mục lưu file backup mysqldump (mount 
 - **Swagger annotations:** Mỗi handler function trong `api/pkg/server/api_*.go` có swaggo annotations (`@Summary`, `@Tags`, `@Param`, `@Success`, `@Router`). Khi thêm handler mới, phải thêm annotations. Sau khi thêm/sửa annotations, chạy `cd api && swag init -g cmd/main.go -o docs/` để regenerate. Không sửa tay files trong `api/docs/`.
 - **Shared feature builder (Python):** `prediction/src/algorithms/features.py` cung cấp hai hàm dùng chung cho LightGBM, XGBoost, RandomForest: `build_basic_features()` (14 features: lag returns 1-10, RSI, MA5/20 ratios, vol ratio) và `build_enhanced_features()` (~30 features: lag returns 1-10, MA5/10/20/50 ratios, multi-timeframe returns 5/10/20d, RSI, StochRSI %K/%D, Bollinger %B, MACD line/hist normalized, rolling volatility 5/10/20d, ROC(10), momentum 5/10, volume ratio). Khi `pandas-ta` có sẵn thì dùng pandas-ta; nếu không dùng numpy-only fallback hoàn toàn tương đương. Minimum data: `MIN_DATA_POINTS = 80`.
 - **Optuna hyperparameter tuning:** LightGBM và XGBoost chạy Optuna Bayesian search khi data >= 200 points và optuna được cài (`[ml]` extras). Search tối đa 30 trials, timeout 120s; fallback về `_DEFAULT_PARAMS` nếu optuna không có hoặc data không đủ. Search space — LightGBM: learning_rate, num_leaves, min_data_in_leaf, n_estimators, subsample, colsample_bytree. XGBoost: n_estimators, learning_rate, max_depth, subsample, colsample_bytree, min_child_weight. RandomForest không dùng Optuna (fixed: n_estimators=200, max_depth=8, min_samples_leaf=5).
+- **Market calendar — đóng cửa cuối tuần/lễ NYSE:** NASDAQ và SP500 không chạy crawl/predict/bot-trade vào Thứ 7, Chủ nhật và ngày lễ NYSE (New Year's Day, MLK Day, Presidents' Day, Good Friday, Memorial Day, Juneteenth, Independence Day, Labor Day, Thanksgiving, Christmas). Logic tập trung tại `prediction/src/utils/market_calendar.py` — hàm `is_market_open(market_key, when)`, không phụ thuộc thư viện ngoài, tự tính ngày lễ theo năm. Ba điểm guard trong Python service: (1) `scheduler/jobs.py::_run_pipeline` — skip toàn bộ pipeline nếu market đóng; (2) `orchestrator/runner.py::run_for_market` — return 0 predictions và bỏ qua sim live step; (3) `simulation/engine.py::run_live_step` — lọc bỏ bot thuộc market đóng trong job bot 8PM hàng ngày. GOLD và CRYPTO không bị ảnh hưởng — luôn trả `True`.
 
 ## Hướng dẫn mở rộng (Extension Guide)
 
@@ -320,8 +327,8 @@ Go-side `seedCronSchedules()` trong `api/pkg/server/api_schedules.go` chỉ inse
 |-------------|-------------------|---------|-----------|
 | `daily_reconcile` | `0 0 6 * * *` | bật | Reconcile dự đoán với giá thực tế |
 | `crawler_gold` | `0 0 * * * *` | bật | Pipeline Gold: crawl → train mỗi 10 lần → predict (mỗi giờ phút 0) |
-| `crawler_nasdaq` | `0 15 * * * *` | bật | Pipeline NASDAQ: crawl → train mỗi 10 lần → predict (mỗi giờ phút 15) |
-| `crawler_sp500` | `0 0,30 * * * *` | bật | Pipeline S&P 500: crawl → train mỗi 10 lần → predict (mỗi giờ phút 0 và 30) |
+| `crawler_nasdaq` | `0 15 * * * 1-5` | bật | Pipeline NASDAQ: crawl → train mỗi 10 lần → predict (mỗi giờ phút 15, chỉ T2-T6) |
+| `crawler_sp500` | `0 0,30 * * * 1-5` | bật | Pipeline S&P 500: crawl → train mỗi 10 lần → predict (mỗi giờ phút 0 và 30, chỉ T2-T6) |
 | `crawler_crypto` | `0 0 */2 * * *` | bật | Pipeline Crypto: crawl → train mỗi 10 lần → predict (mỗi 2 giờ) |
 | `train_gold` | `0 0 3 * * 0` | bật | Training Gold (Chủ nhật 3AM) |
 | `train_nasdaq` | `0 0 4 * * 0` | bật | Training NASDAQ (Chủ nhật 4AM) |
@@ -458,6 +465,12 @@ Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`
 | Method | Path | Ghi chú |
 |--------|------|---------|
 | `GET` | `/api/dashboard/stats` | Thống kê tổng quan dashboard |
+
+### Monitoring
+
+| Method | Path | Ghi chú |
+|--------|------|---------|
+| `GET` | `/api/monitoring/overview` | Pipeline monitoring overview — yêu cầu JWT; trả `{generated_at, markets:[{market, crawl:{last_crawl_at, staleness, stale, daily_today, intraday_today}, predictions:{last_predict_at, staleness, today_total, expected_algos, missing_today, algorithms:[{algorithm, today_count, direction_accuracy, reconciled, correct}]}}], bots:{summary:{total_bots, active_bots, by_market:[...]}, table:[{bot_id, market, algorithm, trades, wins, losses, breakeven, win_rate, total_pnl, return_pct, profit_factor}]}}`; cache 30s; staleness "stale" khi last crawl > 3h hoặc không có data hôm nay |
 
 ### Schedules
 
@@ -603,7 +616,7 @@ Go API Backend:
 - `api/pkg/testutil/` — Test helpers
 
 Python Prediction Service (`prediction/tests/`):
-- `tests/unit/` — Unit tests cho 6 algorithms (moving_average, ema_macd, lstm, arima_garch, lightgbm_model, ensemble)
+- `tests/unit/` — Unit tests cho algorithms (moving_average, ema_macd, lstm, gru, arima_garch, egarch, sarima, lightgbm_model, xgboost_model, random_forest, ensemble, features, simulation_metrics, simulation_portfolio, simulation_signal) và `test_market_calendar.py` (25 tests — weekday/weekend/holiday logic cho NASDAQ/SP500/GOLD/CRYPTO)
 - `tests/integration/` — End-to-end: gRPC contract, crawlers, prediction pipeline, training, schedules, performance benchmarks, service resilience
 - Phase 5 final: **71 passed, 0 failed** (`make test-phase5`)
 

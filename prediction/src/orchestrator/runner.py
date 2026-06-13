@@ -43,6 +43,14 @@ def run_all_markets() -> int:
 def run_for_market(market_key: str) -> int:
     """Run predictions for a single market. Returns prediction count."""
     mk = market_key.upper()
+
+    # Skip closed markets (NASDAQ/SP500 cuối tuần & ngày lễ US). Cũng chặn
+    # _trigger_sim_step phía dưới vì ta return sớm.
+    from src.utils.market_calendar import is_market_open
+    if not is_market_open(mk):
+        log.info("orchestrator.skip.market_closed", market=mk)
+        return 0
+
     algos = get_algos_for_market(mk)
 
     if mk == "GOLD":

@@ -446,10 +446,16 @@ class SimulationEngine:
         from datetime import date as date_type
         today = date_type.today()
 
+        from src.utils.market_calendar import is_market_open
+
         with session_scope() as session:
             bots = session.query(SimBot).filter(SimBot.is_active == True).all()
             bot_configs = []
             for db_bot in bots:
+                # Bỏ qua bot của market đang đóng (NASDAQ/SP500 cuối tuần & lễ US)
+                if not is_market_open(db_bot.market):
+                    log.debug("sim.live_step.skip_closed", bot_id=db_bot.id, market=db_bot.market)
+                    continue
                 bot_configs.append((db_bot.id, BotConfig(
                     bot_id=db_bot.id,
                     market=db_bot.market,

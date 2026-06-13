@@ -4,12 +4,13 @@ Hệ thống dự đoán giá tài sản tài chính (Gold SJC/XAU, NASDAQ, Cryp
 
 ## Tính năng
 
-- **Thu thập dữ liệu:** Crawl giá vàng SJC/XAU/USD mỗi giờ; NASDAQ và S&P 500 mỗi giờ; Crypto BTC/ETH/SOL mỗi 2 giờ
+- **Thu thập dữ liệu:** Crawl giá vàng SJC/XAU/USD mỗi giờ; NASDAQ và S&P 500 mỗi giờ (chỉ T2-T6, bỏ qua cuối tuần và ngày lễ NYSE); Crypto BTC/ETH/SOL mỗi 2 giờ
 - **Backup tự động:** mysqldump toàn bộ DB hàng ngày lúc 3 AM vào `BACKUP_DIR`
 - **Dự đoán giá:** 11 thuật toán ML — Moving Average, EMA/MACD, LSTM, GRU, ARIMA-GARCH, EGARCH, SARIMA, LightGBM, XGBoost, Random Forest, Ensemble
 - **Walk-forward Backtest:** Backtest lịch sử với cơ chế fold tự động (`/api/trigger/historical-backtest`)
 - **Huấn luyện tự động:** Per-market training jobs mỗi Chủ nhật (staggered từ 3AM đến 7AM)
 - **Reconcile hàng ngày:** 6 AM cập nhật `actual_price` và `direction_correct` vào các dự đoán đã qua `target_date`
+- **Pipeline Monitoring:** Trang "Data Pipeline" — crawl freshness, per-algo prediction counts hôm nay, bot win/loss summary qua `GET /api/monitoring/overview` (JWT, cache 30s)
 - **Dashboard web:** React SPA — biểu đồ, kết quả dự đoán, giá vàng, NASDAQ, Crypto, S&P 500
 - **REST API:** Endpoints đầy đủ cho mọi market, dự đoán, trigger thủ công
 
@@ -159,6 +160,7 @@ curl -X POST http://localhost/api/trigger/nasdaq-crawler -H "Authorization: Bear
 curl -X POST http://localhost/api/trigger/crypto-crawler -H "Authorization: Bearer $TOKEN"      # crawl Crypto
 curl -X POST http://localhost/api/trigger/sp500-crawler -H "Authorization: Bearer $TOKEN"       # crawl S&P 500
 curl -X POST http://localhost/api/trigger/reconcile -H "Authorization: Bearer $TOKEN"           # reconcile actual price
+curl http://localhost/api/monitoring/overview -H "Authorization: Bearer $TOKEN"                  # pipeline monitoring overview
 
 # Backtest tất cả markets (async, trả 202 ngay)
 curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&step_size=6&market_key=ALL" \
@@ -201,6 +203,12 @@ curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&s
 | `GET` | `/api/gold/predictions/chart` | Biểu đồ dự đoán vs thực tế (vàng) |
 | `GET` | `/api/gold/predictions` | Danh sách dự đoán vàng |
 
+### Monitoring
+
+| Method | Path | Mô tả |
+|--------|------|-------|
+| `GET` | `/api/monitoring/overview` | Pipeline monitoring — yêu cầu JWT; crawl freshness + today counts per market, per-algo prediction activity (today_count, direction_accuracy, missing algos), bot win/loss stats; cache 30s |
+
 ### Schedules
 
 | Method | Path | Mô tả |
@@ -240,8 +248,8 @@ Lịch được lưu trong bảng DB `cron_schedules` và có thể chỉnh sử
 |---------|-------------------|-----------|
 | `daily_reconcile` | Mỗi ngày 6:00 AM | Reconcile dự đoán với giá thực tế |
 | `crawler_gold` | Mỗi giờ (phút 0) | Pipeline Gold: crawl → train mỗi 10 lần → predict |
-| `crawler_nasdaq` | Mỗi giờ (phút 15) | Pipeline NASDAQ: crawl → train mỗi 10 lần → predict |
-| `crawler_sp500` | Mỗi giờ (phút 0 và 30) | Pipeline S&P 500: crawl → train mỗi 10 lần → predict |
+| `crawler_nasdaq` | Mỗi giờ (phút 15, chỉ T2-T6) | Pipeline NASDAQ: crawl → train mỗi 10 lần → predict |
+| `crawler_sp500` | Mỗi giờ (phút 0 và 30, chỉ T2-T6) | Pipeline S&P 500: crawl → train mỗi 10 lần → predict |
 | `crawler_crypto` | Mỗi 2 giờ | Pipeline Crypto: crawl → train mỗi 10 lần → predict |
 | `train_gold` | Chủ nhật 3:00 AM | Huấn luyện lại mô hình Gold |
 | `train_nasdaq` | Chủ nhật 4:00 AM | Huấn luyện lại mô hình NASDAQ |
@@ -249,6 +257,15 @@ Lịch được lưu trong bảng DB `cron_schedules` và có thể chỉnh sử
 | `train_sp500` | Chủ nhật 7:00 AM | Huấn luyện lại mô hình S&P 500 |
 | `simulation_daily` | Mỗi ngày 8:00 PM | Bot trading hàng ngày |
 | `daily_backup` | Mỗi ngày 3:00 AM | Backup database bằng mysqldump vào `BACKUP_DIR` |
+
+## Market Calendar — NASDAQ & S&P 500 đóng cửa cuối tuần/lễ
+
+NASDAQ và S&P 500 không chạy crawl, predict hoặc bot-trade vào Thứ 7, Chủ nhật và ngày lễ NYSE (New Year's Day, MLK Day, Presidents' Day, Good Friday, Memorial Day, Juneteenth, Independence Day, Labor Day, Thanksgiving, Christmas). GOLD và Crypto không bị ảnh hưởng — giao dịch 24/7.
+
+Logic tập trung tại `prediction/src/utils/market_calendar.py`. Ba điểm guard:
+- `scheduler/jobs.py` — skip toàn pipeline nếu market đóng (cron vẫn kích hoạt nhưng không làm gì)
+- `orchestrator/runner.py` — `run_for_market()` trả về 0 predictions và bỏ qua sim step
+- `simulation/engine.py` — `run_live_step()` lọc bỏ bot thuộc market đóng khỏi job 8PM hàng ngày
 
 ## Các thuật toán dự đoán (11 thuật toán)
 

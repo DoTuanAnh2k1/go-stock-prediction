@@ -21,7 +21,14 @@ def _run_pipeline(market_key: str, crawl_fn: Callable) -> None:
     3. Run run_for_market() to generate fresh predictions.
 
     Aborts the full pipeline if crawl fails (no point predicting stale data).
+    Skips entirely if the market is closed (weekend/holiday for NASDAQ/SP500).
     """
+    # Step 0: Skip closed markets (NASDAQ/SP500 cuối tuần & ngày lễ US)
+    from src.utils.market_calendar import is_market_open
+    if not is_market_open(market_key):
+        log.info("pipeline.skip.market_closed", market=market_key)
+        return
+
     # Step 1: Crawl
     try:
         saved = crawl_fn()
