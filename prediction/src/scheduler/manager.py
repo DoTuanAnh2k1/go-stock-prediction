@@ -25,21 +25,18 @@ _lock = threading.Lock()
 
 # Default schedules (mirrors Go constants)
 DEFAULT_SCHEDULES = [
-    ("crawler_stock", "Crawl cổ phiếu VN30 (hàng ngày)", "0 0 12 * * *", True),
     ("crawler_sp500", "Pipeline S&P 500 (30 phút, phút 0 và 30)", "0 0,30 * * * *", True),
     ("crawler_gold", "Pipeline Gold (mỗi giờ, phút 0)", "0 0 * * * *", True),
     ("gold_predict", "Dự đoán vàng (disabled — trong pipeline)", "0 0 11 * * *", False),
     ("crawler_nasdaq", "Pipeline NASDAQ (mỗi giờ, phút 15)", "0 15 * * * *", True),
-    ("crawler_crypto", "Pipeline Crypto (30 phút, phút 15 và 45)", "0 15,45 * * * *", True),
+    ("crawler_crypto", "Pipeline Crypto (mỗi 2 giờ, phút 0)", "0 0 */2 * * *", True),
     ("weekly_training", "Huấn luyện mô hình (Chủ nhật 9AM)", "0 0 9 * * 0", False),
     # Per-market training jobs — staggered on Sunday to avoid overlap
-    ("train_vn30",   "Training VN30 (Chủ nhật 2AM)",          "0 0 2 * * 0", True),
     ("train_gold",   "Training Gold (Chủ nhật 3AM)",           "0 0 3 * * 0", True),
     ("train_nasdaq", "Training NASDAQ (Chủ nhật 4AM)",         "0 0 4 * * 0", True),
     ("train_crypto", "Training Crypto (Chủ nhật 5AM)",         "0 0 5 * * 0", True),
     ("train_sp500",  "Training S&P 500 (Chủ nhật 7AM)",        "0 0 7 * * 0", True),
     ("daily_prediction", "Dự đoán tất cả thị trường (mỗi giờ)", "0 0 */1 * * *", False),
-    ("predict_vn30",   "Dự đoán VN30 (3PM ngày thường)",          "0 0 15 * * 1-5",  True),
     ("predict_nasdaq", "Dự đoán NASDAQ (disabled — trong pipeline)",  "0 30 23 * * 1-5", False),
     ("predict_crypto", "Dự đoán Crypto (disabled — trong pipeline)", "0 0 */6 * * *",   False),
     ("predict_sp500",  "Dự đoán S&P 500 (disabled — trong pipeline)", "0 0 13 * * 1-5",  False),

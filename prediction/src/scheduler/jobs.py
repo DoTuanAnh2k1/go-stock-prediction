@@ -53,16 +53,6 @@ def _run_pipeline(market_key: str, crawl_fn: Callable) -> None:
         log.error("pipeline.predict.error", market=market_key, error=str(exc))
 
 
-def job_crawl_vn30() -> None:
-    from src.crawlers.vn30 import VN30Crawler
-    crawler = VN30Crawler()
-    _run_pipeline("VN30", lambda: crawler.crawl())
-    try:
-        crawler.crawl_intraday()
-    except Exception as exc:
-        log.warning("job.crawl_vn30.intraday.error", error=str(exc))
-
-
 def job_crawl_gold() -> None:
     from src.crawlers.gold import GoldCrawler
     crawler = GoldCrawler()
@@ -139,15 +129,6 @@ def job_gold_predict() -> None:
         log.error("job.gold_predict.error", error=str(exc))
 
 
-def job_predict_vn30() -> None:
-    from src.orchestrator.runner import run_for_market
-    try:
-        count = run_for_market("VN30")
-        log.info("job.predict_vn30.done", count=count)
-    except Exception as exc:
-        log.error("job.predict_vn30.error", error=str(exc))
-
-
 def job_predict_nasdaq() -> None:
     from src.orchestrator.runner import run_for_market
     try:
@@ -178,15 +159,6 @@ def job_predict_sp500() -> None:
 # ---------------------------------------------------------------------------
 # Per-market training jobs
 # ---------------------------------------------------------------------------
-
-def job_train_vn30() -> None:
-    from src.orchestrator.training import train_for_market
-    try:
-        success, sid = train_for_market("VN30")
-        log.info("job.train_vn30.done", success=success, session_id=sid)
-    except Exception as exc:
-        log.error("job.train_vn30.error", error=str(exc))
-
 
 def job_train_gold() -> None:
     from src.orchestrator.training import train_for_market
@@ -304,7 +276,6 @@ def job_simulation_daily() -> None:
 
 # Job registry — maps job_key → callable
 JOB_FUNCTIONS = {
-    "crawler_stock": job_crawl_vn30,
     "crawler_gold": job_crawl_gold,
     "crawler_nasdaq": job_crawl_nasdaq,
     "crawler_crypto": job_crawl_crypto,
@@ -313,12 +284,10 @@ JOB_FUNCTIONS = {
     "daily_prediction": job_daily_prediction,
     "daily_reconcile": job_daily_reconcile,
     "gold_predict": job_gold_predict,
-    "predict_vn30": job_predict_vn30,
     "predict_nasdaq": job_predict_nasdaq,
     "predict_crypto": job_predict_crypto,
     "predict_sp500": job_predict_sp500,
     # Per-market training jobs
-    "train_vn30": job_train_vn30,
     "train_gold": job_train_gold,
     "train_nasdaq": job_train_nasdaq,
     "train_crypto": job_train_crypto,
