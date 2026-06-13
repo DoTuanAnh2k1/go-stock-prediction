@@ -379,12 +379,7 @@ function buildGoldPredActual(res: any): GoldPredActual | null {
 export function loadAll(): Promise<{ data: AppData; raw: Record<string, any> }> {
   const P = (u: string) => fetchJSON(u).catch(() => null);
   const jobs: Record<string, Promise<any>> = {
-    market:       P('/market/overview?page_size=100'),
     stats:        P('/dashboard/stats'),
-    preds:        P('/predictions?limit=12'),
-    confirmed:    P('/predictions?limit=80&status=confirmed'),
-    acc:          P('/predictions/accuracy?days=30'),
-    trend:        P('/predictions/accuracy-trend?days=90'),
     algoDefs:     P('/training/algorithms'),
     goldLatest:   P('/gold/latest'),
     goldPreds:    P('/gold/predictions/latest'),
@@ -412,30 +407,8 @@ export function loadAll(): Promise<{ data: AppData; raw: Record<string, any> }> 
       out.algoMap = merged;
     }
 
-    if (R.market) {
-      const st = buildStocks(R.market);
-      if (st) {
-        out.stocks = st; sources.market = true;
-        out.gainers = arr<any>(R.market.top_gainers).map(mover);
-        out.losers  = arr<any>(R.market.top_losers).map(mover);
-        out.active  = arr<any>(R.market.most_active).map(mover);
-        if (!out.gainers.length) out.gainers = st.slice().sort((a, b) => b.chgPct - a.chgPct).slice(0, 6);
-        if (!out.losers.length)  out.losers  = st.slice().sort((a, b) => a.chgPct - b.chgPct).slice(0, 6);
-        if (!out.active.length)  out.active  = st.slice().sort((a, b) => b.volume - a.volume).slice(0, 6);
-      }
-      const v = num(R.market.vnindex);
-      if (v) {
-        out.indices = {
-          vnindex: { val: v, chg: num(R.market.index_change), chgPct: num(R.market.index_percent), vol: num(R.market.total_volume) / 1e6, series: [] },
-        };
-      }
-    }
-
-    const pl = buildPredsLatest(R.preds); if (pl) { out.predictions = pl; sources.preds = true; }
-    const cf = buildConfirmed(R.confirmed) || buildConfirmed(R.preds); if (cf) { out.confirmed = cf; }
     // Pass training algorithm defs so buildAlgos can use server-provided names.
-    const al = buildAlgos(R.acc || {}, R.algoDefs); if (al && al.length) { out.algos = al; sources.acc = true; }
-    const tr = buildTrend(R.trend); if (tr) { out.accTrend = tr; }
+    const al = buildAlgos({}, R.algoDefs); if (al && al.length) { out.algos = al; sources.acc = true; }
 
     if (R.stats) {
       out.stats = { total: R.stats.total_predictions || 0, acc: +num(R.stats.avg_accuracy).toFixed(1) };
@@ -460,12 +433,6 @@ export function loadAll(): Promise<{ data: AppData; raw: Record<string, any> }> 
 
 // ── Phase 2: sparklines + gold history (non-blocking) ───────────────────────
 export function enrich(data: AppData, onUpdate: () => void): void {
-  if (data.__sources && data.__sources.market) {
-    const syms = data.stocks.slice(0, 30);
-    Promise.allSettled(
-      syms.map((s) => stockHistory(s.sym, 30).then((h) => { s.hist = h; s.spark = h.slice(-20); }))
-    ).then(() => { onUpdate && onUpdate(); });
-  }
   if (data.__sources && data.__sources.gold) {
     Promise.allSettled(
       data.goldSources.map((g) =>

@@ -163,7 +163,6 @@ interface MarketDef {
 
 function getMarkets(t: Translations): MarketDef[] {
   return [
-    { key: 'vn30',      label: 'VN30',         icon: 'candles', color: 'var(--accent)'            },
     { key: 'gold',      label: t.markets.gold,  icon: 'gold',    color: 'var(--gold)'              },
     { key: 'nasdaq100', label: 'NASDAQ 100',    icon: 'nasdaq',  color: 'oklch(0.74 0.13 200)'     },
     { key: 'sp500',     label: 'S&P 500',       icon: 'nasdaq',  color: 'oklch(0.72 0.15 145)'     },
@@ -182,7 +181,6 @@ function getMarketSubs(t: Translations) {
 function getNav(t: Translations): NavItem[] {
   return [
     { id: 'dashboard',  path: '/',                  label: t.nav.overview,     icon: 'grid'    },
-    { id: 'vn30',       path: '/markets/vn30',      label: 'VN30',             icon: 'candles' },
     { id: 'gold',       path: '/markets/gold',      label: t.markets.gold,     icon: 'gold'    },
     { id: 'nasdaq100',  path: '/markets/nasdaq100', label: 'NASDAQ',           icon: 'nasdaq'  },
     { id: 'sp500',      path: '/markets/sp500',     label: 'S&P 500',          icon: 'nasdaq'  },
