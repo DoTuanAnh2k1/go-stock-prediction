@@ -34,22 +34,6 @@ type marketTrainingResponse struct {
 	TotalPages int         `json:"total_pages"`
 }
 
-// vn30PredictionItem is the per-row DTO for VN30 market predictions.
-type vn30PredictionItem struct {
-	ID             uint             `json:"id"`
-	Symbol         string           `json:"symbol"`
-	CompanyName    string           `json:"company_name"`
-	AlgorithmName  string           `json:"algorithm_name"`
-	PredictedPrice decimal.Decimal  `json:"predicted_price"`
-	CurrentPrice   decimal.Decimal  `json:"current_price"`
-	Confidence     decimal.Decimal  `json:"confidence"`
-	PredictionDate string           `json:"prediction_date"`
-	TargetDate     string           `json:"target_date"`
-	ActualPrice    *decimal.Decimal `json:"actual_price"`
-	Accuracy       *decimal.Decimal `json:"accuracy"`
-	Status         string           `json:"status"`
-}
-
 // goldPredictionPageItem is the per-row DTO for gold market predictions.
 type goldPredictionPageItem struct {
 	ID             uint             `json:"id"`
@@ -138,47 +122,6 @@ func GetMarketPredictions(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 
 	switch key {
-	case "vn30":
-		preds, total, err := store.GetPredictionsByMarketPage(key, page, limit, search, sortBy, sortDir, algorithm, status)
-		if err != nil {
-			logger.Logger.Errorf("[api/markets/%s/predictions] DB error: %v", key, err)
-			ResponseError(w, http.StatusInternalServerError, "Failed to get predictions")
-			return
-		}
-
-		items := make([]vn30PredictionItem, 0, len(preds))
-		for _, p := range preds {
-			symbol := ""
-			companyName := ""
-			if p.Stock != nil {
-				symbol = p.Stock.Symbol
-				companyName = p.Stock.CompanyName
-			}
-			items = append(items, vn30PredictionItem{
-				ID:             p.ID,
-				Symbol:         symbol,
-				CompanyName:    companyName,
-				AlgorithmName:  p.AlgorithmName,
-				PredictedPrice: p.PredictedPrice,
-				CurrentPrice:   p.CurrentPrice,
-				Confidence:     p.Confidence,
-				PredictionDate: p.PredictionDate.Format(time.RFC3339),
-				TargetDate:     p.TargetDate.Format("2006-01-02"),
-				ActualPrice:    p.ActualPrice,
-				Accuracy:       p.Accuracy,
-				Status:         p.Status,
-			})
-		}
-
-		ResponseSuccess(w, http.StatusOK, marketPredictionsResponse{
-			Market:     key,
-			Data:       items,
-			Total:      total,
-			Page:       page,
-			Limit:      limit,
-			TotalPages: totalPages(total, limit),
-		})
-
 	case "gold":
 		preds, total, err := store.GetGoldPredictionsPage(page, limit, search, algorithm, status, sortBy, sortDir)
 		if err != nil {
@@ -242,7 +185,7 @@ func GetMarketTraining(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
 
 	// Validate market key
-	if key != "vn30" && key != "gold" {
+	if key != "gold" {
 		ResponseError(w, http.StatusNotFound, "unknown market key: "+key)
 		return
 	}

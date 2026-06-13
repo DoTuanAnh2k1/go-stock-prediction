@@ -13,8 +13,6 @@ import (
 func TestTriggerTrain_InvalidAlgorithm(t *testing.T) {
 	unknownAlgos := []string{
 		"invalid",
-		"random_forest",
-		"xgboost",
 		"linear_regression",
 		"gradient_boost",
 	}

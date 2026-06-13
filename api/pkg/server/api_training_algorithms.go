@@ -49,19 +49,8 @@ func GetTrainingAlgorithms(w http.ResponseWriter, r *http.Request) {
 		logByAlg[log.AlgorithmName] = struct{}{}
 	}
 
-	// Total prediction count per algorithm
-	totalCounts, err := store.GetPredictionCountByAlgorithm()
-	if err != nil {
-		logger.Logger.Warnf("Failed to get prediction counts by algorithm: %v", err)
-		totalCounts = map[string]int64{}
-	}
-
-	// Successful predictions (accuracy >= 0.95) per algorithm
-	successCounts, err := store.GetSuccessfulPredictionCountByAlgorithm(0.95)
-	if err != nil {
-		logger.Logger.Warnf("Failed to get success prediction counts: %v", err)
-		successCounts = map[string]int64{}
-	}
+	totalCounts := map[string]int64{}
+	successCounts := map[string]int64{}
 
 	defs := registry.All()
 	result := make([]modelsapi.TrainingAlgorithmDTO, 0, len(defs))

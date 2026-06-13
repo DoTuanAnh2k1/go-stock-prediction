@@ -6,7 +6,6 @@ import (
 	grpcclient "go-stock-prediction/pkg/grpc/client"
 	"go-stock-prediction/pkg/logger"
 	modelsapi "go-stock-prediction/pkg/models/models_api"
-	modelsdb "go-stock-prediction/pkg/models/models_db"
 	pb "go-stock-prediction/proto/prediction"
 	"math"
 	"net/http"
@@ -144,67 +143,6 @@ func calculateDateRange(period string) (time.Time, time.Time) {
 	return fromDate, now
 }
 
-func calculateStockStats(prices []modelsdb.StockPrice) modelsapi.StockStatsDTO {
-	if len(prices) == 0 {
-		return modelsapi.StockStatsDTO{}
-	}
-
-	var highest, lowest, totalPrice decimal.Decimal
-	var totalVolume int64
-	var totalValue decimal.Decimal
-	var priceChanges []float64
-
-	// Initialize with first price
-	highest = prices[0].HighPrice
-	lowest = prices[0].LowPrice
-
-	for _, price := range prices {
-		// Find highest/lowest
-		if price.HighPrice.GreaterThan(highest) {
-			highest = price.HighPrice
-		}
-		if price.LowPrice.LessThan(lowest) {
-			lowest = price.LowPrice
-		}
-
-		// Sum for averages
-		totalPrice = totalPrice.Add(price.ClosePrice)
-		totalVolume += price.Volume
-		totalValue = totalValue.Add(price.Value)
-
-		// Collect price changes for volatility
-		changeFloat, _ := price.ChangePercent.Float64()
-		priceChanges = append(priceChanges, changeFloat)
-	}
-
-	avgPrice := totalPrice.Div(decimal.NewFromInt(int64(len(prices))))
-
-	// Calculate period change
-	var priceChange, percentChange decimal.Decimal
-	if len(prices) > 1 {
-		startPrice := prices[len(prices)-1].ClosePrice // Oldest price
-		endPrice := prices[0].ClosePrice               // Latest price
-		priceChange = endPrice.Sub(startPrice)
-		if startPrice.GreaterThan(decimal.Zero) {
-			percentChange = priceChange.Div(startPrice).Mul(decimal.NewFromInt(100))
-		}
-	}
-
-	// Calculate volatility (standard deviation)
-	volatility := calculateVolatility(priceChanges)
-
-	return modelsapi.StockStatsDTO{
-		HighestPrice:  highest,
-		LowestPrice:   lowest,
-		AveragePrice:  avgPrice,
-		TotalVolume:   totalVolume,
-		TotalValue:    totalValue,
-		PriceChange:   priceChange,
-		PercentChange: percentChange,
-		Volatility:    decimal.NewFromFloat(volatility),
-		TradingDays:   len(prices),
-	}
-}
 
 func calculateVolatility(changes []float64) float64 {
 	if len(changes) <= 1 {
@@ -262,10 +200,15 @@ func getTopByVolume(stocks []modelsapi.StockCurrentPriceDTO, limit int) []models
 
 var validAlgorithms = map[string]bool{
 	"moving_average": true,
-	"lstm_nn":        true,
-	"arima_garch":    true,
 	"ema":            true,
+	"lstm_nn":        true,
+	"gru_nn":         true,
+	"arima_garch":    true,
+	"egarch":         true,
+	"sarima":         true,
 	"lightgbm":       true,
+	"xgboost":        true,
+	"random_forest":  true,
 	"ensemble":       true,
 }
 

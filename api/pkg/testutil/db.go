@@ -86,13 +86,9 @@ func SetupTestDB(t *testing.T) (*gorm.DB, func()) {
 func CleanupTestDB(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	tables := []string{
-		"predictions",
-		"stock_prices",
 		"gold_prices",
 		"macro_indicators",
 		"sync_logs",
-		"stocks",
-		"exchanges",
 	}
 	db.Exec("SET FOREIGN_KEY_CHECKS = 0")
 	for _, table := range tables {
@@ -113,27 +109,6 @@ func SeedTestData(t *testing.T, db *gorm.DB) {
 		t.Fatalf("Failed to load fixtures: %v", err)
 	}
 
-	// Insert in order: exchanges → stocks → stock_prices → predictions, gold_prices
-	if len(fixtures.Exchanges) > 0 {
-		if err := db.Create(&fixtures.Exchanges).Error; err != nil {
-			t.Fatalf("Failed to seed exchanges: %v", err)
-		}
-	}
-	if len(fixtures.Stocks) > 0 {
-		if err := db.Create(&fixtures.Stocks).Error; err != nil {
-			t.Fatalf("Failed to seed stocks: %v", err)
-		}
-	}
-	if len(fixtures.StockPrices) > 0 {
-		if err := db.Create(&fixtures.StockPrices).Error; err != nil {
-			t.Fatalf("Failed to seed stock_prices: %v", err)
-		}
-	}
-	if len(fixtures.Predictions) > 0 {
-		if err := db.Create(&fixtures.Predictions).Error; err != nil {
-			t.Fatalf("Failed to seed predictions: %v", err)
-		}
-	}
 	if len(fixtures.GoldPrices) > 0 {
 		if err := db.Create(&fixtures.GoldPrices).Error; err != nil {
 			t.Fatalf("Failed to seed gold_prices: %v", err)

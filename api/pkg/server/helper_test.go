@@ -151,7 +151,7 @@ func TestValidateAlgorithm_ValidAlgorithms_NoError(t *testing.T) {
 }
 
 func TestValidateAlgorithm_UnknownAlgorithm_ReturnsError(t *testing.T) {
-	err := validateAlgorithm("random_forest")
+	err := validateAlgorithm("not_a_real_algorithm")
 	if err == nil {
 		t.Error("expected error for unknown algorithm, got nil")
 	}
