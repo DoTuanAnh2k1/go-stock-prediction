@@ -4,6 +4,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LangContext';
 import { Sparkline } from './charts';
+import { marketStatus } from '../utils/marketHours';
 import type { FmtUtils } from '../types';
 import type { Translations } from '../i18n';
 
@@ -36,6 +37,7 @@ const I: Record<string, React.ReactNode> = {
   trophy:    <><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></>,
   chevrLeft:  <polyline points="15 18 9 12 15 6"/>,
   chevrRight: <polyline points="9 18 15 12 9 6"/>,
+  activity:   <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></>,
 };
 
 export function Icon({ name, size = 18, sw = 1.7, style, ...p }: { name: string; size?: number; sw?: number; style?: React.CSSProperties; [key: string]: any }) {
@@ -286,6 +288,11 @@ export function Sidebar({ status, collapsed = false, onToggle }: {
           <Icon name="book" size={17} /><span>{t.nav.guide}</span>
         </NavLink>
         {user && (
+          <NavLink to="/monitoring" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
+            <Icon name="activity" size={17} /><span>{t.nav.monitoring}</span>
+          </NavLink>
+        )}
+        {user && (
           <NavLink to="/settings" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
             <Icon name="settings" size={17} /><span>{t.nav.settings}</span>
           </NavLink>
@@ -415,6 +422,30 @@ export function MobNav() {
         </NavLink>
       ))}
     </nav>
+  );
+}
+
+// ── MarketClosedBanner ────────────────────────────────────────────────────────
+// Hiện ngay khi mở tab NASDAQ/SP500 nếu thị trường đang đóng (cuối tuần / lễ Mỹ).
+export function MarketClosedBanner({ marketKey }: { marketKey: string }) {
+  const { t } = useLanguage();
+  const status = marketStatus(marketKey);
+  if (status.open) return null;
+  const msg = status.reason === 'holiday' ? t.marketClosed.holiday : t.marketClosed.weekend;
+  return (
+    <div
+      className="section-gap"
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+        borderRadius: 8, fontSize: 13,
+        background: 'var(--warn-bg, rgba(234,179,8,.12))',
+        border: '1px solid var(--warn-border, rgba(234,179,8,.4))',
+        color: 'var(--warn-text, #b45309)',
+      }}
+    >
+      <Icon name="clock" size={16} />
+      <span>{msg}</span>
+    </div>
   );
 }
 

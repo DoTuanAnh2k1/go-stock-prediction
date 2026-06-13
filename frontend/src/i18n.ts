@@ -12,6 +12,7 @@ export const translations: Record<Lang, Translations> = {
       settings: 'Cài đặt',
       users: 'Người dùng',
       leaderboard: 'Leaderboard',
+      monitoring: 'Giám sát dữ liệu',
     },
     // Market sub-items
     marketSubs: {
@@ -60,6 +61,7 @@ export const translations: Record<Lang, Translations> = {
       '/gold': ['Giá vàng', 'GOLD'],
       '/crypto': ['Cryptocurrency', 'CRYPTO'],
       '/nasdaq': ['NASDAQ 100', 'NASDAQ 100 · US EQUITIES'],
+      '/monitoring': ['Giám sát dữ liệu', 'DATA PIPELINE · MONITORING'],
     },
     // Sidebar footer
     footer: {
@@ -87,6 +89,11 @@ export const translations: Record<Lang, Translations> = {
       predictions: 'Dự đoán',
       detail: 'Chi tiết',
       training: 'Huấn luyện',
+    },
+    // Banner thị trường đóng cửa (NASDAQ / SP500)
+    marketClosed: {
+      weekend: 'Thị trường đang đóng cửa (cuối tuần). Crawl, dự đoán và bot tạm dừng cho tới phiên giao dịch kế tiếp.',
+      holiday: 'Thị trường đang đóng cửa (ngày lễ Mỹ). Crawl, dự đoán và bot tạm dừng cho tới phiên giao dịch kế tiếp.',
     },
     // Date range labels
     dateRange: {
@@ -540,6 +547,58 @@ export const translations: Record<Lang, Translations> = {
       colCreatedAt: 'Ngày tạo',
       deleteConfirm: 'Xóa người dùng',
     },
+    // Monitoring page
+    monitoring: {
+      pageTitle: 'Giám sát dữ liệu',
+      generatedAt: 'Được tạo lúc',
+      refresh: 'Làm mới',
+      loading: 'Đang tải dữ liệu giám sát...',
+      error: 'Không thể tải dữ liệu giám sát',
+      loginRequired: 'Vui lòng đăng nhập để xem trang này.',
+      // Market card
+      crawlSection: 'Thu thập dữ liệu',
+      lastCrawl: 'Lần crawl cuối',
+      staleness: 'Cũ',
+      never: 'Chưa crawl',
+      dailyToday: 'Bản ghi hôm nay',
+      intradayToday: 'Intraday hôm nay',
+      staleWarning: 'Dữ liệu cũ',
+      predSection: 'Dự đoán',
+      lastPredict: 'Dự đoán cuối',
+      todayTotal: 'Tổng hôm nay',
+      expectedAlgos: 'Thuật toán kỳ vọng',
+      missingAlgos: 'Thiếu thuật toán',
+      noMissing: 'Đủ thuật toán',
+      algoTable: 'Chi tiết thuật toán',
+      colAlgo: 'Thuật toán',
+      colTodayCount: 'Hôm nay',
+      colDirAccuracy: 'Độ CX hướng',
+      colReconciled: 'Reconciled',
+      colCorrect: 'Đúng',
+      noAlgoData: 'Chưa có dữ liệu thuật toán',
+      // Bots
+      botsSummary: 'Tổng hợp Bot Trading',
+      totalBots: 'Tổng bots',
+      activeBots: 'Bots đang hoạt động',
+      byMarket: 'Theo thị trường',
+      colMarket: 'Thị trường',
+      colTrades: 'Giao dịch',
+      colWins: 'Thắng',
+      colLosses: 'Thua',
+      colWinRate: 'Win Rate',
+      colPnl: 'Total P&L',
+      noBotsData: 'Chưa có dữ liệu bot',
+      botsTable: 'Bảng Bot',
+      colBotId: 'Bot ID',
+      colAlgoBot: 'Thuật toán',
+      colWLBE: 'W/L/BE',
+      colReturnPct: 'Return %',
+      colProfitFactor: 'Profit Factor',
+      returnPctNote: 'snapshot-derived, có thể bị inflated do bug duplicate snapshot',
+      noBotsTable: 'Chưa có dữ liệu bot nào',
+      sortAsc: 'Tăng dần',
+      sortDesc: 'Giảm dần',
+    },
   },
 
   en: {
@@ -552,6 +611,7 @@ export const translations: Record<Lang, Translations> = {
       settings: 'Settings',
       users: 'Users',
       leaderboard: 'Leaderboard',
+      monitoring: 'Data Pipeline',
     },
     marketSubs: {
       overview: 'Overview',
@@ -595,6 +655,7 @@ export const translations: Record<Lang, Translations> = {
       '/gold': ['Gold Price', 'GOLD'],
       '/crypto': ['Cryptocurrency', 'CRYPTO'],
       '/nasdaq': ['NASDAQ 100', 'NASDAQ 100 · US EQUITIES'],
+      '/monitoring': ['Data Pipeline', 'DATA PIPELINE · MONITORING'],
     },
     footer: {
       liveData: 'Live data',
@@ -618,6 +679,10 @@ export const translations: Record<Lang, Translations> = {
       predictions: 'Predictions',
       detail: 'Detail',
       training: 'Training',
+    },
+    marketClosed: {
+      weekend: 'Market is closed (weekend). Crawling, predictions and bots are paused until the next trading session.',
+      holiday: 'Market is closed (US holiday). Crawling, predictions and bots are paused until the next trading session.',
     },
     dateRange: {
       today: 'Today',
@@ -1054,6 +1119,58 @@ export const translations: Record<Lang, Translations> = {
       colCreatedAt: 'Created At',
       deleteConfirm: 'Delete user',
     },
+    // Monitoring page
+    monitoring: {
+      pageTitle: 'Data Pipeline',
+      generatedAt: 'Generated at',
+      refresh: 'Refresh',
+      loading: 'Loading monitoring data...',
+      error: 'Cannot load monitoring data',
+      loginRequired: 'Please log in to view this page.',
+      // Market card
+      crawlSection: 'Data Crawl',
+      lastCrawl: 'Last crawl',
+      staleness: 'Age',
+      never: 'Never crawled',
+      dailyToday: "Today's records",
+      intradayToday: "Today's intraday",
+      staleWarning: 'Stale data',
+      predSection: 'Predictions',
+      lastPredict: 'Last prediction',
+      todayTotal: "Today's total",
+      expectedAlgos: 'Expected algos',
+      missingAlgos: 'Missing algorithms',
+      noMissing: 'All algorithms present',
+      algoTable: 'Algorithm detail',
+      colAlgo: 'Algorithm',
+      colTodayCount: 'Today',
+      colDirAccuracy: 'Dir. Accuracy',
+      colReconciled: 'Reconciled',
+      colCorrect: 'Correct',
+      noAlgoData: 'No algorithm data',
+      // Bots
+      botsSummary: 'Bot Trading Summary',
+      totalBots: 'Total bots',
+      activeBots: 'Active bots',
+      byMarket: 'By market',
+      colMarket: 'Market',
+      colTrades: 'Trades',
+      colWins: 'Wins',
+      colLosses: 'Losses',
+      colWinRate: 'Win Rate',
+      colPnl: 'Total P&L',
+      noBotsData: 'No bot data',
+      botsTable: 'Bots Table',
+      colBotId: 'Bot ID',
+      colAlgoBot: 'Algorithm',
+      colWLBE: 'W/L/BE',
+      colReturnPct: 'Return %',
+      colProfitFactor: 'Profit Factor',
+      returnPctNote: 'snapshot-derived, may be inflated due to duplicate snapshot bug',
+      noBotsTable: 'No bots data',
+      sortAsc: 'Ascending',
+      sortDesc: 'Descending',
+    },
   },
 };
 
@@ -1068,6 +1185,7 @@ export interface Translations {
     settings: string;
     users: string;
     leaderboard: string;
+    monitoring: string;
   };
   marketSubs: {
     overview: string;
@@ -1113,6 +1231,10 @@ export interface Translations {
     predictions: string;
     detail: string;
     training: string;
+  };
+  marketClosed: {
+    weekend: string;
+    holiday: string;
   };
   dateRange: {
     today: string;
@@ -1548,5 +1670,54 @@ export interface Translations {
     colRole: string;
     colCreatedAt: string;
     deleteConfirm: string;
+  };
+  monitoring: {
+    pageTitle: string;
+    generatedAt: string;
+    refresh: string;
+    loading: string;
+    error: string;
+    loginRequired: string;
+    crawlSection: string;
+    lastCrawl: string;
+    staleness: string;
+    never: string;
+    dailyToday: string;
+    intradayToday: string;
+    staleWarning: string;
+    predSection: string;
+    lastPredict: string;
+    todayTotal: string;
+    expectedAlgos: string;
+    missingAlgos: string;
+    noMissing: string;
+    algoTable: string;
+    colAlgo: string;
+    colTodayCount: string;
+    colDirAccuracy: string;
+    colReconciled: string;
+    colCorrect: string;
+    noAlgoData: string;
+    botsSummary: string;
+    totalBots: string;
+    activeBots: string;
+    byMarket: string;
+    colMarket: string;
+    colTrades: string;
+    colWins: string;
+    colLosses: string;
+    colWinRate: string;
+    colPnl: string;
+    noBotsData: string;
+    botsTable: string;
+    colBotId: string;
+    colAlgoBot: string;
+    colWLBE: string;
+    colReturnPct: string;
+    colProfitFactor: string;
+    returnPctNote: string;
+    noBotsTable: string;
+    sortAsc: string;
+    sortDesc: string;
   };
 }

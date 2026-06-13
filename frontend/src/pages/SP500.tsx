@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Panel, KPI, Icon, Chg, Seg, ConfBar, vnsToast } from '../components/ui';
+import { Panel, KPI, Icon, Chg, Seg, ConfBar, vnsToast, MarketClosedBanner } from '../components/ui';
 import { LineChart } from '../components/charts';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LangContext';
@@ -382,6 +382,7 @@ export default function SP500() {
   return (
     <div className="content__inner fade">
       <MarketTabs marketKey="sp500" />
+      <MarketClosedBanner marketKey="sp500" />
       {/* KPI cards */}
       <div className="grid grid--kpis section-gap">
         {kpiItems.length === 0
