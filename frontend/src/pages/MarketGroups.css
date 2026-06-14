@@ -1,0 +1,81 @@
+.mg-page { padding: 24px; max-width: 900px; }
+.mg-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 24px; }
+.mg-loading { padding: 40px; text-align: center; opacity: 0.6; }
+.mg-empty { opacity: 0.5; font-style: italic; margin: 0; }
+.mg-error {
+  background: #e53e3e; color: white;
+  padding: 10px 16px; border-radius: 6px; margin-bottom: 16px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.mg-error button { background: none; border: none; color: white; cursor: pointer; font-size: 1rem; }
+
+.mg-create-form {
+  background: var(--bg-2, #1e2130);
+  border: 1px solid var(--border, #2d3048);
+  border-radius: 10px; padding: 20px; margin-bottom: 24px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.mg-create-form h2 { font-size: 1rem; font-weight: 600; margin: 0 0 4px; }
+
+.mg-input {
+  background: var(--bg, #131622);
+  border: 1px solid var(--border, #2d3048);
+  border-radius: 6px; padding: 8px 12px; color: inherit;
+  font-size: 0.875rem; width: 100%; box-sizing: border-box;
+}
+
+.mg-btn {
+  padding: 7px 14px; border-radius: 6px;
+  border: 1px solid var(--border, #2d3048);
+  background: var(--bg-2, #1e2130); color: inherit;
+  cursor: pointer; font-size: 0.8rem; transition: opacity 0.15s; white-space: nowrap;
+}
+.mg-btn:hover { opacity: 0.8; }
+.mg-btn--primary { background: #5B8DEF; border-color: transparent; color: white; }
+.mg-btn--danger { background: #c53030; border-color: transparent; color: white; }
+.mg-btn--sm { padding: 4px 10px; font-size: 0.75rem; }
+
+.mg-list { display: flex; flex-direction: column; gap: 12px; }
+.mg-card {
+  background: var(--bg-2, #1e2130);
+  border: 1px solid var(--border, #2d3048);
+  border-radius: 10px; overflow: hidden;
+}
+.mg-card-header {
+  display: flex; justify-content: space-between;
+  align-items: flex-start; padding: 16px; gap: 12px;
+}
+.mg-card-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.mg-card-name { font-weight: 600; font-size: 0.95rem; }
+.mg-card-desc { font-size: 0.8rem; opacity: 0.6; }
+.mg-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.mg-edit-row { display: flex; gap: 8px; align-items: center; flex: 1; }
+
+.mg-market-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.mg-tag {
+  background: rgba(91,141,239,0.15); color: #5B8DEF;
+  border: 1px solid rgba(91,141,239,0.3);
+  padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;
+}
+
+.mg-panel {
+  border-top: 1px solid var(--border, #2d3048);
+  padding: 16px; display: flex; flex-direction: column; gap: 20px;
+}
+.mg-panel-section { display: flex; flex-direction: column; gap: 8px; }
+.mg-panel-section h3 { font-size: 0.85rem; font-weight: 600; opacity: 0.7; margin: 0; }
+.mg-checkboxes { display: flex; gap: 16px; flex-wrap: wrap; }
+.mg-checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 0.875rem; cursor: pointer; }
+
+.mg-user-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.mg-user-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px; background: var(--bg, #131622); border-radius: 6px;
+}
+.mg-user-item span:first-child { flex: 1; font-size: 0.875rem; }
+.mg-role-badge {
+  font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; font-weight: 600;
+}
+.mg-role-badge--super-admin { background: #805ad5; color: white; }
+.mg-role-badge--admin { background: #2b6cb0; color: white; }
+.mg-role-badge--user { background: #2d3748; color: #a0aec0; border: 1px solid #4a5568; }
