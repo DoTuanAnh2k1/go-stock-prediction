@@ -110,7 +110,25 @@ services:
     networks:
       - app-network
 
-  # Frontend (React + Vite + Nginx) — single HTTPS gateway on :443
+  # Rust HTTP/HTTPS Gateway — handles ports 80/443, routes to api and frontend
+  gateway:
+    build:
+      context: ./gateway-svc
+      dockerfile: Dockerfile
+    container_name: vnstock_gateway
+    depends_on:
+      - api
+      - frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/certs:/etc/gateway/certs
+    networks:
+      - app-network
+
+  # Frontend (React + Vite + Nginx) — serves static files on internal port 3000
   frontend:
     build:
       context: ./frontend
@@ -119,11 +137,8 @@ services:
     depends_on:
       - api
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/certs:/etc/nginx/certs
+    expose:
+      - "3000"
     networks:
       - app-network
 
