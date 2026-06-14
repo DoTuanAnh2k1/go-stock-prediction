@@ -170,7 +170,7 @@ def train_for_market(market_key: str) -> tuple[bool, str]:
     """
     mk = market_key.upper()
     session_id = str(uuid.uuid4())
-    started_at = datetime.utcnow()
+    started_at = datetime.now()
 
     series = _collect_series_for_market(mk)
     if not series:
@@ -192,7 +192,7 @@ def train_for_market(market_key: str) -> tuple[bool, str]:
     log.info("training.market.start", market=mk, series=len(series), algorithms=len(algos))
 
     for key, algo in algos.items():
-        algo_started = datetime.utcnow()
+        algo_started = datetime.now()
         try:
             algo.train_batch(series_data)
             success = len(series_data)
@@ -202,7 +202,7 @@ def train_for_market(market_key: str) -> tuple[bool, str]:
             success = 0
             error = len(series_data)
 
-        duration_ms = int((datetime.utcnow() - algo_started).total_seconds() * 1000)
+        duration_ms = int((datetime.now() - algo_started).total_seconds() * 1000)
         accuracy = Decimal(str(round(success / max(1, success + error), 4)))
 
         try:
@@ -216,7 +216,7 @@ def train_for_market(market_key: str) -> tuple[bool, str]:
                 accuracy=accuracy,
                 duration_ms=duration_ms,
                 started_at=algo_started,
-                completed_at=datetime.utcnow(),
+                completed_at=datetime.now(),
             )
         except Exception as exc:
             log.warning("training.log.failed", error=str(exc))
@@ -233,7 +233,7 @@ def train_for_market(market_key: str) -> tuple[bool, str]:
             source=f"ML Training ({mk})",
             success_count=total_success,
             error_count=total_error,
-            duration_ms=int((datetime.utcnow() - started_at).total_seconds() * 1000),
+            duration_ms=int((datetime.now() - started_at).total_seconds() * 1000),
         )
     except Exception as exc:
         log.warning("training.sync_log.failed", error=str(exc))
@@ -261,7 +261,7 @@ def train_all_algorithms() -> tuple[bool, str]:
 
     markets = ["GOLD", "NASDAQ100", "CRYPTO", "SP500"]
     session_id = str(uuid.uuid4())
-    started_at = datetime.utcnow()
+    started_at = datetime.now()
 
     # Update total algorithm count for status reporting
     try:
@@ -300,7 +300,7 @@ def train_all_algorithms() -> tuple[bool, str]:
             source="ML Training (ALL)",
             success_count=total_success,
             error_count=total_error,
-            duration_ms=int((datetime.utcnow() - started_at).total_seconds() * 1000),
+            duration_ms=int((datetime.now() - started_at).total_seconds() * 1000),
         )
 
     except Exception as exc:
@@ -308,7 +308,7 @@ def train_all_algorithms() -> tuple[bool, str]:
     finally:
         with _lock:
             _is_training = False
-            _last_trained = datetime.utcnow()
+            _last_trained = datetime.now()
             _progress = 100.0
             _current_phase = "idle"
 
@@ -333,7 +333,7 @@ def train_single_algorithm(algorithm_name: str) -> tuple[bool, str]:
         raise ValueError(f"Unknown algorithm: {algorithm_name}")
 
     session_id = str(uuid.uuid4())
-    started_at = datetime.utcnow()
+    started_at = datetime.now()
 
     try:
         all_series = _collect_all_training_series()
@@ -353,7 +353,7 @@ def train_single_algorithm(algorithm_name: str) -> tuple[bool, str]:
             success = 0
             error = len(series_data)
 
-        duration_ms = int((datetime.utcnow() - started_at).total_seconds() * 1000)
+        duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
         accuracy = Decimal(str(round(success / max(1, success + error), 4)))
 
         repo.create_training_log(
@@ -366,13 +366,13 @@ def train_single_algorithm(algorithm_name: str) -> tuple[bool, str]:
             accuracy=accuracy,
             duration_ms=duration_ms,
             started_at=started_at,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(),
         )
 
     finally:
         with _lock:
             _is_training = False
-            _last_trained = datetime.utcnow()
+            _last_trained = datetime.now()
 
     return True, session_id
 
@@ -662,7 +662,7 @@ def run_historical_backtest(train_window: int, step_size: int, market_key: str =
         step_size = 6
 
     log.info("backtest.start", market=mk, train_window=train_window, step_size=step_size)
-    started_at = datetime.utcnow()
+    started_at = datetime.now()
     total_preds = 0
     items_processed = 0
 
@@ -691,7 +691,7 @@ def run_historical_backtest(train_window: int, step_size: int, market_key: str =
     else:
         raise ValueError(f"Unknown market key for backtest: {market_key!r}. Valid values: GOLD, NASDAQ100, CRYPTO, SP500, ALL")
 
-    duration_ms = int((datetime.utcnow() - started_at).total_seconds() * 1000)
+    duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
     log.info("backtest.done", market=mk, predictions=total_preds, items=items_processed, duration_ms=duration_ms)
     return {"total_predictions": total_preds, "stocks_processed": items_processed, "duration_ms": duration_ms}
 

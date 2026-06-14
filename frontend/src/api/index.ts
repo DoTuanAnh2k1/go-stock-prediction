@@ -575,6 +575,88 @@ export function fetchMarketPredictions(
     .catch(() => ({ market: marketKey, data: [], total: 0, page: 1, limit: params.limit || 20, total_pages: 0 }));
 }
 
+// ── Monitoring overview ──────────────────────────────────────────────────────
+
+export interface MonitoringAlgorithmRow {
+  algorithm: string;
+  today_count: number;
+  direction_accuracy: number;
+  reconciled: number;
+  correct: number;
+}
+
+export interface MonitoringPredictions {
+  last_predict_at: string | null;
+  staleness: string;
+  today_total: number;
+  expected_algos: number;
+  missing_today: string[];
+  algorithms: MonitoringAlgorithmRow[];
+}
+
+export interface MonitoringCrawl {
+  last_crawl_at: string | null;
+  staleness: string;
+  stale: boolean;
+  daily_today: number;
+  intraday_today: number;
+}
+
+export interface MonitoringMarket {
+  market: 'GOLD' | 'NASDAQ' | 'CRYPTO' | 'SP500';
+  crawl: MonitoringCrawl;
+  predictions: MonitoringPredictions;
+}
+
+export interface MonitoringBotByMarket {
+  market: string;
+  trades: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  total_pnl: number;
+}
+
+export interface MonitoringBotSummary {
+  total_bots: number;
+  active_bots: number;
+  by_market: MonitoringBotByMarket[];
+}
+
+export interface MonitoringBotRow {
+  bot_id: string;
+  market: string;
+  algorithm: string;
+  trades: number;
+  wins: number;
+  losses: number;
+  breakeven: number;
+  win_rate: number;
+  total_pnl: number;
+  return_pct: number;
+  profit_factor: number;
+}
+
+export interface MonitoringOverview {
+  generated_at: string;
+  markets: MonitoringMarket[];
+  bots: {
+    summary: MonitoringBotSummary;
+    table: MonitoringBotRow[];
+  };
+}
+
+export async function fetchMonitoringOverview(): Promise<MonitoringOverview> {
+  const res = await fetch('/api/monitoring/overview', {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${getToken()}`,
+    },
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
 // ── Market Training (server-side paginated) ───────────────────────────────────
 export interface MarketTrainingParams {
   page?: number;

@@ -25,7 +25,7 @@ func addHandler() *http.ServeMux {
 	// ===========================================
 
 	// Auth APIs
-	mux.HandleFunc("POST /api/auth/login", LoginHandler)
+	mux.HandleFunc("POST /api/auth/login", LoginRateLimitMiddleware(LoginHandler))
 	mux.HandleFunc("GET /api/auth/me", MeHandler)
 	mux.HandleFunc("PUT /api/auth/password", ChangePasswordHandler)
 
@@ -110,9 +110,9 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("DELETE /api/backups/{filename}", AuthRequired(DeleteBackupHandler))
 
 	// User management APIs (admin only)
-	mux.HandleFunc("GET /api/users", ListUsersHandler)
-	mux.HandleFunc("POST /api/users", CreateUserHandler)
-	mux.HandleFunc("DELETE /api/users/{id}", DeleteUserHandler)
+	mux.HandleFunc("GET /api/users", AuthRequired(ListUsersHandler))
+	mux.HandleFunc("POST /api/users", AuthRequired(CreateUserHandler))
+	mux.HandleFunc("DELETE /api/users/{id}", AuthRequired(DeleteUserHandler))
 
 	// Cron schedule APIs (require JWT authentication)
 	mux.HandleFunc("GET /api/schedules", AuthRequired(GetSchedulesHandler))
@@ -134,6 +134,9 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("POST /api/trigger/simulation-backtest", AuthRequired(TriggerSimulationBacktestHandler))
 	mux.HandleFunc("POST /api/trigger/simulation-live-step", AuthRequired(TriggerSimulationLiveStepHandler))
 	mux.HandleFunc("POST /api/trigger/sim-reset", AuthRequired(TriggerSimResetHandler))
+
+	// Monitoring APIs (require JWT authentication)
+	mux.HandleFunc("GET /api/monitoring/overview", AuthRequired(GetMonitoringOverview))
 
 	return mux
 }
@@ -226,4 +229,5 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  POST /api/trigger/simulation-backtest")
 	logger.Logger.Info("  POST /api/trigger/simulation-live-step")
 	logger.Logger.Info("  POST /api/trigger/sim-reset")
+	logger.Logger.Info("  GET  /api/monitoring/overview")
 }

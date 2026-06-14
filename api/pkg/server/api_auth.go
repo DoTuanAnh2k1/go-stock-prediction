@@ -131,8 +131,8 @@ func ChangePasswordHandler(w http.ResponseWriter, r *http.Request) {
 		ResponseError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if len(req.NewPassword) < 6 {
-		ResponseError(w, http.StatusBadRequest, "new password must be at least 6 characters")
+	if len(req.NewPassword) < 12 {
+		ResponseError(w, http.StatusBadRequest, "new password must be at least 12 characters")
 		return
 	}
 
@@ -152,7 +152,7 @@ func ChangePasswordHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 12)
 	if err != nil {
 		logger.Logger.Errorf("bcrypt error: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "failed to hash password")

@@ -59,7 +59,21 @@
       "Bash(sudo grep -i \"bot_error\\\\|DetachedInstance\\\\|detached instance\\\\|sim\\\\.live\" /var/lib/docker/containers/071088f7068dbeda959742bd860f78cc3bdbbcf35f9f5827ec4f78656056b8ee/071088f7068dbeda959742bd860f78cc3bdbbcf35f9f5827ec4f78656056b8ee-json.log)",
       "Bash(ls /var/lib/docker/containers/ 2>/dev/null || echo \"no access\")",
       "Read(//var/lib/docker/**)",
-      "Bash(journalctl -u docker --since \"2026-06-08 00:00:00\" --until \"2026-06-09 16:47:00\")"
+      "Bash(journalctl -u docker --since \"2026-06-08 00:00:00\" --until \"2026-06-09 16:47:00\")",
+      "Bash(git mv *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(command -v python3)",
+      "Bash(docker compose *)",
+      "Bash(docker exec *)",
+      "Bash(sed -n '1,45p' pages/Nasdaq.tsx)",
+      "Bash(sed -n '1,45p' pages/SP500.tsx)",
+      "Bash(echo \"=== tsc exit: $? ===\")",
+      "Bash(sed -i 's/change-me-strong-root-password/123/' /home/chronical/Projects/private/go-stock-prediction/.env)",
+      "Bash(sed -i 's/change-me-strong-db-password/password/' /home/chronical/Projects/private/go-stock-prediction/.env)",
+      "Bash(sed -i 's/change-me-strong-admin-password/admin123/' /home/chronical/Projects/private/go-stock-prediction/.env)",
+      "Bash(sed -i 's/change-me-run-openssl-rand-base64-48/dev-jwt-secret-change-in-production/' /home/chronical/Projects/private/go-stock-prediction/.env)",
+      "Bash(git check-ignore *)",
+      "Bash(perl -0pi -e 's{/prediction-server_tz_backup/}{/prediction-server\\\\n_tz_backup/}' .gitignore)"
     ]
   }
 }

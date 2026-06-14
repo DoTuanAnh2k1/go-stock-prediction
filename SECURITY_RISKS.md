@@ -564,34 +564,47 @@ r.Body = http.MaxBytesReader(w, r.Body, 1*1024*1024) // max 1MB
 
 ## Checklist trước khi public
 
+> Cập nhật lần cuối: 2026-06-14
+
 ### Bắt buộc (CRITICAL + HIGH)
 
-- [ ] **C1** — Xóa tất cả hardcoded credentials khỏi `docker-compose.yaml`, dùng `.env` file không commit
-- [ ] **C2** — Sinh JWT secret ngẫu nhiên 48+ bytes, inject qua environment
-- [ ] **C3** — Đảm bảo port 8119 (gRPC) KHÔNG bao giờ expose ra ngoài Docker network
-- [ ] **C4** — Wrap `TriggerStockCrawl` và `TriggerStockPredict` bằng `AuthRequired()`
-- [ ] **C5** — Wrap `ListUsersHandler`, `CreateUserHandler`, `DeleteUserHandler` bằng `AuthRequired()` ở router level
-- [ ] **C6** — Mask password trong DSN trước khi log
-- [ ] **H1** — Fix rate limiter dùng `X-Real-IP` header thay vì `r.RemoteAddr`
-- [ ] **H2** — Thêm dedicated rate limiter cho login (≤ 10 req/min/IP)
-- [ ] **H3** — Xóa port mapping `3306:3306` và `8081:80` khỏi docker-compose (production)
-- [ ] **H4** — Block `/swagger/` trên production tại Nginx
-- [ ] **H5** — Thay `Access-Control-Allow-Origin: *` bằng whitelist cụ thể
-- [ ] **H6** — Cấu hình HTTPS (Let's Encrypt) + redirect HTTP → HTTPS tại Nginx
-- [ ] **H8** — Tăng minimum password length lên 12 ký tự
+- [x] **C1** — ✅ FIXED — Tất cả credentials trong `docker-compose.yaml` đã chuyển sang `${VAR}`, `.env.example` tạo sẵn, `.env` (dev defaults) không commit
+- [x] **C2** — ✅ FIXED (cùng C1) — `JWT_SECRET` đọc từ env var; **cần tự sinh secret mạnh trước khi public**: `openssl rand -base64 48`
+- [x] **C3** — ✅ OK — Port 8119 không bao giờ có `ports:` mapping trong docker-compose; chỉ accessible trong Docker network
+- [x] **C4** — ✅ FIXED (VN30 removed) — Các endpoint `/api/stocks/{symbol}/crawl|predict` đã bị xóa cùng VN30 removal
+- [x] **C5** — ✅ FIXED — `ListUsersHandler`, `CreateUserHandler`, `DeleteUserHandler` đều được wrap `AuthRequired()` ở router level; `GetMonitoringOverview` cũng được thêm `AuthRequired()`
+- [x] **C6** — ✅ FIXED — `mysql.go` log DSN dạng `user:***@tcp(host:port)/db` thay vì password gốc
+- [x] **H1** — ✅ FIXED — `middleware_ratelimit.go` dùng `getRealIP()` đọc `X-Real-IP` → `X-Forwarded-For` → `RemoteAddr`
+- [x] **H2** — ✅ FIXED — `LoginRateLimitMiddleware` riêng: 5 req/min/IP; wrap `LoginHandler` trong router
+- [x] **H3** — ✅ FIXED — Xóa `3306:3306` khỏi db service; phpmyadmin bind `127.0.0.1:8081:80` (chỉ localhost)
+- [x] **H4** — ✅ FIXED — `nginx.conf` block `location /swagger/ { return 404; }` trước `location /`
+- [x] **H5** — ✅ FIXED — `middleware_cors.go` dùng `ALLOWED_ORIGINS` env var (comma-separated whitelist); không còn `*`
+- [ ] **H6** — ⚠️ CẦN LÀM — Cấu hình HTTPS (Let's Encrypt) + redirect HTTP → HTTPS tại Nginx khi có domain thật
+- [ ] **H7** — ⚠️ LOW RISK — ORDER BY whitelist có, nhưng pattern vẫn dùng string concatenation; refactor khi tiện
+- [x] **H8** — ✅ FIXED — Minimum password length tăng từ 6 lên 12 ký tự
 
 ### Nên làm sớm (MEDIUM)
 
-- [ ] **M1** — Thêm security headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`)
-- [ ] **M5** — Thêm audit logging cho login và admin actions
-- [ ] **M6** — Xóa phpMyAdmin hoặc bind localhost-only
-- [ ] **M7** — Tăng bcrypt cost lên 12
+- [x] **M1** — ✅ FIXED — Security headers thêm vào cả `middleware_cors.go` (`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`) và `nginx.conf`
+- [ ] **M2** — ✅ Mitigated (by H5 CORS fix) — Cross-origin requests bị chặn; CSRF không cần thêm token nếu dùng Bearer JWT
+- [ ] **M3** — ⚠️ CẦN LÀM — JWT vẫn lưu localStorage; chuyển sang HttpOnly cookie là fix toàn diện
+- [ ] **M5** — ⚠️ CẦN LÀM — Chưa có audit logging cho login/admin actions
+- [x] **M6** — ✅ FIXED (by H3) — phpMyAdmin bind localhost-only (`127.0.0.1:8081`)
+- [x] **M7** — ✅ FIXED — bcrypt cost tăng từ 10 (DefaultCost) lên 12
 
 ### Cải thiện dần (LOW)
 
 - [ ] **L3** — Configure MySQL connection pool limits
 - [ ] **L4** — Thêm `http.MaxBytesReader` cho request body
 
+### Việc cần làm trước khi thực sự public
+
+1. **Sinh JWT_SECRET mạnh**: `openssl rand -base64 48` → đặt vào `.env` production
+2. **Đặt ADMIN_PASSWORD mạnh** (≥12 ký tự, không phải `admin123`)
+3. **Đặt ALLOWED_ORIGINS** đúng domain production trong `.env`
+4. **Cấu hình HTTPS** (H6) — Let's Encrypt + Certbot hoặc Cloudflare proxy
+5. **Tắt MYSQL_DEBUG và DB_LOG_LEVEL** về `false`/`WARN` trong `.env` production (đã có default)
+
 ---
 
-*File này được tạo tự động từ security audit ngày 2026-06-02. Cập nhật lại sau mỗi lần fix.*
+*Audit gốc: 2026-06-02. Fixes implement: 2026-06-14.*

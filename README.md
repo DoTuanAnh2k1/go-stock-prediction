@@ -335,3 +335,11 @@ docker exec prediction_service python -m pytest tests/ -v
 | Data (Python) | pandas, pandas-ta, SQLAlchemy |
 | Crawling (Python) | yfinance, requests |
 | Frontend | React + TypeScript + Vite |
+
+## Timezone — ICT-at-rest
+
+Toàn bộ cột `datetime` trong DB lưu theo `Asia/Ho_Chi_Minh` (ICT, UTC+7) dạng wallclock — không dùng UTC.
+
+- **Python:** luôn dùng `datetime.now()`. Container set `TZ=Asia/Ho_Chi_Minh` nên trả naive ICT. Không dùng `datetime.utcnow()`.
+- **Go:** DSN có `loc=Asia%2FHo_Chi_Minh` (`api/pkg/store/mysql/mysql.go`); `time.Local` = Asia/Ho_Chi_Minh (set trong `api/cmd/main.go`).
+- **MySQL:** chạy UTC nhưng không ảnh hưởng — kiểu cột `datetime` lưu verbatim, không convert timezone.

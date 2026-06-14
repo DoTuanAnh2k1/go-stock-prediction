@@ -21,6 +21,7 @@ import Users from './pages/Users';
 import Settings from './pages/Settings';
 import Simulation from './pages/Simulation';
 import SimulationBot from './pages/SimulationBot';
+import Monitoring from './pages/Monitoring';
 
 const TWEAK_DEFAULTS = {
   accent: '#5B8DEF',
@@ -99,6 +100,7 @@ function AppInner() {
             {/* ── Support ──────────────────────────────────────── */}
             <Route path="/guide" element={<ErrorBoundary><Guide /></ErrorBoundary>} />
             <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+            <Route path="/monitoring" element={<ErrorBoundary><Monitoring /></ErrorBoundary>} />
 
             {/* ── Admin ────────────────────────────────────────── */}
             <Route path="/admin/users" element={<ErrorBoundary><Users /></ErrorBoundary>} />

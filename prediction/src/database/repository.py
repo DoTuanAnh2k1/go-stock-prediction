@@ -91,7 +91,7 @@ def upsert_gold_price(
         if existing:
             existing.buy_price = buy_price
             existing.sell_price = sell_price
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now()
         else:
             session.add(
                 GoldPrice(
@@ -182,7 +182,7 @@ def update_gold_prediction_actual(
                 "accuracy": accuracy,
                 "status": status,
                 "direction_correct": direction_correct,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(),
             }
         )
 
@@ -237,7 +237,7 @@ def upsert_nasdaq_price(
             existing.low_price = low_price
             existing.close_price = close_price
             existing.volume = volume
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now()
         else:
             session.add(
                 NasdaqPrice(
@@ -342,7 +342,7 @@ def update_nasdaq_prediction_actual(
                 "accuracy": accuracy,
                 "status": status,
                 "direction_correct": direction_correct,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(),
             }
         )
 
@@ -394,7 +394,7 @@ def upsert_crypto_price(
             existing.close_price = close_price
             existing.market_cap = market_cap
             existing.volume24h = volume_24h
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now()
         else:
             session.add(
                 CryptoPrice(
@@ -486,7 +486,7 @@ def update_crypto_prediction_actual(
                 "accuracy": accuracy,
                 "status": status,
                 "direction_correct": direction_correct,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(),
             }
         )
 
@@ -541,7 +541,7 @@ def upsert_sp500_price(
             existing.low_price = low_price
             existing.close_price = close_price
             existing.volume = volume
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now()
         else:
             session.add(
                 SP500Price(
@@ -646,7 +646,7 @@ def update_sp500_prediction_actual(
                 "accuracy": accuracy,
                 "status": status,
                 "direction_correct": direction_correct,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(),
             }
         )
 
@@ -692,7 +692,7 @@ def upsert_nasdaq_intraday(record: NasdaqIntradayPrice) -> None:
             existing.low_price = record.low_price
             existing.close_price = record.close_price
             existing.volume = record.volume
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now()
         else:
             new = NasdaqIntradayPrice(
                 symbol=record.symbol,
@@ -719,7 +719,7 @@ def upsert_sp500_intraday(record: SP500IntradayPrice) -> None:
             existing.low_price = record.low_price
             existing.close_price = record.close_price
             existing.volume = record.volume
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now()
         else:
             new = SP500IntradayPrice(
                 symbol=record.symbol,
@@ -744,7 +744,7 @@ def upsert_crypto_intraday(record: CryptoIntradayPrice) -> None:
             existing.price = record.price
             existing.market_cap = record.market_cap
             existing.volume = record.volume
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now()
         else:
             new = CryptoIntradayPrice(
                 coin_id=record.coin_id,
@@ -766,7 +766,7 @@ def upsert_gold_intraday(record: GoldIntradayPrice) -> None:
         if existing:
             existing.buy_price = record.buy_price
             existing.sell_price = record.sell_price
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now()
         else:
             new = GoldIntradayPrice(
                 source=record.source,
@@ -869,7 +869,7 @@ def upsert_cron_schedule(job_key: str, job_name: str, cron_expression: str, enab
                 existing.enabled = enabled
                 changed = True
             if changed:
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = datetime.now()
             return
         session.add(
             CronSchedule(
@@ -924,7 +924,7 @@ def create_sync_log(
     with session_scope() as session:
         session.add(
             SyncLog(
-                sync_date=datetime.utcnow(),
+                sync_date=datetime.now(),
                 success_count=success_count,
                 error_count=error_count,
                 duration_ms=duration_ms,

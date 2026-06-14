@@ -44,7 +44,8 @@ func (c *Client) Init(cfg models_config.DatabaseConfig) error {
 		logger.Logger.Debugf("Error connecting to database : error=%v", err)
 		return err
 	}
-	logger.Logger.Infof("Connect to database: %s", dsn)
+	dsnForLog := DbUsername + ":***@tcp(" + DbHost + ":" + DbPort + ")/" + DbName
+	logger.Logger.Infof("Connect to database: %s", dsnForLog)
 	c.Db = db
 	c.cfg = cfg.Mysql
 

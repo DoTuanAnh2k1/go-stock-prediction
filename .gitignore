@@ -54,3 +54,5 @@ __pycache__/
 # Go binaries (built artifacts)
 /api/api-server
 /prediction-server
+_tz_backup/
+.codegraph/

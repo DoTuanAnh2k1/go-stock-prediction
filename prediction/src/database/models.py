@@ -33,8 +33,8 @@ class GoldPrice(Base):
     buy_price = Column(Numeric(20, 2), nullable=False)
     sell_price = Column(Numeric(20, 2))
     currency = Column(String(3), nullable=False, default="VND")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
 class GoldPrediction(Base):
@@ -53,8 +53,8 @@ class GoldPrediction(Base):
     accuracy = Column(Numeric(5, 4))
     direction_correct = Column(Boolean, nullable=True)
     status = Column(String(20), default="pending")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     deleted_at = Column(DateTime)
 
 
@@ -74,8 +74,8 @@ class NasdaqPrice(Base):
     volume = Column(BigInteger)
     trading_date = Column(Date, nullable=False)
     currency = Column(String(3), nullable=False, default="USD")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     deleted_at = Column(DateTime)
 
 
@@ -94,8 +94,8 @@ class NasdaqPrediction(Base):
     accuracy = Column(Numeric(5, 4))
     direction_correct = Column(Boolean, nullable=True)
     status = Column(String(20), default="pending")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     deleted_at = Column(DateTime)
 
 
@@ -115,8 +115,8 @@ class SP500Price(Base):
     volume = Column(BigInteger)
     trading_date = Column(Date, nullable=False)
     currency = Column(String(3), nullable=False, default="USD")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     deleted_at = Column(DateTime)
 
 
@@ -135,8 +135,8 @@ class SP500Prediction(Base):
     accuracy = Column(Numeric(5, 4))
     direction_correct = Column(Boolean, nullable=True)
     status = Column(String(20), default="pending")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     deleted_at = Column(DateTime)
 
 
@@ -154,8 +154,8 @@ class CryptoPrice(Base):
     volume24h = Column("volume24h", Numeric(30, 2))
     trading_date = Column(Date, nullable=False)
     currency = Column(String(3), nullable=False, default="USD")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     deleted_at = Column(DateTime)
 
 
@@ -175,8 +175,8 @@ class CryptoPrediction(Base):
     accuracy = Column(Numeric(5, 4))
     direction_correct = Column(Boolean, nullable=True)
     status = Column(String(20), default="pending")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     deleted_at = Column(DateTime)
 
 
@@ -194,8 +194,8 @@ class TrainingLog(Base):
     error_details = Column(Text)
     started_at = Column(DateTime)
     completed_at = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     deleted_at = Column(DateTime)
     market_key = Column(String(50), default="vn30")
 
@@ -210,8 +210,8 @@ class SyncLog(Base):
     duration_ms = Column(BigInteger, default=0)
     source = Column(String(100))
     error_message = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     deleted_at = Column(DateTime)
 
 
@@ -223,15 +223,15 @@ class CronSchedule(Base):
     job_name = Column(String(200))
     cron_expression = Column(String(100), nullable=False)
     enabled = Column(Boolean, default=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     deleted_at = Column(DateTime)
     username = Column(String(50), nullable=False, unique=True)
     password_hash = Column(Text, nullable=False)
@@ -255,8 +255,8 @@ class SimBot(Base):
     max_position_pct = Column(Numeric(5, 2), default=Decimal("15.00"))
     max_positions = Column(Integer, default=5)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
 class SimSession(Base):
@@ -268,7 +268,7 @@ class SimSession(Base):
     end_date = Column(Date)
     status = Column(String(20), default="running")  # running, completed, paused
     mode = Column(String(20), default="backtest")   # backtest, live
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
 
 class SimTrade(Base):
@@ -289,7 +289,7 @@ class SimTrade(Base):
     entry_trade_id = Column(BigInteger)
     pnl = Column(Numeric(20, 2))
     pnl_pct = Column(Numeric(8, 4))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
 
 class SimPortfolioSnapshot(Base):
@@ -327,8 +327,8 @@ class NasdaqIntradayPrice(Base):
     low_price = Column(Numeric(20, 6))
     close_price = Column(Numeric(20, 6))
     volume = Column(BigInteger)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
 class SP500IntradayPrice(Base):
@@ -345,8 +345,8 @@ class SP500IntradayPrice(Base):
     low_price = Column(Numeric(20, 6))
     close_price = Column(Numeric(20, 6))
     volume = Column(BigInteger)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
 class CryptoIntradayPrice(Base):
@@ -361,8 +361,8 @@ class CryptoIntradayPrice(Base):
     price = Column(Numeric(30, 8))
     market_cap = Column(Numeric(30, 2))
     volume = Column(Numeric(30, 2))
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
 class GoldIntradayPrice(Base):
@@ -378,7 +378,7 @@ class GoldIntradayPrice(Base):
     buy_price = Column(Numeric(15, 2))
     sell_price = Column(Numeric(15, 2))
     currency = Column(String(3), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 

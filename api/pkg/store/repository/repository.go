@@ -32,6 +32,7 @@ type DatabaseStore interface {
 	SP500IntradayStore
 	SimulationStore
 	DirectionAccuracyStore
+	MonitoringStore
 }
 
 // CronScheduleStore - interface cho cron schedule operations
