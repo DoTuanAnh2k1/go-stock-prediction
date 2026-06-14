@@ -153,6 +153,9 @@ func addHandler() *http.ServeMux {
 	// Monitoring APIs (require JWT authentication)
 	mux.HandleFunc("GET /api/monitoring/overview", AuthRequired(GetMonitoringOverview))
 
+	// Pipeline SSE stream (auth via ?token= query param, admin only)
+	mux.HandleFunc("GET /api/pipeline/stream", StreamPipelinePredictHandler)
+
 	return mux
 }
 

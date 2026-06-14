@@ -1,6 +1,7 @@
 """gRPC server — implements all 19 RPCs from prediction.proto."""
 from __future__ import annotations
 
+import queue
 import threading
 from concurrent import futures
 
@@ -63,20 +64,38 @@ class PredictionServicer:
     def TriggerGoldPredict(self, request, context):
         pb2, _ = _get_pb()
         log.info("grpc.TriggerGoldPredict")
-        threading.Thread(target=_bg_predict_gold, daemon=True).start()
-        return pb2.TriggerResponse(success=True, message="Gold prediction started in background")
+        try:
+            from src.orchestrator.runner import run_for_market
+            n = run_for_market("GOLD", force=True)
+            log.info("grpc.TriggerGoldPredict.done", count=n)
+            return pb2.TriggerResponse(success=True, message=f"Gold prediction completed: {n} predictions saved")
+        except Exception as exc:
+            log.error("grpc.TriggerGoldPredict.error", error=str(exc))
+            return pb2.TriggerResponse(success=False, error=str(exc))
 
     def TriggerNasdaqPredict(self, request, context):
         pb2, _ = _get_pb()
         log.info("grpc.TriggerNasdaqPredict")
-        threading.Thread(target=_bg_predict_nasdaq, daemon=True).start()
-        return pb2.TriggerResponse(success=True, message="NASDAQ prediction started in background")
+        try:
+            from src.orchestrator.runner import run_for_market
+            n = run_for_market("NASDAQ100", force=True)
+            log.info("grpc.TriggerNasdaqPredict.done", count=n)
+            return pb2.TriggerResponse(success=True, message=f"NASDAQ prediction completed: {n} predictions saved")
+        except Exception as exc:
+            log.error("grpc.TriggerNasdaqPredict.error", error=str(exc))
+            return pb2.TriggerResponse(success=False, error=str(exc))
 
     def TriggerCryptoPredict(self, request, context):
         pb2, _ = _get_pb()
         log.info("grpc.TriggerCryptoPredict")
-        threading.Thread(target=_bg_predict_crypto, daemon=True).start()
-        return pb2.TriggerResponse(success=True, message="Crypto prediction started in background")
+        try:
+            from src.orchestrator.runner import run_for_market
+            n = run_for_market("CRYPTO", force=True)
+            log.info("grpc.TriggerCryptoPredict.done", count=n)
+            return pb2.TriggerResponse(success=True, message=f"Crypto prediction completed: {n} predictions saved")
+        except Exception as exc:
+            log.error("grpc.TriggerCryptoPredict.error", error=str(exc))
+            return pb2.TriggerResponse(success=False, error=str(exc))
 
     def TriggerSP500Crawler(self, request, context):
         pb2, _ = _get_pb()
@@ -87,8 +106,14 @@ class PredictionServicer:
     def TriggerSP500Predict(self, request, context):
         pb2, _ = _get_pb()
         log.info("grpc.TriggerSP500Predict")
-        threading.Thread(target=_bg_predict_sp500, daemon=True).start()
-        return pb2.TriggerResponse(success=True, message="S&P 500 prediction started in background")
+        try:
+            from src.orchestrator.runner import run_for_market
+            n = run_for_market("SP500", force=True)
+            log.info("grpc.TriggerSP500Predict.done", count=n)
+            return pb2.TriggerResponse(success=True, message=f"SP500 prediction completed: {n} predictions saved")
+        except Exception as exc:
+            log.error("grpc.TriggerSP500Predict.error", error=str(exc))
+            return pb2.TriggerResponse(success=False, error=str(exc))
 
     # -------------------------------------------------------------------
     # Backtest (background with concurrency guard)
@@ -240,6 +265,22 @@ class PredictionServicer:
             log.error("grpc.ResetSimBots.error", error=str(exc))
             return pb2.TriggerResponse(success=False, error=str(exc))
 
+    # -------------------------------------------------------------------
+    # Streaming pipeline predict RPCs
+    # -------------------------------------------------------------------
+
+    def StreamGoldPredict(self, request, context):
+        yield from _stream_predict("GOLD", context)
+
+    def StreamNasdaqPredict(self, request, context):
+        yield from _stream_predict("NASDAQ100", context)
+
+    def StreamCryptoPredict(self, request, context):
+        yield from _stream_predict("CRYPTO", context)
+
+    def StreamSP500Predict(self, request, context):
+        yield from _stream_predict("SP500", context)
+
 
 # -------------------------------------------------------------------
 # Background worker functions
@@ -279,7 +320,7 @@ def _bg_gold_history():
 def _bg_predict_gold():
     try:
         from src.orchestrator.runner import run_for_market
-        n = run_for_market("GOLD")
+        n = run_for_market("GOLD", force=True)
         log.info("bg.predict_gold.done", count=n)
     except Exception as exc:
         log.error("bg.predict_gold.error", error=str(exc))
@@ -288,7 +329,7 @@ def _bg_predict_gold():
 def _bg_predict_nasdaq():
     try:
         from src.orchestrator.runner import run_for_market
-        n = run_for_market("NASDAQ100")
+        n = run_for_market("NASDAQ100", force=True)
         log.info("bg.predict_nasdaq.done", count=n)
     except Exception as exc:
         log.error("bg.predict_nasdaq.error", error=str(exc))
@@ -297,7 +338,7 @@ def _bg_predict_nasdaq():
 def _bg_predict_crypto():
     try:
         from src.orchestrator.runner import run_for_market
-        n = run_for_market("CRYPTO")
+        n = run_for_market("CRYPTO", force=True)
         log.info("bg.predict_crypto.done", count=n)
     except Exception as exc:
         log.error("bg.predict_crypto.error", error=str(exc))
@@ -317,7 +358,7 @@ def _bg_crawl_sp500():
 def _bg_predict_sp500():
     try:
         from src.orchestrator.runner import run_for_market
-        n = run_for_market("SP500")
+        n = run_for_market("SP500", force=True)
         log.info("bg.predict_sp500.done", count=n)
     except Exception as exc:
         log.error("bg.predict_sp500.error", error=str(exc))
@@ -364,6 +405,51 @@ def _bg_simulation_live_step():
         SimulationEngine().run_live_step()
     except Exception as exc:
         log.error("sim.live_step.error", error=str(exc))
+
+
+# -------------------------------------------------------------------
+# Streaming predict helper
+# -------------------------------------------------------------------
+
+_SENTINEL = object()
+
+
+def _stream_predict(market_key: str, context):
+    """Run run_for_market in a thread, yield PipelineLogEvents via a queue."""
+    pb2, _ = _get_pb()
+    q: queue.Queue = queue.Queue(maxsize=500)
+
+    def emit(level: str, msg: str, progress: float = 0.0) -> None:
+        if not context.is_active():
+            return
+        try:
+            q.put_nowait(pb2.PipelineLogEvent(level=level, msg=msg, progress=progress))
+        except queue.Full:
+            pass
+
+    def run() -> None:
+        try:
+            from src.orchestrator.runner import run_for_market
+            n = run_for_market(market_key, force=True, emit=emit)
+            q.put(pb2.PipelineLogEvent(level="ok", msg=f"Hoàn thành: {n} dự đoán", progress=1.0, done=True))
+        except Exception as exc:
+            log.error("stream_predict.error", market=market_key, error=str(exc))
+            q.put(pb2.PipelineLogEvent(level="error", msg=str(exc), progress=1.0, done=True, error=str(exc)))
+        finally:
+            q.put(_SENTINEL)
+
+    threading.Thread(target=run, daemon=True).start()
+
+    while context.is_active():
+        try:
+            item = q.get(timeout=30)
+        except queue.Empty:
+            # heartbeat to keep connection alive
+            yield pb2.PipelineLogEvent(level="info", msg="...", progress=0.0)
+            continue
+        if item is _SENTINEL:
+            break
+        yield item
 
 
 # -------------------------------------------------------------------

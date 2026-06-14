@@ -100,7 +100,10 @@ function algoColor(key: string, idx: number): string {
 }
 
 function fetchJSON(url: string, opts?: RequestInit): Promise<any> {
-  return fetch(BASE + url, Object.assign({ headers: { Accept: 'application/json' } }, opts || {}))
+  const token = localStorage.getItem('vns_token');
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  return fetch(BASE + url, Object.assign({ headers }, opts || {}))
     .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
 }
 

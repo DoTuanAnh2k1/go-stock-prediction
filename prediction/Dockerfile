@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 FROM python:3.12-slim AS proto-builder
 
-RUN pip install --no-cache-dir grpcio-tools==1.70.0 protobuf==5.29.4
+RUN pip install --no-cache-dir "grpcio-tools>=1.71.0" "protobuf>=6.33.5"
 
 WORKDIR /app
 

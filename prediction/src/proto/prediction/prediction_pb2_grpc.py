@@ -5,7 +5,7 @@ import warnings
 
 from src.proto.prediction import prediction_pb2 as prediction_dot_prediction__pb2
 
-GRPC_GENERATED_VERSION = '1.70.0'
+GRPC_GENERATED_VERSION = '1.81.1'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in prediction/prediction_pb2_grpc.py depends on'
+        + ' but the generated code in prediction/prediction_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class PredictionServiceStub(object):
+class PredictionServiceStub:
     """PredictionService is the gRPC service exposed by the prediction microservice.
     The API backend calls these RPCs to trigger crawling, training, and prediction.
     """
@@ -36,18 +36,8 @@ class PredictionServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.TriggerCrawler = channel.unary_unary(
-                '/prediction.PredictionService/TriggerCrawler',
-                request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
-                response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
-                _registered_method=True)
         self.TriggerGoldCrawler = channel.unary_unary(
                 '/prediction.PredictionService/TriggerGoldCrawler',
-                request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
-                response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
-                _registered_method=True)
-        self.TriggerPredict = channel.unary_unary(
-                '/prediction.PredictionService/TriggerPredict',
                 request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
                 response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
                 _registered_method=True)
@@ -59,11 +49,6 @@ class PredictionServiceStub(object):
         self.TriggerReconcile = channel.unary_unary(
                 '/prediction.PredictionService/TriggerReconcile',
                 request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
-                response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
-                _registered_method=True)
-        self.TriggerStockHistory = channel.unary_unary(
-                '/prediction.PredictionService/TriggerStockHistory',
-                request_serializer=prediction_dot_prediction__pb2.StockHistoryRequest.SerializeToString,
                 response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
                 _registered_method=True)
         self.TriggerGoldHistory = channel.unary_unary(
@@ -80,16 +65,6 @@ class PredictionServiceStub(object):
                 '/prediction.PredictionService/TriggerHistoricalBacktest',
                 request_serializer=prediction_dot_prediction__pb2.BacktestRequest.SerializeToString,
                 response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
-                _registered_method=True)
-        self.TriggerStockCrawl = channel.unary_unary(
-                '/prediction.PredictionService/TriggerStockCrawl',
-                request_serializer=prediction_dot_prediction__pb2.StockRequest.SerializeToString,
-                response_deserializer=prediction_dot_prediction__pb2.StockCrawlResponse.FromString,
-                _registered_method=True)
-        self.TriggerStockPredict = channel.unary_unary(
-                '/prediction.PredictionService/TriggerStockPredict',
-                request_serializer=prediction_dot_prediction__pb2.StockRequest.SerializeToString,
-                response_deserializer=prediction_dot_prediction__pb2.StockPredictResponse.FromString,
                 _registered_method=True)
         self.GetTrainingStatus = channel.unary_unary(
                 '/prediction.PredictionService/GetTrainingStatus',
@@ -141,29 +116,35 @@ class PredictionServiceStub(object):
                 request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
                 response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
                 _registered_method=True)
+        self.StreamGoldPredict = channel.unary_stream(
+                '/prediction.PredictionService/StreamGoldPredict',
+                request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
+                response_deserializer=prediction_dot_prediction__pb2.PipelineLogEvent.FromString,
+                _registered_method=True)
+        self.StreamNasdaqPredict = channel.unary_stream(
+                '/prediction.PredictionService/StreamNasdaqPredict',
+                request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
+                response_deserializer=prediction_dot_prediction__pb2.PipelineLogEvent.FromString,
+                _registered_method=True)
+        self.StreamCryptoPredict = channel.unary_stream(
+                '/prediction.PredictionService/StreamCryptoPredict',
+                request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
+                response_deserializer=prediction_dot_prediction__pb2.PipelineLogEvent.FromString,
+                _registered_method=True)
+        self.StreamSP500Predict = channel.unary_stream(
+                '/prediction.PredictionService/StreamSP500Predict',
+                request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
+                response_deserializer=prediction_dot_prediction__pb2.PipelineLogEvent.FromString,
+                _registered_method=True)
 
 
-class PredictionServiceServicer(object):
+class PredictionServiceServicer:
     """PredictionService is the gRPC service exposed by the prediction microservice.
     The API backend calls these RPCs to trigger crawling, training, and prediction.
     """
 
-    def TriggerCrawler(self, request, context):
-        """Trigger stock price crawl for all VN30 stocks
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
     def TriggerGoldCrawler(self, request, context):
         """Trigger gold price crawl (SJC + XAU)
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def TriggerPredict(self, request, context):
-        """Trigger daily prediction for all stocks
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -178,13 +159,6 @@ class PredictionServiceServicer(object):
 
     def TriggerReconcile(self, request, context):
         """Trigger prediction reconciliation (fill actual_price, accuracy, status)
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def TriggerStockHistory(self, request, context):
-        """Trigger historical stock price crawl
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -206,20 +180,6 @@ class PredictionServiceServicer(object):
 
     def TriggerHistoricalBacktest(self, request, context):
         """Trigger historical walk-forward backtest
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def TriggerStockCrawl(self, request, context):
-        """Crawl a single stock by symbol
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def TriggerStockPredict(self, request, context):
-        """Predict a single stock by symbol
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -290,21 +250,36 @@ class PredictionServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def StreamGoldPredict(self, request, context):
+        """Streaming pipeline predict — yields PipelineLogEvent during execution
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def StreamNasdaqPredict(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def StreamCryptoPredict(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def StreamSP500Predict(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_PredictionServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'TriggerCrawler': grpc.unary_unary_rpc_method_handler(
-                    servicer.TriggerCrawler,
-                    request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
-                    response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
-            ),
             'TriggerGoldCrawler': grpc.unary_unary_rpc_method_handler(
                     servicer.TriggerGoldCrawler,
-                    request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
-                    response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
-            ),
-            'TriggerPredict': grpc.unary_unary_rpc_method_handler(
-                    servicer.TriggerPredict,
                     request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
                     response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
             ),
@@ -316,11 +291,6 @@ def add_PredictionServiceServicer_to_server(servicer, server):
             'TriggerReconcile': grpc.unary_unary_rpc_method_handler(
                     servicer.TriggerReconcile,
                     request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
-                    response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
-            ),
-            'TriggerStockHistory': grpc.unary_unary_rpc_method_handler(
-                    servicer.TriggerStockHistory,
-                    request_deserializer=prediction_dot_prediction__pb2.StockHistoryRequest.FromString,
                     response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
             ),
             'TriggerGoldHistory': grpc.unary_unary_rpc_method_handler(
@@ -337,16 +307,6 @@ def add_PredictionServiceServicer_to_server(servicer, server):
                     servicer.TriggerHistoricalBacktest,
                     request_deserializer=prediction_dot_prediction__pb2.BacktestRequest.FromString,
                     response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
-            ),
-            'TriggerStockCrawl': grpc.unary_unary_rpc_method_handler(
-                    servicer.TriggerStockCrawl,
-                    request_deserializer=prediction_dot_prediction__pb2.StockRequest.FromString,
-                    response_serializer=prediction_dot_prediction__pb2.StockCrawlResponse.SerializeToString,
-            ),
-            'TriggerStockPredict': grpc.unary_unary_rpc_method_handler(
-                    servicer.TriggerStockPredict,
-                    request_deserializer=prediction_dot_prediction__pb2.StockRequest.FromString,
-                    response_serializer=prediction_dot_prediction__pb2.StockPredictResponse.SerializeToString,
             ),
             'GetTrainingStatus': grpc.unary_unary_rpc_method_handler(
                     servicer.GetTrainingStatus,
@@ -398,6 +358,26 @@ def add_PredictionServiceServicer_to_server(servicer, server):
                     request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
                     response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
             ),
+            'StreamGoldPredict': grpc.unary_stream_rpc_method_handler(
+                    servicer.StreamGoldPredict,
+                    request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
+                    response_serializer=prediction_dot_prediction__pb2.PipelineLogEvent.SerializeToString,
+            ),
+            'StreamNasdaqPredict': grpc.unary_stream_rpc_method_handler(
+                    servicer.StreamNasdaqPredict,
+                    request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
+                    response_serializer=prediction_dot_prediction__pb2.PipelineLogEvent.SerializeToString,
+            ),
+            'StreamCryptoPredict': grpc.unary_stream_rpc_method_handler(
+                    servicer.StreamCryptoPredict,
+                    request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
+                    response_serializer=prediction_dot_prediction__pb2.PipelineLogEvent.SerializeToString,
+            ),
+            'StreamSP500Predict': grpc.unary_stream_rpc_method_handler(
+                    servicer.StreamSP500Predict,
+                    request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
+                    response_serializer=prediction_dot_prediction__pb2.PipelineLogEvent.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
             'prediction.PredictionService', rpc_method_handlers)
@@ -406,37 +386,10 @@ def add_PredictionServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class PredictionService(object):
+class PredictionService:
     """PredictionService is the gRPC service exposed by the prediction microservice.
     The API backend calls these RPCs to trigger crawling, training, and prediction.
     """
-
-    @staticmethod
-    def TriggerCrawler(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/prediction.PredictionService/TriggerCrawler',
-            prediction_dot_prediction__pb2.Empty.SerializeToString,
-            prediction_dot_prediction__pb2.TriggerResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
 
     @staticmethod
     def TriggerGoldCrawler(request,
@@ -453,33 +406,6 @@ class PredictionService(object):
             request,
             target,
             '/prediction.PredictionService/TriggerGoldCrawler',
-            prediction_dot_prediction__pb2.Empty.SerializeToString,
-            prediction_dot_prediction__pb2.TriggerResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def TriggerPredict(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/prediction.PredictionService/TriggerPredict',
             prediction_dot_prediction__pb2.Empty.SerializeToString,
             prediction_dot_prediction__pb2.TriggerResponse.FromString,
             options,
@@ -535,33 +461,6 @@ class PredictionService(object):
             target,
             '/prediction.PredictionService/TriggerReconcile',
             prediction_dot_prediction__pb2.Empty.SerializeToString,
-            prediction_dot_prediction__pb2.TriggerResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def TriggerStockHistory(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/prediction.PredictionService/TriggerStockHistory',
-            prediction_dot_prediction__pb2.StockHistoryRequest.SerializeToString,
             prediction_dot_prediction__pb2.TriggerResponse.FromString,
             options,
             channel_credentials,
@@ -644,60 +543,6 @@ class PredictionService(object):
             '/prediction.PredictionService/TriggerHistoricalBacktest',
             prediction_dot_prediction__pb2.BacktestRequest.SerializeToString,
             prediction_dot_prediction__pb2.TriggerResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def TriggerStockCrawl(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/prediction.PredictionService/TriggerStockCrawl',
-            prediction_dot_prediction__pb2.StockRequest.SerializeToString,
-            prediction_dot_prediction__pb2.StockCrawlResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def TriggerStockPredict(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/prediction.PredictionService/TriggerStockPredict',
-            prediction_dot_prediction__pb2.StockRequest.SerializeToString,
-            prediction_dot_prediction__pb2.StockPredictResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -968,6 +813,114 @@ class PredictionService(object):
             '/prediction.PredictionService/ResetSimBots',
             prediction_dot_prediction__pb2.Empty.SerializeToString,
             prediction_dot_prediction__pb2.TriggerResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def StreamGoldPredict(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/prediction.PredictionService/StreamGoldPredict',
+            prediction_dot_prediction__pb2.Empty.SerializeToString,
+            prediction_dot_prediction__pb2.PipelineLogEvent.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def StreamNasdaqPredict(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/prediction.PredictionService/StreamNasdaqPredict',
+            prediction_dot_prediction__pb2.Empty.SerializeToString,
+            prediction_dot_prediction__pb2.PipelineLogEvent.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def StreamCryptoPredict(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/prediction.PredictionService/StreamCryptoPredict',
+            prediction_dot_prediction__pb2.Empty.SerializeToString,
+            prediction_dot_prediction__pb2.PipelineLogEvent.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def StreamSP500Predict(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/prediction.PredictionService/StreamSP500Predict',
+            prediction_dot_prediction__pb2.Empty.SerializeToString,
+            prediction_dot_prediction__pb2.PipelineLogEvent.FromString,
             options,
             channel_credentials,
             insecure,

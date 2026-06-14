@@ -35,6 +35,10 @@ const (
 	PredictionService_TriggerSimulationBacktest_FullMethodName = "/prediction.PredictionService/TriggerSimulationBacktest"
 	PredictionService_TriggerSimulationLiveStep_FullMethodName = "/prediction.PredictionService/TriggerSimulationLiveStep"
 	PredictionService_ResetSimBots_FullMethodName              = "/prediction.PredictionService/ResetSimBots"
+	PredictionService_StreamGoldPredict_FullMethodName         = "/prediction.PredictionService/StreamGoldPredict"
+	PredictionService_StreamNasdaqPredict_FullMethodName       = "/prediction.PredictionService/StreamNasdaqPredict"
+	PredictionService_StreamCryptoPredict_FullMethodName       = "/prediction.PredictionService/StreamCryptoPredict"
+	PredictionService_StreamSP500Predict_FullMethodName        = "/prediction.PredictionService/StreamSP500Predict"
 )
 
 // PredictionServiceClient is the client API for PredictionService service.
@@ -71,6 +75,11 @@ type PredictionServiceClient interface {
 	TriggerSimulationBacktest(ctx context.Context, in *SimulationRequest, opts ...grpc.CallOption) (*TriggerResponse, error)
 	TriggerSimulationLiveStep(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
 	ResetSimBots(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
+	// Streaming pipeline predict — yields PipelineLogEvent during execution
+	StreamGoldPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PipelineLogEvent], error)
+	StreamNasdaqPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PipelineLogEvent], error)
+	StreamCryptoPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PipelineLogEvent], error)
+	StreamSP500Predict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PipelineLogEvent], error)
 }
 
 type predictionServiceClient struct {
@@ -241,6 +250,82 @@ func (c *predictionServiceClient) ResetSimBots(ctx context.Context, in *Empty, o
 	return out, nil
 }
 
+func (c *predictionServiceClient) StreamGoldPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PipelineLogEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PredictionService_ServiceDesc.Streams[0], PredictionService_StreamGoldPredict_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[Empty, PipelineLogEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PredictionService_StreamGoldPredictClient = grpc.ServerStreamingClient[PipelineLogEvent]
+
+func (c *predictionServiceClient) StreamNasdaqPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PipelineLogEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PredictionService_ServiceDesc.Streams[1], PredictionService_StreamNasdaqPredict_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[Empty, PipelineLogEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PredictionService_StreamNasdaqPredictClient = grpc.ServerStreamingClient[PipelineLogEvent]
+
+func (c *predictionServiceClient) StreamCryptoPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PipelineLogEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PredictionService_ServiceDesc.Streams[2], PredictionService_StreamCryptoPredict_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[Empty, PipelineLogEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PredictionService_StreamCryptoPredictClient = grpc.ServerStreamingClient[PipelineLogEvent]
+
+func (c *predictionServiceClient) StreamSP500Predict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PipelineLogEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PredictionService_ServiceDesc.Streams[3], PredictionService_StreamSP500Predict_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[Empty, PipelineLogEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PredictionService_StreamSP500PredictClient = grpc.ServerStreamingClient[PipelineLogEvent]
+
 // PredictionServiceServer is the server API for PredictionService service.
 // All implementations must embed UnimplementedPredictionServiceServer
 // for forward compatibility.
@@ -275,6 +360,11 @@ type PredictionServiceServer interface {
 	TriggerSimulationBacktest(context.Context, *SimulationRequest) (*TriggerResponse, error)
 	TriggerSimulationLiveStep(context.Context, *Empty) (*TriggerResponse, error)
 	ResetSimBots(context.Context, *Empty) (*TriggerResponse, error)
+	// Streaming pipeline predict — yields PipelineLogEvent during execution
+	StreamGoldPredict(*Empty, grpc.ServerStreamingServer[PipelineLogEvent]) error
+	StreamNasdaqPredict(*Empty, grpc.ServerStreamingServer[PipelineLogEvent]) error
+	StreamCryptoPredict(*Empty, grpc.ServerStreamingServer[PipelineLogEvent]) error
+	StreamSP500Predict(*Empty, grpc.ServerStreamingServer[PipelineLogEvent]) error
 	mustEmbedUnimplementedPredictionServiceServer()
 }
 
@@ -332,6 +422,18 @@ func (UnimplementedPredictionServiceServer) TriggerSimulationLiveStep(context.Co
 }
 func (UnimplementedPredictionServiceServer) ResetSimBots(context.Context, *Empty) (*TriggerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResetSimBots not implemented")
+}
+func (UnimplementedPredictionServiceServer) StreamGoldPredict(*Empty, grpc.ServerStreamingServer[PipelineLogEvent]) error {
+	return status.Error(codes.Unimplemented, "method StreamGoldPredict not implemented")
+}
+func (UnimplementedPredictionServiceServer) StreamNasdaqPredict(*Empty, grpc.ServerStreamingServer[PipelineLogEvent]) error {
+	return status.Error(codes.Unimplemented, "method StreamNasdaqPredict not implemented")
+}
+func (UnimplementedPredictionServiceServer) StreamCryptoPredict(*Empty, grpc.ServerStreamingServer[PipelineLogEvent]) error {
+	return status.Error(codes.Unimplemented, "method StreamCryptoPredict not implemented")
+}
+func (UnimplementedPredictionServiceServer) StreamSP500Predict(*Empty, grpc.ServerStreamingServer[PipelineLogEvent]) error {
+	return status.Error(codes.Unimplemented, "method StreamSP500Predict not implemented")
 }
 func (UnimplementedPredictionServiceServer) mustEmbedUnimplementedPredictionServiceServer() {}
 func (UnimplementedPredictionServiceServer) testEmbeddedByValue()                           {}
@@ -642,6 +744,50 @@ func _PredictionService_ResetSimBots_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PredictionService_StreamGoldPredict_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(Empty)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(PredictionServiceServer).StreamGoldPredict(m, &grpc.GenericServerStream[Empty, PipelineLogEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PredictionService_StreamGoldPredictServer = grpc.ServerStreamingServer[PipelineLogEvent]
+
+func _PredictionService_StreamNasdaqPredict_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(Empty)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(PredictionServiceServer).StreamNasdaqPredict(m, &grpc.GenericServerStream[Empty, PipelineLogEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PredictionService_StreamNasdaqPredictServer = grpc.ServerStreamingServer[PipelineLogEvent]
+
+func _PredictionService_StreamCryptoPredict_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(Empty)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(PredictionServiceServer).StreamCryptoPredict(m, &grpc.GenericServerStream[Empty, PipelineLogEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PredictionService_StreamCryptoPredictServer = grpc.ServerStreamingServer[PipelineLogEvent]
+
+func _PredictionService_StreamSP500Predict_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(Empty)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(PredictionServiceServer).StreamSP500Predict(m, &grpc.GenericServerStream[Empty, PipelineLogEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PredictionService_StreamSP500PredictServer = grpc.ServerStreamingServer[PipelineLogEvent]
+
 // PredictionService_ServiceDesc is the grpc.ServiceDesc for PredictionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -714,6 +860,27 @@ var PredictionService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PredictionService_ResetSimBots_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "StreamGoldPredict",
+			Handler:       _PredictionService_StreamGoldPredict_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "StreamNasdaqPredict",
+			Handler:       _PredictionService_StreamNasdaqPredict_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "StreamCryptoPredict",
+			Handler:       _PredictionService_StreamCryptoPredict_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "StreamSP500Predict",
+			Handler:       _PredictionService_StreamSP500Predict_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "proto/prediction/prediction.proto",
 }

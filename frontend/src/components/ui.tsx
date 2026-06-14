@@ -434,7 +434,7 @@ export function MobNav() {
     { id: 'settings',   path: '/settings',   label: t.nav.settings,   icon: 'settings' },
     ...(role === 'admin' || role === 'super_admin'
       ? [
-          { id: 'users',         path: '/admin/users',         label: t.nav.users,        icon: 'user'   },
+          { id: 'users', path: '/admin/users', label: t.nav.users, icon: 'user' },
           { id: 'market-groups', path: '/admin/market-groups', label: t.nav.marketGroups, icon: 'layers' },
         ]
       : []),

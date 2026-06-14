@@ -44,6 +44,12 @@ service PredictionService {
   rpc TriggerSimulationBacktest(SimulationRequest) returns (TriggerResponse);
   rpc TriggerSimulationLiveStep(Empty) returns (TriggerResponse);
   rpc ResetSimBots(Empty) returns (TriggerResponse);
+
+  // Streaming pipeline predict — yields PipelineLogEvent during execution
+  rpc StreamGoldPredict(Empty) returns (stream PipelineLogEvent);
+  rpc StreamNasdaqPredict(Empty) returns (stream PipelineLogEvent);
+  rpc StreamCryptoPredict(Empty) returns (stream PipelineLogEvent);
+  rpc StreamSP500Predict(Empty) returns (stream PipelineLogEvent);
 }
 
 message Empty {}
@@ -84,4 +90,12 @@ message SimulationRequest {
   string bot_id = 1;     // "" = all bots
   string start_date = 2; // "2024-01-01"
   string end_date = 3;   // "" = today
+}
+
+message PipelineLogEvent {
+  string level = 1;    // "info" | "ok" | "warn" | "error"
+  string msg = 2;
+  float progress = 3;  // 0.0–1.0
+  bool done = 4;       // true on last event
+  string error = 5;    // non-empty on fatal error
 }

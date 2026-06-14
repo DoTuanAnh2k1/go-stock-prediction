@@ -8,7 +8,7 @@ Hệ thống dự đoán giá tài sản tài chính. Thu thập dữ liệu t�
 - **API Backend** (`api/cmd`) — Go HTTP trên `:8118`, phục vụ toàn bộ `/api/*`. Là thin proxy cho auth: validate JWT locally (shared JWT_SECRET), forward tất cả auth/user/market-group calls sang Java Auth Service qua gRPC. Gọi Prediction Service qua gRPC để trigger crawler/training; đọc DB trực tiếp cho các query dữ liệu. Market endpoints yêu cầu `AuthRequired + MarketRequired("KEY")`; trigger endpoints yêu cầu `AdminRequired`.
 - **Auth Service** (`auth-service/`) — **Java** Spring Boot 3, gRPC trên `:8120` (internal). Xử lý toàn bộ auth/RBAC: login, JWT generation (HMAC256), user CRUD, market groups, bcrypt, Flyway migrations (3 bảng mới: `market_groups`, `market_group_markets`, `user_market_groups`). Seeds `chon/super_admin` on startup. Ba roles: `super_admin` (toàn quyền), `admin` (quản lý user và groups), `user` (chỉ access markets được gán).
 - **Prediction Service** (`prediction/`) — **Python** gRPC trên `:8119`. Xử lý crawling (Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, S&P 500), 11 thuật toán ML, training, APScheduler cron jobs.
-- **Nginx** — Reverse proxy trên `:80`, forward tất cả request về API Backend.
+- **Gateway Service** (`gateway-svc/`) — **Rust** Axum gateway trên `:80` (HTTP) và `:443` (HTTPS/TLS). Longest-prefix routing: `/swagger` → block (404), `/api` → proxy `http://api:8118`, `/health` → proxy `http://api:8118`, `/` → proxy `http://frontend:3000`. TLS termination với self-signed cert (tạo tự động qua `docker-entrypoint.sh` nếu chưa có). Nginx không còn là Docker service.
 
 
 ## Lệnh thường dùng
@@ -17,7 +17,7 @@ Hệ thống dự đoán giá tài sản tài chính. Thu thập dữ liệu t�
 # Build API Backend (Go) — chạy từ trong thư mục api/
 cd api && go build -o api-server ./cmd
 
-# Start tất cả services (DB + Java Auth + Python Prediction + API + Nginx + Frontend + phpMyAdmin)
+# Start tất cả services (DB + Java Auth + Python Prediction + API + Gateway + Frontend + phpMyAdmin)
 docker-compose up -d
 
 # Import schema
@@ -56,7 +56,6 @@ api/proto/auth/*.pb.go                  # Generated Go protobuf stubs cho auth (
 api/docs/swagger.json                   # Generated Swagger spec (không sửa tay — chạy swag init)
 api/docs/swagger.yaml                   # Generated Swagger YAML spec
 api/docs/docs.go                        # Generated Go package cho swagger
-nginx/nginx.conf                        # Nginx reverse proxy: :80 → api:8118
 api/Dockerfile                          # Docker build cho API Backend (Go)
 api/pkg/server/router.go                # Đăng ký tất cả routes (API)
 api/pkg/server/api_*.go                 # Mỗi file = một nhóm API endpoint
@@ -195,6 +194,50 @@ auth-service/                           # Spring Boot 3 Java Auth Service — gR
 └── src/main/resources/
     └── db/migration/                   # Flyway SQL migrations (3 bảng RBAC mới)
 ```
+
+### Rust Gateway Service
+
+```
+gateway-svc/                            # Rust Axum HTTP/HTTPS Gateway — expose :80 (HTTP) và :443 (HTTPS)
+├── Dockerfile                          # Docker build cho Gateway Service (Rust)
+├── Cargo.toml                          # Dependencies: axum 0.8, axum-server (tls-rustls), reqwest, rustls, tokio, tracing
+├── config.yaml                         # Route rules, TLS config, HTTP pool settings
+├── docker-entrypoint.sh                # Tạo self-signed cert nếu chưa có, rồi chạy binary
+└── src/
+    ├── main.rs                         # Entry point — load config → PathRouter → ProxyClient → create_routes → serve HTTP+HTTPS
+    ├── lib.rs                          # Module declarations
+    ├── config/
+    │   └── mod.rs                      # AppConfig (serde_yaml) — load từ config.yaml; RouteConfig, TlsConfig, HttpConfig
+    ├── router/
+    │   └── mod.rs                      # PathRouter — longest-prefix match; from_config(), route(path) → RouteAction (Block | Proxy)
+    ├── routes/
+    │   ├── mod.rs                      # create_routes() — Axum Router: /healthz + /readyz (gateway health), fallback → proxy_handler
+    │   ├── health.rs                   # health_check, readiness_check handlers (gateway-local, không proxy sang backend)
+    │   └── proxy.rs                    # AppState, proxy_handler — đọc PathRouter, gọi ProxyClient hoặc trả 404
+    ├── proxy/
+    │   ├── mod.rs                      # Module re-export
+    │   └── client.rs                   # ProxyClient (reqwest) — forward request tới backend, stream response
+    ├── middleware/
+    │   ├── mod.rs                      # Module re-export
+    │   ├── logging.rs                  # logging_middleware — structured access log (tracing)
+    │   ├── request_id.rs               # request_id_middleware — inject X-Request-ID header (UUID v4)
+    │   └── security_headers.rs         # Security headers (chỉ áp dụng cho routes có security_headers: true)
+    └── models/
+        └── mod.rs                      # Shared types
+```
+
+**Route table (từ `config.yaml`, longest-prefix wins):**
+
+| Prefix | Action | Backend | Security Headers |
+|--------|--------|---------|-----------------|
+| `/swagger` | block (404) | — | — |
+| `/api` | proxy | `http://api:8118` | bật |
+| `/health` | proxy | `http://api:8118` | tắt |
+| `/` | proxy | `http://frontend:3000` | tắt |
+
+**Gateway-local endpoints (không proxy):**
+- `GET /healthz` — health check của gateway process
+- `GET /readyz` — readiness check của gateway process
 
 ## Luồng khởi động
 
@@ -384,13 +427,14 @@ Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`
 
 | Service | Port | Protocol | Ghi chú |
 |---------|------|----------|---------|
-| Nginx | 80 | HTTP | Reverse proxy → API Backend |
-| API Backend | 8118 | HTTP | Toàn bộ `/api/*` endpoints; Swagger UI tại `http://localhost:8118/swagger/` |
+| Gateway | 80 | HTTP | Rust Axum gateway — proxy `/api` → api:8118, `/` → frontend:3000 |
+| Gateway | 443 | HTTPS | Rust Axum gateway — TLS termination (self-signed cert) |
+| API Backend | 8118 | HTTP | Internal only — toàn bộ `/api/*` endpoints; Swagger UI tại `http://localhost:8118/swagger/` |
 | Prediction Service | 8119 | gRPC | Internal only (không expose ra ngoài) |
 | Auth Service | 8120 | gRPC | Internal only — Java Spring Boot RBAC service |
 | MySQL | 3306 | TCP | Docker |
-| phpMyAdmin | 8081 | HTTP | Docker |
-| Frontend | 36018 | HTTP | React app (Docker) |
+| phpMyAdmin | 8081 | HTTP | Docker (bind 127.0.0.1) |
+| Frontend | 3000 | HTTP | Internal only — static nginx serving React SPA (qua gateway) |
 
 ## Docker Compose Services
 
@@ -400,9 +444,9 @@ Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`
 | `prediction` | `prediction/Dockerfile` | `db` (healthy) | **Python** Prediction Service — gRPC :8119 (internal); mount volume `backup_data:/backups` |
 | `auth` | `auth-service/Dockerfile` | `db` (healthy) | **Java** Spring Boot Auth Service — gRPC :8120 (internal); Flyway migrations, seeds super_admin |
 | `api` | `api/Dockerfile` | `db` (healthy), `prediction`, `auth` | Go API Backend — HTTP :8118 (internal) |
-| `nginx` | `nginx:alpine` | `api` | Reverse proxy — expose :80 |
-| `frontend` | `frontend/Dockerfile` | `api` | React app — expose :36018 |
-| `phpmyadmin` | `phpmyadmin/phpmyadmin` | `db` | Admin UI — expose :8081 |
+| `gateway` | `gateway-svc/Dockerfile` | `api`, `frontend` | **Rust** Axum gateway — expose :80/:443; TLS termination; route `/api` → api:8118, `/` → frontend:3000; volume `gateway_certs:/etc/gateway/certs` |
+| `frontend` | `frontend/Dockerfile` | `api` | React SPA — static nginx internal port 3000 (không expose trực tiếp — qua gateway) |
+| `phpmyadmin` | `phpmyadmin/phpmyadmin` | `db` | Admin UI — expose 127.0.0.1:8081 |
 
 ## API Endpoints
 

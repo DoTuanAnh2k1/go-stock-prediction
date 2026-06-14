@@ -8,28 +8,31 @@ Financial asset price prediction system with RBAC — crawls Gold SJC/XAU, NASDA
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        Docker Compose                                │
 │                                                                      │
-│  Browser ──► Nginx :80 ──► API Backend :8118 (Go)                  │
-│                                    │                                 │
-│              Frontend :36018        ├──gRPC──► Auth Service :8120   │
-│              (React)               │          (Java Spring Boot)     │
-│                                    │                                 │
-│                                    └──gRPC──► Prediction :8119      │
-│                                               (Python)               │
-│                                                    │                 │
-│              MySQL :3306 ◄─────────────────────────┘                │
+│  Browser ──► Gateway :80/:443 (Rust) ──► API Backend :8118 (Go)   │
+│                     │                          │                     │
+│                     │                          ├──gRPC──► Auth :8120 │
+│                     │                          │      (Java Spring)  │
+│                     │                          │                     │
+│                     │                          └──gRPC──► Pred :8119 │
+│                     │                                     (Python)   │
+│                     │                                          │     │
+│                     └──► Frontend :3000 (internal)            │     │
+│                               (React static nginx)            │     │
+│                                                               │     │
+│              MySQL :3306 ◄────────────────────────────────────┘     │
 │              (shared DB)                                             │
 │                                                                      │
-│  phpMyAdmin :8081                                                    │
+│  phpMyAdmin 127.0.0.1:8081                                           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 **Services:**
-- **Nginx** `:80` — reverse proxy, single entry point
-- **API Backend** (`api/`) — Go HTTP `:8118`; thin auth proxy to Java Auth Service via gRPC, reads DB directly for market data, triggers Python Prediction Service via gRPC
+- **Gateway** (`gateway-svc/`) — Rust Axum `:80`/`:443`; TLS termination, longest-prefix routing: `/swagger` → block, `/api` → API Backend, `/health` → API Backend, `/` → Frontend
+- **API Backend** (`api/`) — Go HTTP `:8118` (internal); thin auth proxy to Java Auth Service via gRPC, reads DB directly for market data, triggers Python Prediction Service via gRPC
 - **Auth Service** (`auth-service/`) — Java Spring Boot 3, gRPC `:8120` (internal); owns all RBAC: login, JWT generation, user CRUD, market groups, Flyway migrations
 - **Prediction Service** (`prediction/`) — Python gRPC `:8119` (internal); crawling, 11 ML algorithms, training, APScheduler cron jobs
 - **MySQL** `:3306` — shared database for all services
-- **Frontend** (`frontend/`) — React + TypeScript SPA `:36018`
+- **Frontend** (`frontend/`) — React + TypeScript SPA, static nginx on internal port `:3000` (accessed via Gateway only)
 
 ## Features
 
@@ -52,10 +55,10 @@ docker-compose up -d
 
 | URL | Service |
 |-----|---------|
-| `http://localhost:36018` | React dashboard |
-| `http://localhost:80` | API (via Nginx) |
+| `http://localhost` or `https://localhost` | React dashboard (via Gateway) |
+| `http://localhost/api/...` or `https://localhost/api/...` | API (via Gateway) |
 | `http://localhost:8081` | phpMyAdmin |
-| `http://localhost:8118/swagger/` | Swagger UI |
+| `http://localhost:8118/swagger/` | Swagger UI (direct, bypasses Gateway) |
 
 Default credentials: `chon` / `super_admin` (seeded by Java Auth Service on first startup).
 
@@ -122,13 +125,14 @@ curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&s
 
 | Service | Port | Notes |
 |---------|------|-------|
-| Nginx | 80 | Reverse proxy → API Backend |
+| Gateway | 80 | Rust Axum — HTTP entry point |
+| Gateway | 443 | Rust Axum — HTTPS/TLS entry point (self-signed cert) |
 | API Backend | 8118 | HTTP (internal) |
 | Prediction Service | 8119 | gRPC (internal) |
 | Auth Service | 8120 | gRPC (internal) — Java Spring Boot RBAC |
-| Frontend | 36018 | React app |
+| Frontend | 3000 | HTTP (internal only — accessed via Gateway) |
 | MySQL | 3306 | Docker |
-| phpMyAdmin | 8081 | Admin UI |
+| phpMyAdmin | 8081 | Admin UI (127.0.0.1 only) |
 
 ## Key API Endpoints
 
@@ -215,12 +219,12 @@ Stored in `cron_schedules` DB table. Edit live via `PUT /api/schedules/{key}` or
 
 | Layer | Technology |
 |-------|-----------|
+| Gateway | Rust, Axum 0.8, axum-server (TLS/rustls), reqwest, tokio |
 | Auth Service | Java 21, Spring Boot 3, gRPC, Flyway, bcrypt |
 | API Backend | Go 1.23+, net/http, gRPC, GORM v2, ZeroLog, shopspring/decimal |
 | Prediction Service | Python 3.12, PyTorch, statsmodels, LightGBM, XGBoost, scikit-learn, APScheduler, SQLAlchemy |
 | Frontend | React, TypeScript, Vite |
 | Database | MySQL 8.0 |
-| Proxy | Nginx |
 
 ## Timezone
 

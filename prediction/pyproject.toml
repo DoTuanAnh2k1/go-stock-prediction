@@ -8,9 +8,9 @@ version = "0.1.0"
 description = "Python gRPC Prediction Service for go-stock-prediction"
 requires-python = ">=3.12"
 dependencies = [
-    "grpcio==1.70.0",
-    "grpcio-tools==1.70.0",
-    "protobuf==5.29.4",
+    "grpcio>=1.70.0",
+    "grpcio-tools>=1.70.0",
+    "protobuf>=6.33.5",
     "sqlalchemy[asyncio]==2.0.40",
     "aiomysql==0.2.0",
     "pydantic-settings==2.9.1",

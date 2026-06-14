@@ -111,7 +111,7 @@ export default function MarketGroups() {
   const toggleExpand = (g: MarketGroup) => {
     if (expandedId === g.id) { setExpandedId(null); return; }
     setExpandedId(g.id);
-    setSelectedMarkets([...g.market_keys]);
+    setSelectedMarkets([...(g.market_keys ?? [])]);
     setAddUserId('');
   };
 
@@ -176,7 +176,7 @@ export default function MarketGroups() {
                     <span className="mg-card-name">{g.name}</span>
                     {g.description && <span className="mg-card-desc">{g.description}</span>}
                     <div className="mg-market-tags">
-                      {g.market_keys.map(k => <span key={k} className="mg-tag">{k}</span>)}
+                      {(g.market_keys ?? []).map(k => <span key={k} className="mg-tag">{k}</span>)}
                     </div>
                   </div>
                   <div className="mg-card-actions">

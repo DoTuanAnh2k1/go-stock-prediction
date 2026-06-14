@@ -167,7 +167,8 @@ function getToken(): string {
 }
 
 async function apiFetch(path: string): Promise<any> {
-  const res = await fetch(path, { headers: { Accept: 'application/json' } });
+  const token = localStorage.getItem('vns_token') || '';
+  const res = await fetch(path, { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   return res.json();
 }
@@ -240,7 +241,7 @@ function Legend({ items }: { items: [string, string][] }) {
 }
 
 // ── Top symbols to show as KPI cards ─────────────────────────────────────────
-const KPI_SYMBOLS = ['QQQ', 'AAPL', 'MSFT', 'NVDA'];
+const KPI_SYMBOLS = ['NVDA', 'AAPL', 'MSFT', 'GOOGL'];
 
 const PRED_PER_PAGE = 30;
 

@@ -290,6 +290,13 @@ const MARKET_SIM_KEY: Record<string, string> = {
   vn30:      'VN30',
 };
 
+const MARKET_SSE_KEY: Record<string, string> = {
+  gold:      'GOLD',
+  nasdaq100: 'NASDAQ100',
+  crypto:    'CRYPTO',
+  sp500:     'SP500',
+};
+
 function tsNow(): string {
   return new Date().toTimeString().slice(0, 8);
 }
@@ -674,10 +681,40 @@ function PipelineTriggerBtn({
       addLog('info', `Bat dau: ${steps[i].label}...`);
 
       try {
-        const msg = await triggerEndpoint(steps[i].endpoint);
+        // Predict step (i === 1) → SSE stream for live logs
+        if (i === 1) {
+          const sseMarket = MARKET_SSE_KEY[marketKey] || marketKey.toUpperCase();
+          const token = getToken();
+          const sseUrl = `/api/pipeline/stream?market=${encodeURIComponent(sseMarket)}&token=${encodeURIComponent(token)}`;
+          await new Promise<void>((resolve, reject) => {
+            const sse = new EventSource(sseUrl);
+            sse.onmessage = (e) => {
+              try {
+                const data = JSON.parse(e.data) as { level: string; msg: string; progress: number; done: boolean; error?: string };
+                if (data.msg && data.msg !== '...') {
+                  addLog(data.level as LogEntry['level'], data.msg);
+                }
+                if (data.done) {
+                  sse.close();
+                  if (data.level === 'error') {
+                    reject(new Error(data.error || data.msg || 'Prediction failed'));
+                  } else {
+                    resolve();
+                  }
+                }
+              } catch { /* ignore parse error */ }
+            };
+            sse.onerror = () => {
+              sse.close();
+              reject(new Error('SSE connection lost'));
+            };
+          });
+        } else {
+          const msg = await triggerEndpoint(steps[i].endpoint);
+          addLog('ok', `${steps[i].label}: ${msg}`);
+        }
         finalStates[i] = 'ok';
         setStepStates([...finalStates]);
-        addLog('ok', `${steps[i].label}: ${msg}`);
 
         // After predict step: fetch & analyze results
         if (i === 1) {

@@ -102,7 +102,7 @@ export default function Gold() {
   }, [src?.id, days]);
 
   useEffect(() => {
-    fetch('/api/gold/predictions/latest-results', { headers: { Accept: 'application/json' } })
+    fetch('/api/gold/predictions/latest-results', { headers: { Accept: 'application/json', Authorization: `Bearer ${localStorage.getItem('vns_token') || ''}` } })
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
         if (data) {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
-export function LoginModal({ onClose }: { onClose: () => void }) {
+export function LoginModal({ onClose, required }: { onClose: () => void; required?: boolean }) {
   const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -22,16 +22,20 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const handleOverlayClick = () => { if (!required) onClose(); };
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={handleOverlayClick}>
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">Đăng nhập</span>
-          <button className="btn btn--icon btn--ghost" onClick={onClose}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+          {!required && (
+            <button className="btn btn--icon btn--ghost" onClick={onClose}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          )}
         </div>
         <form className="modal-body" onSubmit={handleSubmit}>
           {error && <div className="modal-error">{error}</div>}

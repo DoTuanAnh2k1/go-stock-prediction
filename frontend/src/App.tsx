@@ -33,13 +33,18 @@ const TWEAK_DEFAULTS = {
 
 function AppInner() {
   const { status } = useData();
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading } = useAuth();
   const { t: tr } = useLanguage();
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [theme, setTheme] = useState<'dark' | 'light'>(
     () => (localStorage.getItem('vns_theme') as 'dark' | 'light') || 'dark'
   );
   const [showLogin, setShowLogin] = useState(false);
+
+  // Auto-show login modal when auth check completes and user is not logged in
+  useEffect(() => {
+    if (!isLoading && !user) setShowLogin(true);
+  }, [isLoading, user]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem('vns_sidebar') === '1'
   );
@@ -128,7 +133,7 @@ function AppInner() {
           onChange={(v) => setTweak('ticker', v)} />
       </TweaksPanel>
       <MobNav />
-      {showLogin && <LoginModal onClose={() => setShowLogin(false)} />}
+      {showLogin && <LoginModal onClose={() => setShowLogin(false)} required={!user} />}
     </div>
   );
 }

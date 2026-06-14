@@ -177,7 +177,8 @@ function getToken(): string {
 }
 
 async function apiFetch(path: string): Promise<any> {
-  const res = await fetch(path, { headers: { Accept: 'application/json' } });
+  const token = localStorage.getItem('vns_token') || '';
+  const res = await fetch(path, { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   return res.json();
 }

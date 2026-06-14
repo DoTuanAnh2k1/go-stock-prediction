@@ -124,7 +124,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/certs:/etc/gateway/certs
+      - gateway_certs:/etc/gateway/certs
     networks:
       - app-network
 
@@ -168,3 +168,4 @@ networks:
 volumes:
   db_data:
   backup_data:
+  gateway_certs:

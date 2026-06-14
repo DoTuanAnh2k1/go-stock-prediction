@@ -18,6 +18,7 @@ interface JwtPayload {
 interface AuthContextValue {
   user: AuthUser | null;
   isLoggedIn: boolean;
+  isLoading: boolean;
   role: string;
   accessibleMarkets: string[];
   canAccessMarket: (marketKey: string) => boolean;
@@ -28,6 +29,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   isLoggedIn: false,
+  isLoading: true,
   role: '',
   accessibleMarkets: [],
   canAccessMarket: () => false,
@@ -62,10 +64,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return payload?.accessible_markets ?? [];
   });
 
+  const [isLoading, setIsLoading] = useState(true);
+
   // Validate stored token on mount
   useEffect(() => {
     const token = localStorage.getItem('vns_token');
-    if (!token) { setUser(null); setAccessibleMarkets([]); return; }
+    if (!token) { setUser(null); setAccessibleMarkets([]); setIsLoading(false); return; }
     fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
@@ -82,7 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAccessibleMarkets([]);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
   }, []);
 
   const login = async (username: string, password: string) => {
@@ -127,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, isLoggedIn: !!user, role, accessibleMarkets, canAccessMarket, login, logout,
+      user, isLoggedIn: !!user, isLoading, role, accessibleMarkets, canAccessMarket, login, logout,
     }}>
       {children}
     </AuthContext.Provider>
