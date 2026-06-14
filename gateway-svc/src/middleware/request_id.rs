@@ -1,8 +1,9 @@
-use axum::{body::Body, extract::Request, http::HeaderValue, middleware::Next, response::Response};
+use axum::{extract::Request, http::HeaderValue, middleware::Next, response::Response};
 use uuid::Uuid;
 
 pub const REQUEST_ID_HEADER: &str = "x-request-id";
 
+#[allow(dead_code)]
 pub struct RequestIdLayer;
 
 pub async fn request_id_middleware(mut request: Request, next: Next) -> Response {

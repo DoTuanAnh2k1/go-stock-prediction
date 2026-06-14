@@ -81,7 +81,13 @@ async fn main() {
         let https_future =
             axum_server::bind_rustls(https_addr, tls_config).serve(app.into_make_service());
 
-        tokio::join!(http_future, https_future);
+        let (http_result, https_result) = tokio::join!(http_future, https_future);
+        if let Err(e) = http_result {
+            error!("HTTP server error: {}", e);
+        }
+        if let Err(e) = https_result {
+            error!("HTTPS server error: {}", e);
+        }
     } else {
         let listener = match tokio::net::TcpListener::bind(http_addr).await {
             Ok(l) => l,

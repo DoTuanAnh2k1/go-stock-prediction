@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::middleware::add_security_headers;
-use crate::proxy::client::{ProxyClient, ProxyError};
+use crate::proxy::client::ProxyClient;
 use crate::router::{PathRouter, RouteAction};
 
 pub struct AppState {

@@ -1,5 +1,5 @@
 # Stage 1: Build Rust binary
-FROM rust:1.82-slim AS builder
+FROM rust:1.86-slim AS builder
 
 WORKDIR /app
 
@@ -34,7 +34,9 @@ COPY docker-entrypoint.sh /docker-entrypoint.sh
 
 RUN useradd -m -u 1001 gateway && \
     chown -R gateway:gateway /app && \
-    chmod +x /docker-entrypoint.sh
+    chmod +x /docker-entrypoint.sh && \
+    mkdir -p /etc/gateway/certs && \
+    chown -R gateway:gateway /etc/gateway
 
 EXPOSE 80 443
 

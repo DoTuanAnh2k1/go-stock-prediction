@@ -7,6 +7,7 @@ pub struct ErrorResponse {
 }
 
 impl ErrorResponse {
+    #[allow(dead_code)]
     pub fn new(error: impl Into<String>, status: u16) -> Self {
         Self {
             error: error.into(),
