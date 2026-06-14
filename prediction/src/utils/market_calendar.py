@@ -1,7 +1,8 @@
 """Market trading calendar — quyết định một market có đang mở cửa hay không.
 
 NASDAQ và S&P 500 theo lịch NYSE: đóng vào Thứ 7, Chủ nhật và các ngày lễ thị
-trường Mỹ. GOLD và CRYPTO giao dịch cả cuối tuần nên luôn được coi là mở.
+trường Mỹ. GOLD đóng cuối tuần (thị trường forex/commodity 24/5) nhưng không
+theo ngày lễ NYSE. CRYPTO giao dịch 24/7 nên luôn True.
 
 Cơ sở thời gian dùng US/Eastern (đúng nghĩa "thị trường Mỹ có đang giao dịch
 không"). Không truy cập mạng, không phụ thuộc thư viện ngoài — ngày lễ NYSE được
@@ -12,9 +13,11 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-# Các market theo lịch NYSE. Chấp nhận cả orchestrator key ("NASDAQ100") lẫn
-# bot.market đã chuẩn hóa ("NASDAQ").
+# NASDAQ/SP500 đóng cuối tuần + ngày lễ NYSE.
 _NYSE_MARKETS = {"NASDAQ", "NASDAQ100", "SP500"}
+
+# GOLD đóng cuối tuần nhưng không theo ngày lễ NYSE (commodity toàn cầu).
+_WEEKEND_ONLY_MARKETS = {"GOLD"}
 
 _US_EASTERN = ZoneInfo("America/New_York")
 
@@ -22,11 +25,12 @@ _US_EASTERN = ZoneInfo("America/New_York")
 def is_market_open(market_key: str, when: datetime | None = None) -> bool:
     """True nếu market đang trong ngày giao dịch.
 
-    GOLD/CRYPTO (và mọi key không thuộc nhóm NYSE) luôn True. NASDAQ/SP500 trả
-    False vào Thứ 7, Chủ nhật và ngày lễ NYSE (theo ngày US/Eastern).
+    CRYPTO (và mọi key không thuộc 2 nhóm trên) luôn True.
+    GOLD trả False vào Thứ 7, Chủ nhật.
+    NASDAQ/SP500 trả False vào Thứ 7, Chủ nhật và ngày lễ NYSE.
     """
     key = (market_key or "").strip().upper()
-    if key not in _NYSE_MARKETS:
+    if key not in _NYSE_MARKETS and key not in _WEEKEND_ONLY_MARKETS:
         return True
 
     moment = when or datetime.now()
@@ -35,6 +39,10 @@ def is_market_open(market_key: str, when: datetime | None = None) -> bool:
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
     et_date = moment.astimezone(_US_EASTERN).date()
+
+    if key in _WEEKEND_ONLY_MARKETS:
+        return et_date.weekday() < 5  # Thứ 2–6
+
     return _is_us_trading_day(et_date)
 
 

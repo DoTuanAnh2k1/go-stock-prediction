@@ -24,14 +24,35 @@ def _et(y, m, d, hour=12):
 
 
 # ---------------------------------------------------------------------------
-# GOLD / CRYPTO luôn mở
+# CRYPTO luôn mở (24/7)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("market", ["GOLD", "CRYPTO", "gold", "crypto"])
-def test_gold_crypto_always_open(market):
+@pytest.mark.parametrize("market", ["CRYPTO", "crypto"])
+def test_crypto_always_open(market):
     # 2025-06-14 là Thứ 7, 2025-06-15 là Chủ nhật
     assert is_market_open(market, _et(2025, 6, 14)) is True
     assert is_market_open(market, _et(2025, 6, 15)) is True
+
+
+# ---------------------------------------------------------------------------
+# GOLD — đóng cuối tuần, mở ngày thường (không theo ngày lễ NYSE)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("market", ["GOLD", "gold"])
+def test_gold_closed_weekend(market):
+    assert is_market_open(market, _et(2025, 6, 14)) is False  # Thứ 7
+    assert is_market_open(market, _et(2025, 6, 15)) is False  # Chủ nhật
+
+
+@pytest.mark.parametrize("market", ["GOLD", "gold"])
+def test_gold_open_weekday(market):
+    assert is_market_open(market, _et(2025, 6, 13)) is True   # Thứ 6
+    assert is_market_open(market, _et(2025, 6, 16)) is True   # Thứ 2
+
+
+def test_gold_open_on_nyse_holiday():
+    # Gold không theo ngày lễ NYSE — Labor Day 2025 (Thứ 2 1/9) vẫn mở
+    assert is_market_open("GOLD", _et(2025, 9, 1)) is True
 
 
 def test_unknown_market_defaults_open():

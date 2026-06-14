@@ -269,18 +269,6 @@ def _cleanup_old_backups(backup_dir: str, keep: int = 10) -> None:
         log.warning("job.backup.cleanup.error", error=str(exc))
 
 
-def job_simulation_daily() -> None:
-    """Run one live simulation step for all active trading bots."""
-    from src.simulation.engine import SimulationEngine
-    log.info("job.simulation_daily.start")
-    try:
-        engine = SimulationEngine()
-        engine.run_live_step()
-        log.info("job.simulation_daily.done")
-    except Exception as exc:
-        log.error("job.simulation_daily.error", error=str(exc))
-
-
 # Job registry — maps job_key → callable
 JOB_FUNCTIONS = {
     "crawler_gold": job_crawl_gold,
@@ -300,5 +288,4 @@ JOB_FUNCTIONS = {
     "train_crypto": job_train_crypto,
     "train_sp500": job_train_sp500,
     "daily_backup": job_backup_database,
-    "simulation_daily": job_simulation_daily,
 }

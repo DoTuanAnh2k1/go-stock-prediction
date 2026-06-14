@@ -73,7 +73,15 @@
       "Bash(sed -i 's/change-me-strong-admin-password/admin123/' /home/chronical/Projects/private/go-stock-prediction/.env)",
       "Bash(sed -i 's/change-me-run-openssl-rand-base64-48/dev-jwt-secret-change-in-production/' /home/chronical/Projects/private/go-stock-prediction/.env)",
       "Bash(git check-ignore *)",
-      "Bash(perl -0pi -e 's{/prediction-server_tz_backup/}{/prediction-server\\\\n_tz_backup/}' .gitignore)"
+      "Bash(perl -0pi -e 's{/prediction-server_tz_backup/}{/prediction-server\\\\n_tz_backup/}' .gitignore)",
+      "Bash(git -C /home/chronical/Projects/private/go-stock-prediction log --oneline -1)",
+      "Bash(git -C /home/chronical/Projects/private/go-stock-prediction status nginx/certs/)",
+      "Bash(git -C /home/chronical/Projects/private/go-stock-prediction status --short)",
+      "Bash(git -C /home/chronical/Projects/private/go-stock-prediction branch)",
+      "Bash(git -C /home/chronical/Projects/private/go-stock-prediction check-ignore -v nginx/certs/.gitkeep nginx/certs/.gitignore)",
+      "Bash(git -C /home/chronical/Projects/private/go-stock-prediction status --short nginx/)",
+      "Bash(git -C /home/chronical/Projects/private/go-stock-prediction ls-files --others --exclude-standard nginx/)",
+      "Bash(git -C /home/chronical/Projects/private/go-stock-prediction ls-files nginx/)"
     ]
   }
 }
