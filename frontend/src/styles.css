@@ -566,7 +566,8 @@ body {
   .app { grid-template-columns: 1fr; }
   .sidebar { display: none; }
   .content { padding: 10px 10px 68px; }
-  .topbar { padding: 0 10px; height: 44px; }
+  .topbar { padding: 0 10px; height: 44px; gap: 8px; }
+  .topbar .btn--icon { display: none; }
   .topbar__crumb { display: none; }
   .search { display: none; }
   .ticker { display: none; }
