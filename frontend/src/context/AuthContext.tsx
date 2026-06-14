@@ -1,9 +1,26 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { jwtDecode } from 'jwt-decode';
 
-interface AuthUser { username: string; role: string; }
+interface AuthUser {
+  username: string;
+  role: string;
+}
+
+interface JwtPayload {
+  sub: string;
+  username: string;
+  role: string;
+  user_id: number;
+  accessible_markets: string[];
+  exp: number;
+}
+
 interface AuthContextValue {
   user: AuthUser | null;
   isLoggedIn: boolean;
+  role: string;
+  accessibleMarkets: string[];
+  canAccessMarket: (marketKey: string) => boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -11,9 +28,20 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   isLoggedIn: false,
+  role: '',
+  accessibleMarkets: [],
+  canAccessMarket: () => false,
   login: async () => {},
   logout: () => {},
 });
+
+function parseJwt(token: string): JwtPayload | null {
+  try {
+    return jwtDecode<JwtPayload>(token);
+  } catch {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => {
@@ -27,19 +55,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   });
 
+  const [accessibleMarkets, setAccessibleMarkets] = useState<string[]>(() => {
+    const token = localStorage.getItem('vns_token');
+    if (!token) return [];
+    const payload = parseJwt(token);
+    return payload?.accessible_markets ?? [];
+  });
+
   // Validate stored token on mount
   useEffect(() => {
     const token = localStorage.getItem('vns_token');
-    if (!token) { setUser(null); return; }
+    if (!token) { setUser(null); setAccessibleMarkets([]); return; }
     fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data?.username) {
-          setUser({ username: data.username, role: data.role || 'user' });
+        // Handle both bare response {username, role} and wrapped {data: {username, role}}
+        const u = data?.data ?? data;
+        if (u?.username) {
+          setUser({ username: u.username, role: u.role || 'user' });
+          const payload = parseJwt(token);
+          setAccessibleMarkets(payload?.accessible_markets ?? []);
         } else {
           localStorage.removeItem('vns_token');
           localStorage.removeItem('vns_user');
           setUser(null);
+          setAccessibleMarkets([]);
         }
       })
       .catch(() => {});
@@ -53,26 +93,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error((err as any).message || 'Đăng nhập thất bại');
+      throw new Error((err as any).message || (err as any).data?.message || 'Đăng nhập thất bại');
     }
     const data = await res.json();
+    // Handle both bare response and wrapped {data: {token, user}}
+    const respData = data.data ?? data;
+    const token = respData.token;
     const userObj: AuthUser = {
-      username: data.user?.username || username,
-      role: data.user?.role || 'user',
+      username: respData.user?.username || username,
+      role: respData.user?.role || 'user',
     };
-    localStorage.setItem('vns_token', data.token);
+    localStorage.setItem('vns_token', token);
     localStorage.setItem('vns_user', JSON.stringify(userObj));
     setUser(userObj);
+    const payload = parseJwt(token);
+    setAccessibleMarkets(payload?.accessible_markets ?? []);
   };
 
   const logout = () => {
     localStorage.removeItem('vns_token');
     localStorage.removeItem('vns_user');
     setUser(null);
+    setAccessibleMarkets([]);
+  };
+
+  const role = user?.role ?? '';
+
+  const canAccessMarket = (marketKey: string): boolean => {
+    if (role === 'super_admin') return true;
+    if (role === 'admin') return true;
+    return accessibleMarkets.includes(marketKey);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoggedIn: !!user, login, logout }}>
+    <AuthContext.Provider value={{
+      user, isLoggedIn: !!user, role, accessibleMarkets, canAccessMarket, login, logout,
+    }}>
       {children}
     </AuthContext.Provider>
   );
