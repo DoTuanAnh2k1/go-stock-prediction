@@ -4,6 +4,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"go-stock-prediction/pkg/logger"
@@ -80,6 +81,40 @@ func totalPages(total int64, limit int) int {
 	return int(math.Ceil(float64(total) / float64(limit)))
 }
 
+// pathToMarketKey normalises a URL market key to the canonical market key used
+// for access-control and internal lookups.
+func pathToMarketKey(key string) string {
+	switch strings.ToUpper(key) {
+	case "GOLD":
+		return "GOLD"
+	case "NASDAQ", "NASDAQ100":
+		return "NASDAQ"
+	case "CRYPTO":
+		return "CRYPTO"
+	case "SP500":
+		return "SP500"
+	default:
+		return strings.ToUpper(key)
+	}
+}
+
+// checkMarketAccess returns true if the authenticated caller may access the given
+// market key. super_admin always passes; other roles require the market to appear
+// in their accessible_markets JWT claim.
+func checkMarketAccess(w http.ResponseWriter, r *http.Request, marketKey string) bool {
+	claims := getClaims(r)
+	if isSuperAdmin(claims) {
+		return true
+	}
+	for _, m := range getAccessibleMarkets(claims) {
+		if m == marketKey {
+			return true
+		}
+	}
+	ResponseError(w, http.StatusForbidden, "no access to market: "+marketKey)
+	return false
+}
+
 // -----------------------------------------------------------------------
 // GET /api/markets/{key}/predictions
 // -----------------------------------------------------------------------
@@ -104,6 +139,11 @@ func totalPages(total int64, limit int) int {
 //	@Router       /api/markets/{key}/predictions [get]
 func GetMarketPredictions(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
+
+	marketKey := pathToMarketKey(key)
+	if !checkMarketAccess(w, r, marketKey) {
+		return
+	}
 
 	page, limit := parsePaginationParams(r)
 	search := r.URL.Query().Get("search")
@@ -183,6 +223,11 @@ func GetMarketPredictions(w http.ResponseWriter, r *http.Request) {
 //	@Router       /api/markets/{key}/training [get]
 func GetMarketTraining(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
+
+	marketKey := pathToMarketKey(key)
+	if !checkMarketAccess(w, r, marketKey) {
+		return
+	}
 
 	// Validate market key
 	if key != "gold" {
