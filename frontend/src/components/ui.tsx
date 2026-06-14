@@ -2,6 +2,14 @@ import React, { useState } from 'react';
 import { NavLink, useLocation, Link } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
+
+// Map sidebar market key → RBAC market key used in JWT accessible_markets
+const MARKET_RBAC_KEY: Record<string, string> = {
+  gold: 'GOLD',
+  nasdaq100: 'NASDAQ',
+  sp500: 'SP500',
+  crypto: 'CRYPTO',
+};
 import { useLanguage } from '../context/LangContext';
 import { Sparkline } from './charts';
 import { marketStatus } from '../utils/marketHours';
@@ -199,9 +207,13 @@ export function Sidebar({ status, collapsed = false, onToggle }: {
   onToggle?: () => void;
 }) {
   const { pathname } = useLocation();
-  const { user } = useAuth();
+  const { user, role, canAccessMarket } = useAuth();
   const { t } = useLanguage();
-  const MARKETS = getMarkets(t);
+  const allMarkets = getMarkets(t);
+  // Filter markets by RBAC — unauthenticated users see all (legacy), authenticated filter by claims
+  const MARKETS = user
+    ? allMarkets.filter(m => canAccessMarket(MARKET_RBAC_KEY[m.key] ?? m.key.toUpperCase()))
+    : allMarkets;
   const MARKET_SUBS = getMarketSubs(t);
 
   return (
@@ -299,10 +311,13 @@ export function Sidebar({ status, collapsed = false, onToggle }: {
         )}
       </nav>
 
-      {user?.role === 'admin' && (
+      {user && (role === 'admin' || role === 'super_admin') && (
         <div className="sidebar__admin">
           <NavLink to="/admin/users" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
             <Icon name="user" size={17} /><span>{t.nav.users}</span>
+          </NavLink>
+          <NavLink to="/admin/market-groups" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
+            <Icon name="layers" size={17} /><span>{t.nav.marketGroups}</span>
           </NavLink>
         </div>
       )}
@@ -411,14 +426,17 @@ export function Topbar({ theme, setTheme, user, onLoginClick, onLogout }: {
 // ── MobNav ────────────────────────────────────────────────────────────────────
 export function MobNav() {
   const { t } = useLanguage();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const NAV = getNav(t);
 
   const authItems: NavItem[] = user ? [
     { id: 'monitoring', path: '/monitoring', label: t.nav.monitoring, icon: 'activity' },
     { id: 'settings',   path: '/settings',   label: t.nav.settings,   icon: 'settings' },
-    ...(user.role === 'admin'
-      ? [{ id: 'users', path: '/admin/users', label: t.nav.users, icon: 'user' }]
+    ...(role === 'admin' || role === 'super_admin'
+      ? [
+          { id: 'users',         path: '/admin/users',         label: t.nav.users,        icon: 'user'   },
+          { id: 'market-groups', path: '/admin/market-groups', label: t.nav.marketGroups, icon: 'layers' },
+        ]
       : []),
   ] : [];
 

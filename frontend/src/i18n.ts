@@ -13,6 +13,7 @@ export const translations: Record<Lang, Translations> = {
       users: 'Người dùng',
       leaderboard: 'Leaderboard',
       monitoring: 'Giám sát dữ liệu',
+      marketGroups: 'Nhóm thị trường',
     },
     // Market sub-items
     marketSubs: {
@@ -58,6 +59,7 @@ export const translations: Record<Lang, Translations> = {
       '/guide': ['Hướng dẫn sử dụng', 'USER GUIDE'],
       '/settings': ['Cài đặt', 'SETTINGS'],
       '/admin/users': ['Quản lý người dùng', 'ADMIN · USERS'],
+      '/admin/market-groups': ['Nhóm thị trường', 'ADMIN · MARKET GROUPS'],
       '/gold': ['Giá vàng', 'GOLD'],
       '/crypto': ['Cryptocurrency', 'CRYPTO'],
       '/nasdaq': ['NASDAQ 100', 'NASDAQ 100 · US EQUITIES'],
@@ -612,6 +614,7 @@ export const translations: Record<Lang, Translations> = {
       users: 'Users',
       leaderboard: 'Leaderboard',
       monitoring: 'Data Pipeline',
+      marketGroups: 'Market Groups',
     },
     marketSubs: {
       overview: 'Overview',
@@ -652,6 +655,7 @@ export const translations: Record<Lang, Translations> = {
       '/guide': ['User Guide', 'USER GUIDE'],
       '/settings': ['Settings', 'SETTINGS'],
       '/admin/users': ['User Management', 'ADMIN · USERS'],
+      '/admin/market-groups': ['Market Groups', 'ADMIN · MARKET GROUPS'],
       '/gold': ['Gold Price', 'GOLD'],
       '/crypto': ['Cryptocurrency', 'CRYPTO'],
       '/nasdaq': ['NASDAQ 100', 'NASDAQ 100 · US EQUITIES'],
@@ -1186,6 +1190,7 @@ export interface Translations {
     users: string;
     leaderboard: string;
     monitoring: string;
+    marketGroups: string;
   };
   marketSubs: {
     overview: string;
