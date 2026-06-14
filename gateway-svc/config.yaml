@@ -1,0 +1,52 @@
+server:
+  host: "0.0.0.0"
+  http_port: 80
+  https_port: 443
+  tls:
+    enabled: true
+    cert_path: "/etc/gateway/certs/cert.pem"
+    key_path: "/etc/gateway/certs/key.pem"
+  shutdown_timeout: 30
+
+http:
+  version: "auto"
+  pool:
+    max_idle_per_host: 20
+    idle_timeout: 90
+    connection_timeout: 10
+  request:
+    timeout: 600
+    max_retries: 0
+    retry_delay: 1
+
+# Path-prefix routing — longest prefix wins.
+# /swagger → 404 blocked
+# /api     → Go API Backend at api:8118
+# /health  → Go API Backend at api:8118 (existing nginx behaviour)
+# /        → React SPA at frontend:3000
+routes:
+  - prefix: "/swagger"
+    action: "block"
+  - prefix: "/api"
+    action: "proxy"
+    backend: "http://api:8118"
+    security_headers: true
+  - prefix: "/health"
+    action: "proxy"
+    backend: "http://api:8118"
+    security_headers: false
+  - prefix: "/"
+    action: "proxy"
+    backend: "http://frontend:3000"
+    security_headers: false
+
+middleware:
+  rate_limit:
+    enabled: false
+    max_requests: 1000
+    window_secs: 60
+
+logging:
+  level: "info"
+  format: "json"
+  access_log: true
