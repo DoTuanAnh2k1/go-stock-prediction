@@ -140,7 +140,7 @@ export default function Users() {
           <div style={{ padding: 16, color: 'var(--text-3)' }}>{t.users.noUsers}</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>{t.users.colId}</th>
@@ -182,7 +182,7 @@ export default function Users() {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
           </div>
         )}
       </Panel>
