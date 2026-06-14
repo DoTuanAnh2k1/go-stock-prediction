@@ -141,47 +141,47 @@ export default function Users() {
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>{t.users.colId}</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>{t.users.colUsername}</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>{t.users.colRole}</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>{t.users.colCreatedAt}</th>
-                <th style={{ width: 48 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(u => (
-                <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ padding: '8px 12px', color: 'var(--text-2)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{u.id}</td>
-                  <td style={{ padding: '8px 12px', fontWeight: 500 }}>{u.username}</td>
-                  <td style={{ padding: '8px 12px' }}>
-                    <span className={`badge ${u.role === 'admin' ? 'badge--up' : 'badge--muted'}`}>{u.role}</span>
-                  </td>
-                  <td style={{ padding: '8px 12px', color: 'var(--text-2)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-                    {u.created_at ? new Date(u.created_at).toLocaleString('vi-VN') : '—'}
-                  </td>
-                  <td style={{ padding: '8px 12px' }}>
-                    {u.username !== user?.username && (
-                      <button
-                        className="btn btn--icon btn--ghost"
-                        style={{ color: 'var(--down)' }}
-                        onClick={() => handleDelete(u)}
-                        title={`Xóa ${u.username}`}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6"/>
-                          <path d="M19 6l-1 14H6L5 6"/>
-                          <path d="M10 11v6"/>
-                          <path d="M14 11v6"/>
-                          <path d="M9 6V4h6v2"/>
-                        </svg>
-                      </button>
-                    )}
-                  </td>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>{t.users.colId}</th>
+                  <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>{t.users.colUsername}</th>
+                  <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>{t.users.colRole}</th>
+                  <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-2)', fontWeight: 500 }}>{t.users.colCreatedAt}</th>
+                  <th style={{ width: 48 }}></th>
                 </tr>
-              ))}
-            </tbody>
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '8px 12px', color: 'var(--text-2)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{u.id}</td>
+                    <td style={{ padding: '8px 12px', fontWeight: 500 }}>{u.username}</td>
+                    <td style={{ padding: '8px 12px' }}>
+                      <span className={`badge ${u.role === 'admin' ? 'badge--up' : 'badge--muted'}`}>{u.role}</span>
+                    </td>
+                    <td style={{ padding: '8px 12px', color: 'var(--text-2)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                      {u.created_at ? new Date(u.created_at).toLocaleString('vi-VN') : '—'}
+                    </td>
+                    <td style={{ padding: '8px 12px' }}>
+                      {u.username !== user?.username && (
+                        <button
+                          className="btn btn--icon btn--ghost"
+                          style={{ color: 'var(--down)' }}
+                          onClick={() => handleDelete(u)}
+                          title={`Xóa ${u.username}`}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6l-1 14H6L5 6"/>
+                            <path d="M10 11v6"/>
+                            <path d="M14 11v6"/>
+                            <path d="M9 6V4h6v2"/>
+                          </svg>
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
         )}
