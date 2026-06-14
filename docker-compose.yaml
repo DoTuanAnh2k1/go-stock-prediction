@@ -45,7 +45,7 @@ services:
       MYSQL_DEBUG: "true"
       LOG_LEVEL: DEBUG
       BACKUP_DIR: "/backups"
-      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-http://localhost:36018}"
+      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-https://localhost}"
     volumes:
       - backup_data:/backups
     networks:
@@ -80,27 +80,13 @@ services:
       ADMIN_PASSWORD: "${ADMIN_PASSWORD}"
       JWT_SECRET: "${JWT_SECRET}"
       BACKUP_DIR: "/backups"
-      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-http://localhost:36018}"
+      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-https://localhost}"
     volumes:
       - backup_data:/backups
     networks:
       - app-network
 
-  # Nginx (reverse proxy)
-  nginx:
-    image: nginx:alpine
-    container_name: nginx_proxy
-    depends_on:
-      - api
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    networks:
-      - app-network
-
-  # Frontend (React + Vite + Nginx)
+  # Frontend (React + Vite + Nginx) — single HTTPS gateway on :443
   frontend:
     build:
       context: ./frontend
@@ -110,7 +96,10 @@ services:
       - api
     restart: unless-stopped
     ports:
-      - "36018:80"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/certs:/etc/nginx/certs
     networks:
       - app-network
 
