@@ -7,6 +7,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"go-stock-prediction/pkg/config"
+	authpb "go-stock-prediction/proto/auth"
 )
 
 type contextKey string
@@ -37,13 +38,52 @@ func JWTMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// getClaims extracts JWT claims from context (nil if unauthenticated).
 func getClaims(r *http.Request) jwt.MapClaims {
 	claims, _ := r.Context().Value(claimsKey).(jwt.MapClaims)
 	return claims
 }
 
-// requireAuth returns false and writes 401 if no valid JWT claims in context.
+// getAccessibleMarkets extracts the accessible_markets list from JWT claims.
+func getAccessibleMarkets(claims jwt.MapClaims) []string {
+	if claims == nil {
+		return nil
+	}
+	raw, ok := claims["accessible_markets"]
+	if !ok {
+		return nil
+	}
+	arr, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+	markets := make([]string, 0, len(arr))
+	for _, v := range arr {
+		if s, ok := v.(string); ok {
+			markets = append(markets, s)
+		}
+	}
+	return markets
+}
+
+// isSuperAdmin returns true if the JWT role claim is "super_admin".
+func isSuperAdmin(claims jwt.MapClaims) bool {
+	if claims == nil {
+		return false
+	}
+	role, _ := claims["role"].(string)
+	return role == "super_admin"
+}
+
+// callerFromClaims extracts caller_id and caller_role from JWT claims into a CallerMeta proto.
+func callerFromClaims(claims jwt.MapClaims) *authpb.CallerMeta {
+	if claims == nil {
+		return &authpb.CallerMeta{}
+	}
+	idFloat, _ := claims["user_id"].(float64)
+	role, _ := claims["role"].(string)
+	return &authpb.CallerMeta{CallerId: int64(idFloat), CallerRole: role}
+}
+
 func requireAuth(w http.ResponseWriter, r *http.Request) bool {
 	if getClaims(r) == nil {
 		ResponseError(w, http.StatusUnauthorized, "authentication required")
@@ -62,7 +102,6 @@ func AuthRequired(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// requireAdmin returns false and writes 403 if user is not admin.
 func requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 	claims := getClaims(r)
 	if claims == nil {
@@ -70,9 +109,44 @@ func requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	role, _ := claims["role"].(string)
-	if role != "admin" {
+	if role != "admin" && role != "super_admin" {
 		ResponseError(w, http.StatusForbidden, "admin access required")
 		return false
 	}
 	return true
+}
+
+// AdminRequired wraps a handler requiring admin or super_admin role.
+func AdminRequired(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !requireAdmin(w, r) {
+			return
+		}
+		next(w, r)
+	}
+}
+
+// MarketRequired wraps a handler requiring the caller to have access to a specific market.
+// super_admin bypasses the check.
+func MarketRequired(marketKey string) func(http.HandlerFunc) http.HandlerFunc {
+	return func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			claims := getClaims(r)
+			if claims == nil {
+				ResponseError(w, http.StatusUnauthorized, "authentication required")
+				return
+			}
+			if isSuperAdmin(claims) {
+				next(w, r)
+				return
+			}
+			for _, m := range getAccessibleMarkets(claims) {
+				if m == marketKey {
+					next(w, r)
+					return
+				}
+			}
+			ResponseError(w, http.StatusForbidden, "no access to market: "+marketKey)
+		}
+	}
 }
