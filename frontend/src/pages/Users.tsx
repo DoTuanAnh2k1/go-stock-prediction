@@ -15,7 +15,7 @@ function getToken() {
 }
 
 export default function Users() {
-  const { user } = useAuth();
+  const { user, role: callerRole } = useAuth();
   const { t } = useLanguage();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -156,7 +156,7 @@ export default function Users() {
                     <td style={{ padding: '8px 12px', color: 'var(--text-2)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{u.id}</td>
                     <td style={{ padding: '8px 12px', fontWeight: 500 }}>{u.username}</td>
                     <td style={{ padding: '8px 12px' }}>
-                      <span className={`badge ${u.role === 'admin' ? 'badge--up' : 'badge--muted'}`}>{u.role}</span>
+                      <span className={`role-badge role-badge--${u.role.replace('_', '-')}`}>{u.role}</span>
                     </td>
                     <td style={{ padding: '8px 12px', color: 'var(--text-2)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
                       {u.created_at ? new Date(u.created_at).toLocaleString('vi-VN') : '—'}
@@ -165,9 +165,10 @@ export default function Users() {
                       {u.username !== user?.username && (
                         <button
                           className="btn btn--icon btn--ghost"
-                          style={{ color: 'var(--down)' }}
+                          style={{ color: 'var(--down)', opacity: (u.role === 'super_admin' && callerRole !== 'super_admin') ? 0.3 : 1 }}
                           onClick={() => handleDelete(u)}
-                          title={`Xóa ${u.username}`}
+                          disabled={u.role === 'super_admin' && callerRole !== 'super_admin'}
+                          title={u.role === 'super_admin' && callerRole !== 'super_admin' ? 'Không thể xóa super_admin' : `Xóa ${u.username}`}
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="3 6 5 6 21 6"/>
