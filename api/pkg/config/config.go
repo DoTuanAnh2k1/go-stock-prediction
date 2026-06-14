@@ -39,3 +39,10 @@ func GetGRPCConfig() models_config.GRPCConfig {
 	}
 	return config.GRPC
 }
+
+func GetAuthGRPCConfig() string {
+	if config == nil {
+		return "localhost:8120"
+	}
+	return config.GRPC.AuthClientTarget
+}

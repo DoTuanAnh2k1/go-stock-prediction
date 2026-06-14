@@ -12,6 +12,8 @@ type GRPCConfig struct {
 	ServerPort string
 	// ClientTarget is the address the API backend uses to connect to the prediction gRPC server
 	ClientTarget string
+	// AuthClientTarget is the address of the Java Auth Service gRPC server
+	AuthClientTarget string
 }
 
 type ServerConfig struct {

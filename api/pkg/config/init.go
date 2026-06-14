@@ -22,8 +22,9 @@ func InitConfig(filenames ...string) {
 			JWTSecret:     env.GetEnv("JWT_SECRET", "change-me-in-production"),
 		},
 		GRPC: models_config.GRPCConfig{
-			ServerPort:   env.GetEnv("GRPC_SERVER_PORT", "8119"),
-			ClientTarget: env.GetEnv("GRPC_TARGET", "localhost:8119"),
+			ServerPort:       env.GetEnv("GRPC_SERVER_PORT", "8119"),
+			ClientTarget:     env.GetEnv("GRPC_TARGET", "localhost:8119"),
+			AuthClientTarget: env.GetEnv("AUTH_GRPC_TARGET", "localhost:8120"),
 		},
 		Db: models_config.DatabaseConfig{
 			DbType: env.GetEnv("DB_DRIVER", "mysql"),
