@@ -25,10 +25,10 @@ ALGORITHMS = [
 
 MARKETS = [
     ("VN30", "VN30", Decimal("1000000000"), "VND"),
-    ("GOLD", "Gold", Decimal("100000"), "USD"),
-    ("NASDAQ", "NASDAQ", Decimal("100000"), "USD"),
-    ("SP500", "S&P 500", Decimal("100000"), "USD"),
-    ("CRYPTO", "Crypto", Decimal("100000"), "USD"),
+    ("GOLD", "Gold", Decimal("1000"), "USD"),
+    ("NASDAQ", "NASDAQ", Decimal("1000"), "USD"),
+    ("SP500", "S&P 500", Decimal("1000"), "USD"),
+    ("CRYPTO", "Crypto", Decimal("1000"), "USD"),
 ]
 
 
