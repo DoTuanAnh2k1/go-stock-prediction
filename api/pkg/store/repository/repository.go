@@ -19,7 +19,6 @@ type DatabaseStore interface {
 	GoldIntradayStore
 	MacroIndicatorStore
 	TrainingLogStore
-	UserStore
 	CronScheduleStore
 	NasdaqPriceStore
 	NasdaqPredictionStore
