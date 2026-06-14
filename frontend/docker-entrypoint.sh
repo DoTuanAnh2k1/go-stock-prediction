@@ -12,6 +12,7 @@ if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
     -out "$CERT_FILE" \
     -subj "/CN=localhost/O=go-stock-prediction/C=VN" \
     2>/dev/null
+  chmod 600 "$KEY_FILE"
   echo "[TLS] Self-signed cert generated (valid 10 years). Replace with real certs for production."
 fi
 

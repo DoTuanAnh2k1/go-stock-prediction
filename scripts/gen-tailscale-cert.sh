@@ -29,4 +29,4 @@ tailscale cert \
 echo "[TLS] Done. Certs written to nginx/certs/"
 echo ""
 echo "Set in .env:  ALLOWED_ORIGINS=https://$TAILSCALE_HOST"
-echo "Then:         docker-compose restart frontend"
+echo "Then:         docker compose restart frontend"

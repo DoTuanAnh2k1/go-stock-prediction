@@ -20,7 +20,7 @@ mkdir -p "$CERT_DIR"
 
 # Stop frontend temporarily — certbot needs port 80
 echo "[TLS] Stopping frontend container to free port 80..."
-docker-compose stop frontend 2>/dev/null || true
+docker compose stop frontend 2>/dev/null || true
 
 EMAIL_FLAG="--register-unsafely-without-email"
 [ -n "$EMAIL" ] && EMAIL_FLAG="--email $EMAIL"
@@ -36,10 +36,10 @@ cp "/etc/letsencrypt/live/$DOMAIN/privkey.pem"   "$CERT_DIR/key.pem"
 echo "[TLS] Done. Certs written to nginx/certs/"
 echo ""
 echo "Set in .env:  ALLOWED_ORIGINS=https://$DOMAIN"
-echo "Then:         docker-compose start frontend"
+echo "Then:         docker compose start frontend"
 echo ""
 echo "Auto-renewal crontab (run as root):"
 echo "  0 3 * * * certbot renew --quiet && \\"
-echo "    cp /etc/letsencrypt/live/$DOMAIN/fullchain.pem $(pwd)/nginx/certs/cert.pem && \\"
-echo "    cp /etc/letsencrypt/live/$DOMAIN/privkey.pem $(pwd)/nginx/certs/key.pem && \\"
-echo "    docker-compose restart frontend"
+echo "    cp /etc/letsencrypt/live/$DOMAIN/fullchain.pem $CERT_DIR/cert.pem && \\"
+echo "    cp /etc/letsencrypt/live/$DOMAIN/privkey.pem $CERT_DIR/key.pem && \\"
+echo "    docker compose restart frontend"

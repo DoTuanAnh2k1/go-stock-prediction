@@ -33,7 +33,7 @@ if [ -z "$CERT_SRC" ] || [ -z "$KEY_SRC" ]; then
   echo "  4. Save Private Key         → some local file (e.g. ~/cf-key.pem)"
   echo "  5. Run: $0 ~/cf-cert.pem ~/cf-key.pem"
   echo "  6. Set Cloudflare SSL/TLS mode to 'Full (strict)'"
-  echo "  7. docker-compose restart frontend"
+  echo "  7. docker compose restart frontend"
   exit 0
 fi
 
@@ -44,4 +44,4 @@ chmod 600 "$CERT_DIR/key.pem"
 echo "[TLS] Cloudflare Origin Certificate installed to nginx/certs/"
 echo ""
 echo "Ensure Cloudflare SSL/TLS encryption mode is set to 'Full (strict)'"
-echo "Then: docker-compose restart frontend"
+echo "Then: docker compose restart frontend"
