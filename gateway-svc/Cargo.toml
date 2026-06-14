@@ -1,0 +1,11 @@
+[package]
+name = "gateway"
+version = "0.1.0"
+edition = "2021"
+description = "HTTP gateway for go-stock-prediction"
+
+[dependencies]
+
+[[bin]]
+name = "gateway"
+path = "src/main.rs"
