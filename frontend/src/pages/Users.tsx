@@ -139,6 +139,7 @@ export default function Users() {
         ) : users.length === 0 ? (
           <div style={{ padding: 16, color: 'var(--text-3)' }}>{t.users.noUsers}</div>
         ) : (
+          <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -182,6 +183,7 @@ export default function Users() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Panel>
     </div>
