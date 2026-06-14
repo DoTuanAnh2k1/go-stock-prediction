@@ -411,10 +411,20 @@ export function Topbar({ theme, setTheme, user, onLoginClick, onLogout }: {
 // ── MobNav ────────────────────────────────────────────────────────────────────
 export function MobNav() {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const NAV = getNav(t);
+
+  const authItems: NavItem[] = user ? [
+    { id: 'monitoring', path: '/monitoring', label: t.nav.monitoring, icon: 'activity' },
+    { id: 'settings',   path: '/settings',   label: t.nav.settings,   icon: 'settings' },
+    ...(user.role === 'admin'
+      ? [{ id: 'users', path: '/admin/users', label: t.nav.users, icon: 'user' }]
+      : []),
+  ] : [];
+
   return (
     <nav className="mob-nav">
-      {NAV.map((n) => (
+      {[...NAV, ...authItems].map((n) => (
         <NavLink key={n.id} to={n.path} end={n.path === '/'}
           className={({ isActive }) => `mob-nav__item ${isActive ? 'active' : ''}`}>
           <Icon name={n.icon} size={18} />
