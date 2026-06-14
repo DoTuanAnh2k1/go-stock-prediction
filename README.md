@@ -1,90 +1,85 @@
 # go-stock-prediction
 
-Hệ thống dự đoán giá tài sản tài chính (Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, S&P 500), bao gồm crawl dữ liệu tự động, huấn luyện mô hình ML, và dashboard theo dõi.
+Financial asset price prediction system with RBAC — crawls Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, and S&P 500, runs 11 ML algorithms, and displays results in a web dashboard with role-based market access control.
 
-## Tính năng
-
-- **Thu thập dữ liệu:** Crawl giá vàng SJC/XAU/USD mỗi giờ; NASDAQ và S&P 500 mỗi giờ (chỉ T2-T6, bỏ qua cuối tuần và ngày lễ NYSE); Crypto BTC/ETH/SOL mỗi 2 giờ
-- **Backup tự động:** mysqldump toàn bộ DB hàng ngày lúc 3 AM vào `BACKUP_DIR`
-- **Dự đoán giá:** 11 thuật toán ML — Moving Average, EMA/MACD, LSTM, GRU, ARIMA-GARCH, EGARCH, SARIMA, LightGBM, XGBoost, Random Forest, Ensemble
-- **Walk-forward Backtest:** Backtest lịch sử với cơ chế fold tự động (`/api/trigger/historical-backtest`)
-- **Huấn luyện tự động:** Per-market training jobs mỗi Chủ nhật (staggered từ 3AM đến 7AM)
-- **Reconcile hàng ngày:** 6 AM cập nhật `actual_price` và `direction_correct` vào các dự đoán đã qua `target_date`
-- **Pipeline Monitoring:** Trang "Data Pipeline" — crawl freshness, per-algo prediction counts hôm nay, bot win/loss summary qua `GET /api/monitoring/overview` (JWT, cache 30s)
-- **Dashboard web:** React SPA — biểu đồ, kết quả dự đoán, giá vàng, NASDAQ, Crypto, S&P 500
-- **REST API:** Endpoints đầy đủ cho mọi market, dự đoán, trigger thủ công
-
-## Kiến trúc
+## Architecture
 
 ```
-Microservice: Go API Backend + Python Prediction Service + Nginx
-
-api/cmd/main.go              API Backend (:8118) — HTTP, đọc DB trực tiếp, gọi Prediction Service qua gRPC
-prediction/src/main.py       Prediction Service (:8119) — gRPC, crawling (Gold/NASDAQ/Crypto/SP500),
-                             11 thuật toán ML, training, APScheduler cron jobs
-nginx/nginx.conf             Reverse proxy :80 → api:8118
-
-api/pkg/
-  config/                    Quản lý cấu hình (.env)
-  grpc/client/client.go      gRPC client singleton dùng trong API Backend
-  server/                    HTTP server, routes, handlers (api_*.go)
-  store/
-    repository/              Interface repository pattern (DatabaseStore)
-    mysql/                   Triển khai MySQL (GORM)
-  models/
-    models_db/               GORM struct (GoldPrice, NasdaqPrice, CryptoPrice, Sp500Price, predictions, TrainingLog, ...)
-    models_api/              DTO cho API response
-
-prediction/src/
-  algorithms/                11 thuật toán ML (MA, EMA, LSTM, GRU, ARIMA-GARCH, EGARCH, SARIMA, LightGBM, XGBoost, RF, Ensemble)
-  crawlers/                  Gold, NASDAQ, Crypto, S&P 500
-  scheduler/                 APScheduler + DB-backed cron schedules
-  orchestrator/              run_all_markets(), train_for_market(), reconcile_predictions()
-
-api/proto/prediction/        gRPC service definitions + generated code
-frontend/                    React SPA (Vite + TypeScript)
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Docker Compose                                │
+│                                                                      │
+│  Browser ──► Nginx :80 ──► API Backend :8118 (Go)                  │
+│                                    │                                 │
+│              Frontend :36018        ├──gRPC──► Auth Service :8120   │
+│              (React)               │          (Java Spring Boot)     │
+│                                    │                                 │
+│                                    └──gRPC──► Prediction :8119      │
+│                                               (Python)               │
+│                                                    │                 │
+│              MySQL :3306 ◄─────────────────────────┘                │
+│              (shared DB)                                             │
+│                                                                      │
+│  phpMyAdmin :8081                                                    │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Yêu cầu
+**Services:**
+- **Nginx** `:80` — reverse proxy, single entry point
+- **API Backend** (`api/`) — Go HTTP `:8118`; thin auth proxy to Java Auth Service via gRPC, reads DB directly for market data, triggers Python Prediction Service via gRPC
+- **Auth Service** (`auth-service/`) — Java Spring Boot 3, gRPC `:8120` (internal); owns all RBAC: login, JWT generation, user CRUD, market groups, Flyway migrations
+- **Prediction Service** (`prediction/`) — Python gRPC `:8119` (internal); crawling, 11 ML algorithms, training, APScheduler cron jobs
+- **MySQL** `:3306` — shared database for all services
+- **Frontend** (`frontend/`) — React + TypeScript SPA `:36018`
 
-- Go 1.23+ (API Backend)
-- Python 3.12+ (Prediction Service)
-- MySQL 8.0+ (hoặc dùng Docker Compose)
-- Docker + Docker Compose (khuyến nghị)
-- File `.env` cấu hình (xem bên dưới)
+## Features
 
-## Cài đặt & Chạy
+- **RBAC with market groups:** Three roles — `super_admin` (full access), `admin` (manage users and market groups), `user` (access only assigned markets). JWT includes `accessible_markets` claim; sidebar hides tabs for inaccessible markets.
+- **Data collection:** Gold SJC/XAU/USD every hour; NASDAQ and S&P 500 every hour (Mon-Fri, skips NYSE holidays); Crypto BTC/ETH/SOL every 2 hours
+- **11 ML algorithms:** Moving Average, EMA/MACD, LSTM (PyTorch), GRU (PyTorch), ARIMA-GARCH, EGARCH, SARIMA, LightGBM (Optuna tuned), XGBoost (Optuna tuned), Random Forest, Ensemble
+- **Walk-forward backtest:** Historical backtesting via `POST /api/trigger/historical-backtest`
+- **Automated training:** Per-market weekly training jobs (Sunday 3-7 AM)
+- **Daily reconcile:** 6 AM updates `actual_price` and `direction_correct` for past predictions
+- **Dynamic cron schedules:** DB-backed, editable live via Settings page — no restart needed
+- **Pipeline monitoring:** `/api/monitoring/overview` — crawl freshness, per-algo prediction counts, bot win/loss stats (JWT, 30s cache)
+- **Auto backup:** Daily mysqldump at 3 AM into `BACKUP_DIR`
 
-### Chạy bằng Docker Compose (khuyến nghị)
+## Quick Start
 
 ```bash
-# Khởi động tất cả services (DB, Prediction, API, Nginx, Frontend, phpMyAdmin)
+# Start all 7 services
 docker-compose up -d
 ```
 
-Dashboard React: `http://localhost:36018`
-API Backend: `http://localhost:80` (qua Nginx)
-phpMyAdmin: `http://localhost:8081`
+| URL | Service |
+|-----|---------|
+| `http://localhost:36018` | React dashboard |
+| `http://localhost:80` | API (via Nginx) |
+| `http://localhost:8081` | phpMyAdmin |
+| `http://localhost:8118/swagger/` | Swagger UI |
 
-### Tạo file `.env`
+Default credentials: `chon` / `super_admin` (seeded by Java Auth Service on first startup).
+
+## Environment Variables
+
+Create a `.env` file in the project root:
 
 ```env
-# HTTP server (API Backend)
+# HTTP server
 SERVER_PORT=8118
 
 # gRPC
 GRPC_SERVER_PORT=8119
-GRPC_TARGET=prediction:8119   # Docker internal; dùng localhost:8119 khi chạy local
+GRPC_TARGET=prediction:8119       # Docker internal; use localhost:8119 when running locally
+AUTH_GRPC_TARGET=auth:8120        # Docker internal; use localhost:8120 when running locally
 
 # Auth
-API_KEY=                       # Optional — bảo vệ một số trigger endpoint
-ADMIN_USERNAME=admin           # Username đăng nhập dashboard (default: admin)
-ADMIN_PASSWORD=admin123        # Password đăng nhập dashboard (default: admin123)
-JWT_SECRET=change-me-in-production  # Secret ký JWT — bắt buộc đổi trong production
+JWT_SECRET=change-me-in-production
+ADMIN_USERNAME=admin              # Legacy — only used as fallback seed; Java Auth Service seeds chon/super_admin
+ADMIN_PASSWORD=admin123
 
 # Database
 DB_DRIVER=mysql
-MYSQL_HOST=db                  # Docker internal; dùng localhost khi chạy local
+MYSQL_HOST=db                     # Docker internal; use localhost when running locally
 MYSQL_PORT=3306
 MYSQL_USER=root
 MYSQL_PASSWORD=123
@@ -94,252 +89,143 @@ MYSQL_DEBUG=false
 # Logging
 LOG_LEVEL=DEBUG
 DB_LOG_LEVEL=DEBUG
+
+# Backup
+BACKUP_DIR=/backups
 ```
 
-### Build và chạy local (không Docker)
+## First-time Setup
+
+After `docker-compose up -d`, the DB is empty. Run in order:
 
 ```bash
-# Import schema
-mysql -u root -p go_stock_prediction < database.sql
-
-# Chạy Prediction Service (Python) trước
-cd prediction && pip install -e ".[ml]"
-python -m src.main
-
-# Build và chạy API Backend (Go) — từ thư mục api/
-cd api && go build -o api-server ./cmd
-./api-server
-```
-
-## Lần đầu khởi động (luồng bắt buộc)
-
-Khi mới cài đặt, DB trống — thực hiện tuần tự:
-
-```bash
-# Lấy JWT token (admin được tạo tự động từ ADMIN_USERNAME/ADMIN_PASSWORD env vars)
+# 1. Get a JWT token (super_admin seeded by Java Auth Service)
 TOKEN=$(curl -s -X POST http://localhost/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
-```
+  -d '{"username":"chon","password":"super_admin"}' | jq -r '.token')
 
-**Bước 1 — Crawl dữ liệu ban đầu**
-
-```bash
-# Crawl Gold, NASDAQ, Crypto, S&P 500 ngay
-curl -X POST http://localhost/api/trigger/gold-crawler -H "Authorization: Bearer $TOKEN"
+# 2. Crawl initial data
+curl -X POST http://localhost/api/trigger/gold-crawler   -H "Authorization: Bearer $TOKEN"
 curl -X POST http://localhost/api/trigger/nasdaq-crawler -H "Authorization: Bearer $TOKEN"
 curl -X POST http://localhost/api/trigger/crypto-crawler -H "Authorization: Bearer $TOKEN"
-curl -X POST http://localhost/api/trigger/sp500-crawler -H "Authorization: Bearer $TOKEN"
-```
+curl -X POST http://localhost/api/trigger/sp500-crawler  -H "Authorization: Bearer $TOKEN"
 
-**Bước 2 — Huấn luyện mô hình**
-
-```bash
+# 3. Train models
 curl -X POST http://localhost/api/trigger/train -H "Authorization: Bearer $TOKEN"
-```
 
-**Bước 3 — Chạy walk-forward backtest (tạo dữ liệu `confirmed` để xem chart)**
-
-```bash
+# 4. Run walk-forward backtest (generates chart data)
 curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&step_size=6&market_key=ALL" \
   -H "Authorization: Bearer $TOKEN"
-```
-
-## Trigger thủ công bằng curl
-
-Tất cả trigger endpoints yêu cầu JWT. Lấy token trước:
-
-```bash
-TOKEN=$(curl -s -X POST http://localhost/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
-
-curl -X POST http://localhost/api/trigger/train -H "Authorization: Bearer $TOKEN"               # huấn luyện tất cả
-curl -X POST http://localhost/api/trigger/gold-crawler -H "Authorization: Bearer $TOKEN"        # crawl giá vàng
-curl -X POST http://localhost/api/trigger/nasdaq-crawler -H "Authorization: Bearer $TOKEN"      # crawl NASDAQ
-curl -X POST http://localhost/api/trigger/crypto-crawler -H "Authorization: Bearer $TOKEN"      # crawl Crypto
-curl -X POST http://localhost/api/trigger/sp500-crawler -H "Authorization: Bearer $TOKEN"       # crawl S&P 500
-curl -X POST http://localhost/api/trigger/reconcile -H "Authorization: Bearer $TOKEN"           # reconcile actual price
-curl http://localhost/api/monitoring/overview -H "Authorization: Bearer $TOKEN"                  # pipeline monitoring overview
-
-# Backtest tất cả markets (async, trả 202 ngay)
-curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&step_size=6&market_key=ALL" \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-## API Endpoints
-
-### Auth
-
-| Method | Path | Mô tả |
-|--------|------|-------|
-| `POST` | `/api/auth/login` | Đăng nhập — body: `{"username":"","password":""}`, trả JWT 24h |
-| `GET` | `/api/auth/me` | Xác minh token — header: `Authorization: Bearer <token>` |
-
-### Predictions
-
-| Method | Path | Mô tả |
-|--------|------|-------|
-| `GET` | `/api/predictions/direction-accuracy` | Direction accuracy per algorithm — query: `?market=GOLD\|NASDAQ\|SP500\|CRYPTO` |
-
-### Training
-
-| Method | Path | Mô tả |
-|--------|------|-------|
-| `GET` | `/api/training/status` | Trạng thái huấn luyện: `is_training`, `progress`, `phase` |
-| `GET` | `/api/training/history` | Lịch sử các phiên huấn luyện |
-| `GET` | `/api/training/algorithms` | Chi tiết từng thuật toán: config, accuracy, last_trained |
-| `GET` | `/api/training/metrics` | Aggregate metrics: avg time, success rate |
-| `GET` | `/api/training/{id}` | Chi tiết một phiên huấn luyện |
-
-### Gold
-
-| Method | Path | Mô tả |
-|--------|------|-------|
-| `GET` | `/api/gold/latest` | Giá vàng mới nhất |
-| `GET` | `/api/gold/prices` | Danh sách giá vàng |
-| `GET` | `/api/gold/chart` | Biểu đồ lịch sử giá vàng |
-| `GET` | `/api/gold/predictions/latest` | Dự đoán vàng mới nhất |
-| `GET` | `/api/gold/predictions/chart` | Biểu đồ dự đoán vs thực tế (vàng) |
-| `GET` | `/api/gold/predictions` | Danh sách dự đoán vàng |
-
-### Monitoring
-
-| Method | Path | Mô tả |
-|--------|------|-------|
-| `GET` | `/api/monitoring/overview` | Pipeline monitoring — yêu cầu JWT; crawl freshness + today counts per market, per-algo prediction activity (today_count, direction_accuracy, missing algos), bot win/loss stats; cache 30s |
-
-### Schedules
-
-| Method | Path | Mô tả |
-|--------|------|-------|
-| `GET` | `/api/schedules` | Danh sách lịch tác vụ cron — yêu cầu JWT |
-| `PUT` | `/api/schedules/{key}` | Cập nhật lịch tác vụ — yêu cầu JWT; body: `{"cron_expression":"0 0 12 * * *","enabled":true}` |
-
-### Dashboard & Triggers
-
-Tất cả `POST /api/trigger/*` yêu cầu JWT (`Authorization: Bearer <token>`).
-
-| Method | Path | Mô tả |
-|--------|------|-------|
-| `GET` | `/api/dashboard/stats` | Thống kê tổng quan |
-| `GET` | `/api/training/status` | Trạng thái huấn luyện |
-| `GET` | `/api/training/algorithms` | Chi tiết từng thuật toán |
-| `POST` | `/api/trigger/train` | Huấn luyện — body: `{"algorithm":"lstm_nn"}` (optional) — yêu cầu JWT |
-| `POST` | `/api/trigger/gold-crawler` | Crawl giá vàng — yêu cầu JWT |
-| `POST` | `/api/trigger/gold-history` | Import lịch sử XAU — yêu cầu JWT |
-| `POST` | `/api/trigger/gold-predict` | Dự đoán vàng — yêu cầu JWT |
-| `POST` | `/api/trigger/nasdaq-crawler` | Crawl NASDAQ — yêu cầu JWT |
-| `POST` | `/api/trigger/nasdaq-predict` | Dự đoán NASDAQ — yêu cầu JWT |
-| `POST` | `/api/trigger/crypto-crawler` | Crawl Crypto — yêu cầu JWT |
-| `POST` | `/api/trigger/crypto-predict` | Dự đoán Crypto — yêu cầu JWT |
-| `POST` | `/api/trigger/sp500-crawler` | Crawl S&P 500 — yêu cầu JWT |
-| `POST` | `/api/trigger/sp500-predict` | Dự đoán S&P 500 — yêu cầu JWT |
-| `POST` | `/api/trigger/reconcile` | Reconcile actual prices — yêu cầu JWT |
-| `POST` | `/api/trigger/historical-backtest` | Walk-forward backtest — query: `?train_window=30&step_size=6&market_key=ALL`; trả 202, 409 nếu đang chạy — yêu cầu JWT |
-| `GET` | `/health` | Health check chi tiết |
-| `GET` | `/health/simple` | Health check đơn giản |
-
-## Lịch chạy tự động
-
-Lịch được lưu trong bảng DB `cron_schedules` và có thể chỉnh sửa live qua `PUT /api/schedules/{key}` hoặc Settings page trên frontend — không cần restart service.
-
-| Job Key | Thời gian mặc định | Công việc |
-|---------|-------------------|-----------|
-| `daily_reconcile` | Mỗi ngày 6:00 AM | Reconcile dự đoán với giá thực tế |
-| `crawler_gold` | Mỗi giờ (phút 0) | Pipeline Gold: crawl → train mỗi 10 lần → predict |
-| `crawler_nasdaq` | Mỗi giờ (phút 15, chỉ T2-T6) | Pipeline NASDAQ: crawl → train mỗi 10 lần → predict |
-| `crawler_sp500` | Mỗi giờ (phút 0 và 30, chỉ T2-T6) | Pipeline S&P 500: crawl → train mỗi 10 lần → predict |
-| `crawler_crypto` | Mỗi 2 giờ | Pipeline Crypto: crawl → train mỗi 10 lần → predict |
-| `train_gold` | Chủ nhật 3:00 AM | Huấn luyện lại mô hình Gold |
-| `train_nasdaq` | Chủ nhật 4:00 AM | Huấn luyện lại mô hình NASDAQ |
-| `train_crypto` | Chủ nhật 5:00 AM | Huấn luyện lại mô hình Crypto |
-| `train_sp500` | Chủ nhật 7:00 AM | Huấn luyện lại mô hình S&P 500 |
-| `simulation_daily` | Mỗi ngày 8:00 PM | Bot trading hàng ngày |
-| `daily_backup` | Mỗi ngày 3:00 AM | Backup database bằng mysqldump vào `BACKUP_DIR` |
-
-## Market Calendar — NASDAQ & S&P 500 đóng cửa cuối tuần/lễ
-
-NASDAQ và S&P 500 không chạy crawl, predict hoặc bot-trade vào Thứ 7, Chủ nhật và ngày lễ NYSE (New Year's Day, MLK Day, Presidents' Day, Good Friday, Memorial Day, Juneteenth, Independence Day, Labor Day, Thanksgiving, Christmas). GOLD và Crypto không bị ảnh hưởng — giao dịch 24/7.
-
-Logic tập trung tại `prediction/src/utils/market_calendar.py`. Ba điểm guard:
-- `scheduler/jobs.py` — skip toàn pipeline nếu market đóng (cron vẫn kích hoạt nhưng không làm gì)
-- `orchestrator/runner.py` — `run_for_market()` trả về 0 predictions và bỏ qua sim step
-- `simulation/engine.py` — `run_live_step()` lọc bỏ bot thuộc market đóng khỏi job 8PM hàng ngày
-
-## Các thuật toán dự đoán (11 thuật toán)
-
-| Key | Tên | Mô tả ngắn |
-|-----|-----|-----------|
-| `moving_average` | Moving Average | VWMA trend slope + RSI momentum scaling + StochRSI overlay |
-| `ema` | EMA/MACD | EMA slope + MACD momentum boost + Bollinger %B mean-reversion |
-| `lstm_nn` | LSTM | PyTorch LSTM (2 layers, hidden=64, seq=60, dropout=0.2) |
-| `gru_nn` | GRU | PyTorch GRU (2 layers, hidden=64, seq=60, dropout=0.2) |
-| `arima_garch` | ARIMA-GARCH | statsmodels ARIMA(2,1,2) + arch GARCH(1,1) |
-| `egarch` | EGARCH | arch EGARCH(p=1, o=1, q=1) với HARX mean model |
-| `sarima` | SARIMA | statsmodels SARIMA(1,1,1)(1,0,1,5) — seasonal period 5 |
-| `lightgbm` | LightGBM | ~30 features; Optuna hyperopt (30 trials, timeout 120s) |
-| `xgboost` | XGBoost | ~30 features; Optuna hyperopt (30 trials, timeout 120s) |
-| `random_forest` | Random Forest | n_estimators=200, max_depth=8, min_samples_leaf=5 |
-| `ensemble` | Ensemble | Equal-weight average của 10 base models |
-
-## Walk-forward Historical Backtest
-
-`POST /api/trigger/historical-backtest?train_window=30&step_size=6&market_key=ALL`
-
-- Chạy walk-forward backtesting trên một hoặc tất cả markets (GOLD, NASDAQ100, CRYPTO, SP500)
-- Fold 1: train trên `train_window` ngày đầu, predict `step_size` ngày tiếp theo
-- Mỗi fold expand thêm `step_size` ngày; lặp đến hết lịch sử
-- Mỗi fold dùng context cố định (không rolling) — simulate "dự đoán trước khi biết kết quả"
-- Predictions lưu kèm `actual_price` và `accuracy` ngay (vì backtesting biết lịch sử)
-- Xóa predictions `target_date < today` trước khi insert — idempotent khi gọi lại
-- Batch insert 200 rows/lần
-
-## Test
-
-```bash
-# Go API Backend — chạy từ thư mục api/
-cd api && go test ./...
-cd api && make test-coverage   # tạo coverage.html
-
-# Python Prediction Service
-cd prediction && make test
-# hoặc trong container:
-docker exec prediction_service python -m pytest tests/ -v
 ```
 
 ## Ports
 
-| Service | Port | Ghi chú |
-|---------|------|---------|
+| Service | Port | Notes |
+|---------|------|-------|
 | Nginx | 80 | Reverse proxy → API Backend |
 | API Backend | 8118 | HTTP (internal) |
 | Prediction Service | 8119 | gRPC (internal) |
+| Auth Service | 8120 | gRPC (internal) — Java Spring Boot RBAC |
 | Frontend | 36018 | React app |
 | MySQL | 3306 | Docker |
 | phpMyAdmin | 8081 | Admin UI |
 
-## Công nghệ sử dụng
+## Key API Endpoints
 
-| Lĩnh vực | Thư viện |
-|----------|---------|
-| HTTP server (Go) | `net/http` (stdlib) |
-| gRPC | `google.golang.org/grpc` + protobuf |
-| ORM (Go) | GORM v2 + MySQL driver |
-| Logging (Go) | ZeroLog |
-| Số thực tài chính (Go) | `shopspring/decimal` |
-| Config (Go) | `joho/godotenv` |
-| ML models (Python) | PyTorch, statsmodels, arch, scikit-learn, LightGBM, XGBoost |
-| Hyperopt (Python) | Optuna (Bayesian search) |
-| Cron jobs (Python) | APScheduler |
-| Data (Python) | pandas, pandas-ta, SQLAlchemy |
-| Crawling (Python) | yfinance, requests |
-| Frontend | React + TypeScript + Vite |
+### Auth & Users
 
-## Timezone — ICT-at-rest
+| Method | Path | Notes |
+|--------|------|-------|
+| `POST` | `/api/auth/login` | Login — returns JWT with `accessible_markets` claim |
+| `GET` | `/api/auth/me` | Verify token |
+| `PUT` | `/api/auth/password` | Change password (JWT required) |
+| `GET` | `/api/users` | List users (admin) |
+| `POST` | `/api/users` | Create user (admin) |
+| `DELETE` | `/api/users/{id}` | Delete user (admin) |
 
-Toàn bộ cột `datetime` trong DB lưu theo `Asia/Ho_Chi_Minh` (ICT, UTC+7) dạng wallclock — không dùng UTC.
+### Market Groups (admin only)
 
-- **Python:** luôn dùng `datetime.now()`. Container set `TZ=Asia/Ho_Chi_Minh` nên trả naive ICT. Không dùng `datetime.utcnow()`.
-- **Go:** DSN có `loc=Asia%2FHo_Chi_Minh` (`api/pkg/store/mysql/mysql.go`); `time.Local` = Asia/Ho_Chi_Minh (set trong `api/cmd/main.go`).
-- **MySQL:** chạy UTC nhưng không ảnh hưởng — kiểu cột `datetime` lưu verbatim, không convert timezone.
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/api/market-groups` | List all groups |
+| `POST` | `/api/market-groups` | Create group |
+| `PUT` | `/api/market-groups/{id}/markets` | Assign market keys to group |
+| `POST` | `/api/market-groups/{id}/users` | Add user to group |
+| `DELETE` | `/api/market-groups/{id}/users/{uid}` | Remove user from group |
+
+### Predictions & Monitoring
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/api/predictions/direction-accuracy` | Per-algo direction accuracy — `?market=GOLD\|NASDAQ\|SP500\|CRYPTO` |
+| `GET` | `/api/monitoring/overview` | Pipeline health — crawl freshness, algo counts, bot stats (JWT, 30s cache) |
+| `GET` | `/api/schedules` | Cron schedule list (JWT) |
+| `PUT` | `/api/schedules/{key}` | Update cron schedule live (JWT) |
+
+### Triggers (admin/super_admin only)
+
+All `POST /api/trigger/*` require admin or super_admin JWT.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `POST` | `/api/trigger/train` | Train all or one algorithm |
+| `POST` | `/api/trigger/gold-crawler` | Crawl Gold prices |
+| `POST` | `/api/trigger/nasdaq-crawler` | Crawl NASDAQ |
+| `POST` | `/api/trigger/crypto-crawler` | Crawl Crypto |
+| `POST` | `/api/trigger/sp500-crawler` | Crawl S&P 500 |
+| `POST` | `/api/trigger/reconcile` | Reconcile actual prices |
+| `POST` | `/api/trigger/historical-backtest` | Walk-forward backtest — `?train_window=30&step_size=6&market_key=ALL` |
+| `POST` | `/api/trigger/backup` | Manual DB backup (admin) |
+
+## Cron Schedule (default)
+
+Stored in `cron_schedules` DB table. Edit live via `PUT /api/schedules/{key}` or the Settings page.
+
+| Job Key | Default Schedule | Task |
+|---------|-----------------|------|
+| `crawler_gold` | Every hour (minute 0) | Gold pipeline: crawl → train every 10 runs → predict |
+| `crawler_nasdaq` | Every hour minute 15 (Mon-Fri) | NASDAQ pipeline |
+| `crawler_sp500` | Every 30 min (Mon-Fri) | S&P 500 pipeline |
+| `crawler_crypto` | Every 2 hours | Crypto pipeline |
+| `train_gold` | Sunday 3 AM | Retrain Gold models |
+| `train_nasdaq` | Sunday 4 AM | Retrain NASDAQ models |
+| `train_crypto` | Sunday 5 AM | Retrain Crypto models |
+| `train_sp500` | Sunday 7 AM | Retrain S&P 500 models |
+| `daily_reconcile` | Daily 6 AM | Reconcile predictions with actual prices |
+| `simulation_daily` | Daily 8 PM | Bot trading step |
+| `daily_backup` | Daily 3 AM | mysqldump to `BACKUP_DIR` |
+
+## ML Algorithms (11)
+
+| Key | Name | Notes |
+|-----|------|-------|
+| `moving_average` | Moving Average | VWMA slope + RSI momentum + StochRSI overlay |
+| `ema` | EMA/MACD | EMA slope + MACD boost + Bollinger %B mean-reversion |
+| `lstm_nn` | LSTM | PyTorch, 2 layers, hidden=64, seq=60 |
+| `gru_nn` | GRU | PyTorch, 2 layers, hidden=64, seq=60 |
+| `arima_garch` | ARIMA-GARCH | statsmodels ARIMA(2,1,2) + arch GARCH(1,1) |
+| `egarch` | EGARCH | arch EGARCH(1,1,1) with HARX mean |
+| `sarima` | SARIMA | statsmodels SARIMA(1,1,1)(1,0,1,5) |
+| `lightgbm` | LightGBM | ~30 features; Optuna (30 trials, 120s timeout) |
+| `xgboost` | XGBoost | ~30 features; Optuna (30 trials, 120s timeout) |
+| `random_forest` | Random Forest | n_estimators=200, max_depth=8 |
+| `ensemble` | Ensemble | Equal-weight average of 10 base models |
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Auth Service | Java 21, Spring Boot 3, gRPC, Flyway, bcrypt |
+| API Backend | Go 1.23+, net/http, gRPC, GORM v2, ZeroLog, shopspring/decimal |
+| Prediction Service | Python 3.12, PyTorch, statsmodels, LightGBM, XGBoost, scikit-learn, APScheduler, SQLAlchemy |
+| Frontend | React, TypeScript, Vite |
+| Database | MySQL 8.0 |
+| Proxy | Nginx |
+
+## Timezone
+
+All `datetime` columns in the DB store ICT (Asia/Ho_Chi_Minh, UTC+7) wallclock time — not UTC.
+
+- **Python:** use `datetime.now()` only (container has `TZ=Asia/Ho_Chi_Minh`). Never `datetime.utcnow()`.
+- **Go:** DSN has `loc=Asia%2FHo_Chi_Minh`; `time.Local = Asia/Ho_Chi_Minh` set at startup.
+- **Java Auth Service:** configure JVM timezone to `Asia/Ho_Chi_Minh` for consistency.

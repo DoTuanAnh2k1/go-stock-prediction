@@ -4,8 +4,9 @@
 
 Hệ thống dự đoán giá tài sản tài chính. Thu thập dữ liệu từ 4 nguồn (Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, S&P 500), chạy 11 thuật toán ML (Moving Average, EMA/MACD, LSTM PyTorch, GRU PyTorch, ARIMA-GARCH, EGARCH, SARIMA, LightGBM, XGBoost, Random Forest, Ensemble), và hiển thị kết quả qua web dashboard.
 
-**Kiến trúc hiện tại: microservice (2 service + nginx)**
-- **API Backend** (`api/cmd`) — Go HTTP trên `:8118`, phục vụ toàn bộ `/api/*`. Gọi Prediction Service qua gRPC để trigger crawler/training; đọc DB trực tiếp cho các query dữ liệu.
+**Kiến trúc hiện tại: microservice (3 service + supporting)**
+- **API Backend** (`api/cmd`) — Go HTTP trên `:8118`, phục vụ toàn bộ `/api/*`. Là thin proxy cho auth: validate JWT locally (shared JWT_SECRET), forward tất cả auth/user/market-group calls sang Java Auth Service qua gRPC. Gọi Prediction Service qua gRPC để trigger crawler/training; đọc DB trực tiếp cho các query dữ liệu. Market endpoints yêu cầu `AuthRequired + MarketRequired("KEY")`; trigger endpoints yêu cầu `AdminRequired`.
+- **Auth Service** (`auth-service/`) — **Java** Spring Boot 3, gRPC trên `:8120` (internal). Xử lý toàn bộ auth/RBAC: login, JWT generation (HMAC256), user CRUD, market groups, bcrypt, Flyway migrations (3 bảng mới: `market_groups`, `market_group_markets`, `user_market_groups`). Seeds `chon/super_admin` on startup. Ba roles: `super_admin` (toàn quyền), `admin` (quản lý user và groups), `user` (chỉ access markets được gán).
 - **Prediction Service** (`prediction/`) — **Python** gRPC trên `:8119`. Xử lý crawling (Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, S&P 500), 11 thuật toán ML, training, APScheduler cron jobs.
 - **Nginx** — Reverse proxy trên `:80`, forward tất cả request về API Backend.
 
@@ -16,7 +17,7 @@ Hệ thống dự đoán giá tài sản tài chính. Thu thập dữ liệu t�
 # Build API Backend (Go) — chạy từ trong thư mục api/
 cd api && go build -o api-server ./cmd
 
-# Start tất cả services (DB + Python Prediction + API + Nginx + Frontend + phpMyAdmin)
+# Start tất cả services (DB + Java Auth + Python Prediction + API + Nginx + Frontend + phpMyAdmin)
 docker-compose up -d
 
 # Import schema
@@ -24,6 +25,7 @@ mysql -u root -p go_stock_prediction < database.sql
 
 # Regenerate proto Go stubs (cần protoc + plugins) — chạy từ thư mục api/
 cd api && protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/prediction/prediction.proto
+cd api && protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/auth/auth.proto
 
 # Regenerate proto Python stubs (chạy trong Docker hoặc local với grpcio-tools)
 cd prediction
@@ -46,8 +48,11 @@ docker exec prediction_service python -m pytest tests/ -v
 api/cmd/main.go                         # API Backend entry point — config → timezone → logger → repository → grpcclient → server
 api/pkg/config/                         # Load .env, trả về config struct toàn cục (bao gồm GRPCConfig)
 api/pkg/grpc/client/client.go           # gRPC client singleton — API Backend dùng để gọi Python Prediction Service
+api/pkg/grpc/authclient/client.go       # gRPC client singleton — API Backend dùng để gọi Java Auth Service
 api/proto/prediction/prediction.proto   # gRPC service definitions (shared với Python service)
 api/proto/prediction/*.pb.go            # Generated Go protobuf stubs (không sửa tay)
+api/proto/auth/auth.proto               # gRPC service definitions cho Auth Service (16 RPCs)
+api/proto/auth/*.pb.go                  # Generated Go protobuf stubs cho auth (không sửa tay)
 api/docs/swagger.json                   # Generated Swagger spec (không sửa tay — chạy swag init)
 api/docs/swagger.yaml                   # Generated Swagger YAML spec
 api/docs/docs.go                        # Generated Go package cho swagger
@@ -79,13 +84,14 @@ api/pkg/server/api_trigger_nasdaq_crawler.go  # POST /api/trigger/nasdaq-crawler
 api/pkg/server/api_trigger_crypto_crawler.go  # POST /api/trigger/crypto-crawler, POST /api/trigger/crypto-predict (→ gRPC)
 api/pkg/server/api_trigger_sp500.go          # POST /api/trigger/sp500-crawler (→ gRPC TriggerSP500Crawler), POST /api/trigger/sp500-predict (→ gRPC TriggerSP500Predict)
 api/pkg/server/api_trigger_simulation.go     # POST /api/trigger/simulation-backtest, POST /api/trigger/simulation-live-step, POST /api/trigger/sim-reset (→ gRPC)
-api/pkg/server/api_auth.go                  # POST /api/auth/login (DB + bcrypt), GET /api/auth/me — JWT authentication
-api/pkg/server/api_users.go                 # GET/POST /api/users, DELETE /api/users/{id} — quản lý user (admin only)
+api/pkg/server/api_auth.go                  # POST /api/auth/login, GET /api/auth/me, PUT /api/auth/password — forward sang Java Auth Service qua gRPC
+api/pkg/server/api_users.go                 # GET/POST /api/users, DELETE /api/users/{id} — quản lý user (admin only); forward sang Java Auth Service
+api/pkg/server/api_market_groups.go         # CRUD /api/market-groups — quản lý market groups (admin only); forward sang Java Auth Service qua gRPC
 api/pkg/server/api_schedules.go             # GET /api/schedules, PUT /api/schedules/{key} — quản lý lịch cron động
 api/pkg/server/api_backup.go                # GET /api/backups, POST /api/trigger/backup, GET/DELETE /api/backups/{filename}
 api/pkg/server/api_simulation.go            # GET /api/simulation/leaderboard, bots, trades, chart; PUT config; POST toggle/run
 api/pkg/server/api_monitoring.go            # GET /api/monitoring/overview — monitoring overview: crawl freshness, prediction activity per algo per market, bot win/loss (JWT required, cache 30s)
-api/pkg/server/middleware_jwt.go            # JWTMiddleware (non-blocking, inject claims vào context), getClaims(), requireAuth(), requireAdmin(), AuthRequired()
+api/pkg/server/middleware_jwt.go            # JWTMiddleware (non-blocking, inject claims vào context), getClaims(), requireAuth(), requireAdmin(), AuthRequired(), MarketRequired("KEY"), AdminRequired()
 api/pkg/server/helper.go                    # requireGRPCClient(), ResponseError(), ResponseSuccess() và các helper
 api/pkg/service/predict/registry/registry.go   # AlgorithmDef struct (metadata only — không có Factory), Register(), All()
 api/pkg/service/predict/registry/algorithms.go # FILE DUY NHẤT cần sửa khi thêm/bỏ thuật toán trong metadata registry
@@ -111,11 +117,12 @@ api/pkg/models/models_api/monitoring_dto.go # MarketCrawlStats (LastDailyAt, Las
 api/pkg/models/models_config/config.go      # Config struct — bao gồm GRPCConfig (ServerPort, ClientTarget) và ServerConfig (AdminUsername, AdminPassword, JWTSecret)
 api/pkg/utils/cron/                         # Hằng số cron schedule + wrapper (dùng làm giá trị mặc định khi seed DB)
 api/pkg/testutil/                           # Test helpers (db, fixtures, http)
-frontend/src/context/AuthContext.tsx    # AuthProvider + useAuth hook — quản lý JWT trong localStorage
+frontend/src/context/AuthContext.tsx    # AuthProvider + useAuth hook — quản lý JWT trong localStorage; decode JWT để extract `accessible_markets`, expose `canAccessMarket(key)`
 frontend/src/context/LangContext.tsx    # LangProvider + useLanguage hook — VI/EN toggle, state lưu localStorage (vns_lang)
 frontend/src/i18n.ts                    # Bảng dịch VI/EN cho toàn bộ UI shell (nav, topbar, sidebar, tweaks)
 frontend/src/components/LoginModal.tsx  # Login modal component — gọi POST /api/auth/login
-frontend/src/pages/Users.tsx            # Trang quản lý user — chỉ hiển thị với role admin
+frontend/src/pages/Users.tsx            # Trang quản lý user — chỉ hiển thị với role admin; role badges, disable delete cho super_admin
+frontend/src/pages/MarketGroups.tsx     # Trang quản lý market groups — chỉ hiển thị với role admin; route /admin/market-groups
 frontend/src/pages/Monitoring.tsx       # Trang Data Pipeline — gọi GET /api/monitoring/overview; hiển thị 4 market cards (crawl freshness, per-algo prediction stats) + bots summary table + bots full table (sortable); route /monitoring, sidebar "Giám sát dữ liệu" (VI) / "Data Pipeline" (EN)
 ```
 
@@ -176,6 +183,19 @@ prediction/
         └── prediction_pb2*.py          # Generated Python stubs (không sửa tay — tái sinh trong Dockerfile stage 1)
 ```
 
+### Java Auth Service
+
+```
+auth-service/                           # Spring Boot 3 Java Auth Service — gRPC :8120 (internal)
+├── Dockerfile                          # Docker build cho Auth Service (Java 21)
+├── src/main/java/
+│   └── ...                             # gRPC server (AuthGrpcServiceImpl), entities (User, MarketGroup, ...),
+│                                       # Flyway migrations (V1-V3: users, market_groups, market_group_markets, user_market_groups),
+│                                       # SuperAdminSeeder (tạo chon/super_admin khi startup), MarketGroupService, AuthGrpcServiceImpl (16 RPCs)
+└── src/main/resources/
+    └── db/migration/                   # Flyway SQL migrations (3 bảng RBAC mới)
+```
+
 ## Luồng khởi động
 
 ### API Backend (api/cmd/main.go) — Go
@@ -184,10 +204,12 @@ prediction/
 2. Set timezone — `Asia/Ho_Chi_Minh`
 3. `logger.Init()` — Khởi tạo ZeroLog
 4. `repository.Init()` — Kết nối MySQL (shared DB, dùng cho read queries)
-5. `seedAdminUser()` — Tạo admin user từ env vars nếu chưa có admin nào trong DB
+5. `authclient.Init(config.GetAuthGRPCTarget())` — Kết nối tới Java Auth Service (gRPC :8120)
 6. `grpcclient.Init(config.GetGRPCConfig().ClientTarget)` — Kết nối tới Python Prediction Service
 7. `server.StartHTTPServer()` — HTTP server trên `:8118` (goroutine)
-8. Chờ SIGTERM/SIGINT → `grpcclient.Close()` → shutdown
+8. Chờ SIGTERM/SIGINT → `grpcclient.Close()` + `authclient.Close()` → shutdown
+
+**Lưu ý:** Bước seed admin user đã chuyển sang Java Auth Service (SuperAdminSeeder) — Go API Backend không còn seed user.
 
 ### Prediction Service (prediction/src/main.py) — Python
 
@@ -209,6 +231,7 @@ SERVER_PORT=8118
 # gRPC
 GRPC_SERVER_PORT=8119          # Port Prediction Service lắng nghe
 GRPC_TARGET=localhost:8119     # Địa chỉ API Backend dùng để kết nối Prediction Service (Docker: prediction:8119)
+AUTH_GRPC_TARGET=localhost:8120  # Địa chỉ API Backend dùng để kết nối Java Auth Service (Docker: auth:8120)
 
 # Auth
 API_KEY=                       # Optional — hiện tại không được dùng để bảo vệ trigger endpoints (đã chuyển sang JWT)
@@ -244,13 +267,18 @@ BACKUP_DIR=/backups              # Thư mục lưu file backup mysqldump (mount 
 - **Market-aware clamp:** Tất cả algorithms dùng `get_max_change_pct(self._market_key)` từ `base.py` để giới hạn thay đổi giá dự đoán. Giới hạn theo market: GOLD/SP500 ±15%, NASDAQ100 ±20%, CRYPTO ±50%. Registry set `_market_key` trên instance trước khi gọi `predict()`. Market key không xác định dùng `DEFAULT_MAX_CHANGE = 0.15`.
 - **Direction accuracy:** Sau khi reconcile, trường `direction_correct` (nullable boolean) được lưu vào 4 prediction tables (`gold_predictions`, `nasdaq_predictions`, `sp500_predictions`, `crypto_predictions`). Giá trị `True` khi hướng dự đoán (tăng/giảm so với giá hiện tại) khớp với hướng thực tế; `NULL` khi chưa có giá thực tế. Query tổng hợp qua `DirectionAccuracyStore` (Go) hoặc `get_direction_accuracy()` (Python repository).
 - **Logging:** Go API Backend dùng `api/pkg/logger` (zerolog). Python service dùng `structlog`.
-- **gRPC triggers:** Tất cả trigger handler trong `api/pkg/server/api_trigger_*.go` đều gọi `requireGRPCClient(w)` trước. Hàm này trả về 503 nếu gRPC client chưa init. Tất cả trigger endpoints được wrap bằng `AuthRequired()` trong router — yêu cầu JWT hợp lệ.
+- **gRPC triggers:** Tất cả trigger handler trong `api/pkg/server/api_trigger_*.go` đều gọi `requireGRPCClient(w)` trước. Hàm này trả về 503 nếu gRPC client chưa init. Tất cả trigger endpoints được wrap bằng `AdminRequired()` trong router — yêu cầu JWT với role `admin` hoặc `super_admin`.
 - **Dynamic cron schedules:** Lịch cron được lưu trong bảng `cron_schedules`. Python Prediction Service poll DB mỗi 60 giây để phát hiện thay đổi và tự reschedule qua APScheduler — không cần restart. Nguồn sự thật là `DEFAULT_SCHEDULES` trong `prediction/src/scheduler/manager.py`; mỗi lần Python service khởi động, `upsert_cron_schedule()` chạy true upsert — ghi đè DB nếu giá trị code khác. Go `seedCronSchedules()` chỉ insert-if-not-exists (không update). Dùng `CronScheduleStore` interface (Go) để truy cập từ API Backend.
 - **Proto regeneration:** Khi thay đổi `api/proto/prediction/prediction.proto`, cần tái sinh cả Go stubs (`protoc` chạy từ `api/`) lẫn Python stubs (lệnh `grpc_tools.protoc` trong Dockerfile stage 1). Không sửa tay các file generated.
 - **Data ordering — QUAN TRỌNG:** DB trả `stock_prices` với `ORDER BY trading_date DESC` (mới nhất trước). Python algorithms cần đảo ngược về ASC trước khi build feature sequences. Repository (Python) trả DESC — tầng algorithm tự xử lý (tương tự pattern Go cũ với `reverseStockPrices()`).
 - **JWT middleware — non-blocking:** `JWTMiddleware` trong `api/pkg/server/middleware_jwt.go` nằm trong middleware chain `CORS → RateLimit → JWT → mux`. Middleware này chỉ inject claims vào context nếu token hợp lệ — request không có token vẫn tiếp tục (unauthenticated). Các handler bảo vệ dùng `requireAuth(w, r)` hoặc `requireAdmin(w, r)` để enforce.
-- **Admin seeder:** Khi startup, `seedAdminUser()` trong `api/cmd/main.go` kiểm tra `AdminExists()`. Nếu chưa có user nào với `role="admin"`, tạo một user mới từ `ADMIN_USERNAME`/`ADMIN_PASSWORD` env vars với bcrypt hash. Chạy một lần duy nhất — các lần sau bỏ qua nếu admin đã tồn tại.
-- **User management:** `ADMIN_USERNAME`/`ADMIN_PASSWORD` trong `.env` chỉ dùng để seed lần đầu. Sau đó quản lý user hoàn toàn qua API `/api/users` (admin JWT required). Password lưu dưới dạng bcrypt hash — không lưu plaintext.
+- **Java Auth Service — nguồn sự thật RBAC:** Java Auth Service (`auth-service/`) sở hữu toàn bộ auth logic và user table. Flyway quản lý 3 bảng RBAC mới: `market_groups`, `market_group_markets`, `user_market_groups`. Go API Backend chỉ là thin proxy — forward auth/user/market-group requests sang Java qua gRPC, validate JWT locally bằng shared `JWT_SECRET`.
+- **Super Admin seeder:** Java Auth Service seeds `chon/super_admin` khi startup (SuperAdminSeeder) nếu chưa tồn tại. Go API Backend không còn seed admin user.
+- **Ba roles RBAC:** `super_admin` — toàn quyền, access tất cả 4 markets, không bị admin quản lý; `admin` — quản lý users và market groups, access markets theo groups của họ; `user` — chỉ access markets được gán qua market groups.
+- **JWT claims `accessible_markets`:** JWT do Java Auth Service cấp chứa claim `accessible_markets: string[]` (ví dụ: `["GOLD","NASDAQ"]`). Go API Backend đọc claim này trong `MarketRequired("KEY")` middleware để enforce market-level access control. `super_admin` luôn có access tất cả markets.
+- **`MarketRequired("KEY")` middleware:** Wrap market-specific endpoints trong router. Kiểm tra `accessible_markets` trong JWT claims — trả 403 nếu user không có quyền access market đó.
+- **`AdminRequired()` middleware:** Wrap trigger endpoints và admin-only endpoints. Kiểm tra role là `admin` hoặc `super_admin` — trả 403 nếu không đủ quyền.
+- **User management:** Quản lý user hoàn toàn qua Java Auth Service (thông qua Go API proxy tại `/api/users`). Password lưu dưới dạng bcrypt hash trong Java Auth Service — không lưu plaintext. `super_admin` không thể bị xóa.
 - **Swagger annotations:** Mỗi handler function trong `api/pkg/server/api_*.go` có swaggo annotations (`@Summary`, `@Tags`, `@Param`, `@Success`, `@Router`). Khi thêm handler mới, phải thêm annotations. Sau khi thêm/sửa annotations, chạy `cd api && swag init -g cmd/main.go -o docs/` để regenerate. Không sửa tay files trong `api/docs/`.
 - **Shared feature builder (Python):** `prediction/src/algorithms/features.py` cung cấp hai hàm dùng chung cho LightGBM, XGBoost, RandomForest: `build_basic_features()` (14 features: lag returns 1-10, RSI, MA5/20 ratios, vol ratio) và `build_enhanced_features()` (~30 features: lag returns 1-10, MA5/10/20/50 ratios, multi-timeframe returns 5/10/20d, RSI, StochRSI %K/%D, Bollinger %B, MACD line/hist normalized, rolling volatility 5/10/20d, ROC(10), momentum 5/10, volume ratio). Khi `pandas-ta` có sẵn thì dùng pandas-ta; nếu không dùng numpy-only fallback hoàn toàn tương đương. Minimum data: `MIN_DATA_POINTS = 80`.
 - **Optuna hyperparameter tuning:** LightGBM và XGBoost chạy Optuna Bayesian search khi data >= 200 points và optuna được cài (`[ml]` extras). Search tối đa 30 trials, timeout 120s; fallback về `_DEFAULT_PARAMS` nếu optuna không có hoặc data không đủ. Search space — LightGBM: learning_rate, num_leaves, min_data_in_leaf, n_estimators, subsample, colsample_bytree. XGBoost: n_estimators, learning_rate, max_depth, subsample, colsample_bytree, min_child_weight. RandomForest không dùng Optuna (fixed: n_estimators=200, max_depth=8, min_samples_leaf=5).
@@ -309,7 +337,8 @@ Các bước bắt buộc:
 ## Database
 
 - **ORM:** GORM v2
-- **Tables chính:** `sync_logs`, `gold_prices`, `gold_predictions`, `nasdaq_prices`, `nasdaq_predictions`, `sp500_prices`, `sp500_predictions`, `crypto_prices`, `crypto_predictions`, `training_logs`, `training_metrics`, `users`, `cron_schedules`
+- **Tables chính:** `sync_logs`, `gold_prices`, `gold_predictions`, `nasdaq_prices`, `nasdaq_predictions`, `sp500_prices`, `sp500_predictions`, `crypto_prices`, `crypto_predictions`, `training_logs`, `training_metrics`, `users`, `cron_schedules`, `market_groups`, `market_group_markets`, `user_market_groups`
+- **RBAC tables (3 bảng mới):** `market_groups`, `market_group_markets`, `user_market_groups` — quản lý bởi Java Auth Service qua Flyway (không trong GORM auto-migrate)
 - **Auto-migrate:** Chạy khi start app qua `api/pkg/models/models_db/migrations.go`
 - **Schema đầy đủ:** `database.sql` ở root
 - **direction_correct (nullable boolean):** Có mặt trong tất cả 4 prediction tables. Được set bởi `reconcile_predictions()` trong Python; `NULL` = chưa reconcile, `1` = hướng đúng, `0` = hướng sai. Dùng cho endpoint `/api/predictions/direction-accuracy`.
@@ -358,6 +387,7 @@ Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`
 | Nginx | 80 | HTTP | Reverse proxy → API Backend |
 | API Backend | 8118 | HTTP | Toàn bộ `/api/*` endpoints; Swagger UI tại `http://localhost:8118/swagger/` |
 | Prediction Service | 8119 | gRPC | Internal only (không expose ra ngoài) |
+| Auth Service | 8120 | gRPC | Internal only — Java Spring Boot RBAC service |
 | MySQL | 3306 | TCP | Docker |
 | phpMyAdmin | 8081 | HTTP | Docker |
 | Frontend | 36018 | HTTP | React app (Docker) |
@@ -368,7 +398,8 @@ Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`
 |---------|-----------------|------------|---------|
 | `db` | `mysql:8.0` | — | Schema tự init từ `database.sql` |
 | `prediction` | `prediction/Dockerfile` | `db` (healthy) | **Python** Prediction Service — gRPC :8119 (internal); mount volume `backup_data:/backups` |
-| `api` | `api/Dockerfile` | `db` (healthy), `prediction` | Go API Backend — HTTP :8118 (internal) |
+| `auth` | `auth-service/Dockerfile` | `db` (healthy) | **Java** Spring Boot Auth Service — gRPC :8120 (internal); Flyway migrations, seeds super_admin |
+| `api` | `api/Dockerfile` | `db` (healthy), `prediction`, `auth` | Go API Backend — HTTP :8118 (internal) |
 | `nginx` | `nginx:alpine` | `api` | Reverse proxy — expose :80 |
 | `frontend` | `frontend/Dockerfile` | `api` | React app — expose :36018 |
 | `phpmyadmin` | `phpmyadmin/phpmyadmin` | `db` | Admin UI — expose :8081 |
@@ -379,8 +410,9 @@ Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`
 
 | Method | Path | Ghi chú |
 |--------|------|---------|
-| `POST` | `/api/auth/login` | Đăng nhập — body: `{"username":"","password":""}`, query DB + bcrypt verify, trả JWT 24h với claims `sub`, `role`, `user_id`; response: `{"token":"...","user":{"username":"...","role":"..."}}` |
+| `POST` | `/api/auth/login` | Đăng nhập — body: `{"username":"","password":""}`, forward sang Java Auth Service qua gRPC, trả JWT 24h với claims `sub`, `role`, `user_id`, `accessible_markets`; response: `{"token":"...","user":{"username":"...","role":"..."}}` |
 | `GET` | `/api/auth/me` | Xác minh token — header: `Authorization: Bearer <token>`, trả `{"username":"...","role":"..."}` hoặc 401 |
+| `PUT` | `/api/auth/password` | Đổi mật khẩu — yêu cầu JWT; body: `{"old_password":"","new_password":""}` |
 
 ### User Management
 
@@ -388,7 +420,21 @@ Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`
 |--------|------|---------|
 | `GET` | `/api/users` | Danh sách tất cả users — yêu cầu admin JWT; trả `[{"id":1,"username":"...","role":"...","created_at":"..."}]` |
 | `POST` | `/api/users` | Tạo user mới — yêu cầu admin JWT; body: `{"username":"","password":"","role":"user\|admin"}`; role mặc định `"user"` nếu không hợp lệ; trả 409 nếu username đã tồn tại |
-| `DELETE` | `/api/users/{id}` | Xóa user theo ID — yêu cầu admin JWT; trả 400 nếu tự xóa chính mình |
+| `DELETE` | `/api/users/{id}` | Xóa user theo ID — yêu cầu admin JWT; trả 400 nếu tự xóa chính mình hoặc xóa super_admin |
+| `GET` | `/api/users/{id}/market-groups` | Danh sách market groups của user — yêu cầu JWT |
+
+### Market Groups
+
+| Method | Path | Ghi chú |
+|--------|------|---------|
+| `GET` | `/api/market-groups` | Danh sách tất cả market groups — yêu cầu admin JWT |
+| `POST` | `/api/market-groups` | Tạo market group mới — yêu cầu admin JWT; body: `{"name":"...","description":"..."}` |
+| `PUT` | `/api/market-groups/{id}` | Cập nhật market group — yêu cầu admin JWT |
+| `DELETE` | `/api/market-groups/{id}` | Xóa market group — yêu cầu admin JWT |
+| `PUT` | `/api/market-groups/{id}/markets` | Set danh sách market keys cho group — yêu cầu admin JWT; body: `{"markets":["GOLD","NASDAQ","CRYPTO","SP500"]}` |
+| `GET` | `/api/market-groups/{id}/users` | Danh sách users trong group — yêu cầu admin JWT |
+| `POST` | `/api/market-groups/{id}/users` | Thêm user vào group — yêu cầu admin JWT; body: `{"user_id":123}` |
+| `DELETE` | `/api/market-groups/{id}/users/{uid}` | Xóa user khỏi group — yêu cầu admin JWT |
 
 ### Predictions
 
@@ -491,7 +537,7 @@ Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`
 
 ### Trigger
 
-Tất cả trigger endpoint đều yêu cầu JWT authentication (`Authorization: Bearer <token>`), được enforce qua `AuthRequired()` middleware wrapper trong router.
+Tất cả trigger endpoint đều yêu cầu JWT với role `admin` hoặc `super_admin` (`Authorization: Bearer <token>`), được enforce qua `AdminRequired()` middleware wrapper trong router.
 
 | Method | Path | Ghi chú |
 |--------|------|---------|
@@ -514,7 +560,7 @@ Tất cả trigger endpoint đều yêu cầu JWT authentication (`Authorization
 
 ## Trigger thủ công qua API
 
-Tất cả trigger endpoint đều gọi gRPC sang Prediction Service. Tất cả đều yêu cầu JWT (`Authorization: Bearer <token>`). Lấy token qua `POST /api/auth/login` trước.
+Tất cả trigger endpoint đều gọi gRPC sang Prediction Service. Tất cả đều yêu cầu JWT với role `admin` hoặc `super_admin` (`Authorization: Bearer <token>`). Lấy token qua `POST /api/auth/login` trước.
 
 ```bash
 # Lấy JWT token
