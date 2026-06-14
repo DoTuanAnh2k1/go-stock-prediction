@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS market_group_markets (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS user_market_groups (
-    user_id   BIGINT NOT NULL,
+    user_id   BIGINT UNSIGNED NOT NULL,
     group_id  BIGINT NOT NULL,
     PRIMARY KEY (user_id, group_id),
     CONSTRAINT fk_umg_user  FOREIGN KEY (user_id)
