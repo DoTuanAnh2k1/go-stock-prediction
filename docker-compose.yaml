@@ -49,6 +49,29 @@ services:
     networks:
       - app-network
 
+  # Auth Service (Java gRPC)
+  auth:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: auth_service
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: ${MYSQL_DB_NAME:-go_stock_prediction}
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      GRPC_PORT: "8120"
+    expose:
+      - "8120"
+    networks:
+      - app-network
+
   # API Backend (HTTP)
   api:
     build:
@@ -59,6 +82,8 @@ services:
       db:
         condition: service_healthy
       prediction:
+        condition: service_started
+      auth:
         condition: service_started
     restart: unless-stopped
     environment:
@@ -79,6 +104,7 @@ services:
       JWT_SECRET: "${JWT_SECRET}"
       BACKUP_DIR: "/backups"
       ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-https://localhost}"
+      AUTH_GRPC_TARGET: "auth:8120"
     volumes:
       - backup_data:/backups
     networks:
