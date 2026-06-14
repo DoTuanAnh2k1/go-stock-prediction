@@ -1,0 +1,136 @@
+syntax = "proto3";
+package auth;
+
+option java_package = "vn.gostock.auth.proto";
+option java_multiple_files = true;
+option go_package = "go-stock-prediction/proto/auth";
+
+service AuthService {
+  // Auth
+  rpc Login(LoginRequest)               returns (LoginResponse);
+  rpc GetMe(CallerMeta)                 returns (UserResponse);
+  rpc ChangePassword(ChangePassRequest) returns (Empty);
+
+  // User management
+  rpc ListUsers(CallerMeta)             returns (ListUsersResponse);
+  rpc CreateUser(CreateUserRequest)     returns (UserResponse);
+  rpc DeleteUser(DeleteUserRequest)     returns (Empty);
+  rpc UpdateUserRole(UpdateRoleRequest) returns (UserResponse);
+
+  // Market groups
+  rpc ListMarketGroups(CallerMeta)            returns (ListGroupsResponse);
+  rpc CreateMarketGroup(CreateGroupRequest)   returns (MarketGroupResponse);
+  rpc UpdateMarketGroup(UpdateGroupRequest)   returns (MarketGroupResponse);
+  rpc DeleteMarketGroup(DeleteGroupRequest)   returns (Empty);
+  rpc SetGroupMarkets(SetGroupMarketsRequest) returns (Empty);
+  rpc ListGroupUsers(GroupRequest)            returns (ListUsersResponse);
+  rpc AddUserToGroup(UserGroupRequest)        returns (Empty);
+  rpc RemoveUserFromGroup(UserGroupRequest)   returns (Empty);
+  rpc GetUserMarketGroups(UserRequest)        returns (ListGroupsResponse);
+}
+
+message CallerMeta {
+  int64  caller_id   = 1;
+  string caller_role = 2;
+}
+
+message Empty {}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  string token    = 1;
+  string username = 2;
+  string role     = 3;
+}
+
+message UserResponse {
+  int64  id         = 1;
+  string username   = 2;
+  string role       = 3;
+  string created_at = 4;
+}
+
+message ListUsersResponse {
+  repeated UserResponse users = 1;
+}
+
+message CreateUserRequest {
+  CallerMeta caller   = 1;
+  string     username = 2;
+  string     password = 3;
+  string     role     = 4;
+}
+
+message DeleteUserRequest {
+  CallerMeta caller    = 1;
+  int64      target_id = 2;
+}
+
+message UpdateRoleRequest {
+  CallerMeta caller    = 1;
+  int64      target_id = 2;
+  string     new_role  = 3;
+}
+
+message ChangePassRequest {
+  CallerMeta caller       = 1;
+  string     old_password = 2;
+  string     new_password = 3;
+}
+
+message MarketGroupResponse {
+  int64           id          = 1;
+  string          name        = 2;
+  string          description = 3;
+  repeated string market_keys = 4;
+  string          created_at  = 5;
+  string          updated_at  = 6;
+}
+
+message ListGroupsResponse {
+  repeated MarketGroupResponse groups = 1;
+}
+
+message CreateGroupRequest {
+  CallerMeta caller      = 1;
+  string     name        = 2;
+  string     description = 3;
+}
+
+message UpdateGroupRequest {
+  CallerMeta caller      = 1;
+  int64      group_id    = 2;
+  string     name        = 3;
+  string     description = 4;
+}
+
+message DeleteGroupRequest {
+  CallerMeta caller   = 1;
+  int64      group_id = 2;
+}
+
+message SetGroupMarketsRequest {
+  CallerMeta      caller      = 1;
+  int64           group_id    = 2;
+  repeated string market_keys = 3;
+}
+
+message GroupRequest {
+  CallerMeta caller   = 1;
+  int64      group_id = 2;
+}
+
+message UserGroupRequest {
+  CallerMeta caller   = 1;
+  int64      user_id  = 2;
+  int64      group_id = 3;
+}
+
+message UserRequest {
+  CallerMeta caller  = 1;
+  int64      user_id = 2;
+}
