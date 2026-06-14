@@ -3,13 +3,12 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"time"
 
-	"github.com/golang-jwt/jwt/v5"
-	"go-stock-prediction/pkg/config"
+	authclient "go-stock-prediction/pkg/grpc/authclient"
 	"go-stock-prediction/pkg/logger"
-	"go-stock-prediction/pkg/store/repository"
-	"golang.org/x/crypto/bcrypt"
+	authpb "go-stock-prediction/proto/auth"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type loginRequest struct {
@@ -30,7 +29,7 @@ type userInfo struct {
 // LoginHandler godoc
 //
 //	@Summary      Login
-//	@Description  Authenticate with username and password, returns a JWT valid for 24 hours
+//	@Description  Authenticate with username/password; returns JWT signed by Java Auth Service
 //	@Tags         Auth
 //	@Accept       json
 //	@Produce      json
@@ -38,7 +37,7 @@ type userInfo struct {
 //	@Success      200 {object} loginResponse
 //	@Failure      400 {object} ResponseFailure
 //	@Failure      401 {object} ResponseFailure
-//	@Failure      500 {object} ResponseFailure
+//	@Failure      503 {object} ResponseFailure
 //	@Router       /api/auth/login [post]
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
@@ -46,45 +45,36 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		ResponseError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-
-	store := repository.GetSingleton()
-	user, err := store.GetUserByUsername(req.Username)
-	if err != nil {
-		ResponseError(w, http.StatusUnauthorized, "invalid credentials")
+	client := authclient.GetClient()
+	if client == nil {
+		ResponseError(w, http.StatusServiceUnavailable, "auth service unavailable")
 		return
 	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		ResponseError(w, http.StatusUnauthorized, "invalid credentials")
-		return
-	}
-
-	cfg := config.GetServerConfig()
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":     user.Username,
-		"role":    user.Role,
-		"user_id": user.ID,
-		"iat":     time.Now().Unix(),
-		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+	resp, err := client.Login(r.Context(), &authpb.LoginRequest{
+		Username: req.Username,
+		Password: req.Password,
 	})
-
-	signed, err := token.SignedString([]byte(cfg.JWTSecret))
 	if err != nil {
-		logger.Logger.Errorf("Failed to sign JWT: %v", err)
-		ResponseError(w, http.StatusInternalServerError, "failed to generate token")
+		st, _ := status.FromError(err)
+		switch st.Code() {
+		case codes.Unauthenticated:
+			ResponseError(w, http.StatusUnauthorized, "invalid credentials")
+		default:
+			logger.Logger.Errorf("authclient.Login error: %v", err)
+			ResponseError(w, http.StatusInternalServerError, "auth service error")
+		}
 		return
 	}
-
 	ResponseSuccess(w, http.StatusOK, loginResponse{
-		Token: signed,
-		User:  userInfo{Username: user.Username, Role: user.Role},
+		Token: resp.Token,
+		User:  userInfo{Username: resp.Username, Role: resp.Role},
 	})
 }
 
 // MeHandler godoc
 //
 //	@Summary      Get current user
-//	@Description  Returns the authenticated user's username and role based on the JWT token
+//	@Description  Returns username and role from JWT claims (no DB call)
 //	@Tags         Auth
 //	@Produce      json
 //	@Security     BearerAuth
@@ -96,7 +86,11 @@ func MeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	claims := getClaims(r)
-	username, _ := claims["sub"].(string)
+	username, _ := claims["username"].(string)
+	if username == "" {
+		// fallback: some tokens use "sub" for username
+		username, _ = claims["sub"].(string)
+	}
 	role, _ := claims["role"].(string)
 	ResponseSuccess(w, http.StatusOK, userInfo{Username: username, Role: role})
 }
@@ -109,7 +103,7 @@ type changePasswordRequest struct {
 // ChangePasswordHandler godoc
 //
 //	@Summary      Change password
-//	@Description  Changes the authenticated user's password; requires the current password for verification
+//	@Description  Proxies to Java Auth Service — validates current password before updating
 //	@Tags         Auth
 //	@Accept       json
 //	@Produce      json
@@ -118,51 +112,40 @@ type changePasswordRequest struct {
 //	@Success      200 {object} map[string]string
 //	@Failure      400 {object} ResponseFailure
 //	@Failure      401 {object} ResponseFailure
-//	@Failure      404 {object} ResponseFailure
-//	@Failure      500 {object} ResponseFailure
+//	@Failure      503 {object} ResponseFailure
 //	@Router       /api/auth/password [put]
 func ChangePasswordHandler(w http.ResponseWriter, r *http.Request) {
 	if !requireAuth(w, r) {
 		return
 	}
-
 	var req changePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		ResponseError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if len(req.NewPassword) < 12 {
-		ResponseError(w, http.StatusBadRequest, "new password must be at least 12 characters")
+	client := authclient.GetClient()
+	if client == nil {
+		ResponseError(w, http.StatusServiceUnavailable, "auth service unavailable")
 		return
 	}
-
 	claims := getClaims(r)
-	userIDFloat, _ := claims["user_id"].(float64)
-	userID := uint(userIDFloat)
-
-	store := repository.GetSingleton()
-	user, err := store.GetUserByID(userID)
+	_, err := client.ChangePassword(r.Context(), &authpb.ChangePassRequest{
+		Caller:      callerFromClaims(claims),
+		OldPassword: req.CurrentPassword,
+		NewPassword: req.NewPassword,
+	})
 	if err != nil {
-		ResponseError(w, http.StatusNotFound, "user not found")
+		st, _ := status.FromError(err)
+		switch st.Code() {
+		case codes.Unauthenticated:
+			ResponseError(w, http.StatusUnauthorized, "current password is incorrect")
+		case codes.InvalidArgument:
+			ResponseError(w, http.StatusBadRequest, st.Message())
+		default:
+			logger.Logger.Errorf("authclient.ChangePassword error: %v", err)
+			ResponseError(w, http.StatusInternalServerError, "auth service error")
+		}
 		return
 	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)); err != nil {
-		ResponseError(w, http.StatusUnauthorized, "current password is incorrect")
-		return
-	}
-
-	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 12)
-	if err != nil {
-		logger.Logger.Errorf("bcrypt error: %v", err)
-		ResponseError(w, http.StatusInternalServerError, "failed to hash password")
-		return
-	}
-
-	if err := store.UpdateUserPassword(userID, string(newHash)); err != nil {
-		ResponseError(w, http.StatusInternalServerError, "failed to update password")
-		return
-	}
-
 	ResponseSuccess(w, http.StatusOK, map[string]string{"message": "password updated successfully"})
 }
