@@ -18,6 +18,7 @@ import MarketPredictions from './pages/MarketPredictions';
 import MarketTraining from './pages/MarketTraining';
 import MarketDetail from './pages/MarketDetail';
 import Users from './pages/Users';
+import MarketGroups from './pages/MarketGroups';
 import Settings from './pages/Settings';
 import Simulation from './pages/Simulation';
 import SimulationBot from './pages/SimulationBot';
@@ -104,6 +105,7 @@ function AppInner() {
 
             {/* ── Admin ────────────────────────────────────────── */}
             <Route path="/admin/users" element={<ErrorBoundary><Users /></ErrorBoundary>} />
+            <Route path="/admin/market-groups" element={<ErrorBoundary><MarketGroups /></ErrorBoundary>} />
 
             {/* ── Legacy redirects (keep bookmarks working) ────── */}
             <Route path="/gold" element={<Navigate to="/markets/gold" replace />} />
