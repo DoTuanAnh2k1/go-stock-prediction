@@ -6,15 +6,21 @@ use axum::{
     response::Response,
 };
 use governor::{DefaultKeyedRateLimiter, Quota, RateLimiter};
-use std::{net::SocketAddr, num::NonZeroU32, sync::Arc};
+use std::{net::SocketAddr, num::NonZeroU32, sync::Arc, time::Duration};
+use tracing::warn;
 
 use crate::config::RateLimitConfig;
 
 /// Shared keyed rate limiter, indexed by client IP.
+/// Note: governor's DefaultKeyedRateLimiter does not evict stale keys. At the traffic
+/// scale of this project this is an accepted trade-off; add moka or retain_recent()
+/// if unique-IP churn becomes a concern.
 type IpRateLimiter = Arc<DefaultKeyedRateLimiter<std::net::IpAddr>>;
 
-/// Build a per-IP rate limiter from config and return an axum layer.
-/// When `cfg.enabled` is false the router is returned unchanged.
+/// Wraps `router` with a per-IP GCRA rate limiter when `cfg.enabled = true`.
+/// `max_requests` tokens are allowed per `window_secs` seconds; burst is capped at
+/// `max_requests` (clients that were idle can fire up to that many requests at once).
+/// Returns the original router unchanged when disabled.
 pub fn apply_rate_limit(
     router: axum::Router,
     cfg: &RateLimitConfig,
@@ -22,9 +28,13 @@ pub fn apply_rate_limit(
     if !cfg.enabled {
         return router;
     }
-    let rps = NonZeroU32::new(cfg.max_requests.max(1))
-        .expect("max(1) ensures non-zero");
-    let quota = Quota::per_second(rps).allow_burst(rps);
+    let max = cfg.max_requests.max(1);
+    let burst = NonZeroU32::new(max).expect("max(1) ensures non-zero");
+    // Replenishment period: window_secs / max_requests (time per token).
+    let period_ms = (cfg.window_secs * 1000 / max as u64).max(1);
+    let quota = Quota::with_period(Duration::from_millis(period_ms))
+        .expect("period is non-zero")
+        .allow_burst(burst);
     let limiter: IpRateLimiter = Arc::new(RateLimiter::keyed(quota));
 
     router.layer(axum::middleware::from_fn_with_state(
@@ -38,22 +48,28 @@ async fn rate_limit_middleware(
     req: Request<Body>,
     next: Next,
 ) -> Response {
-    // Extract peer IP from ConnectInfo extension; fall back to allowing if absent.
     let ip = req
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
         .map(|ci| ci.0.ip());
 
-    if let Some(addr) = ip {
-        if limiter.check_key(&addr).is_err() {
-            return Response::builder()
-                .status(StatusCode::TOO_MANY_REQUESTS)
-                .body(Body::empty())
-                .unwrap();
+    match ip {
+        None => {
+            // ConnectInfo absent — server was not started with into_make_service_with_connect_info.
+            // Allow the request but warn so the misconfiguration is detectable.
+            warn!("rate_limit: ConnectInfo absent, skipping rate check — ensure into_make_service_with_connect_info is used");
+            next.run(req).await
+        }
+        Some(addr) => {
+            if limiter.check_key(&addr).is_err() {
+                return Response::builder()
+                    .status(StatusCode::TOO_MANY_REQUESTS)
+                    .body(Body::empty())
+                    .unwrap();
+            }
+            next.run(req).await
         }
     }
-
-    next.run(req).await
 }
 
 #[cfg(test)]
