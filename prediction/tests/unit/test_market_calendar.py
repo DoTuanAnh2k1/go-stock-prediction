@@ -18,9 +18,9 @@ from src.utils.market_calendar import (
 _ET = ZoneInfo("America/New_York")
 
 
-def _et(y, m, d, hour=12):
-    """Một datetime giữa trưa giờ US/Eastern (tránh nhập nhằng vùng biên)."""
-    return datetime(y, m, d, hour, tzinfo=_ET)
+def _et(y, m, d, hour=12, minute=0):
+    """Một datetime giờ US/Eastern (mặc định giữa trưa, tránh nhập nhằng vùng biên)."""
+    return datetime(y, m, d, hour, minute, tzinfo=_ET)
 
 
 # ---------------------------------------------------------------------------
@@ -120,3 +120,43 @@ def test_trading_day_helper():
     assert _is_us_trading_day(date(2025, 6, 13)) is True   # Thứ 6
     assert _is_us_trading_day(date(2025, 6, 14)) is False  # Thứ 7
     assert _is_us_trading_day(date(2025, 12, 25)) is False  # Christmas
+
+
+# ---------------------------------------------------------------------------
+# NYSE time-of-day window (9:00 AM – 8:00 PM ET)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("market", ["NASDAQ100", "SP500"])
+def test_nyse_closed_before_window(market):
+    # 7:00 AM ET — trước 9:00 AM, chưa trong window
+    assert is_market_open(market, _et(2025, 6, 13, 7)) is False
+    # 8:59 AM ET — sát giờ nhưng vẫn chưa vào
+    assert is_market_open(market, _et(2025, 6, 13, 8)) is False
+
+
+@pytest.mark.parametrize("market", ["NASDAQ100", "SP500"])
+def test_nyse_open_during_window(market):
+    # 9:00 AM ET — đúng giờ mở cửa window
+    assert is_market_open(market, _et(2025, 6, 13, 9)) is True
+    # 10:30 AM ET — giờ giao dịch
+    assert is_market_open(market, _et(2025, 6, 13, 10)) is True
+    # 4:30 PM ET — đúng giờ đóng window (inclusive boundary)
+    assert is_market_open(market, _et(2025, 6, 13, 16, 30)) is True
+
+
+@pytest.mark.parametrize("market", ["NASDAQ100", "SP500"])
+def test_nyse_closed_after_window(market):
+    # 4:31 PM ET — vừa qua window đóng cửa 4:30 PM
+    assert is_market_open(market, _et(2025, 6, 13, 16, 31)) is False
+    # 8:00 PM ET — sau after-hours, đóng
+    assert is_market_open(market, _et(2025, 6, 13, 20)) is False
+    # 8:01 PM ET — đêm, đóng
+    assert is_market_open(market, _et(2025, 6, 13, 20, 1)) is False
+    # 11:00 PM ET — đêm khuya, đóng
+    assert is_market_open(market, _et(2025, 6, 13, 23)) is False
+
+
+def test_gold_not_restricted_by_time():
+    # GOLD không bị giới hạn giờ — 3 AM ET weekday vẫn open
+    assert is_market_open("GOLD", _et(2025, 6, 13, 3)) is True
+    assert is_market_open("GOLD", _et(2025, 6, 13, 23)) is True

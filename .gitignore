@@ -56,3 +56,7 @@ __pycache__/
 /prediction-server
 _tz_backup/
 .codegraph/
+
+# Rust build artifacts
+gateway-svc/target/
+gateway-svc/.cargo/

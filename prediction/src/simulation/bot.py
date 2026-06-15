@@ -85,6 +85,8 @@ class TradingBot:
                     close_reason="signal",
                 )
                 if trade:
+                    trade.signal_strength = signal.signal_strength
+                    trade.confidence = signal.confidence
                     trades.append(trade)
             else:
                 trades.append(Trade(

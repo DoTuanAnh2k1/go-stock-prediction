@@ -7,11 +7,24 @@ theo ngày lễ NYSE. CRYPTO giao dịch 24/7 nên luôn True.
 Cơ sở thời gian dùng US/Eastern (đúng nghĩa "thị trường Mỹ có đang giao dịch
 không"). Không truy cập mạng, không phụ thuộc thư viện ngoài — ngày lễ NYSE được
 tính động cho mọi năm.
+
+is_market_open kiểm tra cả ngày lẫn giờ ET:
+- NYSE markets (NASDAQ/SP500): trading day + 9:00 AM – 4:30 PM ET
+  (9:00 AM: trước mở để crawl pre-open; 4:30 PM: 30 phút sau đóng cửa thực tế
+  4:00 PM ET, đủ thời gian lấy giá đóng cửa chính thức — tránh crawl/predict
+  lặp lại sau after-hours với data không đổi)
+  Tương đương 8:00 PM – 3:30 AM ICT ngày hôm sau.
+- GOLD: weekday only (no time restriction — commodity 24/5)
+- CRYPTO: luôn True
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
+
+# NYSE/NASDAQ session window (ET): pre-open đến 30 phút sau đóng cửa thực tế
+_NYSE_OPEN_ET = time(9, 0)
+_NYSE_CLOSE_ET = time(16, 30)
 
 # NASDAQ/SP500 đóng cuối tuần + ngày lễ NYSE.
 _NYSE_MARKETS = {"NASDAQ", "NASDAQ100", "SP500"}
@@ -22,28 +35,47 @@ _WEEKEND_ONLY_MARKETS = {"GOLD"}
 _US_EASTERN = ZoneInfo("America/New_York")
 
 
+def next_trading_day(from_date: date, market_key: str) -> date:
+    """Returns the next trading day strictly after from_date for the given market."""
+    key = (market_key or "").strip().upper()
+    d = from_date + timedelta(days=1)
+    if key in _NYSE_MARKETS:
+        while not _is_us_trading_day(d):
+            d += timedelta(days=1)
+    elif key in _WEEKEND_ONLY_MARKETS:
+        while d.weekday() >= 5:
+            d += timedelta(days=1)
+    return d
+
+
 def is_market_open(market_key: str, when: datetime | None = None) -> bool:
-    """True nếu market đang trong ngày giao dịch.
+    """True nếu market đang trong khung giờ giao dịch hợp lệ.
 
     CRYPTO (và mọi key không thuộc 2 nhóm trên) luôn True.
-    GOLD trả False vào Thứ 7, Chủ nhật.
-    NASDAQ/SP500 trả False vào Thứ 7, Chủ nhật và ngày lễ NYSE.
+    GOLD trả False vào Thứ 7, Chủ nhật (không giới hạn giờ).
+    NASDAQ/SP500 trả False khi: cuối tuần, ngày lễ NYSE,
+      hoặc ngoài khung 9:00 AM – 8:00 PM ET.
     """
     key = (market_key or "").strip().upper()
     if key not in _NYSE_MARKETS and key not in _WEEKEND_ONLY_MARKETS:
         return True
 
     moment = when or datetime.now()
-    # Quy đổi sang ngày US/Eastern. Nếu `moment` naive (TZ=Asia/Ho_Chi_Minh do
+    # Quy đổi sang US/Eastern. Nếu `moment` naive (TZ=Asia/Ho_Chi_Minh do
     # service set), gán tzinfo VN trước khi đổi sang ET.
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
-    et_date = moment.astimezone(_US_EASTERN).date()
+    et_moment = moment.astimezone(_US_EASTERN)
+    et_date = et_moment.date()
 
     if key in _WEEKEND_ONLY_MARKETS:
-        return et_date.weekday() < 5  # Thứ 2–6
+        return et_date.weekday() < 5  # Thứ 2–6, không giới hạn giờ
 
-    return _is_us_trading_day(et_date)
+    # NYSE: phải là ngày giao dịch VÀ trong khung giờ 9AM–8PM ET
+    if not _is_us_trading_day(et_date):
+        return False
+    et_time = et_moment.time()
+    return _NYSE_OPEN_ET <= et_time <= _NYSE_CLOSE_ET
 
 
 def _is_us_trading_day(d: date) -> bool:

@@ -299,6 +299,12 @@ DB_LOG_LEVEL=DEBUG
 BACKUP_DIR=/backups              # Thư mục lưu file backup mysqldump (mount vào cả api và prediction containers)
 ```
 
+## Công cụ khám phá code (cho AI assistant)
+
+- **Codegraph trước tiên:** Luôn dùng `codegraph_explore` làm tool ĐẦU TIÊN cho mọi câu hỏi về code (how does X work, where is X, architecture, call flow). Nó đã index sẵn toàn bộ codebase — nhanh hơn và đầy đủ hơn grep/Read.
+- **Phân tích symbol:** `codegraph_search` (tìm theo tên) → `codegraph_callers` / `codegraph_callees` (ai gọi ai) → `codegraph_impact` (impact analysis khi sửa).
+- **grep/Read:** Chỉ dùng khi codegraph không cover đủ chi tiết (ví dụ: đọc toàn bộ file dài, xem nội dung cụ thể mà codegraph đã trim).
+
 ## Conventions trong codebase
 
 - **Repository pattern (Go):** Mọi truy cập DB từ API Backend phải qua interface `DatabaseStore` trong `api/pkg/store/repository/`. Không gọi GORM trực tiếp từ service layer.

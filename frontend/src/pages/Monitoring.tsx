@@ -102,7 +102,16 @@ function MarketCard({ market }: { market: MonitoringMarket }) {
               >
                 {crawl.staleness || m.never}
               </span>
-              {crawl.stale && (
+              {!crawl.market_open && (
+                <span style={{
+                  fontSize: 11, padding: '1px 7px',
+                  background: 'var(--text-3)', color: 'var(--bg)',
+                  opacity: 0.75,
+                }}>
+                  {m.marketClosed}
+                </span>
+              )}
+              {crawl.stale && crawl.market_open && (
                 <span style={{
                   fontSize: 11, padding: '1px 7px',
                   background: 'var(--down-bg)', color: 'var(--down)',

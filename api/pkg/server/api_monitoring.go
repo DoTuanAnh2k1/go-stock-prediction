@@ -12,16 +12,18 @@ import (
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 	"go-stock-prediction/pkg/service/predict/registry"
 	"go-stock-prediction/pkg/store/repository"
+	market_calendar "go-stock-prediction/pkg/utils/market_calendar"
 )
 
 // ─── Response DTOs ────────────────────────────────────────────────────────────
 
 type monitoringCrawl struct {
-	LastCrawlAt  *string `json:"last_crawl_at"`  // RFC3339 or null
-	Staleness    string  `json:"staleness"`       // "35m ago" | "2h ago" | "never"
-	Stale        bool    `json:"stale"`
-	DailyToday   int64   `json:"daily_today"`
-	IntradayToday int64  `json:"intraday_today"`
+	LastCrawlAt   *string `json:"last_crawl_at"`  // RFC3339 or null
+	Staleness     string  `json:"staleness"`       // "35m ago" | "2h ago" | "never"
+	Stale         bool    `json:"stale"`
+	MarketOpen    bool    `json:"market_open"`     // true if market is currently in a trading session (ET-based)
+	DailyToday    int64   `json:"daily_today"`
+	IntradayToday int64   `json:"intraday_today"`
 }
 
 type monitoringAlgoStat struct {
@@ -165,6 +167,7 @@ func buildMarketOverview(
 			LastCrawlAt:   rfc3339OrNil(lastCrawl),
 			Staleness:     staleness,
 			Stale:         stale,
+			MarketOpen:    market_calendar.IsMarketOpenNow(market),
 			DailyToday:    crawlStats.DailyToday,
 			IntradayToday: crawlStats.IntradayToday,
 		}
@@ -306,10 +309,18 @@ func buildBotSection(store repository.DatabaseStore) monitoringBots {
 						pnl, _ = t.PnL.Float64()
 					}
 					stats.totalPnl += pnl
+					// Dùng pnl_pct (4 decimal places) để phân loại W/L/BE —
+					// tránh pnl tuyệt đối bị làm tròn thành $0.00 khi gain rất nhỏ.
+					var classify float64
+					if t.PnLPct != nil {
+						classify, _ = t.PnLPct.Float64()
+					} else {
+						classify = pnl
+					}
 					switch {
-					case pnl > 0:
+					case classify > 0:
 						stats.wins++
-					case pnl < 0:
+					case classify < 0:
 						stats.losses++
 					default:
 						stats.breakeven++

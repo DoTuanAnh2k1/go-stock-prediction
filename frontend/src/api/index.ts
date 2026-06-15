@@ -333,6 +333,7 @@ const GOLD_SRC: Record<string, string> = { BTMC: 'BTMC', BTMH: 'BTMH', SJC: 'SJC
 const GOLD_PROD: Record<string, string> = { sjc: 'Miếng', nhan_tron: 'Nhẫn Tròn', spot: '' };
 
 function buildGold(latest: any): GoldSource[] | null {
+  if (!latest) return null;
   const list = arr<any>(latest.data);
   if (!list.length) return null;
   return list.map((g: any) => {
@@ -349,6 +350,7 @@ function buildGold(latest: any): GoldSource[] | null {
 }
 
 function buildGoldPreds(res: any): GoldPred[] | null {
+  if (!res) return null;
   const list = arr<any>(res.data || res);
   if (!list.length) return null;
   return list.map((p: any) => {
@@ -369,6 +371,7 @@ function buildGoldPreds(res: any): GoldPred[] | null {
 }
 
 function buildGoldPredActual(res: any): GoldPredActual | null {
+  if (!res) return null;
   const list = arr<any>(res.data || res);
   if (!list.length) return null;
   return {
@@ -601,6 +604,7 @@ export interface MonitoringCrawl {
   last_crawl_at: string | null;
   staleness: string;
   stale: boolean;
+  market_open: boolean;
   daily_today: number;
   intraday_today: number;
 }

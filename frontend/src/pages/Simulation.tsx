@@ -87,8 +87,8 @@ function fmtCapital(v: number | null, currency: string): string {
     return v.toLocaleString('vi-VN');
   }
   if (v >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M';
-  if (v >= 1e3) return '$' + (v / 1e3).toFixed(1) + 'K';
-  return '$' + v.toFixed(2);
+  if (v >= 1e4) return '$' + (v / 1e3).toFixed(1) + 'K';
+  return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function algoLabel(algo: string): string {

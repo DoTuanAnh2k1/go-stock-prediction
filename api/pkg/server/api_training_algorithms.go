@@ -43,7 +43,7 @@ func GetTrainingAlgorithms(w http.ResponseWriter, r *http.Request) {
 		acc, _ := log.Accuracy.Float64()
 		logEntries[log.AlgorithmName] = algLogEntry{
 			lastTrainedStr:  log.CompletedAt.UTC().Format(time.RFC3339),
-			accuracyFloat:   acc / 100.0, // stored as percentage 0-100, convert to 0-1
+			accuracyFloat:   acc, // stored as 0.0–1.0 ratio by Python training.py
 			trainingTimeSec: float64(log.DurationMs) / 1000.0,
 		}
 		logByAlg[log.AlgorithmName] = struct{}{}

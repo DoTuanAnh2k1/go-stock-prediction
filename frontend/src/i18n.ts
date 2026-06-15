@@ -184,10 +184,36 @@ export const translations: Record<Lang, Translations> = {
       rising: 'tăng giá',
       leadingSectors: 'Ngành dẫn dắt',
       noMarketData: 'Chưa có dữ liệu thị trường',
+      totalPredictions: 'Tổng dự đoán',
+      allTime: 'toàn thời gian',
+      predsToday: 'Dự đoán hôm nay',
+      acrossMarkets: 'tất cả thị trường',
+      activeBots: 'Bots hoạt động',
+      inSimulation: 'đang chạy simulation',
+      marketStatus: 'Trạng thái Pipeline',
+      marketStatusDesc: 'Freshness dữ liệu & hoạt động dự đoán',
+      lastCrawl: 'Crawl cuối',
+      predsCount: 'dự đoán',
+      loginForStatus: 'Đăng nhập để xem trạng thái pipeline hệ thống',
+      loadingStatus: 'Đang tải trạng thái...',
+      marketOpen: 'Mở cửa',
+      marketClosed: 'Đóng cửa',
+      fresh: 'Tươi',
+      stale: 'Cũ',
+      never: 'Chưa có',
+      missing: 'thiếu',
+      dirAccuracy: 'Độ chính xác dự đoán hướng',
+      dirAccuracySub: 'TB các thị trường · từ lịch sử reconcile',
+      dirAccuracyChart: 'So sánh direction accuracy',
+      loginToSeeAccuracy: 'Đăng nhập để xem direction accuracy thực từ DB',
+      noReconcileData: 'Chưa có dữ liệu reconcile',
+      ensDir: 'ENS Direction Acc',
+      ensDirSub: 'avg các thị trường',
     },
     // Crypto page
     crypto: {
       priceChart: 'Biểu đồ giá Crypto',
+      noAccess: 'Bạn không có quyền truy cập thị trường Crypto.',
       loadingData: 'Đang tải dữ liệu crypto...',
       noDataKpi: 'Chưa có dữ liệu',
       tomorrowPred: 'Dự đoán Crypto phiên mai',
@@ -204,6 +230,7 @@ export const translations: Record<Lang, Translations> = {
     // Gold page
     gold: {
       priceChart: 'Biểu đồ giá vàng',
+      noAccess: 'Bạn không có quyền truy cập thị trường Vàng.',
       loadingData: 'Đang tải dữ liệu vàng...',
       loading: 'đang tải...',
       sellPrice: 'giá bán',
@@ -240,6 +267,7 @@ export const translations: Record<Lang, Translations> = {
     // Nasdaq page
     nasdaq: {
       priceChart: 'Biểu đồ giá NASDAQ 100',
+      noAccess: 'Bạn không có quyền truy cập thị trường NASDAQ.',
       loadingData: 'Đang tải dữ liệu NASDAQ 100...',
       noDataKpi: 'Chưa có dữ liệu',
       tomorrowPred: 'Dự đoán NASDAQ phiên mai',
@@ -255,6 +283,7 @@ export const translations: Record<Lang, Translations> = {
     // SP500 page
     sp500: {
       priceChart: 'Biểu đồ giá S&P 500',
+      noAccess: 'Bạn không có quyền truy cập thị trường S&P 500.',
       loadingData: 'Đang tải dữ liệu S&P 500...',
       noDataKpi: 'Chưa có dữ liệu',
       tomorrowPred: 'Dự đoán S&P 500 phiên mai',
@@ -565,6 +594,7 @@ export const translations: Record<Lang, Translations> = {
       dailyToday: 'Bản ghi hôm nay',
       intradayToday: 'Intraday hôm nay',
       staleWarning: 'Dữ liệu cũ',
+      marketClosed: 'Đóng cửa',
       predSection: 'Dự đoán',
       lastPredict: 'Dự đoán cuối',
       todayTotal: 'Tổng hôm nay',
@@ -772,9 +802,35 @@ export const translations: Record<Lang, Translations> = {
       rising: 'advancing',
       leadingSectors: 'Leading Sectors',
       noMarketData: 'No market data',
+      totalPredictions: 'Total Predictions',
+      allTime: 'all time',
+      predsToday: 'Predictions Today',
+      acrossMarkets: 'across all markets',
+      activeBots: 'Active Bots',
+      inSimulation: 'running simulation',
+      marketStatus: 'Pipeline Status',
+      marketStatusDesc: 'Data freshness & prediction activity',
+      lastCrawl: 'Last crawl',
+      predsCount: 'preds',
+      loginForStatus: 'Log in to see system pipeline status',
+      loadingStatus: 'Loading status...',
+      marketOpen: 'Open',
+      marketClosed: 'Closed',
+      fresh: 'Fresh',
+      stale: 'Stale',
+      never: 'Never',
+      missing: 'missing',
+      dirAccuracy: 'Direction Prediction Accuracy',
+      dirAccuracySub: 'avg across markets · from reconcile history',
+      dirAccuracyChart: 'Direction Accuracy Comparison',
+      loginToSeeAccuracy: 'Log in to see real direction accuracy from DB',
+      noReconcileData: 'No reconcile data yet',
+      ensDir: 'ENS Direction Acc',
+      ensDirSub: 'avg across markets',
     },
     crypto: {
       priceChart: 'Crypto Price Chart',
+      noAccess: 'You do not have access to the Crypto market.',
       loadingData: 'Loading crypto data...',
       noDataKpi: 'No data',
       tomorrowPred: "Tomorrow's Crypto Predictions",
@@ -790,6 +846,7 @@ export const translations: Record<Lang, Translations> = {
     },
     gold: {
       priceChart: 'Gold Price Chart',
+      noAccess: 'You do not have access to the Gold market.',
       loadingData: 'Loading gold data...',
       loading: 'loading...',
       sellPrice: 'sell price',
@@ -825,6 +882,7 @@ export const translations: Record<Lang, Translations> = {
     },
     nasdaq: {
       priceChart: 'NASDAQ 100 Price Chart',
+      noAccess: 'You do not have access to the NASDAQ market.',
       loadingData: 'Loading NASDAQ 100 data...',
       noDataKpi: 'No data',
       tomorrowPred: "Tomorrow's NASDAQ Predictions",
@@ -839,6 +897,7 @@ export const translations: Record<Lang, Translations> = {
     },
     sp500: {
       priceChart: 'S&P 500 Price Chart',
+      noAccess: 'You do not have access to the S&P 500 market.',
       loadingData: 'Loading S&P 500 data...',
       noDataKpi: 'No data',
       tomorrowPred: "Tomorrow's S&P 500 Predictions",
@@ -1139,6 +1198,7 @@ export const translations: Record<Lang, Translations> = {
       dailyToday: "Today's records",
       intradayToday: "Today's intraday",
       staleWarning: 'Stale data',
+      marketClosed: 'Market closed',
       predSection: 'Predictions',
       lastPredict: 'Last prediction',
       todayTotal: "Today's total",
@@ -1325,9 +1385,35 @@ export interface Translations {
     rising: string;
     leadingSectors: string;
     noMarketData: string;
+    totalPredictions: string;
+    allTime: string;
+    predsToday: string;
+    acrossMarkets: string;
+    activeBots: string;
+    inSimulation: string;
+    marketStatus: string;
+    marketStatusDesc: string;
+    lastCrawl: string;
+    predsCount: string;
+    loginForStatus: string;
+    loadingStatus: string;
+    marketOpen: string;
+    marketClosed: string;
+    fresh: string;
+    stale: string;
+    never: string;
+    missing: string;
+    dirAccuracy: string;
+    dirAccuracySub: string;
+    dirAccuracyChart: string;
+    loginToSeeAccuracy: string;
+    noReconcileData: string;
+    ensDir: string;
+    ensDirSub: string;
   };
   crypto: {
     priceChart: string;
+    noAccess: string;
     loadingData: string;
     noDataKpi: string;
     tomorrowPred: string;
@@ -1343,6 +1429,7 @@ export interface Translations {
   };
   gold: {
     priceChart: string;
+    noAccess: string;
     loadingData: string;
     loading: string;
     sellPrice: string;
@@ -1378,6 +1465,7 @@ export interface Translations {
   };
   nasdaq: {
     priceChart: string;
+    noAccess: string;
     loadingData: string;
     noDataKpi: string;
     tomorrowPred: string;
@@ -1392,6 +1480,7 @@ export interface Translations {
   };
   sp500: {
     priceChart: string;
+    noAccess: string;
     loadingData: string;
     noDataKpi: string;
     tomorrowPred: string;
@@ -1690,6 +1779,7 @@ export interface Translations {
     dailyToday: string;
     intradayToday: string;
     staleWarning: string;
+    marketClosed: string;
     predSection: string;
     lastPredict: string;
     todayTotal: string;

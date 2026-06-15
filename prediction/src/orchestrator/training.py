@@ -392,7 +392,6 @@ def reconcile_predictions() -> int:
     # Records that have actual_price but direction_correct=NULL were reconciled before
     # this field was introduced; compute it from existing data without re-fetching prices.
     for market, backfill_fn in [
-        ("stock", repo.backfill_direction_correct_stock),
         ("gold", repo.backfill_direction_correct_gold),
         ("nasdaq", repo.backfill_direction_correct_nasdaq),
         ("sp500", repo.backfill_direction_correct_sp500),
@@ -405,49 +404,6 @@ def reconcile_predictions() -> int:
                 total_updated += n
         except Exception as exc:
             log.error("reconcile.backfill.error", market=market, error=str(exc))
-
-    # --- Stock predictions ---
-    try:
-        pending = repo.get_pending_predictions(days_back=10)
-        log.info("reconcile.stock.pending", count=len(pending))
-
-        for pred in pending:
-            stock_prices = repo.get_stock_prices_range_asc(
-                pred.stock_id,
-                pred.target_date - timedelta(days=3),
-                pred.target_date + timedelta(days=3),
-            )
-            if not stock_prices:
-                continue
-
-            # Find closest price to target_date
-            closest = min(stock_prices, key=lambda p: abs((p.trading_date - pred.target_date).total_seconds()))
-            actual = Decimal(str(closest.close_price))
-
-            if actual == 0:
-                continue
-
-            predicted = Decimal(str(pred.predicted_price))
-            current = Decimal(str(pred.current_price))
-            accuracy = max(Decimal("0"), Decimal("1") - abs(actual - predicted) / actual)
-            accuracy = accuracy.quantize(Decimal("0.0001"))
-            status = "confirmed" if float(accuracy) >= 0.70 else "wrong"
-
-            # direction_correct: both predicted and actual move in the same direction vs current_price
-            pred_diff = predicted - current
-            actual_diff = actual - current
-            if actual_diff == 0:
-                direction_correct: bool | None = (pred_diff == 0)
-            elif pred_diff != 0:
-                direction_correct = (pred_diff > 0) == (actual_diff > 0)
-            else:
-                direction_correct = False  # flat prediction but actual moved
-
-            repo.update_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
-            total_updated += 1
-
-    except Exception as exc:
-        log.error("reconcile.stock.error", error=str(exc))
 
     # --- Gold predictions ---
     try:
@@ -501,20 +457,15 @@ def reconcile_predictions() -> int:
             if not prices:
                 continue
 
-            closest = min(
-                prices,
-                key=lambda p: abs((p.trading_date - target_d).days)
-                if isinstance(p.trading_date, date_type)
-                else 999,
-            )
-            diff_days = (
-                abs((closest.trading_date - target_d).days)
-                if isinstance(closest.trading_date, date_type)
-                else 999
-            )
-            if diff_days > 3:
-                continue
+            # Find first price ON OR AFTER target_d — avoids using same-day price as actual
+            prices_after = [
+                p for p in prices
+                if isinstance(p.trading_date, date_type) and p.trading_date >= target_d
+            ]
+            if not prices_after:
+                continue  # data not available yet for this target date
 
+            closest = prices_after[0]  # prices are ASC, so first = earliest on/after target_d
             actual = Decimal(str(closest.close_price))
             if actual == 0:
                 continue
@@ -552,20 +503,15 @@ def reconcile_predictions() -> int:
             if not prices:
                 continue
 
-            closest = min(
-                prices,
-                key=lambda p: abs((p.trading_date - target_d).days)
-                if isinstance(p.trading_date, date_type)
-                else 999,
-            )
-            diff_days = (
-                abs((closest.trading_date - target_d).days)
-                if isinstance(closest.trading_date, date_type)
-                else 999
-            )
-            if diff_days > 3:
-                continue
+            # Find first price ON OR AFTER target_d — avoids using same-day price as actual
+            prices_after = [
+                p for p in prices
+                if isinstance(p.trading_date, date_type) and p.trading_date >= target_d
+            ]
+            if not prices_after:
+                continue  # data not available yet for this target date
 
+            closest = prices_after[0]  # prices are ASC, so first = earliest on/after target_d
             actual = Decimal(str(closest.close_price))
             if actual == 0:
                 continue
@@ -603,20 +549,15 @@ def reconcile_predictions() -> int:
             if not prices:
                 continue
 
-            closest = min(
-                prices,
-                key=lambda p: abs((p.trading_date - target_d).days)
-                if isinstance(p.trading_date, date_type)
-                else 999,
-            )
-            diff_days = (
-                abs((closest.trading_date - target_d).days)
-                if isinstance(closest.trading_date, date_type)
-                else 999
-            )
-            if diff_days > 3:
-                continue
+            # Find first price ON OR AFTER target_d — same pattern as NASDAQ/SP500
+            prices_after = [
+                p for p in prices
+                if isinstance(p.trading_date, date_type) and p.trading_date >= target_d
+            ]
+            if not prices_after:
+                continue  # data not available yet for this target date
 
+            closest = prices_after[0]  # prices are ASC, first = earliest on/after target_d
             actual = Decimal(str(closest.close_price))
             if actual == 0:
                 continue

@@ -18,6 +18,7 @@ from src.crawlers.nasdaq import NASDAQ_SYMBOLS
 from src.crawlers.sp500 import SP500_SYMBOLS
 from src.database import repository as repo
 from src.utils.logger import get_logger
+from src.utils.market_calendar import next_trading_day
 
 log = get_logger("orchestrator")
 
@@ -151,7 +152,6 @@ def _predict_nasdaq(algos: dict, emit: EmitFn) -> int:
     dir_acc = repo.get_direction_accuracy("NASDAQ100")
     count = 0
     now = datetime.now()
-    target = now + timedelta(hours=1)
 
     for sym_idx, symbol in enumerate(symbols):
         emit("info", f"[{sym_idx + 1}/{len(symbols)}] {symbol} — đang tính...", done_ops / max(total_ops, 1))
@@ -161,6 +161,11 @@ def _predict_nasdaq(algos: dict, emit: EmitFn) -> int:
             emit("warn", f"  {symbol}: không đủ dữ liệu ({len(prices_asc)} điểm)", done_ops / max(total_ops, 1))
             done_ops += len(algos)
             continue
+
+        last_d = prices_asc[-1].trading_date
+        if isinstance(last_d, datetime):
+            last_d = last_d.date()
+        target = datetime.combine(next_trading_day(last_d, "NASDAQ100"), datetime.min.time())
 
         price_list = [float(p.close_price) for p in prices_asc]
         vol_list = [float(p.volume or 0) for p in prices_asc]
@@ -206,7 +211,6 @@ def _predict_crypto(algos: dict, emit: EmitFn) -> int:
     dir_acc = repo.get_direction_accuracy("CRYPTO")
     count = 0
     now = datetime.now()
-    target = now + timedelta(hours=1)
 
     for coin_idx, (coin_id, symbol) in enumerate(coins):
         emit("info", f"[{coin_idx + 1}/{len(coins)}] {symbol} — đang tính...", done_ops / max(total_ops, 1))
@@ -216,6 +220,12 @@ def _predict_crypto(algos: dict, emit: EmitFn) -> int:
             emit("warn", f"  {symbol}: không đủ dữ liệu ({len(prices_asc)} điểm)", done_ops / max(total_ops, 1))
             done_ops += len(algos)
             continue
+
+        # target = next calendar day after last available price (crypto is 24/7)
+        last_d = prices_asc[-1].trading_date
+        if isinstance(last_d, datetime):
+            last_d = last_d.date()
+        target = datetime.combine(last_d + timedelta(days=1), datetime.min.time())
 
         price_list = [float(p.close_price) for p in prices_asc]
         current = price_list[-1]
@@ -261,7 +271,6 @@ def _predict_sp500(algos: dict, emit: EmitFn) -> int:
     dir_acc = repo.get_direction_accuracy("SP500")
     count = 0
     now = datetime.now()
-    target = now + timedelta(hours=1)
 
     for sym_idx, symbol in enumerate(symbols):
         emit("info", f"[{sym_idx + 1}/{len(symbols)}] {symbol} — đang tính...", done_ops / max(total_ops, 1))
@@ -271,6 +280,11 @@ def _predict_sp500(algos: dict, emit: EmitFn) -> int:
             emit("warn", f"  {symbol}: không đủ dữ liệu ({len(prices_asc)} điểm)", done_ops / max(total_ops, 1))
             done_ops += len(algos)
             continue
+
+        last_d = prices_asc[-1].trading_date
+        if isinstance(last_d, datetime):
+            last_d = last_d.date()
+        target = datetime.combine(next_trading_day(last_d, "SP500"), datetime.min.time())
 
         price_list = [float(p.close_price) for p in prices_asc]
         vol_list = [float(p.volume or 0) for p in prices_asc]
