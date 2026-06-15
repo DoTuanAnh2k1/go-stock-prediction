@@ -25,7 +25,7 @@ func addHandler() *http.ServeMux {
 	// ===========================================
 
 	// Auth APIs
-	mux.HandleFunc("POST /api/auth/login", LoginRateLimitMiddleware(LoginHandler))
+	mux.HandleFunc("POST /api/auth/login", LoginHandler)
 	mux.HandleFunc("GET /api/auth/me", MeHandler)
 	mux.HandleFunc("PUT /api/auth/password", AuthRequired(ChangePasswordHandler))
 
