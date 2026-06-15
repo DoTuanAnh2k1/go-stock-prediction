@@ -54,7 +54,7 @@ interface BotChart {
 interface Trade {
   id: number;
   symbol: string;
-  action: 'BUY' | 'SELL';
+  action: 'BUY' | 'SELL' | 'HOLD';
   quantity: number;
   price: number;
   trade_value: number;
@@ -73,6 +73,26 @@ interface TradesResponse {
   page: number;
   limit: number;
   data: Trade[];
+}
+
+interface VariantKPIs {
+  total_return_pct: number;
+  sharpe_ratio: number;
+  win_rate_pct: number;
+  max_drawdown_pct: number;
+  profit_factor: number;
+  total_trades: number;
+}
+
+interface VariantBot {
+  id: string;
+  display_name: string;
+  buy_threshold: number | null;
+  sell_threshold: number | null;
+  min_confidence: number | null;
+  stop_loss: number | null;
+  take_profit: number | null;
+  kpis: VariantKPIs;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -103,8 +123,8 @@ function fmtCapital(v: number | null, currency: string): string {
     return v.toLocaleString('vi-VN') + ' VND';
   }
   if (v >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M';
-  if (v >= 1e3) return '$' + (v / 1e3).toFixed(1) + 'K';
-  return '$' + v.toFixed(2);
+  if (v >= 1e4) return '$' + (v / 1e3).toFixed(1) + 'K';
+  return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function fmtValueShort(v: number | null, currency: string): string {
@@ -116,8 +136,8 @@ function fmtValueShort(v: number | null, currency: string): string {
     return v.toFixed(0);
   }
   if (v >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
-  if (v >= 1e3) return '$' + (v / 1e3).toFixed(1) + 'K';
-  return '$' + v.toFixed(0);
+  if (v >= 1e4) return '$' + (v / 1e3).toFixed(1) + 'K';
+  return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function algoLabel(algo: string): string {
@@ -176,6 +196,126 @@ function fmtDT(s: string): string {
   }
 }
 
+// ── Variants components ───────────────────────────────────────────────────────
+
+function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
+  if (!active) return <span style={{ color: 'var(--text-3)', fontSize: 10 }}> ⇅</span>;
+  return <span style={{ color: 'var(--accent, #58a6ff)', fontSize: 10 }}>{dir === 'desc' ? ' ↓' : ' ↑'}</span>;
+}
+
+function VariantsTab({
+  variants, currentBotId, sort, onSort, currency, onNavigate,
+}: {
+  variants: VariantBot[];
+  currentBotId: string;
+  sort: { col: string; dir: 'asc' | 'desc' };
+  onSort: (col: string) => void;
+  currency: string;
+  onNavigate: (id: string) => void;
+}) {
+  const cols: { key: string; label: string; right?: boolean }[] = [
+    { key: 'name', label: 'Variant' },
+    { key: 'buy', label: 'Buy', right: true },
+    { key: 'sell', label: 'Sell', right: true },
+    { key: 'conf', label: 'Conf', right: true },
+    { key: 'sl', label: 'SL', right: true },
+    { key: 'tp', label: 'TP', right: true },
+    { key: 'return', label: 'Return%', right: true },
+    { key: 'sharpe', label: 'Sharpe', right: true },
+    { key: 'win', label: 'Win%', right: true },
+    { key: 'trades', label: 'Trades', right: true },
+  ];
+
+  const sorted = [...variants].sort((a, b) => {
+    const dir = sort.dir === 'desc' ? -1 : 1;
+    switch (sort.col) {
+      case 'buy':    return ((a.buy_threshold ?? 0) - (b.buy_threshold ?? 0)) * dir;
+      case 'sell':   return ((a.sell_threshold ?? 0) - (b.sell_threshold ?? 0)) * dir;
+      case 'conf':   return ((a.min_confidence ?? 0) - (b.min_confidence ?? 0)) * dir;
+      case 'sl':     return ((a.stop_loss ?? 0) - (b.stop_loss ?? 0)) * dir;
+      case 'tp':     return ((a.take_profit ?? 0) - (b.take_profit ?? 0)) * dir;
+      case 'return': return (a.kpis.total_return_pct - b.kpis.total_return_pct) * dir;
+      case 'sharpe': return (a.kpis.sharpe_ratio - b.kpis.sharpe_ratio) * dir;
+      case 'win':    return (a.kpis.win_rate_pct - b.kpis.win_rate_pct) * dir;
+      case 'trades': return (a.kpis.total_trades - b.kpis.total_trades) * dir;
+      default:       return a.display_name.localeCompare(b.display_name) * dir;
+    }
+  });
+
+  if (variants.length === 0) {
+    return (
+      <div className="empty section-gap" style={{ padding: 48 }}>
+        <p style={{ color: 'var(--text-3)' }}>Chưa có variant nào.</p>
+      </div>
+    );
+  }
+
+  // currency is available for future use (e.g. showing currency symbol in columns)
+  void currency;
+
+  return (
+    <div className="section-gap">
+      <div style={{ overflowX: 'auto' }}>
+        <table className="tbl">
+          <thead>
+            <tr>
+              {cols.map(c => (
+                <th
+                  key={c.key}
+                  className={c.right ? 'r' : ''}
+                  style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                  onClick={() => onSort(c.key)}
+                >
+                  {c.label}
+                  <SortIcon active={sort.col === c.key} dir={sort.dir} />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map(v => {
+              const isCurrent = v.id === currentBotId;
+              return (
+                <tr
+                  key={v.id}
+                  style={{ background: isCurrent ? 'var(--surface-2)' : undefined, cursor: 'pointer' }}
+                  onClick={() => !isCurrent && onNavigate(v.id)}
+                >
+                  <td>
+                    <span
+                      style={{
+                        color: isCurrent ? 'var(--accent, #58a6ff)' : 'var(--text-1)',
+                        fontWeight: isCurrent ? 700 : 400,
+                        fontSize: 13,
+                      }}
+                    >
+                      {v.display_name.split('—').pop()?.trim() || v.display_name}
+                      {isCurrent && <span style={{ color: 'var(--text-3)', fontWeight: 400, marginLeft: 6 }}>← đây</span>}
+                    </span>
+                  </td>
+                  <td className="r num" style={{ fontSize: 12 }}>{v.buy_threshold != null ? v.buy_threshold.toFixed(1) + '%' : '—'}</td>
+                  <td className="r num" style={{ fontSize: 12 }}>{v.sell_threshold != null ? v.sell_threshold.toFixed(1) + '%' : '—'}</td>
+                  <td className="r num" style={{ fontSize: 12 }}>{v.min_confidence != null ? (v.min_confidence * 100).toFixed(0) + '%' : '—'}</td>
+                  <td className="r num" style={{ fontSize: 12 }}>{v.stop_loss != null ? v.stop_loss.toFixed(1) + '%' : '—'}</td>
+                  <td className="r num" style={{ fontSize: 12 }}>{v.take_profit != null ? v.take_profit.toFixed(1) + '%' : '—'}</td>
+                  <td className="r">
+                    <span className="num" style={{ fontSize: 12, color: v.kpis.total_return_pct >= 0 ? 'var(--up)' : 'var(--down)' }}>
+                      {v.kpis.total_return_pct >= 0 ? '+' : ''}{v.kpis.total_return_pct.toFixed(2)}%
+                    </span>
+                  </td>
+                  <td className="r num" style={{ fontSize: 12 }}>{v.kpis.sharpe_ratio.toFixed(2)}</td>
+                  <td className="r num" style={{ fontSize: 12 }}>{v.kpis.win_rate_pct.toFixed(1)}%</td>
+                  <td className="r num" style={{ fontSize: 12 }}>{v.kpis.total_trades}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function SimulationBot() {
@@ -197,6 +337,10 @@ export default function SimulationBot() {
   const [activeChart, setActiveChart] = useState<'value' | 'return'>('value');
   const [chartSession, setChartSession] = useState<'backtest' | 'live'>('backtest');
   const [tradeSession, setTradeSession] = useState<'backtest' | 'live'>('backtest');
+  const [hideHold, setHideHold] = useState(true);
+  const [activeTab, setActiveTab] = useState<'detail' | 'variants'>('detail');
+  const [variants, setVariants] = useState<VariantBot[]>([]);
+  const [variantSort, setVariantSort] = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'return', dir: 'desc' });
 
   const TRADE_LIMIT = 50;
 
@@ -258,6 +402,13 @@ export default function SimulationBot() {
         setTradesLoading(false);
       });
   }, [botId, tradePage, chart, liveChart, tradeSession]);
+
+  useEffect(() => {
+    if (!botId) return;
+    apiFetch(`/api/simulation/bots/${encodeURIComponent(botId)}/variants`)
+      .then((data: VariantBot[]) => setVariants(Array.isArray(data) ? data : []))
+      .catch(() => setVariants([]));
+  }, [botId]);
 
   if (loading) {
     return (
@@ -373,6 +524,37 @@ export default function SimulationBot() {
           </button>
         )}
       </div>
+
+      {/* Tab bar */}
+      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
+        <button
+          onClick={() => setActiveTab('detail')}
+          style={{
+            padding: '8px 18px', fontSize: 13, fontWeight: activeTab === 'detail' ? 700 : 400,
+            color: activeTab === 'detail' ? 'var(--text-1)' : 'var(--text-3)',
+            background: 'none', border: 'none',
+            borderBottom: activeTab === 'detail' ? '2px solid var(--accent, #58a6ff)' : '2px solid transparent',
+            cursor: 'pointer',
+          }}
+        >
+          Chi tiết
+        </button>
+        <button
+          onClick={() => setActiveTab('variants')}
+          style={{
+            padding: '8px 18px', fontSize: 13, fontWeight: activeTab === 'variants' ? 700 : 400,
+            color: activeTab === 'variants' ? 'var(--text-1)' : 'var(--text-3)',
+            background: 'none', border: 'none',
+            borderBottom: activeTab === 'variants' ? '2px solid var(--accent, #58a6ff)' : '2px solid transparent',
+            cursor: 'pointer',
+          }}
+        >
+          Variants ({variants.length || 10})
+        </button>
+      </div>
+
+      {activeTab === 'detail' && (
+      <>
 
       {/* Session info */}
       {bot.last_session && (
@@ -601,9 +783,23 @@ export default function SimulationBot() {
       </Panel>
 
       {/* Trades table */}
-      <div className="sec-head section-gap" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div className="sec-head section-gap" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h2>{t.simulationBot.tradeHistory}</h2>
         <div className="line" style={{ flex: 1 }} />
+        <button
+          className="btn btn--sm btn--ghost"
+          style={{
+            fontSize: 11,
+            padding: '3px 10px',
+            background: hideHold ? 'var(--accent-bg, var(--surface-2))' : 'transparent',
+            color: hideHold ? 'var(--accent, var(--text-1))' : 'var(--text-3)',
+            border: '1px solid ' + (hideHold ? 'var(--accent, var(--border))' : 'var(--border)'),
+          }}
+          onClick={() => setHideHold(h => !h)}
+          title="Ẩn tín hiệu HOLD (không phát sinh giao dịch)"
+        >
+          {hideHold ? 'Ẩn HOLD' : 'Hiện HOLD'}
+        </button>
         <div className="seg">
           <button
             className={tradeSession === 'backtest' ? 'active' : ''}
@@ -656,7 +852,7 @@ export default function SimulationBot() {
                   </tr>
                 </thead>
                 <tbody>
-                  {trades.map((t) => (
+                  {trades.filter(tr => !hideHold || tr.action !== 'HOLD').map((t) => (
                     <tr key={t.id}>
                       <td className="sym">{t.symbol}</td>
                       <td className="c">
@@ -666,9 +862,9 @@ export default function SimulationBot() {
                             fontSize: 11,
                             fontWeight: 700,
                             letterSpacing: 0.5,
-                            background: t.action === 'BUY' ? 'var(--up-bg)' : 'var(--down-bg)',
-                            color: t.action === 'BUY' ? 'var(--up)' : 'var(--down)',
-                            border: '1px solid ' + (t.action === 'BUY' ? 'var(--up)' : 'var(--down)'),
+                            background: t.action === 'BUY' ? 'var(--up-bg)' : t.action === 'SELL' ? 'var(--down-bg)' : 'var(--surface-2)',
+                            color: t.action === 'BUY' ? 'var(--up)' : t.action === 'SELL' ? 'var(--down)' : 'var(--text-3)',
+                            border: '1px solid ' + (t.action === 'BUY' ? 'var(--up)' : t.action === 'SELL' ? 'var(--down)' : 'var(--border)'),
                           }}
                         >
                           {t.action}
@@ -745,6 +941,22 @@ export default function SimulationBot() {
           </>
         )}
       </Panel>
+
+      </>
+      )}
+
+      {activeTab === 'variants' && (
+        <VariantsTab
+          variants={variants}
+          currentBotId={botId || ''}
+          sort={variantSort}
+          onSort={(col) =>
+            setVariantSort(s => ({ col, dir: s.col === col && s.dir === 'desc' ? 'asc' : 'desc' }))
+          }
+          currency={currency}
+          onNavigate={(id) => navigate(`/simulation/${id}`)}
+        />
+      )}
     </div>
   );
 }
