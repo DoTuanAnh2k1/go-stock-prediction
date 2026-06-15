@@ -549,7 +549,7 @@ export default function SimulationBot() {
             cursor: 'pointer',
           }}
         >
-          Variants ({variants.length || 10})
+          Variants ({variants.length})
         </button>
       </div>
 
