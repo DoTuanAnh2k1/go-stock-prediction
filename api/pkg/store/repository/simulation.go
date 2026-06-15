@@ -10,6 +10,8 @@ type SimulationStore interface {
 	GetAllSimBots() ([]modelsdb.SimBot, error)
 	GetSimBotByID(id string) (*modelsdb.SimBot, error)
 	GetActiveSimBots() ([]modelsdb.SimBot, error)
+	// GetSimBotsByMarketAlgo returns all bots for a given market and algorithm key.
+	GetSimBotsByMarketAlgo(market, algorithm string) ([]modelsdb.SimBot, error)
 	UpdateSimBotConfig(bot *modelsdb.SimBot) error
 
 	// Sessions

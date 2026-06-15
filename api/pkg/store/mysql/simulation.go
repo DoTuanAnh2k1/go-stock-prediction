@@ -28,6 +28,16 @@ func (c *Client) GetActiveSimBots() ([]modelsdb.SimBot, error) {
 	return bots, err
 }
 
+// GetSimBotsByMarketAlgo returns all bots with the given market and algorithm,
+// ordered by ID for consistent display.
+func (c *Client) GetSimBotsByMarketAlgo(market, algorithm string) ([]modelsdb.SimBot, error) {
+	var bots []modelsdb.SimBot
+	err := c.Db.Where("market = ? AND algorithm = ?", market, algorithm).
+		Order("id ASC").
+		Find(&bots).Error
+	return bots, err
+}
+
 // UpdateSimBotConfig saves (full replace) a bot configuration record.
 func (c *Client) UpdateSimBotConfig(bot *modelsdb.SimBot) error {
 	return c.Db.Save(bot).Error
