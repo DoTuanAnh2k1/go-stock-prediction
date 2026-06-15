@@ -1,4 +1,4 @@
-"""Seed sim_bots table with all trading bots (5 markets × 11 algorithms × 10 variants)."""
+"""Seed sim_bots table with all trading bots (4 markets × 11 algorithms × 10 variants)."""
 from __future__ import annotations
 
 from decimal import Decimal
@@ -24,7 +24,6 @@ ALGORITHMS = [
 ]
 
 MARKETS = [
-    ("VN30", "VN30", Decimal("1000000000"), "VND"),
     ("GOLD", "Gold", Decimal("1000"), "USD"),
     ("NASDAQ", "NASDAQ", Decimal("1000"), "USD"),
     ("SP500", "S&P 500", Decimal("1000"), "USD"),
