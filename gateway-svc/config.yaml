@@ -42,9 +42,9 @@ routes:
 
 middleware:
   rate_limit:
-    enabled: false
-    max_requests: 1000
-    window_secs: 60
+    enabled: true
+    max_requests: 60
+    window_secs: 1
 
 logging:
   level: "info"

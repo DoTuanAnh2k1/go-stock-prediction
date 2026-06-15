@@ -81,10 +81,10 @@ async fn main() {
         info!("HTTPS → https://{}", https_addr);
         info!("Gateway ready");
 
-        let http_future =
-            axum_server::bind(http_addr).serve(app.clone().into_make_service());
-        let https_future =
-            axum_server::bind_rustls(https_addr, tls_config).serve(app.into_make_service());
+        let http_future = axum_server::bind(http_addr)
+            .serve(app.clone().into_make_service_with_connect_info::<SocketAddr>());
+        let https_future = axum_server::bind_rustls(https_addr, tls_config)
+            .serve(app.into_make_service_with_connect_info::<SocketAddr>());
 
         let (http_result, https_result) = tokio::join!(http_future, https_future);
         if let Err(e) = http_result {
@@ -102,7 +102,7 @@ async fn main() {
             }
         };
         info!("Gateway ready (HTTP only — TLS disabled)");
-        if let Err(e) = axum::serve(listener, app).await {
+        if let Err(e) = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await {
             error!("Server error: {}", e);
         }
     }
