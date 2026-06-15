@@ -303,6 +303,11 @@ type simBotDetail struct {
 	KPIs        simBotKPIs         `json:"kpis"`
 }
 
+type simBotVariant struct {
+	simBotJSON
+	KPIs simBotKPIs `json:"kpis"`
+}
+
 type simTradesPage struct {
 	BotID     string         `json:"bot_id"`
 	SessionID int64          `json:"session_id"`
@@ -476,6 +481,59 @@ func GetSimBot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ResponseSuccess(w, http.StatusOK, detail)
+}
+
+// GetSimBotVariants godoc
+//
+//	@Summary      Get variant bots for comparison
+//	@Description  Returns all bots sharing the same market and algorithm as {id}, each with KPIs from their best backtest session.
+//	@Tags         Simulation
+//	@Produce      json
+//	@Param        id   path      string  true  "Bot ID"
+//	@Success      200  {array}   simBotVariant
+//	@Failure      404  {object}  ResponseFailure
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/simulation/bots/{id}/variants [get]
+func GetSimBotVariants(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		ResponseError(w, http.StatusBadRequest, "bot id is required")
+		return
+	}
+
+	store := repository.GetSingleton()
+
+	src, err := store.GetSimBotByID(id)
+	if err != nil {
+		ResponseError(w, http.StatusNotFound, "bot not found")
+		return
+	}
+
+	siblings, err := store.GetSimBotsByMarketAlgo(src.Market, src.Algorithm)
+	if err != nil {
+		logger.Logger.Errorf("GetSimBotVariants: %v", err)
+		ResponseError(w, http.StatusInternalServerError, "failed to fetch variants")
+		return
+	}
+
+	variants := make([]simBotVariant, 0, len(siblings))
+	for _, bot := range siblings {
+		v := simBotVariant{simBotJSON: botToJSON(bot)}
+
+		sess, sessErr := store.GetBestSimSessionForChart(bot.ID)
+		if sessErr != nil || sess == nil {
+			sess, sessErr = store.GetLatestSimSession(bot.ID)
+		}
+		if sessErr == nil && sess != nil {
+			snaps, _ := store.GetSimPortfolioSnapshots(sess.ID)
+			trades, _, _ := store.GetSimTrades(sess.ID, 0, 100000)
+			v.KPIs = computeKPIs(snaps, trades)
+		}
+
+		variants = append(variants, v)
+	}
+
+	ResponseSuccess(w, http.StatusOK, variants)
 }
 
 // GetSimBotTrades godoc
