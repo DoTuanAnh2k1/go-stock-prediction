@@ -257,7 +257,7 @@ function TablePager({ total, page, perPage, onChange }: { total: number; page: n
 }
 
 export default function SP500() {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user, canAccessMarket } = useAuth();
   const { t } = useLanguage();
 
   // State
@@ -278,6 +278,7 @@ export default function SP500() {
 
   // Load initial data
   useEffect(() => {
+    if (user && !canAccessMarket('SP500')) { setLoading(false); return; }
     setLoading(true);
     Promise.allSettled([
       apiFetch('/api/sp500/latest'),
@@ -364,6 +365,18 @@ export default function SP500() {
   const confirmedSymbols = Array.from(new Set(confirmedResults.map((r) => r.symbol).filter(Boolean))).sort() as string[];
   const filteredConfirmed = confirmedSym ? confirmedResults.filter((r) => r.symbol === confirmedSym) : confirmedResults;
   const confirmedAlgos = Array.from(new Set(confirmedResults.map((r) => r.algorithm_name))).sort();
+
+  if (user && !canAccessMarket('SP500')) {
+    return (
+      <div className="content__inner fade">
+        <MarketTabs marketKey="sp500" />
+        <div className="empty section-gap">
+          <div className="empty__icon"><Icon name="activity" size={18} /></div>
+          <p>{t.sp500.noAccess}</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

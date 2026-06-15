@@ -507,11 +507,11 @@ export const translations: Record<Lang, Translations> = {
       tableOfContents: 'Mục lục',
       sections: {
         start: 'Bắt đầu',
-        dashboard: 'Tổng quan',
-        stocks: 'Cổ phiếu',
+        markets: 'Thị trường',
         predictions: 'Dự đoán',
         training: 'Huấn luyện',
-        gold: 'Giá vàng',
+        simulation: 'Simulation',
+        monitoring: 'Giám sát',
         api: 'API & Trigger',
       },
     },
@@ -1113,11 +1113,11 @@ export const translations: Record<Lang, Translations> = {
       tableOfContents: 'Table of Contents',
       sections: {
         start: 'Getting Started',
-        dashboard: 'Overview',
-        stocks: 'Stocks',
+        markets: 'Markets',
         predictions: 'Predictions',
         training: 'Training',
-        gold: 'Gold Prices',
+        simulation: 'Simulation',
+        monitoring: 'Monitoring',
         api: 'API & Trigger',
       },
     },
@@ -1696,11 +1696,11 @@ export interface Translations {
     tableOfContents: string;
     sections: {
       start: string;
-      dashboard: string;
-      stocks: string;
+      markets: string;
       predictions: string;
       training: string;
-      gold: string;
+      simulation: string;
+      monitoring: string;
       api: string;
     };
   };

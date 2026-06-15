@@ -5,6 +5,7 @@ import { Sparkline, LineChart } from '../components/charts';
 import { crawlGold, predictGold, goldBacktest, goldChart } from '../api';
 import { vnsToast } from '../components/ui';
 import { useLanguage } from '../context/LangContext';
+import { useAuth } from '../context/AuthContext';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function num(x: any): number {
@@ -77,6 +78,7 @@ export default function Gold() {
   const { data: D } = useData();
   const { fmt } = D;
   const { t } = useLanguage();
+  const { user, canAccessMarket } = useAuth();
   const srcs = D.goldSources || [];
   const [active, setActive] = useState<string | null>(null);
   const [days, setDays] = useState('180');
@@ -145,6 +147,17 @@ export default function Gold() {
     : confirmedResults;
   const confirmedPageCount = Math.ceil(filteredConfirmed.length / PAGE_SIZE);
   const confirmedPagedItems = filteredConfirmed.slice(confirmedPage * PAGE_SIZE, (confirmedPage + 1) * PAGE_SIZE);
+
+  if (user && !canAccessMarket('GOLD')) {
+    return (
+      <div className="content__inner fade">
+        <div className="empty section-gap">
+          <div className="empty__icon"><Icon name="gold" size={18} /></div>
+          <p>{t.gold.noAccess}</p>
+        </div>
+      </div>
+    );
+  }
 
   if (srcs.length === 0) {
     return (

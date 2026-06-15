@@ -258,7 +258,7 @@ function TablePager({ total, page, perPage, onChange }: { total: number; page: n
 }
 
 export default function Nasdaq() {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user, canAccessMarket } = useAuth();
   const { t } = useLanguage();
 
   // State
@@ -279,6 +279,7 @@ export default function Nasdaq() {
 
   // Load initial data
   useEffect(() => {
+    if (user && !canAccessMarket('NASDAQ')) { setLoading(false); return; }
     setLoading(true);
     Promise.allSettled([
       apiFetch('/api/nasdaq/latest'),
@@ -363,6 +364,18 @@ export default function Nasdaq() {
   const confirmedSymbols = Array.from(new Set(confirmedResults.map((r) => r.symbol).filter(Boolean))).sort() as string[];
   const filteredConfirmed = confirmedSym ? confirmedResults.filter((r) => r.symbol === confirmedSym) : confirmedResults;
   const confirmedAlgos = Array.from(new Set(confirmedResults.map((r) => r.algorithm_name))).sort();
+
+  if (user && !canAccessMarket('NASDAQ')) {
+    return (
+      <div className="content__inner fade">
+        <MarketTabs marketKey="nasdaq100" />
+        <div className="empty section-gap">
+          <div className="empty__icon"><Icon name="nasdaq" size={18} /></div>
+          <p>{t.nasdaq.noAccess}</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

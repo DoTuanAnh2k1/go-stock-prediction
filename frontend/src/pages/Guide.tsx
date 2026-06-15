@@ -8,11 +8,11 @@ export default function Guide() {
 
   const sections = [
     { id: 'start',       label: t.guide.sections.start,       icon: 'play' },
-    { id: 'dashboard',   label: t.guide.sections.dashboard,   icon: 'grid' },
-    { id: 'stocks',      label: t.guide.sections.stocks,      icon: 'candles' },
+    { id: 'markets',     label: t.guide.sections.markets,     icon: 'candles' },
     { id: 'predictions', label: t.guide.sections.predictions, icon: 'pulse' },
     { id: 'training',    label: t.guide.sections.training,    icon: 'cpu' },
-    { id: 'gold',        label: t.guide.sections.gold,        icon: 'gold' },
+    { id: 'simulation',  label: t.guide.sections.simulation,  icon: 'grid' },
+    { id: 'monitoring',  label: t.guide.sections.monitoring,  icon: 'refresh' },
     { id: 'api',         label: t.guide.sections.api,         icon: 'refresh' },
   ];
 
@@ -38,11 +38,11 @@ export default function Guide() {
         </div>
         <div>
           {active === 'start'       && <GuideStart />}
-          {active === 'dashboard'   && <GuideDashboard />}
-          {active === 'stocks'      && <GuideStocks />}
+          {active === 'markets'     && <GuideMarkets />}
           {active === 'predictions' && <GuidePredictions />}
           {active === 'training'    && <GuideTraining />}
-          {active === 'gold'        && <GuideGold />}
+          {active === 'simulation'  && <GuideSimulation />}
+          {active === 'monitoring'  && <GuideMonitoring />}
           {active === 'api'         && <GuideAPI />}
         </div>
       </div>
@@ -97,12 +97,13 @@ function GuideStart() {
   return (
     <>
       <GSection title="Chào mừng đến với VNStock Terminal">
-        <p><strong style={{ color: 'var(--text)' }}>VNStock Terminal</strong> là hệ thống phân tích và dự đoán giá cổ phiếu thị trường Việt Nam. Dữ liệu được thu thập tự động từ VietStock, sau đó chạy qua 3 thuật toán Machine Learning để dự đoán xu hướng giá.</p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, margin: '16px 0' }}>
+        <p><strong style={{ color: 'var(--text)' }}>VNStock Terminal</strong> là hệ thống phân tích và dự đoán giá tài sản tài chính. Dữ liệu được thu thập tự động từ nhiều nguồn, sau đó chạy qua <strong>11 thuật toán Machine Learning</strong> để dự đoán xu hướng giá.</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, margin: '16px 0' }}>
           {[
-            { icon: 'candles', title: 'Thu thập dữ liệu', desc: 'Crawl tự động hàng ngày lúc 12:00 từ VietStock cho toàn bộ VN30.' },
-            { icon: 'cpu',     title: 'Huấn luyện ML',   desc: '3 thuật toán: VWMA, LSTM Neural Network, ARIMA-GARCH chạy mỗi Chủ nhật.' },
-            { icon: 'pulse',   title: 'Dự đoán giá',     desc: 'Dự đoán giá đóng cửa hàng ngày lúc 18:00, so sánh với giá thực tế.' },
+            { icon: 'candles', title: '4 thị trường', desc: 'Vàng SJC/XAU, NASDAQ 100 (15 mã), Crypto BTC/ETH/SOL, S&P 500 (16 mã).' },
+            { icon: 'cpu',     title: '11 thuật toán ML',   desc: 'Moving Average, EMA/MACD, LSTM, GRU, ARIMA-GARCH, EGARCH, SARIMA, LightGBM, XGBoost, Random Forest, Ensemble.' },
+            { icon: 'pulse',   title: 'Dự đoán tự động',   desc: 'Crawl dữ liệu → train định kỳ → sinh dự đoán → đối chiếu với giá thực tế (reconcile).' },
+            { icon: 'grid',    title: 'Simulation bots',   desc: 'Bot giao dịch tự động chạy backtest và live theo từng thuật toán, leaderboard win-rate & P&L.' },
           ].map((c) => (
             <div key={c.title} style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 6, padding: 14 }}>
               <div style={{ color: 'var(--accent)', marginBottom: 6 }}><Icon name={c.icon} size={18} /></div>
@@ -113,80 +114,84 @@ function GuideStart() {
         </div>
       </GSection>
       <GSection title="Điều hướng">
-        <p>Dùng thanh sidebar bên trái hoặc bottom nav (mobile) để chuyển trang:</p>
+        <p>Dùng thanh sidebar bên trái để chuyển trang:</p>
         <GList items={[
-          <><strong>Tổng quan</strong> — snapshot toàn thị trường: VN30, top tăng/giảm, độ chính xác thuật toán</>,
-          <><strong>Cổ phiếu</strong> — xem biểu đồ nến, lịch sử giá từng mã trong VN30</>,
-          <><strong>Dự đoán</strong> — danh sách dự đoán giá, so sánh thuật toán, phân tích sai số</>,
-          <><strong>Huấn luyện</strong> — trạng thái và lịch sử các phiên training mô hình ML</>,
-          <><strong>Giá vàng</strong> — theo dõi SJC và XAU/USD kèm dự đoán</>,
+          <><strong>Tổng quan</strong> — snapshot tổng hợp: dự đoán mới nhất, pipeline status, direction accuracy, top bots.</>,
+          <><strong>Thị trường → Vàng / NASDAQ / Crypto / S&P 500</strong> — biểu đồ giá, dự đoán, lịch sử training.</>,
+          <><strong>Simulation</strong> — leaderboard bots theo win-rate và return %.</>,
+          <><strong>Giám sát dữ liệu</strong> — freshness crawl theo từng thị trường, trạng thái thuật toán, bots summary.</>,
+          <><strong>Cài đặt</strong> — lịch cron, trigger thủ công, đổi mật khẩu.</>,
+          <><strong>Quản lý người dùng / Nhóm thị trường</strong> — chỉ hiển thị với role admin/super_admin.</>,
         ]} />
-        <GTip>Nhấn phím <kbd style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', padding: '1px 5px', borderRadius: 3 }}>/</kbd> để focus vào ô tìm kiếm mã cổ phiếu.</GTip>
+        <GTip>Bấm nút <strong>Tweaks</strong> (góc dưới phải) để tuỳ chỉnh màu nhấn, mật độ, cỡ chữ và tắt/bật ticker.</GTip>
+      </GSection>
+      <GSection title="Đăng nhập">
+        <p>Hầu hết tính năng yêu cầu đăng nhập. Hệ thống có 3 vai trò:</p>
+        <GList items={[
+          <><GBadge color="blue">super_admin</GBadge> — toàn quyền, truy cập tất cả 4 thị trường.</>,
+          <><GBadge color="yellow">admin</GBadge> — quản lý users và market groups, truy cập markets được gán.</>,
+          <><GBadge color="gray">user</GBadge> — chỉ truy cập markets được gán qua market groups.</>,
+        ]} />
+        <GTip>Nếu không thấy một thị trường trong menu, liên hệ admin để được thêm vào market group.</GTip>
       </GSection>
       <GSection title="Cài đặt giao diện">
-        <p>Nhấn nút <strong>Tweaks</strong> (góc dưới bên phải) để tuỳ chỉnh:</p>
         <GList items={[
           'Màu nhấn (accent color) — 6 lựa chọn',
           'Mật độ hiển thị — compact / regular / comfy',
           'Cỡ chữ — 90% đến 115%',
           'Ẩn/hiện thanh ticker giá chạy ngang',
         ]} />
-        <GTip>Chế độ tối/sáng có thể chuyển nhanh bằng 2 nút mặt trời / mặt trăng ở Topbar.</GTip>
+        <GTip>Chế độ tối/sáng chuyển nhanh bằng 2 nút mặt trời / mặt trăng ở Topbar.</GTip>
       </GSection>
     </>
   );
 }
 
-function GuideDashboard() {
+function GuideMarkets() {
   return (
     <>
-      <GSection title="Trang Tổng quan">
-        <p>Dashboard cung cấp cái nhìn nhanh toàn thị trường và hiệu suất hệ thống dự đoán.</p>
+      <GSection title="4 thị trường được theo dõi">
+        <p>Mỗi thị trường có trang riêng với 3 tab: <strong>Tổng quan</strong> (biểu đồ giá + dự đoán), <strong>Dự đoán</strong> (bảng phân trang), <strong>Huấn luyện</strong> (lịch sử training sessions).</p>
       </GSection>
-      <GSection title="Các thành phần chính">
+      <GSection title="Vàng (Gold)">
         <GList items={[
-          <><strong>KPI Cards</strong> — Số mã đang theo dõi, dự đoán hôm nay, độ chính xác trung bình, giá vàng SJC.</>,
-          <><strong>Top Gainers / Losers</strong> — 5 mã tăng mạnh nhất và 5 mã giảm mạnh nhất phiên gần nhất.</>,
-          <><strong>Biểu đồ VN30</strong> — Đường giá chỉ số VN30 theo thời gian.</>,
-          <><strong>Độ chính xác thuật toán</strong> — So sánh hiệu suất 3 thuật toán theo thanh ngang.</>,
-          <><strong>Dự đoán gần đây</strong> — Danh sách ngắn các dự đoán mới nhất kèm trạng thái xác nhận.</>,
+          <><strong>Nguồn dữ liệu:</strong> BTMC API (vàng miếng SJC 1 lượng), Yahoo Finance (XAU/USD).</>,
+          <><strong>Lịch crawl:</strong> Mỗi giờ, liên tục 24/7 — vàng không bị ảnh hưởng bởi giờ thị trường.</>,
+          <><strong>Đơn vị giá:</strong> VND (SJC) và USD/oz (XAU).</>,
+          'Bảng so sánh giá mua/bán nhiều nhà cung cấp: BTMC, Phú Quý.',
         ]} />
       </GSection>
-      <GSection title="Trạng thái dữ liệu">
-        <p>Góc dưới sidebar hiển thị trạng thái nguồn dữ liệu:</p>
+      <GSection title="NASDAQ 100">
         <GList items={[
-          <><GBadge color="green">● Dữ liệu trực tiếp</GBadge> — đang kết nối được API, dữ liệu là thật</>,
-          <><GBadge color="yellow">● Dữ liệu mẫu</GBadge> — không kết nối được backend, hiển thị demo data</>,
-          <><GBadge color="gray">● Đang tải…</GBadge> — đang fetch dữ liệu từ server</>,
+          <><strong>15 mã theo dõi:</strong> AAPL, MSFT, GOOGL, AMZN, NVDA, META, TSLA, AVGO, COST, NFLX, AMD, QCOM, INTC, ADBE, MU.</>,
+          <><strong>Nguồn:</strong> Yahoo Finance.</>,
+          <><strong>Lịch crawl:</strong> Mỗi giờ phút 15, chỉ thứ Hai đến thứ Sáu.</>,
+          <><strong>Đóng cửa:</strong> Cuối tuần và ngày lễ NYSE — banner cảnh báo hiển thị tự động.</>,
         ]} />
-        <GTip>Nếu thấy "Dữ liệu mẫu", hãy kiểm tra backend có đang chạy trên port 31300 không.</GTip>
+        <GTip>Khi thị trường đóng cửa, crawler, dự đoán và bot tự động bị tạm dừng đến phiên kế tiếp.</GTip>
       </GSection>
-    </>
-  );
-}
-
-function GuideStocks() {
-  return (
-    <>
-      <GSection title="Trang Cổ phiếu">
-        <p>Xem chi tiết giá và biểu đồ kỹ thuật cho từng mã trong rổ VN30.</p>
-      </GSection>
-      <GSection title="Cách sử dụng">
+      <GSection title="Cryptocurrency">
         <GList items={[
-          'Chọn mã cổ phiếu từ danh sách bên trái (tìm kiếm hoặc cuộn).',
-          'Biểu đồ nến (candlestick) hiển thị OHLC — Open, High, Low, Close.',
-          'Chọn khung thời gian: 1T / 3T / 6T / 1N / Tất cả.',
-          'Thanh volume phía dưới biểu đồ thể hiện khối lượng giao dịch.',
-          'Panel chi tiết bên phải hiển thị: giá hiện tại, % thay đổi, P/E, vốn hoá.',
+          <><strong>3 coin:</strong> BTC (Bitcoin), ETH (Ethereum), SOL (Solana).</>,
+          <><strong>Nguồn:</strong> CoinGecko API.</>,
+          <><strong>Lịch crawl:</strong> Mỗi 2 giờ, liên tục 24/7.</>,
+          'Giá tính theo USD; không bị ảnh hưởng bởi ngày lễ.',
         ]} />
-        <GTip>Hover chuột lên biểu đồ để xem giá OHLC chi tiết của từng phiên.</GTip>
       </GSection>
-      <GSection title="Chỉ báo kỹ thuật">
+      <GSection title="S&P 500">
         <GList items={[
-          <><strong>MA20 / MA50</strong> — Đường trung bình động 20 và 50 phiên.</>,
-          <><strong>Bollinger Bands</strong> — Dải biến động giá ± 2 độ lệch chuẩn.</>,
-          <><strong>RSI</strong> — Chỉ số sức mạnh tương đối. {'>'}70 = quá mua, {'<'}30 = quá bán.</>,
-          <><strong>Volume</strong> — So sánh khối lượng phiên hiện tại với trung bình 20 phiên.</>,
+          <><strong>16 mã theo dõi:</strong> SPY, QQQ, JPM, BAC, GS, JNJ, UNH, PFE, PG, KO, WMT, XOM, CVX, V, MA (+ 1 mã khác).</>,
+          <><strong>Nguồn:</strong> Yahoo Finance.</>,
+          <><strong>Lịch crawl:</strong> Mỗi giờ phút 0 và 30, chỉ thứ Hai đến thứ Sáu.</>,
+          <><strong>Đóng cửa:</strong> Cuối tuần và ngày lễ NYSE — tương tự NASDAQ.</>,
+        ]} />
+      </GSection>
+      <GSection title="Đọc biểu đồ">
+        <GList items={[
+          'Đường xanh = giá thực tế; đường màu nhấn = dự đoán Ensemble.',
+          'Hover chuột để xem giá chi tiết từng ngày.',
+          'Dùng bộ lọc thời gian (Today / 7D / 30D / 90D / 1Năm) để thu/phóng.',
+          'Tab "Chi tiết" so sánh direction accuracy từng thuật toán theo khoảng thời gian.',
         ]} />
       </GSection>
     </>
@@ -197,21 +202,38 @@ function GuidePredictions() {
   return (
     <>
       <GSection title="Trang Dự đoán">
-        <p>Xem kết quả dự đoán giá đóng cửa của các thuật toán ML, đối chiếu với giá thực tế.</p>
+        <p>Mỗi thị trường có tab <strong>Dự đoán</strong> (từ route <code>/markets/&lt;key&gt;/predictions</code>) hiển thị bảng phân trang toàn bộ dự đoán và kết quả đối chiếu.</p>
       </GSection>
       <GSection title="Trạng thái dự đoán">
         <GList items={[
-          <><GBadge color="yellow">pending</GBadge> — Dự đoán đã tạo, chưa đến ngày kiểm chứng.</>,
-          <><GBadge color="green">confirmed</GBadge> — Dự đoán đúng hướng (sai số trong ngưỡng cho phép).</>,
-          <><GBadge color="red">wrong</GBadge> — Dự đoán sai hướng hoặc vượt ngưỡng sai số.</>,
+          <><GBadge color="yellow">Đang chờ</GBadge> — dự đoán đã tạo, chưa đến ngày kiểm chứng (target_date chưa qua).</>,
+          <><GBadge color="green">Chính xác</GBadge> — hướng dự đoán (tăng/giảm) khớp với giá thực tế.</>,
+          <><GBadge color="blue">Gần đúng</GBadge> — sai số nhỏ nhưng hướng đúng.</>,
+          <><GBadge color="red">Sai lệch</GBadge> — hướng hoặc biên độ dự đoán không khớp.</>,
         ]} />
-        <GTip>Độ chính xác được tính là tỉ lệ dự đoán "confirmed" trên tổng số đã xác nhận.</GTip>
+        <GTip>Reconcile tự động chạy lúc 6:00 sáng mỗi ngày để cập nhật trạng thái dự đoán với giá thực tế.</GTip>
       </GSection>
-      <GSection title="3 Thuật toán">
+      <GSection title="11 Thuật toán">
         <GList items={[
-          <><strong>VWMA (Moving Average)</strong> — Trung bình động có trọng số theo khối lượng. Nhanh, ổn định, phù hợp xu hướng dài hạn.</>,
-          <><strong>LSTM Neural Network</strong> — Mạng nơ-ron hồi tiếp, học từ chuỗi thời gian dài. Tốt cho dữ liệu có mẫu lặp lại.</>,
-          <><strong>ARIMA-GARCH</strong> — Mô hình thống kê kết hợp xu hướng (ARIMA) và biến động (GARCH). Tốt khi thị trường ổn định.</>,
+          <><strong>moving_average</strong> — VWMA trend slope + RSI momentum + StochRSI overlay.</>,
+          <><strong>ema</strong> — EMA slope + MACD momentum boost + Bollinger %B mean-reversion.</>,
+          <><strong>lstm_nn</strong> — PyTorch LSTM 2 lớp, hidden=64, sequence=60 phiên.</>,
+          <><strong>gru_nn</strong> — PyTorch GRU 2 lớp, hidden=64, sequence=60 phiên.</>,
+          <><strong>arima_garch</strong> — ARIMA(2,1,2) + GARCH(1,1) cho xu hướng + biến động.</>,
+          <><strong>egarch</strong> — EGARCH(1,1) với HARX mean model.</>,
+          <><strong>sarima</strong> — SARIMA seasonal period 5 (tuần giao dịch).</>,
+          <><strong>lightgbm</strong> — LightGBM ~30 features, Optuna hyperopt 30 trials.</>,
+          <><strong>xgboost</strong> — XGBoost ~30 features, Optuna hyperopt 30 trials.</>,
+          <><strong>random_forest</strong> — RandomForest ~30 features, n_estimators=200.</>,
+          <><strong>ensemble</strong> — Trung bình đồng đều của 10 thuật toán trên.</>,
+        ]} />
+      </GSection>
+      <GSection title="Direction Accuracy">
+        <p><strong>Direction accuracy</strong> là tỉ lệ dự đoán đúng hướng (tăng/giảm so với giá hiện tại). Đây là metric chính của hệ thống — quan trọng hơn sai số tuyệt đối.</p>
+        <GList items={[
+          'Hiển thị trên Dashboard (direction accuracy TB các thị trường).',
+          'Xem chi tiết theo thuật toán ở tab "Chi tiết" của từng thị trường.',
+          'Trang Giám sát hiển thị per-algo direction accuracy cho mỗi thị trường.',
         ]} />
       </GSection>
     </>
@@ -221,31 +243,108 @@ function GuidePredictions() {
 function GuideTraining() {
   return (
     <>
-      <GSection title="Trang Huấn luyện">
-        <p>Theo dõi trạng thái và lịch sử các phiên huấn luyện mô hình Machine Learning.</p>
-      </GSection>
-      <GSection title="Lịch huấn luyện tự động">
+      <GSection title="Pipeline tự động">
+        <p>Mỗi thị trường có pipeline riêng: <strong>crawl → train (mỗi 10 lần crawl) → predict</strong>. Lịch cron được lưu trong DB và có thể chỉnh sửa live qua trang Cài đặt.</p>
         <GList items={[
-          <><strong>Dự đoán hàng ngày</strong> — 18:00 mỗi ngày, chạy cả 3 thuật toán cho toàn bộ VN30.</>,
-          <><strong>Huấn luyện lại</strong> — 09:00 sáng Chủ nhật, tái huấn luyện LSTM và ARIMA-GARCH với dữ liệu mới nhất.</>,
-          <><strong>Crawl dữ liệu</strong> — 12:00 hàng ngày, thu thập giá từ VietStock.</>,
+          <><strong>Gold</strong> — Crawl mỗi giờ (phút 0); pipeline chạy 24/7.</>,
+          <><strong>NASDAQ</strong> — Crawl mỗi giờ phút 15, thứ Hai–Sáu.</>,
+          <><strong>S&P 500</strong> — Crawl mỗi giờ phút 0 và 30, thứ Hai–Sáu.</>,
+          <><strong>Crypto</strong> — Crawl mỗi 2 giờ, 24/7.</>,
         ]} />
-        <GTip>Có thể trigger thủ công bất kỳ lúc nào từ API (xem mục API & Trigger).</GTip>
+      </GSection>
+      <GSection title="Training định kỳ">
+        <GList items={[
+          <><strong>Gold</strong> — Chủ nhật 3:00 AM.</>,
+          <><strong>NASDAQ</strong> — Chủ nhật 4:00 AM.</>,
+          <><strong>Crypto</strong> — Chủ nhật 5:00 AM.</>,
+          <><strong>S&P 500</strong> — Chủ nhật 7:00 AM.</>,
+          <><strong>Reconcile</strong> — Hàng ngày 6:00 AM, đối chiếu dự đoán với giá thực tế.</>,
+        ]} />
+        <GTip>Training tự động cũng được kích hoạt trong pipeline sau mỗi 10 lần crawl — không chỉ theo lịch tuần.</GTip>
+      </GSection>
+      <GSection title="Tab Huấn luyện (mỗi thị trường)">
+        <p>Route <code>/markets/&lt;key&gt;/training</code> — hiển thị lịch sử các phiên training:</p>
+        <GList items={[
+          'Mỗi session có: thuật toán, thời gian bắt đầu/kết thúc, số mẫu, độ chính xác đạt được.',
+          'Lọc theo thuật toán cụ thể hoặc xem tất cả.',
+          'Phân trang — mỗi trang 20 sessions.',
+        ]} />
+      </GSection>
+      <GSection title="Trigger thủ công">
+        <p>Vào <strong>Cài đặt → Thao tác thủ công</strong> để trigger ngay lập tức (yêu cầu JWT role admin):</p>
+        <GList items={[
+          'Crawl + dự đoán từng thị trường.',
+          'Huấn luyện tất cả thuật toán (train all).',
+          'Reconcile thủ công.',
+        ]} />
       </GSection>
     </>
   );
 }
 
-function GuideGold() {
+function GuideSimulation() {
   return (
     <>
-      <GSection title="Trang Giá vàng">
-        <p>Theo dõi giá vàng trong nước và quốc tế, kèm dự đoán xu hướng.</p>
+      <GSection title="Simulation Bots">
+        <p>Hệ thống chạy các bot giao dịch ảo để đánh giá hiệu suất thực tế của từng thuật toán trên dữ liệu lịch sử (backtest) và live.</p>
       </GSection>
-      <GSection title="Nguồn dữ liệu">
+      <GSection title="Leaderboard">
+        <p>Trang <strong>Simulation</strong> hiển thị bảng xếp hạng tất cả bots theo:</p>
         <GList items={[
-          <><strong>Vàng SJC</strong> — Giá mua/bán vàng miếng SJC từ BTMC, crawl lúc 10:00 hàng ngày.</>,
-          <><strong>XAU/USD</strong> — Giá vàng quốc tế tính theo USD/oz, cập nhật hàng ngày.</>,
+          <><strong>Return %</strong> — lợi nhuận/lỗ so với vốn ban đầu.</>,
+          <><strong>Win Rate</strong> — tỉ lệ giao dịch thắng.</>,
+          <><strong>Profit Factor</strong> — tổng lợi nhuận / tổng lỗ.</>,
+          'Lọc theo thị trường, thuật toán.',
+          'Nhấn vào một bot để xem chi tiết portfolio chart và lịch sử giao dịch.',
+        ]} />
+        <GTip>Dashboard cũng hiển thị Top 3 bots hiệu suất cao nhất — bấm "Xem tất cả →" để vào Leaderboard.</GTip>
+      </GSection>
+      <GSection title="Bot detail">
+        <p>Trang <code>/simulation/&lt;botId&gt;</code> hiển thị:</p>
+        <GList items={[
+          'Biểu đồ giá trị danh mục theo thời gian.',
+          'Cấu hình bot: thị trường, thuật toán, vốn ban đầu, chiến lược.',
+          'Lịch sử giao dịch phân trang (loại BUY/SELL, giá, khối lượng, tín hiệu).',
+        ]} />
+      </GSection>
+      <GSection title="Live mode & Reset">
+        <p>Ngoài backtest lịch sử, mỗi bot có thể chạy <strong>live step</strong> — thực thi tín hiệu giao dịch dựa trên dự đoán mới nhất (trigger từ Cài đặt hoặc lịch cron 8PM hàng ngày). Admin có thể <strong>Reset</strong> tất cả bots về trạng thái mới.</p>
+      </GSection>
+    </>
+  );
+}
+
+function GuideMonitoring() {
+  return (
+    <>
+      <GSection title="Trang Giám sát dữ liệu">
+        <p>Route <code>/monitoring</code> — cung cấp cái nhìn toàn diện về sức khoẻ của data pipeline. Yêu cầu đăng nhập. Dữ liệu cache 30 giây.</p>
+      </GSection>
+      <GSection title="Freshness crawl (4 thị trường)">
+        <p>Mỗi market card hiển thị:</p>
+        <GList items={[
+          <><GBadge color="green">Tươi</GBadge> / <GBadge color="red">Cũ</GBadge> — data coi là cũ nếu lần crawl cuối hơn 3 giờ hoặc không có dữ liệu hôm nay.</>,
+          'Thời điểm crawl cuối cùng (daily và intraday).',
+          'Số bản ghi thu thập hôm nay.',
+          <><GBadge color="yellow">Đóng cửa</GBadge> — hiển thị khi thị trường đang đóng (NASDAQ/SP500 cuối tuần/lễ).</>,
+        ]} />
+      </GSection>
+      <GSection title="Trạng thái dự đoán">
+        <p>Mỗi thị trường cũng hiển thị:</p>
+        <GList items={[
+          'Thời điểm dự đoán cuối cùng.',
+          'Tổng số dự đoán hôm nay.',
+          'Số thuật toán kỳ vọng vs số thực tế — <strong>thiếu thuật toán</strong> chỉ ra pipeline có vấn đề.',
+          'Bảng chi tiết: mỗi thuật toán — số dự đoán hôm nay, direction accuracy, số đã reconcile, số đúng.',
+        ]} />
+        <GTip>Nếu một thuật toán thiếu trong bảng hôm nay, có thể crawl bị lỗi hoặc training chưa chạy. Vào Cài đặt để trigger thủ công.</GTip>
+      </GSection>
+      <GSection title="Tổng hợp Bot Trading">
+        <p>Phần cuối trang Giám sát hiển thị:</p>
+        <GList items={[
+          'Số bots đang hoạt động, phân bố theo thị trường.',
+          'Bảng đầy đủ tất cả bots: market, algo, số giao dịch thắng/thua, win rate, total P&L, return %.',
+          'Có thể sắp xếp các cột để tìm bot hiệu suất cao/thấp nhất.',
         ]} />
       </GSection>
     </>
@@ -255,42 +354,73 @@ function GuideGold() {
 function GuideAPI() {
   return (
     <>
-      <GSection title="API & Trigger thủ công">
-        <p>Hệ thống cung cấp API để kích hoạt crawler và dự đoán theo yêu cầu (không cần chờ cron).</p>
-        <GTip>Các endpoint trigger yêu cầu <strong>API Key</strong> trong header <code>X-API-Key</code> (xem file <code>.env</code>).</GTip>
+      <GSection title="Xác thực (JWT)">
+        <p>Tất cả API đều dùng <strong>JWT Bearer token</strong> — không dùng API key cũ. Lấy token bằng endpoint login:</p>
+        <GCode>{`# Đăng nhập, lấy JWT token
+curl -s -X POST http://localhost/api/auth/login \\
+     -H "Content-Type: application/json" \\
+     -d '{"username":"admin","password":"admin123"}' | jq -r '.token'`}</GCode>
+        <GTip>Token hợp lệ trong 24 giờ. Dùng trong header: <code>Authorization: Bearer &lt;token&gt;</code>. Trigger endpoints yêu cầu role <GBadge color="yellow">admin</GBadge> hoặc <GBadge color="blue">super_admin</GBadge>.</GTip>
       </GSection>
       <GSection title="Trigger endpoints">
-        <GCode>{`# Chạy crawler ngay (cần API Key)
-curl -X POST http://localhost:31300/api/trigger/crawler \\
-     -H "X-API-Key: YOUR_KEY"
+        <GCode>{`TOKEN=$(curl -s -X POST http://localhost/api/auth/login \\
+  -H "Content-Type: application/json" \\
+  -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
 
-# Chạy dự đoán ngay (cần API Key)
-curl -X POST http://localhost:31300/api/trigger/predict \\
-     -H "X-API-Key: YOUR_KEY"
+# Crawl + dự đoán từng thị trường
+curl -X POST http://localhost/api/trigger/gold-crawler    -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost/api/trigger/gold-predict    -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost/api/trigger/nasdaq-crawler  -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost/api/trigger/nasdaq-predict  -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost/api/trigger/crypto-crawler  -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost/api/trigger/crypto-predict  -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost/api/trigger/sp500-crawler   -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost/api/trigger/sp500-predict   -H "Authorization: Bearer $TOKEN"
 
-# Huấn luyện mô hình ngay
-curl -X POST http://localhost:31300/api/trigger/train
+# Huấn luyện
+curl -X POST http://localhost/api/trigger/train           -H "Authorization: Bearer $TOKEN"
 
-# Crawl giá vàng ngay
-curl -X POST http://localhost:31300/api/trigger/gold-crawler`}</GCode>
+# Reconcile dự đoán với giá thực tế
+curl -X POST http://localhost/api/trigger/reconcile       -H "Authorization: Bearer $TOKEN"`}</GCode>
       </GSection>
       <GSection title="Một số API đọc dữ liệu">
-        <GCode>{`# Tổng quan thị trường
-GET /api/market/overview?exchange=HOSE&sector=ngan-hang
-
-# Lịch sử giá cổ phiếu
-GET /api/stocks/VNM/history?from=2024-01-01&to=2024-12-31
-
-# Giá vàng mới nhất
+        <GCode>{`# Giá vàng mới nhất
 GET /api/gold/latest
 
+# Dự đoán vàng mới nhất
+GET /api/gold/predictions/latest
+
+# Giá Crypto mới nhất
+GET /api/crypto/latest
+
+# Dự đoán NASDAQ
+GET /api/nasdaq/predictions/latest
+
 # Thống kê dashboard
-GET /api/dashboard/stats`}</GCode>
+GET /api/dashboard/stats
+
+# Direction accuracy (yêu cầu JWT)
+GET /api/predictions/direction-accuracy?market=GOLD
+
+# Monitoring overview (yêu cầu JWT)
+GET /api/monitoring/overview
+
+# Lịch cron
+GET /api/schedules    -H "Authorization: Bearer $TOKEN"
+
+# Cập nhật lịch cron
+PUT /api/schedules/crawler_gold
+    -H "Authorization: Bearer $TOKEN"
+    -d '{"cron_expression":"0 0 * * * *","enabled":true}'`}</GCode>
       </GSection>
       <GSection title="Health check">
-        <GCode>{`GET http://localhost:31300/health
-GET http://localhost:31300/health/simple
-GET http://localhost:31300/health/ready`}</GCode>
+        <GCode>{`# Gateway health (không cần auth)
+GET http://localhost/healthz
+GET http://localhost/readyz
+
+# API Backend trực tiếp (port 8118)
+GET http://localhost:8118/health`}</GCode>
+        <GTip>Swagger UI đầy đủ tại <code>http://localhost:8118/swagger/</code> — xem tất cả endpoints kèm schema request/response.</GTip>
       </GSection>
     </>
   );

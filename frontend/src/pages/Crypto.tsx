@@ -268,7 +268,7 @@ const COINS = [
 ];
 
 export default function Crypto() {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user, canAccessMarket } = useAuth();
   const { t } = useLanguage();
 
   const [latest, setLatest] = useState<CryptoLatestItem[]>([]);
@@ -289,6 +289,7 @@ export default function Crypto() {
 
   // Load initial data
   useEffect(() => {
+    if (user && !canAccessMarket('CRYPTO')) { setLoading(false); return; }
     setLoading(true);
     Promise.allSettled([
       apiFetch('/api/crypto/latest'),
@@ -397,6 +398,18 @@ export default function Crypto() {
     }
     return result.slice(0, 4);
   })();
+
+  if (user && !canAccessMarket('CRYPTO')) {
+    return (
+      <div className="content__inner fade">
+        <MarketTabs marketKey="crypto" />
+        <div className="empty section-gap">
+          <div className="empty__icon"><Icon name="crypto" size={18} /></div>
+          <p>{t.crypto.noAccess}</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

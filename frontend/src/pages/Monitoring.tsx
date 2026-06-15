@@ -395,7 +395,7 @@ function BotsTable({ rows }: { rows: MonitoringBotRow[] }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Monitoring() {
-  const { user } = useAuth();
+  const { user, canAccessMarket } = useAuth();
   const { t } = useLanguage();
   const m = t.monitoring;
 
@@ -495,7 +495,7 @@ export default function Monitoring() {
             gap: 16,
             marginBottom: 24,
           }}>
-            {data.markets.map((market) => (
+            {data.markets.filter(market => canAccessMarket(market.market)).map((market) => (
               <MarketCard key={market.market} market={market} />
             ))}
           </div>
