@@ -561,7 +561,7 @@ export function fetchMarketPredictions(
     case 'nasdaq100': endpoint = '/nasdaq/predictions';  break;
     case 'crypto':    endpoint = '/crypto/predictions';  break;
     case 'gold':      endpoint = '/gold/predictions';    break;
-    default:          endpoint = '/predictions';         break; // vn30
+    default:          endpoint = '/gold/predictions';    break;
   }
 
   return fetchJSON(endpoint + '?' + p.toString())

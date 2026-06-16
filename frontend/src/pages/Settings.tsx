@@ -279,7 +279,6 @@ const MARKET_PRED_ENDPOINT: Record<string, string> = {
   nasdaq100: '/api/nasdaq/predictions?limit=40',
   crypto:    '/api/crypto/predictions?limit=40',
   sp500:     '/api/sp500/predictions?limit=40',
-  vn30:      '/api/predictions?limit=40',
 };
 
 const MARKET_SIM_KEY: Record<string, string> = {
@@ -287,7 +286,6 @@ const MARKET_SIM_KEY: Record<string, string> = {
   nasdaq100: 'NASDAQ100',
   crypto:    'CRYPTO',
   sp500:     'SP500',
-  vn30:      'VN30',
 };
 
 const MARKET_SSE_KEY: Record<string, string> = {
@@ -1415,7 +1413,7 @@ function PastReportsPanel() {
   };
 
   const MARKET_ICON: Record<string, string> = {
-    gold: 'gold', nasdaq100: 'nasdaq', sp500: 'pulse', crypto: 'crypto', vn30: 'candles',
+    gold: 'gold', nasdaq100: 'nasdaq', sp500: 'pulse', crypto: 'crypto',
   };
 
   return (
@@ -1847,11 +1845,6 @@ export default function Settings() {
               { label: t.settings.pipelinePredict,    endpoint: 'crypto-predict'       },
               { label: t.settings.pipelineBotTrading, endpoint: 'simulation-live-step' },
             ]} marketKey="crypto" marketRoute="/markets/crypto" />
-            <PipelineTriggerBtn label="VN30" icon="candles" steps={[
-              { label: t.settings.pipelineCrawl,      endpoint: 'crawler'              },
-              { label: t.settings.pipelinePredict,    endpoint: 'predict'              },
-              { label: t.settings.pipelineBotTrading, endpoint: 'simulation-live-step' },
-            ]} marketKey="vn30" marketRoute="/markets/vn30" />
           </div>
 
           {/* Utility actions */}

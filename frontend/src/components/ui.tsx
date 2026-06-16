@@ -184,8 +184,37 @@ function getMarketSubs(t: Translations) {
   return [
     { path: '',             label: t.marketSubs.overview    },
     { path: '/predictions', label: t.marketSubs.predictions },
-    { path: '/training',    label: t.marketSubs.training    },
+    { path: '/session',     label: t.marketTabs.session     },
   ];
+}
+
+// ── Market sub-nav tabs (shared across all market pages) ───────────────────────
+export function MarketTabs({ marketKey }: { marketKey: string }) {
+  const { t } = useLanguage();
+  const base = '/markets/' + marketKey;
+  const overviewIcon =
+    marketKey === 'gold' ? 'gold' : marketKey === 'nasdaq100' ? 'nasdaq' : marketKey === 'crypto' ? 'crypto' : 'candles';
+  const cls = ({ isActive }: { isActive: boolean }) => 'market-tab' + (isActive ? ' active' : '');
+  return (
+    <div className="market-tabs">
+      <NavLink to={base} end className={cls}>
+        <Icon name={overviewIcon} size={14} />
+        {t.marketTabs.overview}
+      </NavLink>
+      <NavLink to={base + '/predictions'} className={cls}>
+        <Icon name="pulse" size={14} />
+        {t.marketTabs.predictions}
+      </NavLink>
+      <NavLink to={base + '/detail'} className={cls}>
+        <Icon name="layers" size={14} />
+        {t.marketTabs.detail}
+      </NavLink>
+      <NavLink to={base + '/session'} className={cls}>
+        <Icon name="bar-chart" size={14} />
+        {t.marketTabs.session}
+      </NavLink>
+    </div>
+  );
 }
 
 function getNav(t: Translations): NavItem[] {
@@ -271,7 +300,7 @@ export function Sidebar({ status, collapsed = false, onToggle }: {
               {expanded && !m.comingSoon && MARKET_SUBS.map((sub) => {
                 const subPath = base + sub.path;
                 const overviewIcon = m.key === 'gold' ? 'gold' : m.key === 'nasdaq100' ? 'nasdaq' : m.key === 'crypto' ? 'crypto' : 'candles';
-                const subIcon = sub.path === '' ? overviewIcon : sub.path === '/predictions' ? 'pulse' : 'cpu';
+                const subIcon = sub.path === '' ? overviewIcon : sub.path === '/predictions' ? 'pulse' : sub.path === '/session' ? 'bar-chart' : 'cpu';
                 return (
                   <NavLink
                     key={sub.path}

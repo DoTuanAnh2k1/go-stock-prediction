@@ -182,6 +182,7 @@ export default function Dashboard() {
 
   const [monitoring, setMonitoring] = useState<MonitoringOverview | null>(null);
   const [monLoading, setMonLoading] = useState(false);
+  const [selectedDirMarket, setSelectedDirMarket] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) { setMonitoring(null); return; }
@@ -192,22 +193,22 @@ export default function Dashboard() {
       .finally(() => setMonLoading(false));
   }, [user]);
 
-  // Direction accuracy per algo averaged across markets (from monitoring)
+  const accessibleMarkets = monitoring
+    ? monitoring.markets.filter(m => canAccessMarket(m.market))
+    : [];
+
+  const effectiveDirMarket = selectedDirMarket ?? (accessibleMarkets[0]?.market ?? null);
+
+  // Direction accuracy per algo for the selected market
   const algoDirectionAcc = (() => {
-    if (!monitoring) return {} as Record<string, number>;
-    const acc: Record<string, { sum: number; count: number }> = {};
-    for (const market of monitoring.markets) {
-      for (const row of (market.predictions.algorithms || [])) {
-        if (row.reconciled > 0) {
-          if (!acc[row.algorithm]) acc[row.algorithm] = { sum: 0, count: 0 };
-          acc[row.algorithm].sum += row.direction_accuracy;
-          acc[row.algorithm].count += 1;
-        }
-      }
-    }
+    if (!monitoring || !effectiveDirMarket) return {} as Record<string, number>;
+    const mkt = monitoring.markets.find(m => m.market === effectiveDirMarket);
+    if (!mkt) return {} as Record<string, number>;
     const result: Record<string, number> = {};
-    for (const [key, { sum, count }] of Object.entries(acc)) {
-      result[key] = count > 0 ? (sum / count) * 100 : 0;
+    for (const row of (mkt.predictions.algorithms || [])) {
+      if (row.reconciled > 0) {
+        result[row.algorithm] = row.direction_accuracy * 100;
+      }
     }
     return result;
   })();
@@ -215,10 +216,6 @@ export default function Dashboard() {
   const ensDir = algoDirectionAcc['ensemble'] ?? null;
   const ensAccDisplay = ensDir != null ? ensDir.toFixed(1) + '%' : '—%';
   const ens = (D.algos || []).find((a) => a.cls === 'ens');
-
-  const accessibleMarkets = monitoring
-    ? monitoring.markets.filter(m => canAccessMarket(m.market))
-    : [];
 
   const predsToday = monitoring
     ? accessibleMarkets.reduce((s, m) => s + m.predictions.today_total, 0)
@@ -313,10 +310,39 @@ export default function Dashboard() {
       <TopSimulationBots />
 
       {/* Algorithm Direction Accuracy */}
-      <div className="grid grid--halves section-gap">
+      <div className="section-gap">
+        {user && accessibleMarkets.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+            {accessibleMarkets.map(m => {
+              const isActive = m.market === effectiveDirMarket;
+              const color = MARKET_COLORS[m.market] || 'var(--accent)';
+              return (
+                <button
+                  key={m.market}
+                  onClick={() => setSelectedDirMarket(m.market)}
+                  style={{
+                    padding: '4px 14px',
+                    fontSize: 11,
+                    fontWeight: isActive ? 700 : 400,
+                    background: isActive ? color : 'var(--surface-2)',
+                    color: isActive ? '#fff' : 'var(--text-2)',
+                    border: isActive ? `1px solid ${color}` : '1px solid var(--border)',
+                    cursor: 'pointer',
+                    transition: 'all .15s',
+                    fontFamily: 'var(--font-mono)',
+                    letterSpacing: '0.5px',
+                  }}
+                >
+                  {m.market}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="grid grid--halves">
         <Panel
           title={d.dirAccuracy}
-          sub={d.dirAccuracySub}
+          sub={effectiveDirMarket ? `${effectiveDirMarket} · ${d.dirAccuracySub.split('·').slice(-1)[0].trim()}` : d.dirAccuracySub}
           flush
         >
           {D.algos.length === 0 ? (
@@ -360,7 +386,7 @@ export default function Dashboard() {
           })}
         </Panel>
 
-        <Panel title={d.dirAccuracyChart} sub={d.dirAccuracySub}>
+        <Panel title={d.dirAccuracyChart} sub={effectiveDirMarket ? `${effectiveDirMarket} · ${d.dirAccuracySub.split('·').slice(-1)[0].trim()}` : d.dirAccuracySub}>
           {!user ? (
             <div className="empty" style={{ padding: '24px 0' }}>
               <div className="empty__icon"><Icon name="cpu" size={16} /></div>
@@ -386,6 +412,7 @@ export default function Dashboard() {
             />
           )}
         </Panel>
+        </div>
       </div>
     </div>
   );

@@ -565,6 +565,9 @@ export const translations: Record<Lang, Translations> = {
       username: 'Tên đăng nhập',
       password: 'Mật khẩu',
       role: 'Vai trò',
+      fullName: 'Họ và tên',
+      email: 'Email',
+      phone: 'Số điện thoại',
       createBtn: 'Tạo người dùng',
       creating: 'Đang tạo...',
       createFail: 'Tạo người dùng thất bại',
@@ -575,9 +578,57 @@ export const translations: Record<Lang, Translations> = {
       noUsers: 'Chưa có người dùng nào.',
       colId: 'ID',
       colUsername: 'Username',
+      colFullName: 'Họ và tên',
+      colEmail: 'Email',
+      colPhone: 'Điện thoại',
       colRole: 'Vai trò',
       colCreatedAt: 'Ngày tạo',
       deleteConfirm: 'Xóa người dùng',
+      resetPassword: 'Đặt lại mật khẩu',
+      resetPasswordFor: 'Đặt lại mật khẩu cho',
+      newPassword: 'Mật khẩu mới',
+      newPasswordPlaceholder: 'Tối thiểu 6 ký tự',
+      resetBtn: 'Đặt lại',
+      resetting: 'Đang đặt lại...',
+      resetSuccess: 'Đặt lại mật khẩu thành công',
+      resetFail: 'Đặt lại mật khẩu thất bại',
+      passwordTooShort: 'Mật khẩu mới phải có ít nhất 6 ký tự',
+      cancel: 'Hủy',
+      optional: 'tùy chọn',
+      editUser: 'Chỉnh sửa người dùng',
+      editUserFor: 'Chỉnh sửa',
+      save: 'Lưu',
+      saving: 'Đang lưu...',
+      updateSuccess: 'Cập nhật người dùng thành công',
+      updateFail: 'Cập nhật người dùng thất bại',
+    },
+    // Market Groups page
+    marketGroups: {
+      createGroup: 'Tạo group mới',
+      groupName: 'Tên group',
+      groupDesc: 'Mô tả',
+      groupDescPlaceholder: 'Mô tả (tùy chọn)',
+      createBtn: 'Tạo',
+      creating: 'Đang tạo...',
+      noGroups: 'Chưa có group nào.',
+      manage: 'Quản lý',
+      collapse: 'Thu gọn',
+      edit: 'Sửa',
+      delete: 'Xóa',
+      save: 'Lưu',
+      cancel: 'Hủy',
+      deleteConfirm: 'Xóa group này?',
+      marketsSection: 'Markets',
+      saveMarkets: 'Lưu markets',
+      addUser: 'Thêm user',
+      selectUser: '-- Chọn user --',
+      addBtn: 'Thêm',
+      usersInGroup: 'Users trong group',
+      removeUser: 'Xóa',
+      noUsers: 'Chưa có user.',
+      loading: 'Đang tải...',
+      groupCount: 'nhóm',
+      optional: 'tùy chọn',
     },
     // Monitoring page
     monitoring: {
@@ -1170,6 +1221,9 @@ export const translations: Record<Lang, Translations> = {
       username: 'Username',
       password: 'Password',
       role: 'Role',
+      fullName: 'Full name',
+      email: 'Email',
+      phone: 'Phone',
       createBtn: 'Create User',
       creating: 'Creating...',
       createFail: 'Failed to create user',
@@ -1180,9 +1234,57 @@ export const translations: Record<Lang, Translations> = {
       noUsers: 'No users found.',
       colId: 'ID',
       colUsername: 'Username',
+      colFullName: 'Full name',
+      colEmail: 'Email',
+      colPhone: 'Phone',
       colRole: 'Role',
       colCreatedAt: 'Created At',
       deleteConfirm: 'Delete user',
+      resetPassword: 'Reset password',
+      resetPasswordFor: 'Reset password for',
+      newPassword: 'New password',
+      newPasswordPlaceholder: 'Minimum 6 characters',
+      resetBtn: 'Reset',
+      resetting: 'Resetting...',
+      resetSuccess: 'Password reset successfully',
+      resetFail: 'Failed to reset password',
+      passwordTooShort: 'New password must be at least 6 characters',
+      cancel: 'Cancel',
+      optional: 'optional',
+      editUser: 'Edit user',
+      editUserFor: 'Edit',
+      save: 'Save',
+      saving: 'Saving...',
+      updateSuccess: 'User updated successfully',
+      updateFail: 'Failed to update user',
+    },
+    // Market Groups page
+    marketGroups: {
+      createGroup: 'Create New Group',
+      groupName: 'Group name',
+      groupDesc: 'Description',
+      groupDescPlaceholder: 'Description (optional)',
+      createBtn: 'Create',
+      creating: 'Creating...',
+      noGroups: 'No groups yet.',
+      manage: 'Manage',
+      collapse: 'Collapse',
+      edit: 'Edit',
+      delete: 'Delete',
+      save: 'Save',
+      cancel: 'Cancel',
+      deleteConfirm: 'Delete this group?',
+      marketsSection: 'Markets',
+      saveMarkets: 'Save markets',
+      addUser: 'Add user',
+      selectUser: '-- Select user --',
+      addBtn: 'Add',
+      usersInGroup: 'Users in group',
+      removeUser: 'Remove',
+      noUsers: 'No users.',
+      loading: 'Loading...',
+      groupCount: 'groups',
+      optional: 'optional',
     },
     // Monitoring page
     monitoring: {
@@ -1754,6 +1856,9 @@ export interface Translations {
     username: string;
     password: string;
     role: string;
+    fullName: string;
+    email: string;
+    phone: string;
     createBtn: string;
     creating: string;
     createFail: string;
@@ -1764,9 +1869,56 @@ export interface Translations {
     noUsers: string;
     colId: string;
     colUsername: string;
+    colFullName: string;
+    colEmail: string;
+    colPhone: string;
     colRole: string;
     colCreatedAt: string;
     deleteConfirm: string;
+    resetPassword: string;
+    resetPasswordFor: string;
+    newPassword: string;
+    newPasswordPlaceholder: string;
+    resetBtn: string;
+    resetting: string;
+    resetSuccess: string;
+    resetFail: string;
+    passwordTooShort: string;
+    cancel: string;
+    optional: string;
+    editUser: string;
+    editUserFor: string;
+    save: string;
+    saving: string;
+    updateSuccess: string;
+    updateFail: string;
+  };
+  marketGroups: {
+    createGroup: string;
+    groupName: string;
+    groupDesc: string;
+    groupDescPlaceholder: string;
+    createBtn: string;
+    creating: string;
+    noGroups: string;
+    manage: string;
+    collapse: string;
+    edit: string;
+    delete: string;
+    save: string;
+    cancel: string;
+    deleteConfirm: string;
+    marketsSection: string;
+    saveMarkets: string;
+    addUser: string;
+    selectUser: string;
+    addBtn: string;
+    usersInGroup: string;
+    removeUser: string;
+    noUsers: string;
+    loading: string;
+    groupCount: string;
+    optional: string;
   };
   monitoring: {
     pageTitle: string;

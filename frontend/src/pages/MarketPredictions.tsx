@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, NavLink } from 'react-router-dom';
 import { useData } from '../context/DataContext';
-import { Panel, Icon, Chg, ConfBar } from '../components/ui';
+import { Panel, Icon, Chg, ConfBar, MarketTabs } from '../components/ui';
 import { fetchMarketPredictions } from '../api';
 import { useLanguage } from '../context/LangContext';
 
@@ -80,31 +80,6 @@ function SortTh({ label, field, sortBy, sortDir, onSort, className }: {
 }
 
 // ── Sub-nav tabs ──────────────────────────────────────────────────────────────
-function MarketTabs({ marketKey }: { marketKey: string }) {
-  const { t } = useLanguage();
-  const base = '/markets/' + marketKey;
-  const overviewIcon = marketKey === 'gold' ? 'gold' : marketKey === 'crypto' ? 'candles' : 'candles';
-  return (
-    <div className="market-tabs">
-      <NavLink to={base} end className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name={overviewIcon} size={14} />
-        {t.marketTabs.overview}
-      </NavLink>
-      <NavLink to={base + '/predictions'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name="pulse" size={14} />
-        {t.marketTabs.predictions}
-      </NavLink>
-      <NavLink to={base + '/detail'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name="layers" size={14} />
-        {t.marketTabs.detail}
-      </NavLink>
-      <NavLink to={base + '/training'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name="cpu" size={14} />
-        {t.marketTabs.training}
-      </NavLink>
-    </div>
-  );
-}
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 function StatusBadge({ status, acc }: { status?: string; acc?: number }) {
@@ -123,7 +98,7 @@ function StatusBadge({ status, acc }: { status?: string; acc?: number }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function MarketPredictions() {
-  const { marketKey = 'vn30' } = useParams<{ marketKey: string }>();
+  const { marketKey = 'gold' } = useParams<{ marketKey: string }>();
   const { data: D } = useData();
   const { t } = useLanguage();
 
@@ -188,7 +163,7 @@ export default function MarketPredictions() {
   const marketLabel = isGold ? 'Vàng'
     : isNasdaq ? 'NASDAQ 100'
     : isCrypto ? 'Crypto'
-    : 'VN30';
+    : 'GOLD';
 
   const FALLBACK_ALGOS = [
     { id: 'ema', short: 'EMA', name: 'EMA' },

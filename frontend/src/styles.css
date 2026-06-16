@@ -773,10 +773,35 @@ body {
 .session-window { opacity: .75; }
 
 .session-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap); }
-.session-kpi { padding: 16px; background: var(--panel); border-radius: 10px; }
+.session-kpi { padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; }
 .session-kpi-label { font-size: 11px; color: var(--fg-dim); margin-bottom: 4px; }
 .session-kpi-val { font-size: 22px; font-weight: 700; line-height: 1; }
 .session-kpi-sub { font-size: 11px; color: var(--fg-dim); margin-top: 4px; }
+
+/* ── Direction-accuracy table ──────────────────────────────────────────── */
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table thead th {
+  white-space: nowrap;
+  text-align: left;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--border);
+}
+.data-table tbody td {
+  white-space: nowrap;
+  padding: 8px 14px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:hover { background: var(--surface); }
+.data-table th.num, .data-table td.num { text-align: right; }
+/* last (bar) column absorbs the slack so the data columns size to content */
+.data-table thead th:last-child,
+.data-table tbody td:last-child { width: 100%; padding-left: 18px; }
 
 .acc-bar-wrap { width: 100%; min-width: 80px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
 .acc-bar-fill { height: 100%; border-radius: 3px; }
@@ -788,26 +813,50 @@ body {
 /* ── Session bot table enhancements ────────────────────────────────────── */
 .session-search {
   width: 100%; max-width: 340px;
-  padding: 7px 12px; border-radius: 6px;
-  border: 1px solid var(--border); background: var(--input, var(--bg));
-  color: var(--fg); font-size: 13px; outline: none;
+  padding: 7px 12px; border-radius: 3px;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text); font-size: 13px; outline: none;
 }
 .session-search:focus { border-color: var(--accent); }
 
-.session-bot-table th { white-space: nowrap; }
-.session-bot-table .sortable-th { cursor: pointer; user-select: none; }
-.session-bot-table .sortable-th:hover { background: color-mix(in oklch, var(--accent) 8%, transparent); }
-.session-bot-table .th-inner { display: inline-flex; align-items: center; gap: 3px; }
-.session-bot-table .sort-icon { opacity: 0.3; font-size: 11px; }
-.session-bot-table .sort-icon.active { opacity: 1; color: var(--accent); }
-
-.session-bot-table .row-num { color: var(--fg-dim); font-size: 11px; }
-.session-bot-table .bot-name { font-weight: 500; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
-.session-bot-table .algo-badge {
+.session-bot-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 1000px;
+}
+.session-bot-table th,
+.session-bot-table td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
   white-space: nowrap;
-  font-size: 11px; padding: 2px 6px;
-  background: color-mix(in oklch, var(--accent) 12%, transparent);
-  border-radius: 4px; color: var(--accent);
+}
+.session-bot-table thead tr {
+  background: var(--surface-2);
+}
+.session-bot-table thead th {
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  color: var(--text-2);
+  border-bottom: 2px solid var(--border-strong);
+}
+.session-bot-table tbody tr:hover { background: var(--surface); }
+.session-bot-table tbody tr:nth-child(even) { background: color-mix(in oklch, var(--surface) 40%, transparent); }
+.session-bot-table tbody tr:nth-child(even):hover { background: var(--surface); }
+
+.session-bot-table .sortable-th { cursor: pointer; user-select: none; }
+.session-bot-table .sortable-th:hover { background: color-mix(in oklch, var(--accent) 10%, var(--surface-2)); }
+.session-bot-table .th-inner { display: inline-flex; align-items: center; gap: 4px; }
+.session-bot-table .sort-icon { opacity: 0.25; font-size: 12px; }
+.session-bot-table .sort-icon.active { opacity: 1; color: var(--accent); font-weight: 700; }
+
+.session-bot-table .row-num { color: var(--text-3); font-size: 11px; text-align: center; }
+.session-bot-table .bot-name { font-weight: 500; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.session-bot-table .algo-badge {
+  font-size: 11px; padding: 2px 7px;
+  background: color-mix(in oklch, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in oklch, var(--accent) 30%, transparent);
+  border-radius: 3px; color: var(--accent); font-weight: 600;
 }
 
 .session-pagination {

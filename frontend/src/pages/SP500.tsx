@@ -1,40 +1,11 @@
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Panel, KPI, Icon, Chg, Seg, ConfBar, vnsToast, MarketClosedBanner } from '../components/ui';
+import { Panel, KPI, Icon, Chg, Seg, ConfBar, vnsToast, MarketClosedBanner, MarketTabs } from '../components/ui';
 import { LineChart } from '../components/charts';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LangContext';
 
 // ── Market tabs ───────────────────────────────────────────────────────────────
-function MarketTabs({ marketKey }: { marketKey: string }) {
-  const { t } = useLanguage();
-  const base = '/markets/' + marketKey;
-  return (
-    <div className="market-tabs">
-      <NavLink to={base} end className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name="candles" size={14} />
-        {t.marketTabs.overview}
-      </NavLink>
-      <NavLink to={base + '/predictions'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name="pulse" size={14} />
-        {t.marketTabs.predictions}
-      </NavLink>
-      <NavLink to={base + '/detail'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name="layers" size={14} />
-        {t.marketTabs.detail}
-      </NavLink>
-      <NavLink to={base + '/training'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name="cpu" size={14} />
-        {t.marketTabs.training}
-      </NavLink>
-      <NavLink to={base + '/session'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name="bar-chart" size={14} />
-        {t.marketTabs.session}
-      </NavLink>
-    </div>
-  );
-}
-
 // ── Types ────────────────────────────────────────────────────────────────────
 interface SP500LatestItem {
   symbol: string;

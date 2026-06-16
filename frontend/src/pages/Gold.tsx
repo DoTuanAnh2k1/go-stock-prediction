@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
-import { Panel, KPI, Icon, Chg, Seg, ConfBar } from '../components/ui';
+import { Panel, KPI, Icon, Chg, Seg, ConfBar, MarketTabs } from '../components/ui';
 import { Sparkline, LineChart } from '../components/charts';
 import { crawlGold, predictGold, goldBacktest, goldChart } from '../api';
 import { vnsToast } from '../components/ui';
@@ -162,6 +162,7 @@ export default function Gold() {
   if (srcs.length === 0) {
     return (
       <div className="content__inner fade">
+        <MarketTabs marketKey="gold" />
         <div className="grid grid--kpis section-gap">
           {[1, 2, 3, 4].map((i) => <KPI key={i} label="—" value="—" sub={t.gold.loading} />)}
         </div>
@@ -175,6 +176,7 @@ export default function Gold() {
 
   return (
     <div className="content__inner fade">
+      <MarketTabs marketKey="gold" />
       <div className="grid grid--kpis section-gap">
         {kpis.map((g) => {
           const oz = g.unit === 'oz';

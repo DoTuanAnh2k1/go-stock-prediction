@@ -1,37 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, NavLink } from 'react-router-dom';
 import { useData } from '../context/DataContext';
-import { Panel, Icon, Seg } from '../components/ui';
+import { Panel, Icon, Seg, MarketTabs } from '../components/ui';
 import { LineChart } from '../components/charts';
 import { fetchMarketPredictions } from '../api';
 import { useLanguage } from '../context/LangContext';
-
-// ── Sub-nav tabs ──────────────────────────────────────────────────────────────
-function MarketTabs({ marketKey }: { marketKey: string }) {
-  const { t } = useLanguage();
-  const base = '/markets/' + marketKey;
-  const overviewIcon = marketKey === 'gold' ? 'gold' : 'candles';
-  return (
-    <div className="market-tabs">
-      <NavLink to={base} end className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name={overviewIcon} size={14} />
-        {t.marketTabs.overview}
-      </NavLink>
-      <NavLink to={base + '/predictions'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name="pulse" size={14} />
-        {t.marketTabs.predictions}
-      </NavLink>
-      <NavLink to={base + '/detail'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name="layers" size={14} />
-        {t.marketTabs.detail}
-      </NavLink>
-      <NavLink to={base + '/training'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
-        <Icon name="cpu" size={14} />
-        {t.marketTabs.training}
-      </NavLink>
-    </div>
-  );
-}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const ALGO_COLORS_MAP: Record<string, string> = {
@@ -70,7 +43,7 @@ const CRYPTO_INSTRUMENTS = [
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function MarketDetail() {
-  const { marketKey = 'vn30' } = useParams<{ marketKey: string }>();
+  const { marketKey = 'gold' } = useParams<{ marketKey: string }>();
   const { data: D } = useData();
   const { t } = useLanguage();
 

@@ -99,6 +99,8 @@ export default function SessionStats() {
 
   useEffect(() => {
     if (!marketKey) return;
+    setPage(1);
+    setSearch('');
     setLoading(true);
     setError('');
     apiFetch(`/api/markets/${marketKey}/session-stats`)
@@ -235,29 +237,30 @@ export default function SessionStats() {
           <div className="no-data-msg">{t.common.noData}</div>
         ) : (
           <>
-            <div className="table-wrap">
+            <div className="table-wrap" style={{ overflowX: 'auto' }}>
               <table className="data-table session-bot-table">
                 <thead>
                   <tr>
-                    <th className="num" style={{ width: 40 }}>#</th>
+                    <th className="num" style={{ minWidth: 48, width: 48 }}>#</th>
                     {(
                       [
-                        ['display_name', 'Bot'],
-                        ['algorithm', 'Thuật toán'],
-                        ['current_value', 'Tài khoản'],
-                        ['session_pnl', 'PnL phiên'],
-                        ['total_return_pct', 'Tổng lợi nhuận'],
-                        ['trades', 'Lệnh'],
-                        ['wins_col', 'Thắng'],
-                        ['losses_col', 'Thua'],
-                        ['breakeven_col', 'Hòa'],
-                        ['win_rate', 'Win rate'],
-                      ] as [string, string][]
-                    ).map(([k, label]) => {
+                        ['display_name', 'Bot', 180],
+                        ['algorithm', 'Thuật toán', 100],
+                        ['current_value', 'Tài khoản', 140],
+                        ['session_pnl', 'PnL phiên', 110],
+                        ['total_return_pct', 'Tổng lợi nhuận', 160],
+                        ['trades', 'Lệnh', 70],
+                        ['wins_col', 'Thắng', 70],
+                        ['losses_col', 'Thua', 70],
+                        ['breakeven_col', 'Hòa', 70],
+                        ['win_rate', 'Win rate', 90],
+                      ] as [string, string, number][]
+                    ).map(([k, label, mw]) => {
                       const isSortable = SORTABLE_COLS.includes(k as SortKey);
                       return (
                         <th
                           key={k}
+                          style={{ minWidth: mw }}
                           className={isSortable ? 'sortable-th' : ''}
                           onClick={isSortable ? () => toggleSort(k as SortKey) : undefined}
                         >
@@ -274,12 +277,12 @@ export default function SessionStats() {
                     })}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody key={`page-${page}`}>
                   {pagedBots.map((row, idx) => {
                     const profit = row.current_value - row.initial_capital;
                     const rowNum = (page - 1) * PAGE_SIZE + idx + 1;
                     return (
-                      <tr key={row.bot_id}>
+                      <tr key={`${page}-${idx}-${row.bot_id}`}>
                         <td className="num row-num">{rowNum}</td>
                         <td className="bot-name">{row.display_name}</td>
                         <td className="algo-badge">{algoName(row.algorithm)}</td>
