@@ -58,14 +58,3 @@ type StockPriceListResponse struct {
 	StockPrices []StockPriceDTO `json:"stock_prices"`
 	Total       int             `json:"total"`
 }
-
-// VN30OverviewResponse - response cho VN30 overview
-type VN30OverviewResponse struct {
-	TotalStocks int             `json:"total_stocks"`
-	Gainers     int             `json:"gainers"`
-	Losers      int             `json:"losers"`
-	Unchanged   int             `json:"unchanged"`
-	TotalValue  decimal.Decimal `json:"total_value"`
-	LastUpdated time.Time       `json:"last_updated"`
-	StockPrices []StockPriceDTO `json:"stock_prices"`
-}

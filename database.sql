@@ -33,8 +33,7 @@ CREATE TABLE IF NOT EXISTS stocks (
     symbol VARCHAR(10) NOT NULL UNIQUE COMMENT 'Stock symbol: VCB, VIC, FPT',
     company_name VARCHAR(200) NOT NULL COMMENT 'Company full name',
     exchange_id INT UNSIGNED NOT NULL COMMENT 'Foreign key to exchanges',
-    is_vn30 BOOLEAN DEFAULT FALSE COMMENT 'Is VN30 stock',
-    is_vn100 BOOLEAN DEFAULT FALSE COMMENT 'Is VN100 stock', 
+    is_vn100 BOOLEAN DEFAULT FALSE COMMENT 'Is VN100 stock',
     listing_date DATE NULL COMMENT 'Stock listing date',
     sector VARCHAR(100) NULL COMMENT 'Business sector: Banking, Tech, etc',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -44,7 +43,6 @@ CREATE TABLE IF NOT EXISTS stocks (
     -- Indexes
     INDEX idx_stocks_symbol (symbol),
     INDEX idx_stocks_exchange_id (exchange_id),
-    INDEX idx_stocks_is_vn30 (is_vn30),
     INDEX idx_stocks_sector (sector),
     INDEX idx_stocks_deleted_at (deleted_at),
     
@@ -153,18 +151,18 @@ INSERT IGNORE INTO exchanges (code, name, timezone) VALUES
 ('HNX', 'Hanoi Stock Exchange', 'Asia/Ho_Chi_Minh'),
 ('UPCOM', 'Unlisted Public Company Market', 'Asia/Ho_Chi_Minh');
 
--- Insert sample VN30 stocks
-INSERT IGNORE INTO stocks (symbol, company_name, exchange_id, is_vn30, is_vn100, sector) VALUES
-('VCB', 'Ngân hàng Ngoại thương Việt Nam', 1, TRUE, TRUE, 'Banking'),
-('VIC', 'Tập đoàn Vingroup', 1, TRUE, TRUE, 'Real Estate'),
-('FPT', 'Tập đoàn FPT', 1, TRUE, TRUE, 'Technology'),
-('VNM', 'Công ty Cổ phần Sữa Việt Nam', 1, TRUE, TRUE, 'Consumer Goods'),
-('HPG', 'Tập đoàn Hòa Phát', 1, TRUE, TRUE, 'Industrial'),
-('GAS', 'Tổng công ty Khí Việt Nam', 1, TRUE, TRUE, 'Energy'),
-('MBB', 'Ngân hàng Quân đội', 1, TRUE, TRUE, 'Banking'),
-('TCB', 'Ngân hàng Kỹ thương Việt Nam', 1, TRUE, TRUE, 'Banking'),
-('BID', 'Ngân hàng Đầu tư và Phát triển Việt Nam', 1, TRUE, TRUE, 'Banking'),
-('VRE', 'Vincom Retail', 1, TRUE, TRUE, 'Real Estate');
+-- Insert sample stocks
+INSERT IGNORE INTO stocks (symbol, company_name, exchange_id, is_vn100, sector) VALUES
+('VCB', 'Ngân hàng Ngoại thương Việt Nam', 1, TRUE, 'Banking'),
+('VIC', 'Tập đoàn Vingroup', 1, TRUE, 'Real Estate'),
+('FPT', 'Tập đoàn FPT', 1, TRUE, 'Technology'),
+('VNM', 'Công ty Cổ phần Sữa Việt Nam', 1, TRUE, 'Consumer Goods'),
+('HPG', 'Tập đoàn Hòa Phát', 1, TRUE, 'Industrial'),
+('GAS', 'Tổng công ty Khí Việt Nam', 1, TRUE, 'Energy'),
+('MBB', 'Ngân hàng Quân đội', 1, TRUE, 'Banking'),
+('TCB', 'Ngân hàng Kỹ thương Việt Nam', 1, TRUE, 'Banking'),
+('BID', 'Ngân hàng Đầu tư và Phát triển Việt Nam', 1, TRUE, 'Banking'),
+('VRE', 'Vincom Retail', 1, TRUE, 'Real Estate');
 
 -- ============================================
 -- USEFUL QUERIES FOR DEBUGGING
@@ -188,6 +186,6 @@ INSERT IGNORE INTO stocks (symbol, company_name, exchange_id, is_vn30, is_vn100,
 -- SHOW INDEX FROM predictions;
 
 -- Sample queries to verify data
--- SELECT s.symbol, s.company_name, e.name as exchange 
--- FROM stocks s JOIN exchanges e ON s.exchange_id = e.id 
--- WHERE s.is_vn30 = TRUE;
+-- SELECT s.symbol, s.company_name, e.name as exchange
+-- FROM stocks s JOIN exchanges e ON s.exchange_id = e.id
+-- WHERE s.is_vn100 = TRUE;

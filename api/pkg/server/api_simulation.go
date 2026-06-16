@@ -427,7 +427,7 @@ func GetSimBots(w http.ResponseWriter, r *http.Request) {
 //	@Description  Returns full details and KPIs for a single bot identified by {id}.
 //	@Tags         Simulation
 //	@Produce      json
-//	@Param        id   path      string  true  "Bot ID (e.g. vn30_lstm_nn)"
+//	@Param        id   path      string  true  "Bot ID (e.g. gold_lstm_nn)"
 //	@Success      200  {object}  simBotDetail
 //	@Failure      404  {object}  ResponseFailure
 //	@Failure      500  {object}  ResponseFailure
@@ -691,7 +691,7 @@ func GetSimBotChart(w http.ResponseWriter, r *http.Request) {
 //	@Description  Returns all bots sorted by total_return_pct. Supports filtering by market, algorithm, and currency.
 //	@Tags         Simulation
 //	@Produce      json
-//	@Param        market     query  string  false  "Filter by market (e.g. VN30, CRYPTO)"
+//	@Param        market     query  string  false  "Filter by market (e.g. GOLD, CRYPTO)"
 //	@Param        algorithm  query  string  false  "Filter by algorithm key (e.g. lstm_nn)"
 //	@Param        currency   query  string  false  "Filter by currency (VND or USD)"
 //	@Success      200        {object}  leaderboardResponse

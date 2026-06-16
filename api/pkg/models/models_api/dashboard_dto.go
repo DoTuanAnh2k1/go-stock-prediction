@@ -9,7 +9,6 @@ import (
 // DashboardStatsDTO - DTO cho dashboard statistics
 type DashboardStatsDTO struct {
 	TotalStocks      int64 `json:"total_stocks"`
-	VN30Count        int64 `json:"vn30_count"`
 	TotalPrices      int64 `json:"total_prices"`
 	TotalPredictions int64 `json:"total_predictions"`
 }
@@ -32,7 +31,7 @@ type DashboardStatsFullDTO struct {
 
 // MarketOverviewDTO - DTO cho market overview
 type MarketOverview1DTO struct {
-	VN30Index     decimal.Decimal `json:"vn30_index"`
+	IndexValue    decimal.Decimal `json:"index_value"`
 	Change        decimal.Decimal `json:"change"`
 	ChangePercent decimal.Decimal `json:"change_percent"`
 	TotalVolume   int64           `json:"total_volume"`

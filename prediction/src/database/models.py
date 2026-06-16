@@ -197,7 +197,7 @@ class TrainingLog(Base):
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     deleted_at = Column(DateTime)
-    market_key = Column(String(50), default="vn30")
+    market_key = Column(String(50), default="gold")
 
 
 class SyncLog(Base):

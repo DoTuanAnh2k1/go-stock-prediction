@@ -8,7 +8,6 @@ type StockDTO struct {
 	Symbol      string     `json:"symbol"`
 	CompanyName string     `json:"company_name"`
 	ExchangeID  uint       `json:"exchange_id"`
-	IsVN30      bool       `json:"is_vn30"`
 	IsVN100     bool       `json:"is_vn100"`
 	Sector      string     `json:"sector"`
 	ListingDate *time.Time `json:"listing_date,omitempty"`
@@ -19,7 +18,6 @@ type CreateStockRequest struct {
 	Symbol      string     `json:"symbol" validate:"required,max=10"`
 	CompanyName string     `json:"company_name" validate:"required,max=200"`
 	ExchangeID  uint       `json:"exchange_id" validate:"required"`
-	IsVN30      bool       `json:"is_vn30"`
 	IsVN100     bool       `json:"is_vn100"`
 	Sector      string     `json:"sector,omitempty"`
 	ListingDate *time.Time `json:"listing_date,omitempty"`
@@ -28,7 +26,6 @@ type CreateStockRequest struct {
 // UpdateStockRequest - request để update stock
 type UpdateStockRequest struct {
 	CompanyName *string    `json:"company_name,omitempty"`
-	IsVN30      *bool      `json:"is_vn30,omitempty"`
 	IsVN100     *bool      `json:"is_vn100,omitempty"`
 	Sector      *string    `json:"sector,omitempty"`
 	ListingDate *time.Time `json:"listing_date,omitempty"`

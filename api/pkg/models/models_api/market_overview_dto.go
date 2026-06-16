@@ -13,7 +13,6 @@ type StockFlatDTO struct {
 	CompanyName   string          `json:"company_name"`
 	Sector        string          `json:"sector"`
 	Exchange      string          `json:"exchange"`
-	IsVN30        bool            `json:"is_vn30"`
 	CurrentPrice  decimal.Decimal `json:"current_price"`
 	Change        decimal.Decimal `json:"change"`
 	ChangePercent decimal.Decimal `json:"change_percent"`
@@ -22,7 +21,7 @@ type StockFlatDTO struct {
 }
 
 type MarketOverviewDTO struct {
-	VN30Index    decimal.Decimal        `json:"vn30_index"`
+	IndexValue   decimal.Decimal        `json:"index_value"`
 	IndexChange  decimal.Decimal        `json:"index_change"`
 	IndexPercent decimal.Decimal        `json:"index_percent"`
 	TotalStocks  int                    `json:"total_stocks"`

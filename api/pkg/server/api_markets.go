@@ -122,10 +122,10 @@ func checkMarketAccess(w http.ResponseWriter, r *http.Request, marketKey string)
 // GetMarketPredictions godoc
 //
 //	@Summary      List predictions for a market
-//	@Description  Returns a paginated list of predictions for the specified market (vn30 or gold). Supports filtering by algorithm, status, and free-text search. Sortable by any field.
+//	@Description  Returns a paginated list of predictions for the specified market (gold, nasdaq, sp500, crypto). Supports filtering by algorithm, status, and free-text search. Sortable by any field.
 //	@Tags         Markets
 //	@Produce      json
-//	@Param        key        path      string  true   "Market key: vn30 or gold"
+//	@Param        key        path      string  true   "Market key: gold, nasdaq, sp500, crypto"
 //	@Param        page       query     int     false  "Page number (default 1)"
 //	@Param        limit      query     int     false  "Page size (1-100, default 20)"
 //	@Param        search     query     string  false  "Free-text search by symbol or company name"
@@ -208,10 +208,10 @@ func GetMarketPredictions(w http.ResponseWriter, r *http.Request) {
 // GetMarketTraining godoc
 //
 //	@Summary      List training sessions for a market
-//	@Description  Returns a paginated list of training sessions for the specified market (vn30 or gold). Supports filtering by algorithm and sorting.
+//	@Description  Returns a paginated list of training sessions for the specified market (gold, nasdaq, sp500, crypto). Supports filtering by algorithm and sorting.
 //	@Tags         Markets
 //	@Produce      json
-//	@Param        key        path      string  true   "Market key: vn30 or gold"
+//	@Param        key        path      string  true   "Market key: gold, nasdaq, sp500, crypto"
 //	@Param        page       query     int     false  "Page number (default 1)"
 //	@Param        limit      query     int     false  "Page size (1-100, default 20)"
 //	@Param        algorithm  query     string  false  "Filter by algorithm key (e.g. lstm_nn)"

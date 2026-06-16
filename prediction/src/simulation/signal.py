@@ -26,10 +26,8 @@ class TradeSignal:
 class SignalGenerator:
     """Reads predictions from DB and generates trade signals."""
 
-    # Market → symbol field name in the prediction table
-    # For VN30, the symbol comes via JOIN with stocks table
+    # Market → table name for prediction queries
     MARKET_TO_TABLE = {
-        "VN30": "predictions",
         "GOLD": "gold_predictions",
         "NASDAQ": "nasdaq_predictions",
         "SP500": "sp500_predictions",
@@ -90,22 +88,7 @@ class SignalGenerator:
         date_start = datetime.combine(for_date, datetime.min.time())
         date_end = datetime.combine(for_date, datetime.max.time())
 
-        if market == "VN30":
-            result = session.execute(
-                sqlalchemy.text("""
-                    SELECT s.symbol, p.predicted_price, p.current_price, p.confidence
-                    FROM predictions p
-                    JOIN stocks s ON p.stock_id = s.id
-                    WHERE p.algorithm_name = :algo
-                      AND p.prediction_date BETWEEN :d_start AND :d_end
-                      AND s.is_vn30 = 1
-                      AND p.deleted_at IS NULL
-                """),
-                {"algo": algorithm, "d_start": date_start, "d_end": date_end}
-            ).fetchall()
-            return [{"symbol": r[0], "predicted_price": r[1], "current_price": r[2], "confidence": r[3]} for r in result]
-
-        elif market == "GOLD":
+        if market == "GOLD":
             result = session.execute(
                 sqlalchemy.text("""
                     SELECT CONCAT(source, '_', product_type) as symbol,
@@ -175,23 +158,7 @@ class SignalGenerator:
             date_start = datetime.combine(for_date - timedelta(days=7), datetime.min.time())
             date_end = datetime.combine(for_date, datetime.max.time())
 
-            if market == "VN30":
-                for symbol in symbols:
-                    result = session.execute(
-                        sqlalchemy.text("""
-                            SELECT sp.close_price FROM stock_prices sp
-                            JOIN stocks s ON sp.stock_id = s.id
-                            WHERE s.symbol = :sym
-                              AND sp.trading_date BETWEEN :d_start AND :d_end
-                              AND sp.deleted_at IS NULL
-                            ORDER BY sp.trading_date DESC LIMIT 1
-                        """),
-                        {"sym": symbol, "d_start": date_start, "d_end": date_end}
-                    ).fetchone()
-                    if result:
-                        prices[symbol] = float(result[0])
-
-            elif market == "GOLD":
+            if market == "GOLD":
                 for symbol in symbols:
                     # symbol is "source_product_type"
                     parts = symbol.split("_", 1)

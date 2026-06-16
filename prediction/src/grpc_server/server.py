@@ -36,7 +36,7 @@ class PredictionServicer:
     def TriggerCrawler(self, request, context):
         pb2, _ = _get_pb()
         log.info("grpc.TriggerCrawler.removed")
-        return pb2.TriggerResponse(success=False, message="VN30 crawler removed")
+        return pb2.TriggerResponse(success=False, message="stock crawler removed")
 
     def TriggerNasdaqCrawler(self, request, context):
         pb2, _ = _get_pb()
@@ -53,7 +53,7 @@ class PredictionServicer:
     def TriggerStockHistory(self, request, context):
         pb2, _ = _get_pb()
         log.info("grpc.TriggerStockHistory.removed")
-        return pb2.TriggerResponse(success=False, message="VN30 stock history removed")
+        return pb2.TriggerResponse(success=False, message="stock history removed")
 
     def TriggerGoldHistory(self, request, context):
         pb2, _ = _get_pb()
@@ -208,13 +208,13 @@ class PredictionServicer:
         pb2, _ = _get_pb()
         symbol = request.symbol
         log.info("grpc.TriggerStockCrawl.removed", symbol=symbol)
-        return pb2.StockCrawlResponse(success=False, symbol=symbol, message="VN30 crawler removed")
+        return pb2.StockCrawlResponse(success=False, symbol=symbol, message="stock crawler removed")
 
     def TriggerStockPredict(self, request, context):
         pb2, _ = _get_pb()
         symbol = request.symbol
         log.info("grpc.TriggerStockPredict.removed", symbol=symbol)
-        return pb2.StockPredictResponse(success=False, symbol=symbol, message="VN30 predict removed")
+        return pb2.StockPredictResponse(success=False, symbol=symbol, message="stock predict removed")
 
     def GetTrainingStatus(self, request, context):
         pb2, _ = _get_pb()

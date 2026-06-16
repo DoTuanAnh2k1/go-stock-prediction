@@ -276,10 +276,6 @@ func buildBotSection(store repository.DatabaseStore) monitoringBots {
 	activeBots := 0
 
 	for _, bot := range bots {
-		// Skip VN30 bots (branch is removing VN30).
-		if bot.Market == "VN30" {
-			continue
-		}
 		totalBots++
 		if bot.IsActive {
 			activeBots++

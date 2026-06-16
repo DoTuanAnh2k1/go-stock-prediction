@@ -27,7 +27,6 @@ type FilterRequest struct {
 	Symbol     string `json:"symbol,omitempty" form:"symbol"`
 	ExchangeID *uint  `json:"exchange_id,omitempty" form:"exchange_id"`
 	Sector     string `json:"sector,omitempty" form:"sector"`
-	IsVN30     *bool  `json:"is_vn30,omitempty" form:"is_vn30"`
 	IsVN100    *bool  `json:"is_vn100,omitempty" form:"is_vn100"`
 }
 

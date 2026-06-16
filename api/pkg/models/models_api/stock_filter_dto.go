@@ -6,7 +6,6 @@ type StockFilterDTO struct {
 	Symbols   []string         `json:"symbols,omitempty"`
 	Sector    string           `json:"sector,omitempty"`
 	Exchange  string           `json:"exchange,omitempty"`
-	IsVN30    *bool            `json:"is_vn30,omitempty"`
 	IsVN100   *bool            `json:"is_vn100,omitempty"`
 	MinPrice  *decimal.Decimal `json:"min_price,omitempty"`
 	MaxPrice  *decimal.Decimal `json:"max_price,omitempty"`
