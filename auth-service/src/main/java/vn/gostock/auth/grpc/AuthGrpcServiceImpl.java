@@ -72,7 +72,8 @@ public class AuthGrpcServiceImpl extends AuthServiceGrpc.AuthServiceImplBase {
     public void createUser(CreateUserRequest req, StreamObserver<UserResponse> obs) {
         try {
             User user = userService.createUser(req.getCaller().getCallerRole(),
-                req.getUsername(), req.getPassword(), req.getRole());
+                req.getUsername(), req.getPassword(), req.getRole(),
+                req.getFullName(), req.getEmail(), req.getPhone());
             obs.onNext(toUserResponse(user));
             obs.onCompleted();
         } catch (Exception e) { obs.onError(e); }
@@ -88,10 +89,31 @@ public class AuthGrpcServiceImpl extends AuthServiceGrpc.AuthServiceImplBase {
     }
 
     @Override
+    public void resetPassword(ResetPasswordRequest req, StreamObserver<Empty> obs) {
+        try {
+            userService.resetPassword(req.getCaller().getCallerRole(),
+                req.getTargetId(), req.getNewPassword());
+            obs.onNext(Empty.getDefaultInstance());
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    @Override
     public void updateUserRole(UpdateRoleRequest req, StreamObserver<UserResponse> obs) {
         try {
             User user = userService.updateRole(req.getCaller().getCallerRole(),
                 req.getTargetId(), req.getNewRole());
+            obs.onNext(toUserResponse(user));
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    @Override
+    public void updateUser(UpdateUserRequest req, StreamObserver<UserResponse> obs) {
+        try {
+            User user = userService.updateUser(req.getCaller().getCallerRole(),
+                req.getTargetId(), req.getFullName(), req.getEmail(),
+                req.getPhone(), req.getRole());
             obs.onNext(toUserResponse(user));
             obs.onCompleted();
         } catch (Exception e) { obs.onError(e); }
@@ -199,6 +221,9 @@ public class AuthGrpcServiceImpl extends AuthServiceGrpc.AuthServiceImplBase {
             .setUsername(u.getUsername())
             .setRole(u.getRole())
             .setCreatedAt(u.getCreatedAt() != null ? u.getCreatedAt().toString() : "")
+            .setFullName(u.getFullName() != null ? u.getFullName() : "")
+            .setEmail(u.getEmail() != null ? u.getEmail() : "")
+            .setPhone(u.getPhone() != null ? u.getPhone() : "")
             .build();
     }
 

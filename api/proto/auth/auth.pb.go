@@ -227,6 +227,9 @@ type UserResponse struct {
 	Username      string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
 	Role          string                 `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"`
 	CreatedAt     string                 `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	FullName      string                 `protobuf:"bytes,5,opt,name=full_name,json=fullName,proto3" json:"full_name,omitempty"`
+	Email         string                 `protobuf:"bytes,6,opt,name=email,proto3" json:"email,omitempty"`
+	Phone         string                 `protobuf:"bytes,7,opt,name=phone,proto3" json:"phone,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -289,6 +292,27 @@ func (x *UserResponse) GetCreatedAt() string {
 	return ""
 }
 
+func (x *UserResponse) GetFullName() string {
+	if x != nil {
+		return x.FullName
+	}
+	return ""
+}
+
+func (x *UserResponse) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *UserResponse) GetPhone() string {
+	if x != nil {
+		return x.Phone
+	}
+	return ""
+}
+
 type ListUsersResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Users         []*UserResponse        `protobuf:"bytes,1,rep,name=users,proto3" json:"users,omitempty"`
@@ -339,6 +363,9 @@ type CreateUserRequest struct {
 	Username      string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
 	Password      string                 `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"`
 	Role          string                 `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
+	FullName      string                 `protobuf:"bytes,5,opt,name=full_name,json=fullName,proto3" json:"full_name,omitempty"`
+	Email         string                 `protobuf:"bytes,6,opt,name=email,proto3" json:"email,omitempty"`
+	Phone         string                 `protobuf:"bytes,7,opt,name=phone,proto3" json:"phone,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -401,6 +428,171 @@ func (x *CreateUserRequest) GetRole() string {
 	return ""
 }
 
+func (x *CreateUserRequest) GetFullName() string {
+	if x != nil {
+		return x.FullName
+	}
+	return ""
+}
+
+func (x *CreateUserRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *CreateUserRequest) GetPhone() string {
+	if x != nil {
+		return x.Phone
+	}
+	return ""
+}
+
+type ResetPasswordRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Caller        *CallerMeta            `protobuf:"bytes,1,opt,name=caller,proto3" json:"caller,omitempty"`
+	TargetId      int64                  `protobuf:"varint,2,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
+	NewPassword   string                 `protobuf:"bytes,3,opt,name=new_password,json=newPassword,proto3" json:"new_password,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResetPasswordRequest) Reset() {
+	*x = ResetPasswordRequest{}
+	mi := &file_proto_auth_auth_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResetPasswordRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResetPasswordRequest) ProtoMessage() {}
+
+func (x *ResetPasswordRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResetPasswordRequest.ProtoReflect.Descriptor instead.
+func (*ResetPasswordRequest) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ResetPasswordRequest) GetCaller() *CallerMeta {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *ResetPasswordRequest) GetTargetId() int64 {
+	if x != nil {
+		return x.TargetId
+	}
+	return 0
+}
+
+func (x *ResetPasswordRequest) GetNewPassword() string {
+	if x != nil {
+		return x.NewPassword
+	}
+	return ""
+}
+
+type UpdateUserRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Caller        *CallerMeta            `protobuf:"bytes,1,opt,name=caller,proto3" json:"caller,omitempty"`
+	TargetId      int64                  `protobuf:"varint,2,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
+	FullName      string                 `protobuf:"bytes,3,opt,name=full_name,json=fullName,proto3" json:"full_name,omitempty"`
+	Email         string                 `protobuf:"bytes,4,opt,name=email,proto3" json:"email,omitempty"`
+	Phone         string                 `protobuf:"bytes,5,opt,name=phone,proto3" json:"phone,omitempty"`
+	Role          string                 `protobuf:"bytes,6,opt,name=role,proto3" json:"role,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateUserRequest) Reset() {
+	*x = UpdateUserRequest{}
+	mi := &file_proto_auth_auth_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateUserRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateUserRequest) ProtoMessage() {}
+
+func (x *UpdateUserRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateUserRequest.ProtoReflect.Descriptor instead.
+func (*UpdateUserRequest) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *UpdateUserRequest) GetCaller() *CallerMeta {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *UpdateUserRequest) GetTargetId() int64 {
+	if x != nil {
+		return x.TargetId
+	}
+	return 0
+}
+
+func (x *UpdateUserRequest) GetFullName() string {
+	if x != nil {
+		return x.FullName
+	}
+	return ""
+}
+
+func (x *UpdateUserRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *UpdateUserRequest) GetPhone() string {
+	if x != nil {
+		return x.Phone
+	}
+	return ""
+}
+
+func (x *UpdateUserRequest) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
 type DeleteUserRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Caller        *CallerMeta            `protobuf:"bytes,1,opt,name=caller,proto3" json:"caller,omitempty"`
@@ -411,7 +603,7 @@ type DeleteUserRequest struct {
 
 func (x *DeleteUserRequest) Reset() {
 	*x = DeleteUserRequest{}
-	mi := &file_proto_auth_auth_proto_msgTypes[7]
+	mi := &file_proto_auth_auth_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -423,7 +615,7 @@ func (x *DeleteUserRequest) String() string {
 func (*DeleteUserRequest) ProtoMessage() {}
 
 func (x *DeleteUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_auth_auth_proto_msgTypes[7]
+	mi := &file_proto_auth_auth_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -436,7 +628,7 @@ func (x *DeleteUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteUserRequest.ProtoReflect.Descriptor instead.
 func (*DeleteUserRequest) Descriptor() ([]byte, []int) {
-	return file_proto_auth_auth_proto_rawDescGZIP(), []int{7}
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DeleteUserRequest) GetCaller() *CallerMeta {
@@ -464,7 +656,7 @@ type UpdateRoleRequest struct {
 
 func (x *UpdateRoleRequest) Reset() {
 	*x = UpdateRoleRequest{}
-	mi := &file_proto_auth_auth_proto_msgTypes[8]
+	mi := &file_proto_auth_auth_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -476,7 +668,7 @@ func (x *UpdateRoleRequest) String() string {
 func (*UpdateRoleRequest) ProtoMessage() {}
 
 func (x *UpdateRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_auth_auth_proto_msgTypes[8]
+	mi := &file_proto_auth_auth_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -489,7 +681,7 @@ func (x *UpdateRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateRoleRequest.ProtoReflect.Descriptor instead.
 func (*UpdateRoleRequest) Descriptor() ([]byte, []int) {
-	return file_proto_auth_auth_proto_rawDescGZIP(), []int{8}
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *UpdateRoleRequest) GetCaller() *CallerMeta {
@@ -524,7 +716,7 @@ type ChangePassRequest struct {
 
 func (x *ChangePassRequest) Reset() {
 	*x = ChangePassRequest{}
-	mi := &file_proto_auth_auth_proto_msgTypes[9]
+	mi := &file_proto_auth_auth_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -536,7 +728,7 @@ func (x *ChangePassRequest) String() string {
 func (*ChangePassRequest) ProtoMessage() {}
 
 func (x *ChangePassRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_auth_auth_proto_msgTypes[9]
+	mi := &file_proto_auth_auth_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -549,7 +741,7 @@ func (x *ChangePassRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangePassRequest.ProtoReflect.Descriptor instead.
 func (*ChangePassRequest) Descriptor() ([]byte, []int) {
-	return file_proto_auth_auth_proto_rawDescGZIP(), []int{9}
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ChangePassRequest) GetCaller() *CallerMeta {
@@ -587,7 +779,7 @@ type MarketGroupResponse struct {
 
 func (x *MarketGroupResponse) Reset() {
 	*x = MarketGroupResponse{}
-	mi := &file_proto_auth_auth_proto_msgTypes[10]
+	mi := &file_proto_auth_auth_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -599,7 +791,7 @@ func (x *MarketGroupResponse) String() string {
 func (*MarketGroupResponse) ProtoMessage() {}
 
 func (x *MarketGroupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_auth_auth_proto_msgTypes[10]
+	mi := &file_proto_auth_auth_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -612,7 +804,7 @@ func (x *MarketGroupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketGroupResponse.ProtoReflect.Descriptor instead.
 func (*MarketGroupResponse) Descriptor() ([]byte, []int) {
-	return file_proto_auth_auth_proto_rawDescGZIP(), []int{10}
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *MarketGroupResponse) GetId() int64 {
@@ -666,7 +858,7 @@ type ListGroupsResponse struct {
 
 func (x *ListGroupsResponse) Reset() {
 	*x = ListGroupsResponse{}
-	mi := &file_proto_auth_auth_proto_msgTypes[11]
+	mi := &file_proto_auth_auth_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -678,7 +870,7 @@ func (x *ListGroupsResponse) String() string {
 func (*ListGroupsResponse) ProtoMessage() {}
 
 func (x *ListGroupsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_auth_auth_proto_msgTypes[11]
+	mi := &file_proto_auth_auth_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -691,7 +883,7 @@ func (x *ListGroupsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGroupsResponse.ProtoReflect.Descriptor instead.
 func (*ListGroupsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_auth_auth_proto_rawDescGZIP(), []int{11}
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ListGroupsResponse) GetGroups() []*MarketGroupResponse {
@@ -712,7 +904,7 @@ type CreateGroupRequest struct {
 
 func (x *CreateGroupRequest) Reset() {
 	*x = CreateGroupRequest{}
-	mi := &file_proto_auth_auth_proto_msgTypes[12]
+	mi := &file_proto_auth_auth_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -724,7 +916,7 @@ func (x *CreateGroupRequest) String() string {
 func (*CreateGroupRequest) ProtoMessage() {}
 
 func (x *CreateGroupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_auth_auth_proto_msgTypes[12]
+	mi := &file_proto_auth_auth_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -737,7 +929,7 @@ func (x *CreateGroupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateGroupRequest.ProtoReflect.Descriptor instead.
 func (*CreateGroupRequest) Descriptor() ([]byte, []int) {
-	return file_proto_auth_auth_proto_rawDescGZIP(), []int{12}
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *CreateGroupRequest) GetCaller() *CallerMeta {
@@ -773,7 +965,7 @@ type UpdateGroupRequest struct {
 
 func (x *UpdateGroupRequest) Reset() {
 	*x = UpdateGroupRequest{}
-	mi := &file_proto_auth_auth_proto_msgTypes[13]
+	mi := &file_proto_auth_auth_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -785,7 +977,7 @@ func (x *UpdateGroupRequest) String() string {
 func (*UpdateGroupRequest) ProtoMessage() {}
 
 func (x *UpdateGroupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_auth_auth_proto_msgTypes[13]
+	mi := &file_proto_auth_auth_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -798,7 +990,7 @@ func (x *UpdateGroupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateGroupRequest.ProtoReflect.Descriptor instead.
 func (*UpdateGroupRequest) Descriptor() ([]byte, []int) {
-	return file_proto_auth_auth_proto_rawDescGZIP(), []int{13}
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *UpdateGroupRequest) GetCaller() *CallerMeta {
@@ -839,7 +1031,7 @@ type DeleteGroupRequest struct {
 
 func (x *DeleteGroupRequest) Reset() {
 	*x = DeleteGroupRequest{}
-	mi := &file_proto_auth_auth_proto_msgTypes[14]
+	mi := &file_proto_auth_auth_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -851,7 +1043,7 @@ func (x *DeleteGroupRequest) String() string {
 func (*DeleteGroupRequest) ProtoMessage() {}
 
 func (x *DeleteGroupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_auth_auth_proto_msgTypes[14]
+	mi := &file_proto_auth_auth_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -864,7 +1056,7 @@ func (x *DeleteGroupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteGroupRequest.ProtoReflect.Descriptor instead.
 func (*DeleteGroupRequest) Descriptor() ([]byte, []int) {
-	return file_proto_auth_auth_proto_rawDescGZIP(), []int{14}
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *DeleteGroupRequest) GetCaller() *CallerMeta {
@@ -892,7 +1084,7 @@ type SetGroupMarketsRequest struct {
 
 func (x *SetGroupMarketsRequest) Reset() {
 	*x = SetGroupMarketsRequest{}
-	mi := &file_proto_auth_auth_proto_msgTypes[15]
+	mi := &file_proto_auth_auth_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -904,7 +1096,7 @@ func (x *SetGroupMarketsRequest) String() string {
 func (*SetGroupMarketsRequest) ProtoMessage() {}
 
 func (x *SetGroupMarketsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_auth_auth_proto_msgTypes[15]
+	mi := &file_proto_auth_auth_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -917,7 +1109,7 @@ func (x *SetGroupMarketsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetGroupMarketsRequest.ProtoReflect.Descriptor instead.
 func (*SetGroupMarketsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_auth_auth_proto_rawDescGZIP(), []int{15}
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SetGroupMarketsRequest) GetCaller() *CallerMeta {
@@ -951,7 +1143,7 @@ type GroupRequest struct {
 
 func (x *GroupRequest) Reset() {
 	*x = GroupRequest{}
-	mi := &file_proto_auth_auth_proto_msgTypes[16]
+	mi := &file_proto_auth_auth_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -963,7 +1155,7 @@ func (x *GroupRequest) String() string {
 func (*GroupRequest) ProtoMessage() {}
 
 func (x *GroupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_auth_auth_proto_msgTypes[16]
+	mi := &file_proto_auth_auth_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -976,7 +1168,7 @@ func (x *GroupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GroupRequest.ProtoReflect.Descriptor instead.
 func (*GroupRequest) Descriptor() ([]byte, []int) {
-	return file_proto_auth_auth_proto_rawDescGZIP(), []int{16}
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GroupRequest) GetCaller() *CallerMeta {
@@ -1004,7 +1196,7 @@ type UserGroupRequest struct {
 
 func (x *UserGroupRequest) Reset() {
 	*x = UserGroupRequest{}
-	mi := &file_proto_auth_auth_proto_msgTypes[17]
+	mi := &file_proto_auth_auth_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1016,7 +1208,7 @@ func (x *UserGroupRequest) String() string {
 func (*UserGroupRequest) ProtoMessage() {}
 
 func (x *UserGroupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_auth_auth_proto_msgTypes[17]
+	mi := &file_proto_auth_auth_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1029,7 +1221,7 @@ func (x *UserGroupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserGroupRequest.ProtoReflect.Descriptor instead.
 func (*UserGroupRequest) Descriptor() ([]byte, []int) {
-	return file_proto_auth_auth_proto_rawDescGZIP(), []int{17}
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *UserGroupRequest) GetCaller() *CallerMeta {
@@ -1063,7 +1255,7 @@ type UserRequest struct {
 
 func (x *UserRequest) Reset() {
 	*x = UserRequest{}
-	mi := &file_proto_auth_auth_proto_msgTypes[18]
+	mi := &file_proto_auth_auth_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1075,7 +1267,7 @@ func (x *UserRequest) String() string {
 func (*UserRequest) ProtoMessage() {}
 
 func (x *UserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_auth_auth_proto_msgTypes[18]
+	mi := &file_proto_auth_auth_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1088,7 +1280,7 @@ func (x *UserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserRequest.ProtoReflect.Descriptor instead.
 func (*UserRequest) Descriptor() ([]byte, []int) {
-	return file_proto_auth_auth_proto_rawDescGZIP(), []int{18}
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *UserRequest) GetCaller() *CallerMeta {
@@ -1122,20 +1314,37 @@ const file_proto_auth_auth_proto_rawDesc = "" +
 	"\rLoginResponse\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x12\n" +
-	"\x04role\x18\x03 \x01(\tR\x04role\"m\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role\"\xb6\x01\n" +
 	"\fUserResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x12\n" +
 	"\x04role\x18\x03 \x01(\tR\x04role\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x04 \x01(\tR\tcreatedAt\"=\n" +
+	"created_at\x18\x04 \x01(\tR\tcreatedAt\x12\x1b\n" +
+	"\tfull_name\x18\x05 \x01(\tR\bfullName\x12\x14\n" +
+	"\x05email\x18\x06 \x01(\tR\x05email\x12\x14\n" +
+	"\x05phone\x18\a \x01(\tR\x05phone\"=\n" +
 	"\x11ListUsersResponse\x12(\n" +
-	"\x05users\x18\x01 \x03(\v2\x12.auth.UserResponseR\x05users\"\x89\x01\n" +
+	"\x05users\x18\x01 \x03(\v2\x12.auth.UserResponseR\x05users\"\xd2\x01\n" +
 	"\x11CreateUserRequest\x12(\n" +
 	"\x06caller\x18\x01 \x01(\v2\x10.auth.CallerMetaR\x06caller\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x1a\n" +
 	"\bpassword\x18\x03 \x01(\tR\bpassword\x12\x12\n" +
-	"\x04role\x18\x04 \x01(\tR\x04role\"Z\n" +
+	"\x04role\x18\x04 \x01(\tR\x04role\x12\x1b\n" +
+	"\tfull_name\x18\x05 \x01(\tR\bfullName\x12\x14\n" +
+	"\x05email\x18\x06 \x01(\tR\x05email\x12\x14\n" +
+	"\x05phone\x18\a \x01(\tR\x05phone\"\x80\x01\n" +
+	"\x14ResetPasswordRequest\x12(\n" +
+	"\x06caller\x18\x01 \x01(\v2\x10.auth.CallerMetaR\x06caller\x12\x1b\n" +
+	"\ttarget_id\x18\x02 \x01(\x03R\btargetId\x12!\n" +
+	"\fnew_password\x18\x03 \x01(\tR\vnewPassword\"\xb7\x01\n" +
+	"\x11UpdateUserRequest\x12(\n" +
+	"\x06caller\x18\x01 \x01(\v2\x10.auth.CallerMetaR\x06caller\x12\x1b\n" +
+	"\ttarget_id\x18\x02 \x01(\x03R\btargetId\x12\x1b\n" +
+	"\tfull_name\x18\x03 \x01(\tR\bfullName\x12\x14\n" +
+	"\x05email\x18\x04 \x01(\tR\x05email\x12\x14\n" +
+	"\x05phone\x18\x05 \x01(\tR\x05phone\x12\x12\n" +
+	"\x04role\x18\x06 \x01(\tR\x04role\"Z\n" +
 	"\x11DeleteUserRequest\x12(\n" +
 	"\x06caller\x18\x01 \x01(\v2\x10.auth.CallerMetaR\x06caller\x12\x1b\n" +
 	"\ttarget_id\x18\x02 \x01(\x03R\btargetId\"u\n" +
@@ -1185,7 +1394,7 @@ const file_proto_auth_auth_proto_rawDesc = "" +
 	"\bgroup_id\x18\x03 \x01(\x03R\agroupId\"P\n" +
 	"\vUserRequest\x12(\n" +
 	"\x06caller\x18\x01 \x01(\v2\x10.auth.CallerMetaR\x06caller\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x03R\x06userId2\xd0\a\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId2\xc5\b\n" +
 	"\vAuthService\x120\n" +
 	"\x05Login\x12\x12.auth.LoginRequest\x1a\x13.auth.LoginResponse\x12-\n" +
 	"\x05GetMe\x12\x10.auth.CallerMeta\x1a\x12.auth.UserResponse\x126\n" +
@@ -1195,7 +1404,10 @@ const file_proto_auth_auth_proto_rawDesc = "" +
 	"CreateUser\x12\x17.auth.CreateUserRequest\x1a\x12.auth.UserResponse\x122\n" +
 	"\n" +
 	"DeleteUser\x12\x17.auth.DeleteUserRequest\x1a\v.auth.Empty\x12=\n" +
-	"\x0eUpdateUserRole\x12\x17.auth.UpdateRoleRequest\x1a\x12.auth.UserResponse\x12>\n" +
+	"\x0eUpdateUserRole\x12\x17.auth.UpdateRoleRequest\x1a\x12.auth.UserResponse\x129\n" +
+	"\n" +
+	"UpdateUser\x12\x17.auth.UpdateUserRequest\x1a\x12.auth.UserResponse\x128\n" +
+	"\rResetPassword\x12\x1a.auth.ResetPasswordRequest\x1a\v.auth.Empty\x12>\n" +
 	"\x10ListMarketGroups\x12\x10.auth.CallerMeta\x1a\x18.auth.ListGroupsResponse\x12H\n" +
 	"\x11CreateMarketGroup\x12\x18.auth.CreateGroupRequest\x1a\x19.auth.MarketGroupResponse\x12H\n" +
 	"\x11UpdateMarketGroup\x12\x18.auth.UpdateGroupRequest\x1a\x19.auth.MarketGroupResponse\x12:\n" +
@@ -1219,7 +1431,7 @@ func file_proto_auth_auth_proto_rawDescGZIP() []byte {
 	return file_proto_auth_auth_proto_rawDescData
 }
 
-var file_proto_auth_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_proto_auth_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_proto_auth_auth_proto_goTypes = []any{
 	(*CallerMeta)(nil),             // 0: auth.CallerMeta
 	(*Empty)(nil),                  // 1: auth.Empty
@@ -1228,70 +1440,78 @@ var file_proto_auth_auth_proto_goTypes = []any{
 	(*UserResponse)(nil),           // 4: auth.UserResponse
 	(*ListUsersResponse)(nil),      // 5: auth.ListUsersResponse
 	(*CreateUserRequest)(nil),      // 6: auth.CreateUserRequest
-	(*DeleteUserRequest)(nil),      // 7: auth.DeleteUserRequest
-	(*UpdateRoleRequest)(nil),      // 8: auth.UpdateRoleRequest
-	(*ChangePassRequest)(nil),      // 9: auth.ChangePassRequest
-	(*MarketGroupResponse)(nil),    // 10: auth.MarketGroupResponse
-	(*ListGroupsResponse)(nil),     // 11: auth.ListGroupsResponse
-	(*CreateGroupRequest)(nil),     // 12: auth.CreateGroupRequest
-	(*UpdateGroupRequest)(nil),     // 13: auth.UpdateGroupRequest
-	(*DeleteGroupRequest)(nil),     // 14: auth.DeleteGroupRequest
-	(*SetGroupMarketsRequest)(nil), // 15: auth.SetGroupMarketsRequest
-	(*GroupRequest)(nil),           // 16: auth.GroupRequest
-	(*UserGroupRequest)(nil),       // 17: auth.UserGroupRequest
-	(*UserRequest)(nil),            // 18: auth.UserRequest
+	(*ResetPasswordRequest)(nil),   // 7: auth.ResetPasswordRequest
+	(*UpdateUserRequest)(nil),      // 8: auth.UpdateUserRequest
+	(*DeleteUserRequest)(nil),      // 9: auth.DeleteUserRequest
+	(*UpdateRoleRequest)(nil),      // 10: auth.UpdateRoleRequest
+	(*ChangePassRequest)(nil),      // 11: auth.ChangePassRequest
+	(*MarketGroupResponse)(nil),    // 12: auth.MarketGroupResponse
+	(*ListGroupsResponse)(nil),     // 13: auth.ListGroupsResponse
+	(*CreateGroupRequest)(nil),     // 14: auth.CreateGroupRequest
+	(*UpdateGroupRequest)(nil),     // 15: auth.UpdateGroupRequest
+	(*DeleteGroupRequest)(nil),     // 16: auth.DeleteGroupRequest
+	(*SetGroupMarketsRequest)(nil), // 17: auth.SetGroupMarketsRequest
+	(*GroupRequest)(nil),           // 18: auth.GroupRequest
+	(*UserGroupRequest)(nil),       // 19: auth.UserGroupRequest
+	(*UserRequest)(nil),            // 20: auth.UserRequest
 }
 var file_proto_auth_auth_proto_depIdxs = []int32{
 	4,  // 0: auth.ListUsersResponse.users:type_name -> auth.UserResponse
 	0,  // 1: auth.CreateUserRequest.caller:type_name -> auth.CallerMeta
-	0,  // 2: auth.DeleteUserRequest.caller:type_name -> auth.CallerMeta
-	0,  // 3: auth.UpdateRoleRequest.caller:type_name -> auth.CallerMeta
-	0,  // 4: auth.ChangePassRequest.caller:type_name -> auth.CallerMeta
-	10, // 5: auth.ListGroupsResponse.groups:type_name -> auth.MarketGroupResponse
-	0,  // 6: auth.CreateGroupRequest.caller:type_name -> auth.CallerMeta
-	0,  // 7: auth.UpdateGroupRequest.caller:type_name -> auth.CallerMeta
-	0,  // 8: auth.DeleteGroupRequest.caller:type_name -> auth.CallerMeta
-	0,  // 9: auth.SetGroupMarketsRequest.caller:type_name -> auth.CallerMeta
-	0,  // 10: auth.GroupRequest.caller:type_name -> auth.CallerMeta
-	0,  // 11: auth.UserGroupRequest.caller:type_name -> auth.CallerMeta
-	0,  // 12: auth.UserRequest.caller:type_name -> auth.CallerMeta
-	2,  // 13: auth.AuthService.Login:input_type -> auth.LoginRequest
-	0,  // 14: auth.AuthService.GetMe:input_type -> auth.CallerMeta
-	9,  // 15: auth.AuthService.ChangePassword:input_type -> auth.ChangePassRequest
-	0,  // 16: auth.AuthService.ListUsers:input_type -> auth.CallerMeta
-	6,  // 17: auth.AuthService.CreateUser:input_type -> auth.CreateUserRequest
-	7,  // 18: auth.AuthService.DeleteUser:input_type -> auth.DeleteUserRequest
-	8,  // 19: auth.AuthService.UpdateUserRole:input_type -> auth.UpdateRoleRequest
-	0,  // 20: auth.AuthService.ListMarketGroups:input_type -> auth.CallerMeta
-	12, // 21: auth.AuthService.CreateMarketGroup:input_type -> auth.CreateGroupRequest
-	13, // 22: auth.AuthService.UpdateMarketGroup:input_type -> auth.UpdateGroupRequest
-	14, // 23: auth.AuthService.DeleteMarketGroup:input_type -> auth.DeleteGroupRequest
-	15, // 24: auth.AuthService.SetGroupMarkets:input_type -> auth.SetGroupMarketsRequest
-	16, // 25: auth.AuthService.ListGroupUsers:input_type -> auth.GroupRequest
-	17, // 26: auth.AuthService.AddUserToGroup:input_type -> auth.UserGroupRequest
-	17, // 27: auth.AuthService.RemoveUserFromGroup:input_type -> auth.UserGroupRequest
-	18, // 28: auth.AuthService.GetUserMarketGroups:input_type -> auth.UserRequest
-	3,  // 29: auth.AuthService.Login:output_type -> auth.LoginResponse
-	4,  // 30: auth.AuthService.GetMe:output_type -> auth.UserResponse
-	1,  // 31: auth.AuthService.ChangePassword:output_type -> auth.Empty
-	5,  // 32: auth.AuthService.ListUsers:output_type -> auth.ListUsersResponse
-	4,  // 33: auth.AuthService.CreateUser:output_type -> auth.UserResponse
-	1,  // 34: auth.AuthService.DeleteUser:output_type -> auth.Empty
-	4,  // 35: auth.AuthService.UpdateUserRole:output_type -> auth.UserResponse
-	11, // 36: auth.AuthService.ListMarketGroups:output_type -> auth.ListGroupsResponse
-	10, // 37: auth.AuthService.CreateMarketGroup:output_type -> auth.MarketGroupResponse
-	10, // 38: auth.AuthService.UpdateMarketGroup:output_type -> auth.MarketGroupResponse
-	1,  // 39: auth.AuthService.DeleteMarketGroup:output_type -> auth.Empty
-	1,  // 40: auth.AuthService.SetGroupMarkets:output_type -> auth.Empty
-	5,  // 41: auth.AuthService.ListGroupUsers:output_type -> auth.ListUsersResponse
-	1,  // 42: auth.AuthService.AddUserToGroup:output_type -> auth.Empty
-	1,  // 43: auth.AuthService.RemoveUserFromGroup:output_type -> auth.Empty
-	11, // 44: auth.AuthService.GetUserMarketGroups:output_type -> auth.ListGroupsResponse
-	29, // [29:45] is the sub-list for method output_type
-	13, // [13:29] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	0,  // 2: auth.ResetPasswordRequest.caller:type_name -> auth.CallerMeta
+	0,  // 3: auth.UpdateUserRequest.caller:type_name -> auth.CallerMeta
+	0,  // 4: auth.DeleteUserRequest.caller:type_name -> auth.CallerMeta
+	0,  // 5: auth.UpdateRoleRequest.caller:type_name -> auth.CallerMeta
+	0,  // 6: auth.ChangePassRequest.caller:type_name -> auth.CallerMeta
+	12, // 7: auth.ListGroupsResponse.groups:type_name -> auth.MarketGroupResponse
+	0,  // 8: auth.CreateGroupRequest.caller:type_name -> auth.CallerMeta
+	0,  // 9: auth.UpdateGroupRequest.caller:type_name -> auth.CallerMeta
+	0,  // 10: auth.DeleteGroupRequest.caller:type_name -> auth.CallerMeta
+	0,  // 11: auth.SetGroupMarketsRequest.caller:type_name -> auth.CallerMeta
+	0,  // 12: auth.GroupRequest.caller:type_name -> auth.CallerMeta
+	0,  // 13: auth.UserGroupRequest.caller:type_name -> auth.CallerMeta
+	0,  // 14: auth.UserRequest.caller:type_name -> auth.CallerMeta
+	2,  // 15: auth.AuthService.Login:input_type -> auth.LoginRequest
+	0,  // 16: auth.AuthService.GetMe:input_type -> auth.CallerMeta
+	11, // 17: auth.AuthService.ChangePassword:input_type -> auth.ChangePassRequest
+	0,  // 18: auth.AuthService.ListUsers:input_type -> auth.CallerMeta
+	6,  // 19: auth.AuthService.CreateUser:input_type -> auth.CreateUserRequest
+	9,  // 20: auth.AuthService.DeleteUser:input_type -> auth.DeleteUserRequest
+	10, // 21: auth.AuthService.UpdateUserRole:input_type -> auth.UpdateRoleRequest
+	8,  // 22: auth.AuthService.UpdateUser:input_type -> auth.UpdateUserRequest
+	7,  // 23: auth.AuthService.ResetPassword:input_type -> auth.ResetPasswordRequest
+	0,  // 24: auth.AuthService.ListMarketGroups:input_type -> auth.CallerMeta
+	14, // 25: auth.AuthService.CreateMarketGroup:input_type -> auth.CreateGroupRequest
+	15, // 26: auth.AuthService.UpdateMarketGroup:input_type -> auth.UpdateGroupRequest
+	16, // 27: auth.AuthService.DeleteMarketGroup:input_type -> auth.DeleteGroupRequest
+	17, // 28: auth.AuthService.SetGroupMarkets:input_type -> auth.SetGroupMarketsRequest
+	18, // 29: auth.AuthService.ListGroupUsers:input_type -> auth.GroupRequest
+	19, // 30: auth.AuthService.AddUserToGroup:input_type -> auth.UserGroupRequest
+	19, // 31: auth.AuthService.RemoveUserFromGroup:input_type -> auth.UserGroupRequest
+	20, // 32: auth.AuthService.GetUserMarketGroups:input_type -> auth.UserRequest
+	3,  // 33: auth.AuthService.Login:output_type -> auth.LoginResponse
+	4,  // 34: auth.AuthService.GetMe:output_type -> auth.UserResponse
+	1,  // 35: auth.AuthService.ChangePassword:output_type -> auth.Empty
+	5,  // 36: auth.AuthService.ListUsers:output_type -> auth.ListUsersResponse
+	4,  // 37: auth.AuthService.CreateUser:output_type -> auth.UserResponse
+	1,  // 38: auth.AuthService.DeleteUser:output_type -> auth.Empty
+	4,  // 39: auth.AuthService.UpdateUserRole:output_type -> auth.UserResponse
+	4,  // 40: auth.AuthService.UpdateUser:output_type -> auth.UserResponse
+	1,  // 41: auth.AuthService.ResetPassword:output_type -> auth.Empty
+	13, // 42: auth.AuthService.ListMarketGroups:output_type -> auth.ListGroupsResponse
+	12, // 43: auth.AuthService.CreateMarketGroup:output_type -> auth.MarketGroupResponse
+	12, // 44: auth.AuthService.UpdateMarketGroup:output_type -> auth.MarketGroupResponse
+	1,  // 45: auth.AuthService.DeleteMarketGroup:output_type -> auth.Empty
+	1,  // 46: auth.AuthService.SetGroupMarkets:output_type -> auth.Empty
+	5,  // 47: auth.AuthService.ListGroupUsers:output_type -> auth.ListUsersResponse
+	1,  // 48: auth.AuthService.AddUserToGroup:output_type -> auth.Empty
+	1,  // 49: auth.AuthService.RemoveUserFromGroup:output_type -> auth.Empty
+	13, // 50: auth.AuthService.GetUserMarketGroups:output_type -> auth.ListGroupsResponse
+	33, // [33:51] is the sub-list for method output_type
+	15, // [15:33] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_proto_auth_auth_proto_init() }
@@ -1305,7 +1525,7 @@ func file_proto_auth_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_auth_auth_proto_rawDesc), len(file_proto_auth_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

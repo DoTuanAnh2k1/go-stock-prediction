@@ -26,6 +26,8 @@ const (
 	AuthService_CreateUser_FullMethodName          = "/auth.AuthService/CreateUser"
 	AuthService_DeleteUser_FullMethodName          = "/auth.AuthService/DeleteUser"
 	AuthService_UpdateUserRole_FullMethodName      = "/auth.AuthService/UpdateUserRole"
+	AuthService_UpdateUser_FullMethodName          = "/auth.AuthService/UpdateUser"
+	AuthService_ResetPassword_FullMethodName       = "/auth.AuthService/ResetPassword"
 	AuthService_ListMarketGroups_FullMethodName    = "/auth.AuthService/ListMarketGroups"
 	AuthService_CreateMarketGroup_FullMethodName   = "/auth.AuthService/CreateMarketGroup"
 	AuthService_UpdateMarketGroup_FullMethodName   = "/auth.AuthService/UpdateMarketGroup"
@@ -50,6 +52,8 @@ type AuthServiceClient interface {
 	CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*UserResponse, error)
 	DeleteUser(ctx context.Context, in *DeleteUserRequest, opts ...grpc.CallOption) (*Empty, error)
 	UpdateUserRole(ctx context.Context, in *UpdateRoleRequest, opts ...grpc.CallOption) (*UserResponse, error)
+	UpdateUser(ctx context.Context, in *UpdateUserRequest, opts ...grpc.CallOption) (*UserResponse, error)
+	ResetPassword(ctx context.Context, in *ResetPasswordRequest, opts ...grpc.CallOption) (*Empty, error)
 	// Market groups
 	ListMarketGroups(ctx context.Context, in *CallerMeta, opts ...grpc.CallOption) (*ListGroupsResponse, error)
 	CreateMarketGroup(ctx context.Context, in *CreateGroupRequest, opts ...grpc.CallOption) (*MarketGroupResponse, error)
@@ -134,6 +138,26 @@ func (c *authServiceClient) UpdateUserRole(ctx context.Context, in *UpdateRoleRe
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UserResponse)
 	err := c.cc.Invoke(ctx, AuthService_UpdateUserRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) UpdateUser(ctx context.Context, in *UpdateUserRequest, opts ...grpc.CallOption) (*UserResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UserResponse)
+	err := c.cc.Invoke(ctx, AuthService_UpdateUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) ResetPassword(ctx context.Context, in *ResetPasswordRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, AuthService_ResetPassword_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -243,6 +267,8 @@ type AuthServiceServer interface {
 	CreateUser(context.Context, *CreateUserRequest) (*UserResponse, error)
 	DeleteUser(context.Context, *DeleteUserRequest) (*Empty, error)
 	UpdateUserRole(context.Context, *UpdateRoleRequest) (*UserResponse, error)
+	UpdateUser(context.Context, *UpdateUserRequest) (*UserResponse, error)
+	ResetPassword(context.Context, *ResetPasswordRequest) (*Empty, error)
 	// Market groups
 	ListMarketGroups(context.Context, *CallerMeta) (*ListGroupsResponse, error)
 	CreateMarketGroup(context.Context, *CreateGroupRequest) (*MarketGroupResponse, error)
@@ -283,6 +309,12 @@ func (UnimplementedAuthServiceServer) DeleteUser(context.Context, *DeleteUserReq
 }
 func (UnimplementedAuthServiceServer) UpdateUserRole(context.Context, *UpdateRoleRequest) (*UserResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateUserRole not implemented")
+}
+func (UnimplementedAuthServiceServer) UpdateUser(context.Context, *UpdateUserRequest) (*UserResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateUser not implemented")
+}
+func (UnimplementedAuthServiceServer) ResetPassword(context.Context, *ResetPasswordRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResetPassword not implemented")
 }
 func (UnimplementedAuthServiceServer) ListMarketGroups(context.Context, *CallerMeta) (*ListGroupsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListMarketGroups not implemented")
@@ -454,6 +486,42 @@ func _AuthService_UpdateUserRole_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AuthServiceServer).UpdateUserRole(ctx, req.(*UpdateRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_UpdateUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).UpdateUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_UpdateUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).UpdateUser(ctx, req.(*UpdateUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_ResetPassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResetPasswordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ResetPassword(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_ResetPassword_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).ResetPassword(ctx, req.(*ResetPasswordRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -654,6 +722,14 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateUserRole",
 			Handler:    _AuthService_UpdateUserRole_Handler,
+		},
+		{
+			MethodName: "UpdateUser",
+			Handler:    _AuthService_UpdateUser_Handler,
+		},
+		{
+			MethodName: "ResetPassword",
+			Handler:    _AuthService_ResetPassword_Handler,
 		},
 		{
 			MethodName: "ListMarketGroups",

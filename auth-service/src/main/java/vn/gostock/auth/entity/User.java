@@ -25,6 +25,15 @@ public class User {
     @Column(nullable = false)
     private String role;
 
+    @Column(name = "full_name", length = 100)
+    private String fullName;
+
+    @Column(length = 255)
+    private String email;
+
+    @Column(length = 30)
+    private String phone;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

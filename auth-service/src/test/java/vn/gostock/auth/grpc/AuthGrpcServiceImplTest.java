@@ -67,7 +67,7 @@ class AuthGrpcServiceImplTest {
 
     @Test
     void createUser_adminCaller_createsUser() {
-        when(userService.createUser("admin", "newuser", "pass", "user")).thenReturn(
+        when(userService.createUser("admin", "newuser", "pass", "user", "", "", "")).thenReturn(
             User.builder().id(2L).username("newuser").role("user").build());
 
         StreamObserver<UserResponse> obs = mock(StreamObserver.class);

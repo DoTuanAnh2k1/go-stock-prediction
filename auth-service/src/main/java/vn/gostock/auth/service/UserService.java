@@ -47,7 +47,8 @@ public class UserService {
     }
 
     @Transactional
-    public User createUser(String callerRole, String username, String password, String role) {
+    public User createUser(String callerRole, String username, String password, String role,
+                           String fullName, String email, String phone) {
         requireAdminOrSuperAdmin(callerRole);
         String effectiveRole = VALID_ROLES.contains(role) ? role : "user";
         if ("super_admin".equals(effectiveRole) && !"super_admin".equals(callerRole)) {
@@ -62,10 +63,36 @@ public class UserService {
             .username(username)
             .passwordHash(passwordEncoder.encode(password))
             .role(effectiveRole)
+            .fullName(emptyToNull(fullName))
+            .email(emptyToNull(email))
+            .phone(emptyToNull(phone))
             .createdAt(LocalDateTime.now())
             .updatedAt(LocalDateTime.now())
             .build();
         return userRepository.save(user);
+    }
+
+    @Transactional
+    public void resetPassword(String callerRole, long targetId, String newPassword) {
+        requireAdminOrSuperAdmin(callerRole);
+        User target = userRepository.findByIdAndDeletedAtIsNull(targetId)
+            .orElseThrow(() -> new StatusRuntimeException(
+                Status.NOT_FOUND.withDescription("user not found")));
+        if ("super_admin".equals(target.getRole())) {
+            throw new StatusRuntimeException(
+                Status.PERMISSION_DENIED.withDescription("cannot reset super_admin password"));
+        }
+        if ("admin".equals(callerRole) && !"user".equals(target.getRole())) {
+            throw new StatusRuntimeException(
+                Status.PERMISSION_DENIED.withDescription("admin can only reset user passwords"));
+        }
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new StatusRuntimeException(
+                Status.INVALID_ARGUMENT.withDescription("new password must be at least 6 characters"));
+        }
+        target.setPasswordHash(passwordEncoder.encode(newPassword));
+        target.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(target);
     }
 
     @Transactional
@@ -106,6 +133,35 @@ public class UserService {
     }
 
     @Transactional
+    public User updateUser(String callerRole, long targetId, String fullName, String email,
+                           String phone, String role) {
+        requireAdminOrSuperAdmin(callerRole);
+        User target = userRepository.findByIdAndDeletedAtIsNull(targetId)
+            .orElseThrow(() -> new StatusRuntimeException(
+                Status.NOT_FOUND.withDescription("user not found")));
+        if ("super_admin".equals(target.getRole()) && !"super_admin".equals(callerRole)) {
+            throw new StatusRuntimeException(
+                Status.PERMISSION_DENIED.withDescription("cannot modify super_admin"));
+        }
+        if (role != null && !role.isBlank()) {
+            if (!VALID_ROLES.contains(role)) {
+                throw new StatusRuntimeException(
+                    Status.INVALID_ARGUMENT.withDescription("invalid role: " + role));
+            }
+            if ("super_admin".equals(role) && !"super_admin".equals(callerRole)) {
+                throw new StatusRuntimeException(
+                    Status.PERMISSION_DENIED.withDescription("only super_admin can assign super_admin role"));
+            }
+            target.setRole(role);
+        }
+        target.setFullName(emptyToNull(fullName));
+        target.setEmail(emptyToNull(email));
+        target.setPhone(emptyToNull(phone));
+        target.setUpdatedAt(LocalDateTime.now());
+        return userRepository.save(target);
+    }
+
+    @Transactional
     public void changePassword(long callerId, String oldPassword, String newPassword) {
         User user = userRepository.findByIdAndDeletedAtIsNull(callerId)
             .orElseThrow(() -> new StatusRuntimeException(
@@ -121,6 +177,10 @@ public class UserService {
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+    }
+
+    private static String emptyToNull(String s) {
+        return (s == null || s.isEmpty()) ? null : s;
     }
 
     private void requireAdminOrSuperAdmin(String role) {

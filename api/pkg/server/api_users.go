@@ -16,6 +16,13 @@ type createUserRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Role     string `json:"role"`
+	FullName string `json:"full_name"`
+	Email    string `json:"email"`
+	Phone    string `json:"phone"`
+}
+
+type resetPasswordRequest struct {
+	NewPassword string `json:"new_password"`
 }
 
 // ListUsersHandler godoc
@@ -81,6 +88,9 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		Username: req.Username,
 		Password: req.Password,
 		Role:     req.Role,
+		FullName: req.FullName,
+		Email:    req.Email,
+		Phone:    req.Phone,
 	})
 	if err != nil {
 		st, _ := status.FromError(err)
@@ -149,4 +159,134 @@ func DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ResponseSuccess(w, http.StatusOK, map[string]string{"message": "user deleted"})
+}
+
+type updateUserRequest struct {
+	FullName string `json:"full_name"`
+	Email    string `json:"email"`
+	Phone    string `json:"phone"`
+	Role     string `json:"role"`
+}
+
+// UpdateUserHandler godoc
+//
+//	@Summary      Update user
+//	@Description  Updates profile fields (full_name, email, phone) and/or role of an existing user; admin or super_admin required
+//	@Tags         Users
+//	@Accept       json
+//	@Produce      json
+//	@Security     BearerAuth
+//	@Param        id    path     int               true  "User ID"
+//	@Param        body  body     updateUserRequest true  "Fields to update"
+//	@Success      200   {object} authpb.UserResponse
+//	@Failure      400   {object} ResponseFailure
+//	@Failure      401   {object} ResponseFailure
+//	@Failure      403   {object} ResponseFailure
+//	@Failure      404   {object} ResponseFailure
+//	@Failure      503   {object} ResponseFailure
+//	@Router       /api/users/{id} [put]
+func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireAdmin(w, r) {
+		return
+	}
+	idStr := r.PathValue("id")
+	targetID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		ResponseError(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	var req updateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		ResponseError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	client := authclient.GetClient()
+	if client == nil {
+		ResponseError(w, http.StatusServiceUnavailable, "auth service unavailable")
+		return
+	}
+	resp, err := client.UpdateUser(r.Context(), &authpb.UpdateUserRequest{
+		Caller:   callerFromClaims(getClaims(r)),
+		TargetId: targetID,
+		FullName: req.FullName,
+		Email:    req.Email,
+		Phone:    req.Phone,
+		Role:     req.Role,
+	})
+	if err != nil {
+		st, _ := status.FromError(err)
+		switch st.Code() {
+		case codes.PermissionDenied:
+			ResponseError(w, http.StatusForbidden, st.Message())
+		case codes.NotFound:
+			ResponseError(w, http.StatusNotFound, "user not found")
+		case codes.InvalidArgument:
+			ResponseError(w, http.StatusBadRequest, st.Message())
+		default:
+			logger.Logger.Errorf("authclient.UpdateUser error: %v", err)
+			ResponseError(w, http.StatusInternalServerError, "auth service error")
+		}
+		return
+	}
+	ResponseSuccess(w, http.StatusOK, resp)
+}
+
+// ResetPasswordHandler godoc
+//
+//	@Summary      Reset user password
+//	@Description  Resets the password of an existing user; admin or super_admin required; cannot reset super_admin password if caller is admin
+//	@Tags         Users
+//	@Accept       json
+//	@Produce      json
+//	@Security     BearerAuth
+//	@Param        id    path     int                  true "User ID"
+//	@Param        body  body     resetPasswordRequest true "New password"
+//	@Success      200   {object} map[string]string
+//	@Failure      400   {object} ResponseFailure
+//	@Failure      401   {object} ResponseFailure
+//	@Failure      403   {object} ResponseFailure
+//	@Failure      404   {object} ResponseFailure
+//	@Failure      503   {object} ResponseFailure
+//	@Router       /api/users/{id}/reset-password [post]
+func ResetPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireAdmin(w, r) {
+		return
+	}
+	idStr := r.PathValue("id")
+	targetID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		ResponseError(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	var req resetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		ResponseError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	client := authclient.GetClient()
+	if client == nil {
+		ResponseError(w, http.StatusServiceUnavailable, "auth service unavailable")
+		return
+	}
+	_, err = client.ResetPassword(r.Context(), &authpb.ResetPasswordRequest{
+		Caller:      callerFromClaims(getClaims(r)),
+		TargetId:    targetID,
+		NewPassword: req.NewPassword,
+	})
+	if err != nil {
+		st, _ := status.FromError(err)
+		switch st.Code() {
+		case codes.PermissionDenied:
+			ResponseError(w, http.StatusForbidden, st.Message())
+		case codes.NotFound:
+			ResponseError(w, http.StatusNotFound, "user not found")
+		case codes.InvalidArgument:
+			ResponseError(w, http.StatusBadRequest, st.Message())
+		default:
+			logger.Logger.Errorf("authclient.ResetPassword error: %v", err)
+			ResponseError(w, http.StatusInternalServerError, "auth service error")
+		}
+		return
+	}
+	ResponseSuccess(w, http.StatusOK, map[string]string{"message": "password reset"})
 }
