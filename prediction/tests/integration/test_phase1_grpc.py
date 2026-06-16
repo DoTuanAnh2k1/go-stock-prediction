@@ -46,7 +46,7 @@ def test_get_training_status(grpc_stub):
 
 
 def test_trigger_crawler(grpc_stub):
-    """TriggerCrawler returns a response (VN30 removed — success=False expected)."""
+    """TriggerCrawler returns a response (stock crawler removed — success=False expected)."""
     from src.proto.prediction import prediction_pb2
 
     resp = grpc_stub.TriggerCrawler(prediction_pb2.Empty())

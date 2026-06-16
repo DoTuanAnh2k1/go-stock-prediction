@@ -52,7 +52,7 @@ def test_api_trigger_gold_crawler_succeeds(api_base_url, auth_headers):
 
 
 # ---------------------------------------------------------------------------
-# VN30 / Stock endpoints
+# Stock endpoints (removed)
 # ---------------------------------------------------------------------------
 
 def test_api_stock_vcb_history_has_data(api_base_url, auth_headers):

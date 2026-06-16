@@ -196,7 +196,6 @@ class TestTradeSignalImport:
     def test_signal_generator_has_market_to_table(self):
         from src.simulation.signal import SignalGenerator
         sg = SignalGenerator()
-        assert "VN30" in sg.MARKET_TO_TABLE
         assert "GOLD" in sg.MARKET_TO_TABLE
         assert "NASDAQ" in sg.MARKET_TO_TABLE
         assert "SP500" in sg.MARKET_TO_TABLE

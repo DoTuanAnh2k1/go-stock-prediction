@@ -35,13 +35,13 @@ def test_sim_bots_seeded_count():
 
 
 def test_sim_bots_all_markets_present():
-    """All 6 markets must be represented."""
+    """All 4 markets must be represented."""
     from src.database.connection import session_scope
     from src.database.models import SimBot
 
     with session_scope() as session:
         markets = {b.market for b in session.query(SimBot).all()}
-    assert markets == {"VN30", "GOLD", "NASDAQ", "SP500", "CRYPTO"}
+    assert markets == {"GOLD", "NASDAQ", "SP500", "CRYPTO"}
 
 
 def test_sim_bots_all_algorithms_present():
@@ -56,19 +56,6 @@ def test_sim_bots_all_algorithms_present():
         "sarima", "egarch", "gru_nn", "random_forest", "xgboost", "ensemble",
     }
     assert algos == expected
-
-
-def test_sim_bots_vnd_markets_have_correct_capital():
-    """VN30 bots must have 1,000,000,000 VND initial capital."""
-    from src.database.connection import session_scope
-    from src.database.models import SimBot
-
-    with session_scope() as session:
-        vnd_data = [(b.id, float(b.initial_capital))
-                    for b in session.query(SimBot).filter(SimBot.currency == "VND").all()]
-    assert len(vnd_data) == 22, f"Expected 22 VND bots, got {len(vnd_data)}"
-    for bot_id, capital in vnd_data:
-        assert capital == 1_000_000_000.0, f"Bot {bot_id} wrong capital: {capital}"
 
 
 def test_sim_bots_usd_markets_have_correct_capital():
@@ -207,11 +194,11 @@ def test_bot_detail_not_found(api_base_url):
 
 
 def test_bot_trades_api_empty(api_base_url):
-    """GET /api/simulation/bots/vn30_lstm_nn/trades returns 200 even when no trades yet."""
+    """GET /api/simulation/bots/gold_lstm_nn/trades returns 200 even when no trades yet."""
     import requests
 
     resp = requests.get(
-        f"{api_base_url}/api/simulation/bots/vn30_lstm_nn/trades", timeout=10
+        f"{api_base_url}/api/simulation/bots/gold_lstm_nn/trades", timeout=10
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -220,11 +207,11 @@ def test_bot_trades_api_empty(api_base_url):
 
 
 def test_bot_chart_api_empty(api_base_url):
-    """GET /api/simulation/bots/vn30_lstm_nn/chart returns 200 even when no data yet."""
+    """GET /api/simulation/bots/gold_lstm_nn/chart returns 200 even when no data yet."""
     import requests
 
     resp = requests.get(
-        f"{api_base_url}/api/simulation/bots/vn30_lstm_nn/chart", timeout=10
+        f"{api_base_url}/api/simulation/bots/gold_lstm_nn/chart", timeout=10
     )
     assert resp.status_code == 200
     data = resp.json()

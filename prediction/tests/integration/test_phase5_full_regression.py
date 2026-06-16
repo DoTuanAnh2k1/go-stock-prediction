@@ -105,7 +105,7 @@ class TestGRPCContractAllRPCs:
     def test_trigger_crawler(self, grpc_stub):
         from src.proto.prediction import prediction_pb2
         resp = grpc_stub.TriggerCrawler(prediction_pb2.Empty())
-        assert resp is not None  # VN30 removed — success=False expected
+        assert resp is not None  # stock crawler removed — success=False expected
 
     def test_trigger_gold_crawler(self, grpc_stub):
         from src.proto.prediction import prediction_pb2
@@ -150,7 +150,7 @@ class TestGRPCContractAllRPCs:
     def test_trigger_stock_history(self, grpc_stub):
         from src.proto.prediction import prediction_pb2
         resp = grpc_stub.TriggerStockHistory(prediction_pb2.StockHistoryRequest(days=7))
-        assert resp is not None  # VN30 removed — success=False expected
+        assert resp is not None  # stock crawler removed — success=False expected
 
     def test_trigger_gold_history(self, grpc_stub):
         from src.proto.prediction import prediction_pb2
