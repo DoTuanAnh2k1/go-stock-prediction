@@ -91,6 +91,7 @@ export const translations: Record<Lang, Translations> = {
       predictions: 'Dự đoán',
       detail: 'Chi tiết',
       training: 'Huấn luyện',
+      session: 'Phiên',
     },
     // Banner thị trường đóng cửa (NASDAQ / SP500)
     marketClosed: {
@@ -713,6 +714,7 @@ export const translations: Record<Lang, Translations> = {
       predictions: 'Predictions',
       detail: 'Detail',
       training: 'Training',
+      session: 'Session',
     },
     marketClosed: {
       weekend: 'Market is closed (weekend). Crawling, predictions and bots are paused until the next trading session.',
@@ -1296,6 +1298,7 @@ export interface Translations {
     predictions: string;
     detail: string;
     training: string;
+    session: string;
   };
   marketClosed: {
     weekend: string;

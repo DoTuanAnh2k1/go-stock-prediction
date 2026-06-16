@@ -759,3 +759,28 @@ body {
 .sidebar--collapsed .sidebar__foot { padding: 10px; }
 .sidebar--collapsed .sidebar__foot .mkt__row { justify-content: center; }
 .sidebar--collapsed .sidebar__foot .mkt__row span { display: none; }
+
+/* ── Session Stats ─────────────────────────────────────────────────────── */
+.session-stats { display: flex; flex-direction: column; gap: var(--gap); }
+
+.session-banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-radius: 8px; font-size: 13px;
+}
+.session-banner.open  { background: color-mix(in oklch, var(--up) 15%, transparent); color: var(--up); }
+.session-banner.closed{ background: color-mix(in oklch, var(--fg) 8%, transparent); color: var(--fg-dim); }
+.session-status { font-weight: 600; }
+.session-window { opacity: .75; }
+
+.session-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap); }
+.session-kpi { padding: 16px; background: var(--panel); border-radius: 10px; }
+.session-kpi-label { font-size: 11px; color: var(--fg-dim); margin-bottom: 4px; }
+.session-kpi-val { font-size: 22px; font-weight: 700; line-height: 1; }
+.session-kpi-sub { font-size: 11px; color: var(--fg-dim); margin-top: 4px; }
+
+.acc-bar-wrap { width: 80px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.acc-bar-fill { height: 100%; border-radius: 3px; }
+
+@media (max-width: 600px) {
+  .session-kpis { grid-template-columns: 1fr 1fr; }
+}
