@@ -20,7 +20,7 @@ set -euo pipefail
 
 CERT_SRC="${1:-}"
 KEY_SRC="${2:-}"
-CERT_DIR="$(cd "$(dirname "$0")/.." && pwd)/nginx/certs"
+CERT_DIR="$(cd "$(dirname "$0")/.." && pwd)/gateway-svc/certs"
 mkdir -p "$CERT_DIR"
 
 if [ -z "$CERT_SRC" ] || [ -z "$KEY_SRC" ]; then
@@ -33,7 +33,7 @@ if [ -z "$CERT_SRC" ] || [ -z "$KEY_SRC" ]; then
   echo "  4. Save Private Key         → some local file (e.g. ~/cf-key.pem)"
   echo "  5. Run: $0 ~/cf-cert.pem ~/cf-key.pem"
   echo "  6. Set Cloudflare SSL/TLS mode to 'Full (strict)'"
-  echo "  7. docker compose restart frontend"
+  echo "  7. docker compose restart gateway"
   exit 0
 fi
 
@@ -41,7 +41,7 @@ cp "$CERT_SRC" "$CERT_DIR/cert.pem"
 cp "$KEY_SRC"  "$CERT_DIR/key.pem"
 chmod 600 "$CERT_DIR/key.pem"
 
-echo "[TLS] Cloudflare Origin Certificate installed to nginx/certs/"
+echo "[TLS] Cloudflare Origin Certificate installed to gateway-svc/certs/"
 echo ""
 echo "Ensure Cloudflare SSL/TLS encryption mode is set to 'Full (strict)'"
-echo "Then: docker compose restart frontend"
+echo "Then: docker compose restart gateway"

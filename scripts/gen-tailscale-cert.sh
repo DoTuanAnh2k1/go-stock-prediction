@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-CERT_DIR="$(cd "$(dirname "$0")/.." && pwd)/nginx/certs"
+CERT_DIR="$(cd "$(dirname "$0")/.." && pwd)/gateway-svc/certs"
 mkdir -p "$CERT_DIR"
 
 # Detect Tailscale hostname
@@ -26,7 +26,7 @@ tailscale cert \
   --key-file  "$CERT_DIR/key.pem" \
   "$TAILSCALE_HOST"
 
-echo "[TLS] Done. Certs written to nginx/certs/"
+echo "[TLS] Done. Certs written to gateway-svc/certs/"
 echo ""
 echo "Set in .env:  ALLOWED_ORIGINS=https://$TAILSCALE_HOST"
-echo "Then:         docker compose restart frontend"
+echo "Then:         docker compose restart gateway"

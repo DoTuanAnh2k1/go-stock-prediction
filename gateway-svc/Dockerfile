@@ -43,6 +43,6 @@ EXPOSE 80 443
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:80/healthz || exit 1
 
-USER gateway
-
+# Entrypoint runs as root to provision/own TLS certs on the (possibly bind-mounted)
+# certs volume, then drops privileges to the unprivileged `gateway` user via setpriv.
 ENTRYPOINT ["/docker-entrypoint.sh"]

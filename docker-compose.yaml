@@ -124,7 +124,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - gateway_certs:/etc/gateway/certs
+      - ./gateway-svc/certs:/etc/gateway/certs
     networks:
       - app-network
 
@@ -168,4 +168,3 @@ networks:
 volumes:
   db_data:
   backup_data:
-  gateway_certs:
