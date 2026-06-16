@@ -27,6 +27,10 @@ function MarketTabs({ marketKey }: { marketKey: string }) {
         <Icon name="cpu" size={14} />
         {t.marketTabs.training}
       </NavLink>
+      <NavLink to={base + '/session'} className={({ isActive }) => 'market-tab' + (isActive ? ' active' : '')}>
+        <Icon name="bar-chart" size={14} />
+        {t.marketTabs.session}
+      </NavLink>
     </div>
   );
 }

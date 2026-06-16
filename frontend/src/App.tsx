@@ -17,6 +17,7 @@ import Guide from './pages/Guide';
 import MarketPredictions from './pages/MarketPredictions';
 import MarketTraining from './pages/MarketTraining';
 import MarketDetail from './pages/MarketDetail';
+import SessionStats from './pages/SessionStats';
 import Users from './pages/Users';
 import MarketGroups from './pages/MarketGroups';
 import Settings from './pages/Settings';
@@ -94,6 +95,7 @@ function AppInner() {
             <Route path="/markets/:marketKey/predictions" element={<ErrorBoundary><MarketPredictions /></ErrorBoundary>} />
             <Route path="/markets/:marketKey/training" element={<ErrorBoundary><MarketTraining /></ErrorBoundary>} />
             <Route path="/markets/:marketKey/detail" element={<ErrorBoundary><MarketDetail /></ErrorBoundary>} />
+            <Route path="/markets/:marketKey/session" element={<ErrorBoundary><SessionStats /></ErrorBoundary>} />
 
             <Route path="/markets/crypto" element={<ErrorBoundary><Crypto /></ErrorBoundary>} />
             <Route path="/markets/nasdaq100" element={<ErrorBoundary><Nasdaq /></ErrorBoundary>} />
