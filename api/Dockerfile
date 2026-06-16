@@ -13,6 +13,9 @@ RUN apk add --no-cache ca-certificates wget tzdata mysql-client
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 WORKDIR /app
 COPY --from=builder /app/api-server .
+# Backup directory — owned by appuser so a fresh backup_data volume inherits
+# write permission for the scheduled/manual database backup.
+RUN mkdir -p /backups && chown appuser:appgroup /backups
 USER appuser
 EXPOSE 8118
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s CMD wget -qO- http://localhost:8118/health/simple || exit 1

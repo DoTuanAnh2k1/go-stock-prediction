@@ -41,7 +41,8 @@ DEFAULT_SCHEDULES = [
     ("predict_crypto", "Dự đoán Crypto (disabled — trong pipeline)", "0 0 */6 * * *",   False),
     ("predict_sp500",  "Dự đoán S&P 500 (disabled — trong pipeline)", "0 0 13 * * 1-5",  False),
     ("daily_reconcile", "Reconcile dự đoán (6AM hàng ngày)", "0 0 6 * * *", True),
-    ("daily_backup", "Backup database (3AM hàng ngày)", "0 0 3 * * *", True),
+    # daily_backup moved to the Go API service (api/pkg/server/backup_scheduler.go)
+    # which now owns the schedule and runs mysqldump itself.
 ]
 
 

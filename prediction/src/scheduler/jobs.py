@@ -203,70 +203,9 @@ def job_train_sp500() -> None:
         log.error("job.train_sp500.error", error=str(exc))
 
 
-def job_backup_database() -> None:
-    """Create a compressed mysqldump backup of the database."""
-    import subprocess
-    import os
-    import datetime
-
-    from src.config import get_settings
-    settings = get_settings()
-
-    backup_dir = os.environ.get("BACKUP_DIR", "/backups")
-    os.makedirs(backup_dir, exist_ok=True)
-
-    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"backup_{ts}.sql.gz"
-    filepath_out = os.path.join(backup_dir, filename)
-
-    try:
-        dump_cmd = [
-            "mysqldump",
-            f"--host={settings.mysql_host}",
-            f"--port={settings.mysql_port}",
-            f"--user={settings.mysql_user}",
-            f"--password={settings.mysql_password}",
-            "--single-transaction",
-            "--routines",
-            "--triggers",
-            settings.mysql_db_name,
-        ]
-
-        with open(filepath_out, "wb") as f:
-            dump_proc = subprocess.Popen(dump_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            gzip_proc = subprocess.Popen(["gzip", "-c"], stdin=dump_proc.stdout, stdout=f, stderr=subprocess.PIPE)
-            dump_proc.stdout.close()
-            gzip_proc.wait()
-            dump_proc.wait()
-
-            if dump_proc.returncode != 0:
-                _, stderr_data = dump_proc.communicate()
-                raise RuntimeError(f"mysqldump failed (rc={dump_proc.returncode}): {stderr_data.decode()}")
-
-        size = os.path.getsize(filepath_out)
-        log.info("job.backup.done", filename=filename, size_bytes=size)
-
-        # Keep only the 10 most recent backups
-        _cleanup_old_backups(backup_dir, keep=10)
-
-    except Exception as exc:
-        log.error("job.backup.error", error=str(exc))
-        if os.path.exists(filepath_out):
-            os.remove(filepath_out)
-
-
-def _cleanup_old_backups(backup_dir: str, keep: int = 10) -> None:
-    """Remove old backups, keeping only the `keep` most recent files."""
-    try:
-        files = sorted(
-            [f for f in os.listdir(backup_dir) if f.startswith("backup_") and f.endswith(".sql.gz")],
-            reverse=True,
-        )
-        for old_file in files[keep:]:
-            os.remove(os.path.join(backup_dir, old_file))
-            log.info("job.backup.cleanup", removed=old_file)
-    except Exception as exc:
-        log.warning("job.backup.cleanup.error", error=str(exc))
+# Note: the database backup job lives in the Go API service
+# (api/pkg/server/backup_scheduler.go). The API owns the daily_backup schedule
+# and runs mysqldump itself, so the prediction service no longer performs backups.
 
 
 # Job registry — maps job_key → callable
@@ -287,5 +226,4 @@ JOB_FUNCTIONS = {
     "train_nasdaq": job_train_nasdaq,
     "train_crypto": job_train_crypto,
     "train_sp500": job_train_sp500,
-    "daily_backup": job_backup_database,
 }

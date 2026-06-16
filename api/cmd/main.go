@@ -20,7 +20,7 @@ import (
 
 //	@title			Go Stock Prediction API
 //	@version		1.0
-//	@description	Vietnamese stock market prediction system — ML algorithms (VWMA, EMA, LSTM, ARIMA-GARCH, Ensemble) for VN30 stocks, gold, NASDAQ, crypto, and S&P 500.
+//	@description	Financial asset prediction system — ML algorithms (VWMA, EMA, LSTM, ARIMA-GARCH, Ensemble) for gold, NASDAQ, crypto, and S&P 500.
 //	@host			localhost:8118
 //	@BasePath		/
 //	@securityDefinitions.apikey	BearerAuth
@@ -51,6 +51,9 @@ func main() {
 	// Initialize gRPC client pointing at the prediction service
 	grpcclient.Init(config.GetGRPCConfig().ClientTarget)
 
+	// Start the scheduled database backup (DB-backed schedule, editable via Settings)
+	server.StartBackupScheduler(repository.GetSingleton())
+
 	// Start the HTTP API server
 	go server.StartHTTPServer()
 
@@ -59,6 +62,7 @@ func main() {
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT, os.Interrupt)
 	sig := <-signals
 	logger.Logger.Infof("Received signal %v — shutting down API service", sig)
+	server.StopBackupScheduler()
 	authclient.Close()
 	grpcclient.Close()
 	logger.Logger.Info("API service stopped")

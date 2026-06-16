@@ -42,10 +42,7 @@ services:
       MYSQL_DB_NAME: go_stock_prediction
       MYSQL_DEBUG: "true"
       LOG_LEVEL: DEBUG
-      BACKUP_DIR: "/backups"
       ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-https://localhost}"
-    volumes:
-      - backup_data:/backups
     networks:
       - app-network
 

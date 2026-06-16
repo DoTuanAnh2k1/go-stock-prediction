@@ -2,6 +2,7 @@ package server
 
 import (
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -149,6 +150,23 @@ func TriggerBackupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	filename, size, err := runBackup(r.Context())
+	if err != nil {
+		ResponseError(w, http.StatusInternalServerError, fmt.Sprintf("backup failed: %v", err))
+		return
+	}
+
+	ResponseSuccess(w, http.StatusOK, map[string]interface{}{
+		"filename": filename,
+		"size":     size,
+		"message":  fmt.Sprintf("backup completed successfully (%s)", formatSizeHuman(size)),
+	})
+}
+
+// runBackup runs mysqldump, gzips the output to the backup directory, prunes to
+// the 10 most recent backups, and returns the new file's name and size.
+// Shared by the manual trigger endpoint and the scheduled backup job.
+func runBackup(ctx context.Context) (string, int64, error) {
 	// Collect DB connection params from environment.
 	host := os.Getenv("MYSQL_HOST")
 	if host == "" {
@@ -171,8 +189,7 @@ func TriggerBackupHandler(w http.ResponseWriter, r *http.Request) {
 	backupDir := getBackupDir()
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		logger.Logger.Errorf("Failed to create backup directory %s: %v", backupDir, err)
-		ResponseError(w, http.StatusInternalServerError, "failed to create backup directory")
-		return
+		return "", 0, fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
 	timestamp := time.Now().Format("20060102_150405")
@@ -182,15 +199,16 @@ func TriggerBackupHandler(w http.ResponseWriter, r *http.Request) {
 	outFile, err := os.Create(filePath)
 	if err != nil {
 		logger.Logger.Errorf("Failed to create backup file %s: %v", filePath, err)
-		ResponseError(w, http.StatusInternalServerError, "failed to create backup file")
-		return
+		return "", 0, fmt.Errorf("failed to create backup file: %w", err)
 	}
 	defer outFile.Close()
 
 	gzWriter := gzip.NewWriter(outFile)
 	defer gzWriter.Close()
 
-	// Build mysqldump command.
+	// Build mysqldump command. --skip-ssl avoids the MariaDB client rejecting
+	// MySQL 8's auto-generated server cert ("certificate is NOT trusted") on the
+	// internal Docker network where TLS is unnecessary.
 	args := []string{
 		fmt.Sprintf("--host=%s", host),
 		fmt.Sprintf("--port=%s", port),
@@ -200,6 +218,7 @@ func TriggerBackupHandler(w http.ResponseWriter, r *http.Request) {
 		args = append(args, fmt.Sprintf("--password=%s", password))
 	}
 	args = append(args,
+		"--skip-ssl",
 		"--single-transaction",
 		"--routines",
 		"--triggers",
@@ -207,7 +226,7 @@ func TriggerBackupHandler(w http.ResponseWriter, r *http.Request) {
 		dbName,
 	)
 
-	cmd := exec.CommandContext(r.Context(), "mysqldump", args...)
+	cmd := exec.CommandContext(ctx, "mysqldump", args...)
 	cmd.Stdout = gzWriter
 
 	var stderrBuf strings.Builder
@@ -219,22 +238,19 @@ func TriggerBackupHandler(w http.ResponseWriter, r *http.Request) {
 		outFile.Close()
 		os.Remove(filePath)
 		logger.Logger.Errorf("mysqldump failed: %v — stderr: %s", err, stderrBuf.String())
-		ResponseError(w, http.StatusInternalServerError, fmt.Sprintf("backup failed: %v", err))
-		return
+		return "", 0, fmt.Errorf("mysqldump failed: %v", err)
 	}
 
 	// Flush gzip writer before stat.
 	if err := gzWriter.Close(); err != nil {
 		logger.Logger.Errorf("Failed to finalize gzip for %s: %v", filename, err)
-		ResponseError(w, http.StatusInternalServerError, "failed to finalize backup file")
-		return
+		return "", 0, fmt.Errorf("failed to finalize backup file: %w", err)
 	}
 
 	info, err := outFile.Stat()
 	if err != nil {
 		logger.Logger.Errorf("Failed to stat backup file %s: %v", filePath, err)
-		ResponseError(w, http.StatusInternalServerError, "backup created but could not read file info")
-		return
+		return "", 0, fmt.Errorf("backup created but could not read file info: %w", err)
 	}
 
 	logger.Logger.Infof("Backup completed: %s (%s)", filename, formatSizeHuman(info.Size()))
@@ -242,11 +258,7 @@ func TriggerBackupHandler(w http.ResponseWriter, r *http.Request) {
 	// Cleanup: keep only the 10 most recent backup files.
 	cleanupOldBackups(backupDir, 10)
 
-	ResponseSuccess(w, http.StatusOK, map[string]interface{}{
-		"filename": filename,
-		"size":     info.Size(),
-		"message":  fmt.Sprintf("backup completed successfully (%s)", formatSizeHuman(info.Size())),
-	})
+	return filename, info.Size(), nil
 }
 
 // cleanupOldBackups removes old backup files so that only `keep` most recent remain.
