@@ -57,57 +57,86 @@ func (c *Client) GetSessionDirAccuracy(market string, from, to time.Time) ([]mod
 	return result, nil
 }
 
-// GetSessionBotTrades returns per-algorithm bot trade stats for SELL trades
-// closed in [from, to) for the given market.
-func (c *Client) GetSessionBotTrades(market string, from, to time.Time) ([]modelsapi.SessionBotRow, error) {
+// GetSessionBotTrades returns per-bot trade stats with portfolio snapshot data for SELL trades
+// closed in [from, to) for the given market. Results are ordered by session_pnl DESC.
+func (c *Client) GetSessionBotTrades(market string, from, to time.Time) ([]modelsapi.SessionBotDetail, error) {
 	type rawRow struct {
-		Algorithm string
-		Trades    int64
-		Wins      int64
-		Losses    int64
-		Breakeven int64
-		TotalPnL  float64
+		BotID          string
+		DisplayName    string
+		Algorithm      string
+		Currency       string
+		InitialCapital float64
+		CurrentValue   float64
+		TotalReturnPct float64
+		Trades         int64
+		Wins           int64
+		Losses         int64
+		Breakeven      int64
+		SessionPnL     float64
 	}
 	var rows []rawRow
 
 	query := `
 		SELECT
+			b.id                                                     AS bot_id,
+			b.display_name,
 			b.algorithm,
-			COUNT(*) AS trades,
-			SUM(CASE WHEN t.pnl > 0 THEN 1 ELSE 0 END) AS wins,
-			SUM(CASE WHEN t.pnl < 0 THEN 1 ELSE 0 END) AS losses,
-			SUM(CASE WHEN t.pnl = 0 THEN 1 ELSE 0 END) AS breakeven,
-			COALESCE(SUM(t.pnl), 0) AS total_pnl
-		FROM sim_trades t
-		JOIN sim_bots b ON t.bot_id = b.id
+			b.currency,
+			CAST(b.initial_capital AS DECIMAL(20,2))                AS initial_capital,
+			COALESCE(CAST(latest.total_value AS DECIMAL(20,2)),
+			         CAST(b.initial_capital AS DECIMAL(20,2)))      AS current_value,
+			COALESCE(latest.total_return_pct, 0)                    AS total_return_pct,
+			COUNT(t.id)                                             AS trades,
+			SUM(CASE WHEN t.pnl > 0 THEN 1 ELSE 0 END)             AS wins,
+			SUM(CASE WHEN t.pnl < 0 THEN 1 ELSE 0 END)             AS losses,
+			SUM(CASE WHEN t.pnl = 0 THEN 1 ELSE 0 END)             AS breakeven,
+			COALESCE(SUM(t.pnl), 0)                                 AS session_pnl
+		FROM sim_bots b
+		LEFT JOIN (
+			SELECT s1.bot_id,
+			       s1.total_value,
+			       s1.total_return_pct
+			FROM sim_portfolio_snapshots s1
+			WHERE s1.snapshot_date = (
+				SELECT MAX(s2.snapshot_date)
+				FROM sim_portfolio_snapshots s2
+				WHERE s2.bot_id = s1.bot_id
+			)
+		) latest ON latest.bot_id = b.id
+		LEFT JOIN sim_trades t ON t.bot_id = b.id
+			AND t.action = 'SELL'
+			AND t.pnl IS NOT NULL
+			AND t.trade_date >= ?
+			AND t.trade_date < ?
 		WHERE b.market = ?
-		  AND t.action = 'SELL'
-		  AND t.pnl IS NOT NULL
-		  AND t.trade_date >= ?
-		  AND t.trade_date < ?
-		GROUP BY b.algorithm
-		ORDER BY b.algorithm
+		GROUP BY b.id, b.display_name, b.algorithm, b.currency,
+		         b.initial_capital, latest.total_value, latest.total_return_pct
+		ORDER BY session_pnl DESC
 	`
-	if err := c.Db.Raw(query, strings.ToUpper(market), from, to).Scan(&rows).Error; err != nil {
+
+	if err := c.Db.Raw(query, from, to, strings.ToUpper(market)).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("GetSessionBotTrades(%s): %w", market, err)
 	}
 
-	result := make([]modelsapi.SessionBotRow, len(rows))
+	result := make([]modelsapi.SessionBotDetail, len(rows))
 	for i, r := range rows {
-		avgPnL := 0.0
 		winRate := 0.0
 		if r.Trades > 0 {
-			avgPnL = r.TotalPnL / float64(r.Trades)
 			winRate = float64(r.Wins) / float64(r.Trades)
 		}
-		result[i] = modelsapi.SessionBotRow{
+		result[i] = modelsapi.SessionBotDetail{
+			BotID:          r.BotID,
+			DisplayName:    r.DisplayName,
 			Algorithm:      r.Algorithm,
+			Currency:       r.Currency,
+			InitialCapital: r.InitialCapital,
+			CurrentValue:   r.CurrentValue,
+			SessionPnL:     r.SessionPnL,
+			TotalReturnPct: r.TotalReturnPct,
 			Trades:         r.Trades,
 			Wins:           r.Wins,
 			Losses:         r.Losses,
 			Breakeven:      r.Breakeven,
-			TotalPnL:       r.TotalPnL,
-			AvgPnLPerTrade: avgPnL,
 			WinRate:        winRate,
 		}
 	}

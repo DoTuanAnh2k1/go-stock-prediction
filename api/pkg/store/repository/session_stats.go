@@ -12,7 +12,7 @@ type SessionStatsStore interface {
 	// market must be one of: GOLD, NASDAQ, CRYPTO, SP500.
 	GetSessionDirAccuracy(market string, from, to time.Time) ([]modelsapi.SessionDirAccRow, error)
 
-	// GetSessionBotTrades returns per-algorithm bot trade stats for trades
+	// GetSessionBotTrades returns per-bot trade stats with portfolio snapshot data for trades
 	// executed within [from, to) for the given market.
-	GetSessionBotTrades(market string, from, to time.Time) ([]modelsapi.SessionBotRow, error)
+	GetSessionBotTrades(market string, from, to time.Time) ([]modelsapi.SessionBotDetail, error)
 }

@@ -17,15 +17,20 @@ type SessionDirAccRow struct {
 	Accuracy  float64 `json:"accuracy"`
 }
 
-// SessionBotRow — bot trading stats của 1 thuật toán trong phiên.
-type SessionBotRow struct {
+// SessionBotDetail — per-bot trading stats với portfolio snapshot data trong phiên.
+type SessionBotDetail struct {
+	BotID          string  `json:"bot_id"`
+	DisplayName    string  `json:"display_name"`
 	Algorithm      string  `json:"algorithm"`
+	Currency       string  `json:"currency"`
+	InitialCapital float64 `json:"initial_capital"`
+	CurrentValue   float64 `json:"current_value"`
+	SessionPnL     float64 `json:"session_pnl"`
+	TotalReturnPct float64 `json:"total_return_pct"`
 	Trades         int64   `json:"trades"`
 	Wins           int64   `json:"wins"`
 	Losses         int64   `json:"losses"`
 	Breakeven      int64   `json:"breakeven"`
-	TotalPnL       float64 `json:"total_pnl"`
-	AvgPnLPerTrade float64 `json:"avg_pnl_per_trade"`
 	WinRate        float64 `json:"win_rate"`
 }
 
@@ -34,5 +39,5 @@ type SessionStatsResponse struct {
 	Market            string             `json:"market"`
 	Session           SessionWindow      `json:"session"`
 	DirectionAccuracy []SessionDirAccRow `json:"direction_accuracy"`
-	BotTrades         []SessionBotRow    `json:"bot_trades"`
+	BotTrades         []SessionBotDetail `json:"bot_trades"`
 }

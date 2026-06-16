@@ -88,7 +88,7 @@ func GetMarketSessionStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if botTrades == nil {
-		botTrades = []modelsapi.SessionBotRow{}
+		botTrades = []modelsapi.SessionBotDetail{}
 	}
 
 	ResponseSuccess(w, http.StatusOK, modelsapi.SessionStatsResponse{
