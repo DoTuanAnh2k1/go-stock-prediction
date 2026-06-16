@@ -17,14 +17,19 @@ interface DirAccRow {
   accuracy: number;
 }
 
-interface BotTradeRow {
+interface BotDetail {
+  bot_id: string;
+  display_name: string;
   algorithm: string;
+  currency: string;
+  initial_capital: number;
+  current_value: number;
+  session_pnl: number;
+  total_return_pct: number;
   trades: number;
   wins: number;
   losses: number;
   breakeven: number;
-  total_pnl: number;
-  avg_pnl_per_trade: number;
   win_rate: number;
 }
 
@@ -32,7 +37,7 @@ interface SessionStatsData {
   market: string;
   session: SessionWindow;
   direction_accuracy: DirAccRow[];
-  bot_trades: BotTradeRow[];
+  bot_trades: BotDetail[];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -53,6 +58,10 @@ function fmtTime(iso: string) {
   } catch { return iso; }
 }
 
+function fmtMoney(v: number, currency = 'USD') {
+  return v.toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' ' + currency;
+}
+
 function pct(v: number) { return (v * 100).toFixed(1) + '%'; }
 function pnl(v: number) { return (v >= 0 ? '+' : '') + v.toFixed(2); }
 
@@ -65,6 +74,9 @@ async function apiFetch(path: string) {
   return res.json();
 }
 
+// ── Sort key type ─────────────────────────────────────────────────────────────
+type SortKey = 'display_name' | 'algorithm' | 'session_pnl' | 'current_value' | 'total_return_pct' | 'trades' | 'win_rate';
+
 // ── Component ────────────────────────────────────────────────────────────────
 export default function SessionStats() {
   const { marketKey } = useParams<{ marketKey: string }>();
@@ -72,6 +84,14 @@ export default function SessionStats() {
   const [data, setData] = useState<SessionStatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const [sortKey, setSortKey] = useState<SortKey>('session_pnl');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+    else { setSortKey(key); setSortDir('desc'); }
+  }
 
   useEffect(() => {
     if (!marketKey) return;
@@ -91,9 +111,18 @@ export default function SessionStats() {
   const totalCorrect = direction_accuracy.reduce((s, r) => s + r.correct, 0);
   const overallAcc = totalDir > 0 ? totalCorrect / totalDir : null;
   const totalTrades = bot_trades.reduce((s, r) => s + r.trades, 0);
-  const totalPnL = bot_trades.reduce((s, r) => s + r.total_pnl, 0);
+  const totalPnL = bot_trades.reduce((s, r) => s + r.session_pnl, 0);
   const totalWins = bot_trades.reduce((s, r) => s + r.wins, 0);
   const overallWR = totalTrades > 0 ? totalWins / totalTrades : null;
+
+  const sortedBots = [...bot_trades].sort((a, b) => {
+    const v = sortKey === 'display_name' || sortKey === 'algorithm'
+      ? a[sortKey].localeCompare(b[sortKey])
+      : (a[sortKey] as number) - (b[sortKey] as number);
+    return sortDir === 'desc' ? -v : v;
+  });
+
+  const SORTABLE_COLS: SortKey[] = ['display_name', 'algorithm', 'current_value', 'session_pnl', 'total_return_pct', 'trades', 'win_rate'];
 
   return (
     <div className="session-stats">
@@ -125,7 +154,7 @@ export default function SessionStats() {
         <div className="session-kpi">
           <div className="session-kpi-label">Tổng PnL</div>
           <div className={'session-kpi-val' + (totalPnL >= 0 ? ' up' : ' dn')}>{pnl(totalPnL)}</div>
-          <div className="session-kpi-sub">{bot_trades.length} thuật toán có lệnh</div>
+          <div className="session-kpi-sub">{bot_trades.length} bot có lệnh</div>
         </div>
       </div>
 
@@ -142,7 +171,7 @@ export default function SessionStats() {
                   <th className="num">Tổng</th>
                   <th className="num">Đúng</th>
                   <th className="num">Độ chính xác</th>
-                  <th>Bar</th>
+                  <th style={{ width: '100%' }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -176,47 +205,70 @@ export default function SessionStats() {
         )}
       </Panel>
 
-      {/* Bot Trades table */}
-      <Panel title="Giao dịch bot theo thuật toán">
+      {/* Bot detail table (per-bot, sortable) */}
+      <Panel title="Chi tiết bot giao dịch">
         {bot_trades.length === 0 ? (
           <div className="no-data-msg">{t.common.noData}</div>
         ) : (
           <div className="table-wrap">
-            <table className="data-table">
+            <table className="data-table sortable">
               <thead>
                 <tr>
-                  <th>Thuật toán</th>
-                  <th className="num">Lệnh</th>
-                  <th className="num">Thắng</th>
-                  <th className="num">Thua</th>
-                  <th className="num">Hòa</th>
-                  <th className="num">Win rate</th>
-                  <th className="num">PnL</th>
-                  <th className="num">PnL/lệnh</th>
+                  {(
+                    [
+                      ['display_name', 'Bot'],
+                      ['algorithm', 'Thuật toán'],
+                      ['current_value', 'Hiện tại'],
+                      ['session_pnl', 'PnL phiên'],
+                      ['total_return_pct', 'Tổng lợi nhuận'],
+                      ['trades', 'Lệnh'],
+                      ['wins_col', 'Thắng'],
+                      ['losses_col', 'Thua'],
+                      ['breakeven_col', 'Hòa'],
+                      ['win_rate', 'Win rate'],
+                    ] as [string, string][]
+                  ).map(([k, label]) => {
+                    const isSortable = SORTABLE_COLS.includes(k as SortKey);
+                    return (
+                      <th
+                        key={k}
+                        className={'num ' + (isSortable ? 'sortable-col' : '')}
+                        onClick={isSortable ? () => toggleSort(k as SortKey) : undefined}
+                        style={isSortable ? { cursor: 'pointer', userSelect: 'none' } : {}}
+                      >
+                        {label}
+                        {isSortable && sortKey === k && (
+                          <span style={{ marginLeft: 4, opacity: 0.6 }}>{sortDir === 'desc' ? '↓' : '↑'}</span>
+                        )}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
-                {bot_trades
-                  .slice()
-                  .sort((a, b) => b.total_pnl - a.total_pnl)
-                  .map(row => (
-                    <tr key={row.algorithm}>
+                {sortedBots.map(row => {
+                  const profit = row.current_value - row.initial_capital;
+                  return (
+                    <tr key={row.bot_id}>
+                      <td style={{ fontWeight: 500 }}>{row.display_name}</td>
                       <td>{algoName(row.algorithm)}</td>
+                      <td className="num">{fmtMoney(row.current_value, row.currency)}</td>
+                      <td className={'num' + (row.session_pnl >= 0 ? ' up' : ' dn')}>
+                        {row.session_pnl !== 0 ? pnl(row.session_pnl) : '—'}
+                      </td>
+                      <td className={'num' + (profit >= 0 ? ' up' : ' dn')}>
+                        {pnl(profit)} ({row.total_return_pct.toFixed(2)}%)
+                      </td>
                       <td className="num">{row.trades}</td>
                       <td className="num up">{row.wins}</td>
                       <td className="num dn">{row.losses}</td>
                       <td className="num">{row.breakeven}</td>
                       <td className={'num' + (row.win_rate >= 0.5 ? ' up' : ' dn')}>
-                        {pct(row.win_rate)}
-                      </td>
-                      <td className={'num' + (row.total_pnl >= 0 ? ' up' : ' dn')}>
-                        {pnl(row.total_pnl)}
-                      </td>
-                      <td className={'num' + (row.avg_pnl_per_trade >= 0 ? ' up' : ' dn')}>
-                        {pnl(row.avg_pnl_per_trade)}
+                        {row.trades > 0 ? pct(row.win_rate) : '—'}
                       </td>
                     </tr>
-                  ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
