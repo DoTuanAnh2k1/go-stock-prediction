@@ -91,6 +91,7 @@ func addHandler() *http.ServeMux {
 	// Market-level paginated APIs (auth enforced inside handler via pathToMarketKey)
 	mux.HandleFunc("/api/markets/{key}/predictions", AuthRequired(GetMarketPredictions))
 	mux.HandleFunc("/api/markets/{key}/training", AuthRequired(GetMarketTraining))
+	mux.HandleFunc("/api/markets/{key}/session-stats", AuthRequired(GetMarketSessionStats))
 
 	// Trigger APIs (require admin role)
 	mux.HandleFunc("POST /api/trigger/gold-crawler", AdminRequired(TriggerGoldCrawlerHandler))
@@ -205,6 +206,7 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  GET  /api/sp500/predictions/*   [auth+SP500]")
 	logger.Logger.Info("  GET  /api/markets/{key}/predictions  [auth]")
 	logger.Logger.Info("  GET  /api/markets/{key}/training     [auth]")
+	logger.Logger.Info("  GET  /api/markets/{key}/session-stats [auth]")
 	logger.Logger.Info("  POST /api/trigger/gold-crawler        [admin]")
 	logger.Logger.Info("  POST /api/trigger/gold-history        [admin]")
 	logger.Logger.Info("  POST /api/trigger/gold-predict        [admin]")
