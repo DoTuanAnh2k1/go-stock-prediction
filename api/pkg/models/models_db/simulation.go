@@ -67,8 +67,8 @@ func (SimTrade) TableName() string { return "sim_trades" }
 type SimPortfolioSnapshot struct {
 	ID             int64            `gorm:"primaryKey;autoIncrement" json:"id"`
 	SessionID      int64            `gorm:"not null;index:idx_sim_snap_session_date,priority:1" json:"session_id"`
-	BotID          string           `gorm:"size:50;not null" json:"bot_id"`
-	SnapshotDate   time.Time        `gorm:"not null;index:idx_sim_snap_session_date,priority:2" json:"snapshot_date"`
+	BotID          string           `gorm:"size:50;not null;index:idx_sim_snap_bot_date,priority:1" json:"bot_id"`
+	SnapshotDate   time.Time        `gorm:"not null;index:idx_sim_snap_session_date,priority:2;index:idx_sim_snap_bot_date,priority:2" json:"snapshot_date"`
 	CashBalance    decimal.Decimal  `gorm:"type:decimal(20,2);not null" json:"cash_balance"`
 	PositionsValue decimal.Decimal  `gorm:"type:decimal(20,2);not null" json:"positions_value"`
 	TotalValue     decimal.Decimal  `gorm:"type:decimal(20,2);not null" json:"total_value"`

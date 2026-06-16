@@ -37,6 +37,17 @@ func nyseSessionWindow(now time.Time) (start, end time.Time, isOpen bool) {
 	return
 }
 
+// dailySessionWindow returns the current 24/7 trading session for markets that
+// never close (GOLD, CRYPTO): a full calendar day in ICT, from the most recent
+// midnight (00:00 today) to the nearest next midnight (00:00 tomorrow).
+// The session is always considered open since these markets trade non-stop.
+func dailySessionWindow(now time.Time) (start, end time.Time, isOpen bool) {
+	start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	end = start.AddDate(0, 0, 1)
+	isOpen = true
+	return
+}
+
 // GetMarketSessionStats godoc
 //
 //	@Summary		Session stats for a market
@@ -63,10 +74,9 @@ func GetMarketSessionStats(w http.ResponseWriter, r *http.Request) {
 	case "NASDAQ", "SP500":
 		from, to, isOpen = nyseSessionWindow(now)
 	default:
-		// GOLD, CRYPTO: rolling 24-hour window (today 00:00 → now)
-		from = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		to = now
-		isOpen = true
+		// GOLD, CRYPTO: trade 24/7 — one session is a full calendar day,
+		// from today 00:00 to the nearest next midnight (tomorrow 00:00).
+		from, to, isOpen = dailySessionWindow(now)
 	}
 
 	store := repository.GetSingleton()
