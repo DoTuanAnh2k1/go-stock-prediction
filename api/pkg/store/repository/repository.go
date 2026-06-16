@@ -32,6 +32,7 @@ type DatabaseStore interface {
 	SimulationStore
 	DirectionAccuracyStore
 	MonitoringStore
+	SessionStatsStore
 }
 
 // CronScheduleStore - interface cho cron schedule operations
