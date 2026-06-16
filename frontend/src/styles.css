@@ -778,9 +778,46 @@ body {
 .session-kpi-val { font-size: 22px; font-weight: 700; line-height: 1; }
 .session-kpi-sub { font-size: 11px; color: var(--fg-dim); margin-top: 4px; }
 
-.acc-bar-wrap { width: 80px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.acc-bar-wrap { width: 100%; min-width: 80px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
 .acc-bar-fill { height: 100%; border-radius: 3px; }
 
 @media (max-width: 600px) {
   .session-kpis { grid-template-columns: 1fr 1fr; }
 }
+
+/* ── Session bot table enhancements ────────────────────────────────────── */
+.session-search {
+  width: 100%; max-width: 340px;
+  padding: 7px 12px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--input, var(--bg));
+  color: var(--fg); font-size: 13px; outline: none;
+}
+.session-search:focus { border-color: var(--accent); }
+
+.session-bot-table th { white-space: nowrap; }
+.session-bot-table .sortable-th { cursor: pointer; user-select: none; }
+.session-bot-table .sortable-th:hover { background: color-mix(in oklch, var(--accent) 8%, transparent); }
+.session-bot-table .th-inner { display: inline-flex; align-items: center; gap: 3px; }
+.session-bot-table .sort-icon { opacity: 0.3; font-size: 11px; }
+.session-bot-table .sort-icon.active { opacity: 1; color: var(--accent); }
+
+.session-bot-table .row-num { color: var(--fg-dim); font-size: 11px; }
+.session-bot-table .bot-name { font-weight: 500; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.session-bot-table .algo-badge {
+  white-space: nowrap;
+  font-size: 11px; padding: 2px 6px;
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  border-radius: 4px; color: var(--accent);
+}
+
+.session-pagination {
+  display: flex; align-items: center; gap: 6px;
+  padding-top: 12px; justify-content: center;
+}
+.pg-btn {
+  padding: 4px 10px; border-radius: 5px; border: 1px solid var(--border);
+  background: var(--panel); color: var(--fg); cursor: pointer; font-size: 13px;
+}
+.pg-btn:hover:not(:disabled) { background: color-mix(in oklch, var(--accent) 12%, transparent); border-color: var(--accent); }
+.pg-btn:disabled { opacity: 0.35; cursor: default; }
+.pg-info { font-size: 12px; color: var(--fg-dim); padding: 0 6px; }

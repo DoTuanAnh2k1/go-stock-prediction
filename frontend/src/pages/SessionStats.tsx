@@ -87,10 +87,14 @@ export default function SessionStats() {
 
   const [sortKey, setSortKey] = useState<SortKey>('session_pnl');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
     else { setSortKey(key); setSortDir('desc'); }
+    setPage(1);
   }
 
   useEffect(() => {
@@ -115,14 +119,23 @@ export default function SessionStats() {
   const totalWins = bot_trades.reduce((s, r) => s + r.wins, 0);
   const overallWR = totalTrades > 0 ? totalWins / totalTrades : null;
 
-  const sortedBots = [...bot_trades].sort((a, b) => {
+  const SORTABLE_COLS: SortKey[] = ['display_name', 'algorithm', 'current_value', 'session_pnl', 'total_return_pct', 'trades', 'win_rate'];
+
+  const filteredBots = bot_trades.filter(r => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return r.display_name.toLowerCase().includes(q) || r.algorithm.toLowerCase().includes(q);
+  });
+
+  const sortedBots = [...filteredBots].sort((a, b) => {
     const v = sortKey === 'display_name' || sortKey === 'algorithm'
       ? a[sortKey].localeCompare(b[sortKey])
       : (a[sortKey] as number) - (b[sortKey] as number);
     return sortDir === 'desc' ? -v : v;
   });
 
-  const SORTABLE_COLS: SortKey[] = ['display_name', 'algorithm', 'current_value', 'session_pnl', 'total_return_pct', 'trades', 'win_rate'];
+  const totalPages = Math.ceil(sortedBots.length / PAGE_SIZE);
+  const pagedBots = sortedBots.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="session-stats">
@@ -205,73 +218,103 @@ export default function SessionStats() {
         )}
       </Panel>
 
-      {/* Bot detail table (per-bot, sortable) */}
-      <Panel title="Chi tiết bot giao dịch">
-        {bot_trades.length === 0 ? (
+      {/* Bot detail table (per-bot, sortable, searchable, paginated) */}
+      <Panel title={`Chi tiết bot giao dịch (${filteredBots.length}/${bot_trades.length})`}>
+        {/* Search bar */}
+        <div style={{ marginBottom: 12 }}>
+          <input
+            type="text"
+            placeholder="Tìm bot hoặc thuật toán..."
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            className="session-search"
+          />
+        </div>
+
+        {filteredBots.length === 0 ? (
           <div className="no-data-msg">{t.common.noData}</div>
         ) : (
-          <div className="table-wrap">
-            <table className="data-table sortable">
-              <thead>
-                <tr>
-                  {(
-                    [
-                      ['display_name', 'Bot'],
-                      ['algorithm', 'Thuật toán'],
-                      ['current_value', 'Hiện tại'],
-                      ['session_pnl', 'PnL phiên'],
-                      ['total_return_pct', 'Tổng lợi nhuận'],
-                      ['trades', 'Lệnh'],
-                      ['wins_col', 'Thắng'],
-                      ['losses_col', 'Thua'],
-                      ['breakeven_col', 'Hòa'],
-                      ['win_rate', 'Win rate'],
-                    ] as [string, string][]
-                  ).map(([k, label]) => {
-                    const isSortable = SORTABLE_COLS.includes(k as SortKey);
+          <>
+            <div className="table-wrap">
+              <table className="data-table session-bot-table">
+                <thead>
+                  <tr>
+                    <th className="num" style={{ width: 40 }}>#</th>
+                    {(
+                      [
+                        ['display_name', 'Bot'],
+                        ['algorithm', 'Thuật toán'],
+                        ['current_value', 'Tài khoản'],
+                        ['session_pnl', 'PnL phiên'],
+                        ['total_return_pct', 'Tổng lợi nhuận'],
+                        ['trades', 'Lệnh'],
+                        ['wins_col', 'Thắng'],
+                        ['losses_col', 'Thua'],
+                        ['breakeven_col', 'Hòa'],
+                        ['win_rate', 'Win rate'],
+                      ] as [string, string][]
+                    ).map(([k, label]) => {
+                      const isSortable = SORTABLE_COLS.includes(k as SortKey);
+                      return (
+                        <th
+                          key={k}
+                          className={isSortable ? 'sortable-th' : ''}
+                          onClick={isSortable ? () => toggleSort(k as SortKey) : undefined}
+                        >
+                          <span className="th-inner">
+                            {label}
+                            {isSortable && (
+                              <span className={'sort-icon' + (sortKey === k ? ' active' : '')}>
+                                {sortKey === k ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ' ⇅'}
+                              </span>
+                            )}
+                          </span>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedBots.map((row, idx) => {
+                    const profit = row.current_value - row.initial_capital;
+                    const rowNum = (page - 1) * PAGE_SIZE + idx + 1;
                     return (
-                      <th
-                        key={k}
-                        className={'num ' + (isSortable ? 'sortable-col' : '')}
-                        onClick={isSortable ? () => toggleSort(k as SortKey) : undefined}
-                        style={isSortable ? { cursor: 'pointer', userSelect: 'none' } : {}}
-                      >
-                        {label}
-                        {isSortable && sortKey === k && (
-                          <span style={{ marginLeft: 4, opacity: 0.6 }}>{sortDir === 'desc' ? '↓' : '↑'}</span>
-                        )}
-                      </th>
+                      <tr key={row.bot_id}>
+                        <td className="num row-num">{rowNum}</td>
+                        <td className="bot-name">{row.display_name}</td>
+                        <td className="algo-badge">{algoName(row.algorithm)}</td>
+                        <td className="num">{fmtMoney(row.current_value, row.currency)}</td>
+                        <td className={'num' + (row.session_pnl > 0 ? ' up' : row.session_pnl < 0 ? ' dn' : '')}>
+                          {row.session_pnl !== 0 ? pnl(row.session_pnl) : '—'}
+                        </td>
+                        <td className={'num' + (profit >= 0 ? ' up' : ' dn')}>
+                          {pnl(profit)} <span style={{ opacity: 0.7 }}>({row.total_return_pct.toFixed(2)}%)</span>
+                        </td>
+                        <td className="num">{row.trades}</td>
+                        <td className="num up">{row.wins}</td>
+                        <td className="num dn">{row.losses}</td>
+                        <td className="num">{row.breakeven}</td>
+                        <td className={'num' + (row.win_rate >= 0.5 ? ' up' : ' dn')}>
+                          {row.trades > 0 ? pct(row.win_rate) : '—'}
+                        </td>
+                      </tr>
                     );
                   })}
-                </tr>
-              </thead>
-              <tbody>
-                {sortedBots.map(row => {
-                  const profit = row.current_value - row.initial_capital;
-                  return (
-                    <tr key={row.bot_id}>
-                      <td style={{ fontWeight: 500 }}>{row.display_name}</td>
-                      <td>{algoName(row.algorithm)}</td>
-                      <td className="num">{fmtMoney(row.current_value, row.currency)}</td>
-                      <td className={'num' + (row.session_pnl >= 0 ? ' up' : ' dn')}>
-                        {row.session_pnl !== 0 ? pnl(row.session_pnl) : '—'}
-                      </td>
-                      <td className={'num' + (profit >= 0 ? ' up' : ' dn')}>
-                        {pnl(profit)} ({row.total_return_pct.toFixed(2)}%)
-                      </td>
-                      <td className="num">{row.trades}</td>
-                      <td className="num up">{row.wins}</td>
-                      <td className="num dn">{row.losses}</td>
-                      <td className="num">{row.breakeven}</td>
-                      <td className={'num' + (row.win_rate >= 0.5 ? ' up' : ' dn')}>
-                        {row.trades > 0 ? pct(row.win_rate) : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="session-pagination">
+                <button className="pg-btn" onClick={() => setPage(1)} disabled={page === 1}>«</button>
+                <button className="pg-btn" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>‹</button>
+                <span className="pg-info">Trang {page} / {totalPages} ({filteredBots.length} bot)</span>
+                <button className="pg-btn" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>›</button>
+                <button className="pg-btn" onClick={() => setPage(totalPages)} disabled={page === totalPages}>»</button>
+              </div>
+            )}
+          </>
         )}
       </Panel>
     </div>
