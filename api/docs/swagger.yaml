@@ -1,6 +1,6 @@
 basePath: /
 definitions:
-  modelsapi.AlgorithmResultDTO:
+  go-stock-prediction_pkg_models_models_api.AlgorithmResultDTO:
     properties:
       accuracy:
         type: number
@@ -13,18 +13,18 @@ definitions:
       success_count:
         type: integer
     type: object
-  modelsapi.AlgorithmStatsEntry:
+  go-stock-prediction_pkg_models_models_api.AlgorithmStatsEntry:
     properties:
       accuracy:
         type: string
       predictions:
         type: integer
     type: object
-  modelsapi.DashboardStatsFullDTO:
+  go-stock-prediction_pkg_models_models_api.DashboardStatsFullDTO:
     properties:
       algorithms:
         additionalProperties:
-          $ref: '#/definitions/modelsapi.AlgorithmStatsEntry'
+          $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.AlgorithmStatsEntry'
         type: object
       avg_accuracy:
         type: string
@@ -37,7 +37,71 @@ definitions:
       total_stocks:
         type: integer
     type: object
-  modelsapi.TrainingAlgorithmDTO:
+  go-stock-prediction_pkg_models_models_api.SessionBotDetail:
+    properties:
+      algorithm:
+        type: string
+      bot_id:
+        type: string
+      breakeven:
+        type: integer
+      currency:
+        type: string
+      current_value:
+        type: number
+      display_name:
+        type: string
+      initial_capital:
+        type: number
+      losses:
+        type: integer
+      session_pnl:
+        type: number
+      total_return_pct:
+        type: number
+      trades:
+        type: integer
+      win_rate:
+        type: number
+      wins:
+        type: integer
+    type: object
+  go-stock-prediction_pkg_models_models_api.SessionDirAccRow:
+    properties:
+      accuracy:
+        type: number
+      algorithm:
+        type: string
+      correct:
+        type: integer
+      total:
+        type: integer
+    type: object
+  go-stock-prediction_pkg_models_models_api.SessionStatsResponse:
+    properties:
+      bot_trades:
+        items:
+          $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.SessionBotDetail'
+        type: array
+      direction_accuracy:
+        items:
+          $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.SessionDirAccRow'
+        type: array
+      market:
+        type: string
+      session:
+        $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.SessionWindow'
+    type: object
+  go-stock-prediction_pkg_models_models_api.SessionWindow:
+    properties:
+      end:
+        type: string
+      is_open:
+        type: boolean
+      start:
+        type: string
+    type: object
+  go-stock-prediction_pkg_models_models_api.TrainingAlgorithmDTO:
     properties:
       accuracy:
         type: number
@@ -59,7 +123,7 @@ definitions:
       training_time_seconds:
         type: number
     type: object
-  modelsapi.TrainingHistoryDTO:
+  go-stock-prediction_pkg_models_models_api.TrainingHistoryDTO:
     properties:
       avg_accuracy:
         type: number
@@ -67,12 +131,12 @@ definitions:
         type: integer
       sessions:
         items:
-          $ref: '#/definitions/modelsapi.TrainingSessionDTO'
+          $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.TrainingSessionDTO'
         type: array
       total:
         type: integer
     type: object
-  modelsapi.TrainingMetricsDTO:
+  go-stock-prediction_pkg_models_models_api.TrainingMetricsDTO:
     properties:
       avg_training_time:
         type: string
@@ -89,11 +153,11 @@ definitions:
       total_sessions:
         type: integer
     type: object
-  modelsapi.TrainingSessionDTO:
+  go-stock-prediction_pkg_models_models_api.TrainingSessionDTO:
     properties:
       algorithms:
         items:
-          $ref: '#/definitions/modelsapi.AlgorithmResultDTO'
+          $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.AlgorithmResultDTO'
         type: array
       duration_ms:
         type: integer
@@ -112,7 +176,7 @@ definitions:
       total_stocks:
         type: integer
     type: object
-  modelsapi.TrainingStatusDTO:
+  go-stock-prediction_pkg_models_models_api.TrainingStatusDTO:
     properties:
       current_phase:
         type: string
@@ -127,7 +191,7 @@ definitions:
       progress:
         type: number
     type: object
-  modelsdb.SimBot:
+  go-stock-prediction_pkg_models_models_db.SimBot:
     properties:
       algorithm:
         type: string
@@ -162,7 +226,41 @@ definitions:
       updated_at:
         type: string
     type: object
-  server.BackupInfo:
+  go-stock-prediction_proto_auth.MarketGroupResponse:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      market_keys:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  go-stock-prediction_proto_auth.UserResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: integer
+      phone:
+        type: string
+      role:
+        type: string
+      username:
+        type: string
+    type: object
+  pkg_server.BackupInfo:
     properties:
       created_at:
         type: string
@@ -173,7 +271,7 @@ definitions:
       size_human:
         type: string
     type: object
-  server.HealthStatus:
+  pkg_server.HealthStatus:
     properties:
       server_name:
         type: string
@@ -184,7 +282,7 @@ definitions:
       status:
         type: string
       system:
-        $ref: '#/definitions/server.SystemInfo'
+        $ref: '#/definitions/pkg_server.SystemInfo'
       timestamp:
         type: string
       uptime:
@@ -192,7 +290,7 @@ definitions:
       version:
         type: string
     type: object
-  server.MemoryStats:
+  pkg_server.MemoryStats:
     properties:
       alloc_mb:
         type: integer
@@ -201,52 +299,69 @@ definitions:
       total_alloc_mb:
         type: integer
     type: object
-  server.ResponseFailure:
+  pkg_server.ResponseFailure:
     properties:
       message:
         type: string
       status_code:
         type: integer
     type: object
-  server.SystemInfo:
+  pkg_server.SystemInfo:
     properties:
       go_version:
         type: string
       memory:
-        $ref: '#/definitions/server.MemoryStats'
+        $ref: '#/definitions/pkg_server.MemoryStats'
       num_goroutine:
         type: integer
     type: object
-  server.TriggerTrainRequest:
+  pkg_server.TriggerTrainRequest:
     properties:
       algorithm:
         type: string
     type: object
-  server.TriggerTrainResponse:
+  pkg_server.TriggerTrainResponse:
     properties:
       message:
         type: string
       session_id:
         type: string
     type: object
-  server.changePasswordRequest:
+  pkg_server.addUserToGroupRequest:
+    properties:
+      user_id:
+        type: integer
+    type: object
+  pkg_server.changePasswordRequest:
     properties:
       current_password:
         type: string
       new_password:
         type: string
     type: object
-  server.createUserRequest:
+  pkg_server.createGroupRequest:
     properties:
+      description:
+        type: string
+      name:
+        type: string
+    type: object
+  pkg_server.createUserRequest:
+    properties:
+      email:
+        type: string
+      full_name:
+        type: string
       password:
         type: string
+      phone:
+        type: string
       role:
-        description: '"admin" or "user"'
         type: string
       username:
         type: string
     type: object
-  server.cryptoChartResponse:
+  pkg_server.cryptoChartResponse:
     properties:
       coin_id:
         type: string
@@ -261,7 +376,7 @@ definitions:
           type: number
         type: array
     type: object
-  server.cryptoLatestItem:
+  pkg_server.cryptoLatestItem:
     properties:
       close_price:
         type: number
@@ -278,16 +393,16 @@ definitions:
       volume_24h:
         type: number
     type: object
-  server.cryptoLatestResponse:
+  pkg_server.cryptoLatestResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/server.cryptoLatestItem'
+          $ref: '#/definitions/pkg_server.cryptoLatestItem'
         type: array
       updated_at:
         type: string
     type: object
-  server.cryptoPredictionChartPoint:
+  pkg_server.cryptoPredictionChartPoint:
     properties:
       actual_price:
         type: number
@@ -300,7 +415,7 @@ definitions:
       predicted_price:
         type: number
     type: object
-  server.cryptoPredictionChartResponse:
+  pkg_server.cryptoPredictionChartResponse:
     properties:
       algorithm:
         type: string
@@ -308,10 +423,10 @@ definitions:
         type: string
       data:
         items:
-          $ref: '#/definitions/server.cryptoPredictionChartPoint'
+          $ref: '#/definitions/pkg_server.cryptoPredictionChartPoint'
         type: array
     type: object
-  server.cryptoPredictionItem:
+  pkg_server.cryptoPredictionItem:
     properties:
       accuracy:
         type: number
@@ -336,11 +451,11 @@ definitions:
       target_date:
         type: string
     type: object
-  server.cryptoPredictionsPageResponse:
+  pkg_server.cryptoPredictionsPageResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/server.cryptoPredictionItem'
+          $ref: '#/definitions/pkg_server.cryptoPredictionItem'
         type: array
       limit:
         type: integer
@@ -349,16 +464,16 @@ definitions:
       total:
         type: integer
     type: object
-  server.cryptoPredictionsResponse:
+  pkg_server.cryptoPredictionsResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/server.cryptoPredictionItem'
+          $ref: '#/definitions/pkg_server.cryptoPredictionItem'
         type: array
       total:
         type: integer
     type: object
-  server.cryptoPricePoint:
+  pkg_server.cryptoPricePoint:
     properties:
       close_price:
         type: number
@@ -369,16 +484,16 @@ definitions:
       volume_24h:
         type: number
     type: object
-  server.cryptoPricesResponse:
+  pkg_server.cryptoPricesResponse:
     properties:
       coin_id:
         type: string
       data:
         items:
-          $ref: '#/definitions/server.cryptoPricePoint'
+          $ref: '#/definitions/pkg_server.cryptoPricePoint'
         type: array
     type: object
-  server.directionAccuracyAlgoDTO:
+  pkg_server.directionAccuracyAlgoDTO:
     properties:
       algorithm:
         type: string
@@ -389,16 +504,16 @@ definitions:
       total:
         type: integer
     type: object
-  server.directionAccuracyResponseDTO:
+  pkg_server.directionAccuracyResponseDTO:
     properties:
       algorithms:
         items:
-          $ref: '#/definitions/server.directionAccuracyAlgoDTO'
+          $ref: '#/definitions/pkg_server.directionAccuracyAlgoDTO'
         type: array
       market:
         type: string
     type: object
-  server.goldChartResponse:
+  pkg_server.goldChartResponse:
     properties:
       buy_prices:
         items:
@@ -415,7 +530,7 @@ definitions:
           type: number
         type: array
     type: object
-  server.goldLatestItem:
+  pkg_server.goldLatestItem:
     properties:
       buy_price:
         type: number
@@ -430,16 +545,16 @@ definitions:
       trading_date:
         type: string
     type: object
-  server.goldLatestResponse:
+  pkg_server.goldLatestResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/server.goldLatestItem'
+          $ref: '#/definitions/pkg_server.goldLatestItem'
         type: array
       updated_at:
         type: string
     type: object
-  server.goldPredictionChartPoint:
+  pkg_server.goldPredictionChartPoint:
     properties:
       actual_price:
         type: number
@@ -450,20 +565,20 @@ definitions:
       predicted_price:
         type: number
     type: object
-  server.goldPredictionChartResponse:
+  pkg_server.goldPredictionChartResponse:
     properties:
       algorithm:
         type: string
       data:
         items:
-          $ref: '#/definitions/server.goldPredictionChartPoint'
+          $ref: '#/definitions/pkg_server.goldPredictionChartPoint'
         type: array
       product_type:
         type: string
       source:
         type: string
     type: object
-  server.goldPredictionItem:
+  pkg_server.goldPredictionItem:
     properties:
       accuracy:
         type: number
@@ -488,16 +603,16 @@ definitions:
       target_date:
         type: string
     type: object
-  server.goldPredictionsResponse:
+  pkg_server.goldPredictionsResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/server.goldPredictionItem'
+          $ref: '#/definitions/pkg_server.goldPredictionItem'
         type: array
       total:
         type: integer
     type: object
-  server.goldPricePoint:
+  pkg_server.goldPricePoint:
     properties:
       buy_price:
         type: number
@@ -506,18 +621,18 @@ definitions:
       sell_price:
         type: number
     type: object
-  server.goldPricesResponse:
+  pkg_server.goldPricesResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/server.goldPricePoint'
+          $ref: '#/definitions/pkg_server.goldPricePoint'
         type: array
       product_type:
         type: string
       source:
         type: string
     type: object
-  server.leaderboardEntry:
+  pkg_server.leaderboardEntry:
     properties:
       algorithm:
         type: string
@@ -546,7 +661,7 @@ definitions:
       sharpe_ratio:
         type: number
       simulation_period:
-        $ref: '#/definitions/server.simPeriod'
+        $ref: '#/definitions/pkg_server.simPeriod'
       total_return_pct:
         type: number
       total_trades:
@@ -554,16 +669,16 @@ definitions:
       win_rate_pct:
         type: number
     type: object
-  server.leaderboardResponse:
+  pkg_server.leaderboardResponse:
     properties:
       leaderboard:
         items:
-          $ref: '#/definitions/server.leaderboardEntry'
+          $ref: '#/definitions/pkg_server.leaderboardEntry'
         type: array
       summary:
-        $ref: '#/definitions/server.leaderboardSummary'
+        $ref: '#/definitions/pkg_server.leaderboardSummary'
     type: object
-  server.leaderboardSummary:
+  pkg_server.leaderboardSummary:
     properties:
       avg_return_pct:
         type: number
@@ -574,21 +689,21 @@ definitions:
       total_bots:
         type: integer
     type: object
-  server.loginRequest:
+  pkg_server.loginRequest:
     properties:
       password:
         type: string
       username:
         type: string
     type: object
-  server.loginResponse:
+  pkg_server.loginResponse:
     properties:
       token:
         type: string
       user:
-        $ref: '#/definitions/server.userInfo'
+        $ref: '#/definitions/pkg_server.userInfo'
     type: object
-  server.marketPredictionsResponse:
+  pkg_server.marketPredictionsResponse:
     properties:
       data: {}
       limit:
@@ -602,7 +717,7 @@ definitions:
       total_pages:
         type: integer
     type: object
-  server.marketTrainingResponse:
+  pkg_server.marketTrainingResponse:
     properties:
       data: {}
       limit:
@@ -616,7 +731,142 @@ definitions:
       total_pages:
         type: integer
     type: object
-  server.nasdaqChartResponse:
+  pkg_server.monitoringAlgoStat:
+    properties:
+      algorithm:
+        type: string
+      correct:
+        type: integer
+      direction_accuracy:
+        description: 0..1
+        type: number
+      reconciled:
+        type: integer
+      today_count:
+        type: integer
+    type: object
+  pkg_server.monitoringBotByMarket:
+    properties:
+      losses:
+        type: integer
+      market:
+        type: string
+      total_pnl:
+        type: number
+      trades:
+        type: integer
+      win_rate:
+        description: 0..1
+        type: number
+      wins:
+        type: integer
+    type: object
+  pkg_server.monitoringBotSummary:
+    properties:
+      active_bots:
+        type: integer
+      by_market:
+        items:
+          $ref: '#/definitions/pkg_server.monitoringBotByMarket'
+        type: array
+      total_bots:
+        type: integer
+    type: object
+  pkg_server.monitoringBotTableRow:
+    properties:
+      algorithm:
+        type: string
+      bot_id:
+        type: string
+      breakeven:
+        type: integer
+      losses:
+        type: integer
+      market:
+        type: string
+      profit_factor:
+        type: number
+      return_pct:
+        type: number
+      total_pnl:
+        type: number
+      trades:
+        type: integer
+      win_rate:
+        description: 0..1
+        type: number
+      wins:
+        type: integer
+    type: object
+  pkg_server.monitoringBots:
+    properties:
+      summary:
+        $ref: '#/definitions/pkg_server.monitoringBotSummary'
+      table:
+        items:
+          $ref: '#/definitions/pkg_server.monitoringBotTableRow'
+        type: array
+    type: object
+  pkg_server.monitoringCrawl:
+    properties:
+      daily_today:
+        type: integer
+      intraday_today:
+        type: integer
+      last_crawl_at:
+        description: RFC3339 or null
+        type: string
+      market_open:
+        description: true if market is currently in a trading session (ET-based)
+        type: boolean
+      stale:
+        type: boolean
+      staleness:
+        description: '"35m ago" | "2h ago" | "never"'
+        type: string
+    type: object
+  pkg_server.monitoringMarket:
+    properties:
+      crawl:
+        $ref: '#/definitions/pkg_server.monitoringCrawl'
+      market:
+        type: string
+      predictions:
+        $ref: '#/definitions/pkg_server.monitoringPredictions'
+    type: object
+  pkg_server.monitoringOverviewResponse:
+    properties:
+      bots:
+        $ref: '#/definitions/pkg_server.monitoringBots'
+      generated_at:
+        description: RFC3339
+        type: string
+      markets:
+        items:
+          $ref: '#/definitions/pkg_server.monitoringMarket'
+        type: array
+    type: object
+  pkg_server.monitoringPredictions:
+    properties:
+      algorithms:
+        items:
+          $ref: '#/definitions/pkg_server.monitoringAlgoStat'
+        type: array
+      expected_algos:
+        type: integer
+      last_predict_at:
+        description: RFC3339 or null
+        type: string
+      missing_today:
+        items:
+          type: string
+        type: array
+      staleness:
+        type: string
+      today_total:
+        type: integer
+    type: object
+  pkg_server.nasdaqChartResponse:
     properties:
       dates:
         items:
@@ -631,7 +881,7 @@ definitions:
       symbol:
         type: string
     type: object
-  server.nasdaqLatestItem:
+  pkg_server.nasdaqLatestItem:
     properties:
       close_price:
         type: number
@@ -644,16 +894,16 @@ definitions:
       trading_date:
         type: string
     type: object
-  server.nasdaqLatestResponse:
+  pkg_server.nasdaqLatestResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/server.nasdaqLatestItem'
+          $ref: '#/definitions/pkg_server.nasdaqLatestItem'
         type: array
       updated_at:
         type: string
     type: object
-  server.nasdaqPredictionChartPoint:
+  pkg_server.nasdaqPredictionChartPoint:
     properties:
       actual_price:
         type: number
@@ -666,18 +916,18 @@ definitions:
       predicted_price:
         type: number
     type: object
-  server.nasdaqPredictionChartResponse:
+  pkg_server.nasdaqPredictionChartResponse:
     properties:
       algorithm:
         type: string
       data:
         items:
-          $ref: '#/definitions/server.nasdaqPredictionChartPoint'
+          $ref: '#/definitions/pkg_server.nasdaqPredictionChartPoint'
         type: array
       symbol:
         type: string
     type: object
-  server.nasdaqPredictionItem:
+  pkg_server.nasdaqPredictionItem:
     properties:
       accuracy:
         type: number
@@ -700,11 +950,11 @@ definitions:
       target_date:
         type: string
     type: object
-  server.nasdaqPredictionsPageResponse:
+  pkg_server.nasdaqPredictionsPageResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/server.nasdaqPredictionItem'
+          $ref: '#/definitions/pkg_server.nasdaqPredictionItem'
         type: array
       limit:
         type: integer
@@ -713,16 +963,16 @@ definitions:
       total:
         type: integer
     type: object
-  server.nasdaqPredictionsResponse:
+  pkg_server.nasdaqPredictionsResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/server.nasdaqPredictionItem'
+          $ref: '#/definitions/pkg_server.nasdaqPredictionItem'
         type: array
       total:
         type: integer
     type: object
-  server.nasdaqPricePoint:
+  pkg_server.nasdaqPricePoint:
     properties:
       close_price:
         type: number
@@ -737,16 +987,21 @@ definitions:
       volume:
         type: integer
     type: object
-  server.nasdaqPricesResponse:
+  pkg_server.nasdaqPricesResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/server.nasdaqPricePoint'
+          $ref: '#/definitions/pkg_server.nasdaqPricePoint'
         type: array
       symbol:
         type: string
     type: object
-  server.scheduleResponse:
+  pkg_server.resetPasswordRequest:
+    properties:
+      new_password:
+        type: string
+    type: object
+  pkg_server.scheduleResponse:
     properties:
       cron_expression:
         type: string
@@ -759,7 +1014,14 @@ definitions:
       updated_at:
         type: string
     type: object
-  server.simBotDetail:
+  pkg_server.setGroupMarketsRequest:
+    properties:
+      market_keys:
+        items:
+          type: string
+        type: array
+    type: object
+  pkg_server.simBotDetail:
     properties:
       algorithm:
         type: string
@@ -778,9 +1040,9 @@ definitions:
       is_active:
         type: boolean
       kpis:
-        $ref: '#/definitions/server.simBotKPIs'
+        $ref: '#/definitions/pkg_server.simBotKPIs'
       last_session:
-        $ref: '#/definitions/server.simSessionSummary'
+        $ref: '#/definitions/pkg_server.simSessionSummary'
       market:
         type: string
       max_position_pct:
@@ -798,7 +1060,7 @@ definitions:
       updated_at:
         type: string
     type: object
-  server.simBotKPIs:
+  pkg_server.simBotKPIs:
     properties:
       annualized_return_pct:
         type: number
@@ -821,7 +1083,7 @@ definitions:
       worst_trade_pct:
         type: number
     type: object
-  server.simBotListItem:
+  pkg_server.simBotListItem:
     properties:
       algorithm:
         type: string
@@ -840,7 +1102,7 @@ definitions:
       is_active:
         type: boolean
       last_session:
-        $ref: '#/definitions/server.simSessionSummary'
+        $ref: '#/definitions/pkg_server.simSessionSummary'
       market:
         type: string
       max_position_pct:
@@ -862,7 +1124,44 @@ definitions:
       updated_at:
         type: string
     type: object
-  server.simChartResponse:
+  pkg_server.simBotVariant:
+    properties:
+      algorithm:
+        type: string
+      buy_threshold:
+        type: number
+      created_at:
+        type: string
+      currency:
+        type: string
+      display_name:
+        type: string
+      id:
+        type: string
+      initial_capital:
+        type: number
+      is_active:
+        type: boolean
+      kpis:
+        $ref: '#/definitions/pkg_server.simBotKPIs'
+      market:
+        type: string
+      max_position_pct:
+        type: number
+      max_positions:
+        type: integer
+      min_confidence:
+        type: number
+      sell_threshold:
+        type: number
+      stop_loss:
+        type: number
+      take_profit:
+        type: number
+      updated_at:
+        type: string
+    type: object
+  pkg_server.simChartResponse:
     properties:
       bot_id:
         type: string
@@ -881,14 +1180,14 @@ definitions:
           type: number
         type: array
     type: object
-  server.simPeriod:
+  pkg_server.simPeriod:
     properties:
       end:
         type: string
       start:
         type: string
     type: object
-  server.simSessionSummary:
+  pkg_server.simSessionSummary:
     properties:
       end_date:
         type: string
@@ -899,7 +1198,7 @@ definitions:
       status:
         type: string
     type: object
-  server.simTradeJSON:
+  pkg_server.simTradeJSON:
     properties:
       action:
         type: string
@@ -934,13 +1233,13 @@ definitions:
       trade_value:
         type: number
     type: object
-  server.simTradesPage:
+  pkg_server.simTradesPage:
     properties:
       bot_id:
         type: string
       data:
         items:
-          $ref: '#/definitions/server.simTradeJSON'
+          $ref: '#/definitions/pkg_server.simTradeJSON'
         type: array
       limit:
         type: integer
@@ -951,7 +1250,7 @@ definitions:
       total:
         type: integer
     type: object
-  server.sp500ChartResponse:
+  pkg_server.sp500ChartResponse:
     properties:
       dates:
         items:
@@ -966,7 +1265,7 @@ definitions:
       symbol:
         type: string
     type: object
-  server.sp500LatestItem:
+  pkg_server.sp500LatestItem:
     properties:
       close_price:
         type: number
@@ -979,16 +1278,16 @@ definitions:
       trading_date:
         type: string
     type: object
-  server.sp500LatestResponse:
+  pkg_server.sp500LatestResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/server.sp500LatestItem'
+          $ref: '#/definitions/pkg_server.sp500LatestItem'
         type: array
       updated_at:
         type: string
     type: object
-  server.sp500PredictionChartPoint:
+  pkg_server.sp500PredictionChartPoint:
     properties:
       actual_price:
         type: number
@@ -1001,18 +1300,18 @@ definitions:
       predicted_price:
         type: number
     type: object
-  server.sp500PredictionChartResponse:
+  pkg_server.sp500PredictionChartResponse:
     properties:
       algorithm:
         type: string
       data:
         items:
-          $ref: '#/definitions/server.sp500PredictionChartPoint'
+          $ref: '#/definitions/pkg_server.sp500PredictionChartPoint'
         type: array
       symbol:
         type: string
     type: object
-  server.sp500PredictionItem:
+  pkg_server.sp500PredictionItem:
     properties:
       accuracy:
         type: number
@@ -1035,11 +1334,11 @@ definitions:
       target_date:
         type: string
     type: object
-  server.sp500PredictionsPageResponse:
+  pkg_server.sp500PredictionsPageResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/server.sp500PredictionItem'
+          $ref: '#/definitions/pkg_server.sp500PredictionItem'
         type: array
       limit:
         type: integer
@@ -1048,16 +1347,16 @@ definitions:
       total:
         type: integer
     type: object
-  server.sp500PredictionsResponse:
+  pkg_server.sp500PredictionsResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/server.sp500PredictionItem'
+          $ref: '#/definitions/pkg_server.sp500PredictionItem'
         type: array
       total:
         type: integer
     type: object
-  server.sp500PricePoint:
+  pkg_server.sp500PricePoint:
     properties:
       close_price:
         type: number
@@ -1072,35 +1371,35 @@ definitions:
       volume:
         type: integer
     type: object
-  server.sp500PricesResponse:
+  pkg_server.sp500PricesResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/server.sp500PricePoint'
+          $ref: '#/definitions/pkg_server.sp500PricePoint'
         type: array
       symbol:
         type: string
     type: object
-  server.updateScheduleRequest:
+  pkg_server.updateScheduleRequest:
     properties:
       cron_expression:
         type: string
       enabled:
         type: boolean
     type: object
-  server.userInfo:
+  pkg_server.updateUserRequest:
     properties:
+      email:
+        type: string
+      full_name:
+        type: string
+      phone:
+        type: string
       role:
         type: string
-      username:
-        type: string
     type: object
-  server.userResponse:
+  pkg_server.userInfo:
     properties:
-      created_at:
-        type: string
-      id:
-        type: integer
       role:
         type: string
       username:
@@ -1109,8 +1408,8 @@ definitions:
 host: localhost:8118
 info:
   contact: {}
-  description: Vietnamese stock market prediction system — ML algorithms (VWMA, EMA,
-    LSTM, ARIMA-GARCH, Ensemble) for VN30 stocks, gold, NASDAQ, crypto, and S&P 500.
+  description: Financial asset prediction system — ML algorithms (VWMA, EMA, LSTM,
+    ARIMA-GARCH, Ensemble) for gold, NASDAQ, crypto, and S&P 500.
   title: Go Stock Prediction API
   version: "1.0"
 paths:
@@ -1118,52 +1417,51 @@ paths:
     post:
       consumes:
       - application/json
-      description: Authenticate with username and password, returns a JWT valid for
-        24 hours
+      description: Authenticate with username/password; returns JWT signed by Java
+        Auth Service
       parameters:
       - description: Login credentials
         in: body
         name: body
         required: true
         schema:
-          $ref: '#/definitions/server.loginRequest'
+          $ref: '#/definitions/pkg_server.loginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.loginResponse'
+            $ref: '#/definitions/pkg_server.loginResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
-        "500":
-          description: Internal Server Error
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "503":
+          description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Login
       tags:
       - Auth
   /api/auth/me:
     get:
-      description: Returns the authenticated user's username and role based on the
-        JWT token
+      description: Returns username and role from JWT claims (no DB call)
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.userInfo'
+            $ref: '#/definitions/pkg_server.userInfo'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Get current user
@@ -1173,15 +1471,15 @@ paths:
     put:
       consumes:
       - application/json
-      description: Changes the authenticated user's password; requires the current
-        password for verification
+      description: Proxies to Java Auth Service — validates current password before
+        updating
       parameters:
       - description: Current and new password
         in: body
         name: body
         required: true
         schema:
-          $ref: '#/definitions/server.changePasswordRequest'
+          $ref: '#/definitions/pkg_server.changePasswordRequest'
       produces:
       - application/json
       responses:
@@ -1194,19 +1492,15 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
-        "404":
-          description: Not Found
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "503":
+          description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Change password
@@ -1223,12 +1517,12 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/server.BackupInfo'
+              $ref: '#/definitions/pkg_server.BackupInfo'
             type: array
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: List database backups
@@ -1255,19 +1549,19 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Delete a backup file
@@ -1289,15 +1583,15 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Download a backup file
@@ -1324,11 +1618,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.cryptoChartResponse'
+            $ref: '#/definitions/pkg_server.cryptoChartResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get crypto price chart data
       tags:
       - Crypto
@@ -1342,11 +1636,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.cryptoLatestResponse'
+            $ref: '#/definitions/pkg_server.cryptoLatestResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get latest crypto prices
       tags:
       - Crypto
@@ -1389,11 +1683,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.cryptoPredictionsPageResponse'
+            $ref: '#/definitions/pkg_server.cryptoPredictionsPageResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: List crypto predictions with pagination
       tags:
       - Crypto Predictions
@@ -1420,11 +1714,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.cryptoPredictionChartResponse'
+            $ref: '#/definitions/pkg_server.cryptoPredictionChartResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get crypto prediction chart data
       tags:
       - Crypto Predictions
@@ -1437,11 +1731,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.cryptoPredictionsResponse'
+            $ref: '#/definitions/pkg_server.cryptoPredictionsResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get latest crypto predictions
       tags:
       - Crypto Predictions
@@ -1455,11 +1749,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.cryptoPredictionsResponse'
+            $ref: '#/definitions/pkg_server.cryptoPredictionsResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get latest confirmed crypto prediction results
       tags:
       - Crypto Predictions
@@ -1482,11 +1776,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.cryptoPricesResponse'
+            $ref: '#/definitions/pkg_server.cryptoPricesResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get historical crypto prices
       tags:
       - Crypto
@@ -1500,11 +1794,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/modelsapi.DashboardStatsFullDTO'
+            $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.DashboardStatsFullDTO'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get dashboard statistics
       tags:
       - Dashboard
@@ -1533,11 +1827,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.goldChartResponse'
+            $ref: '#/definitions/pkg_server.goldChartResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get gold price chart data
       tags:
       - Gold
@@ -1551,11 +1845,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.goldLatestResponse'
+            $ref: '#/definitions/pkg_server.goldLatestResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get latest gold prices
       tags:
       - Gold
@@ -1586,11 +1880,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.goldPredictionsResponse'
+            $ref: '#/definitions/pkg_server.goldPredictionsResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: List gold predictions
       tags:
       - Gold Predictions
@@ -1621,11 +1915,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.goldPredictionChartResponse'
+            $ref: '#/definitions/pkg_server.goldPredictionChartResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get gold prediction chart data
       tags:
       - Gold Predictions
@@ -1639,11 +1933,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.goldPredictionsResponse'
+            $ref: '#/definitions/pkg_server.goldPredictionsResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get latest gold predictions
       tags:
       - Gold Predictions
@@ -1657,11 +1951,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.goldPredictionsResponse'
+            $ref: '#/definitions/pkg_server.goldPredictionsResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get latest confirmed gold prediction results
       tags:
       - Gold Predictions
@@ -1688,21 +1982,216 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.goldPricesResponse'
+            $ref: '#/definitions/pkg_server.goldPricesResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get historical gold prices
       tags:
       - Gold
+  /api/market-groups:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/go-stock-prediction_proto_auth.MarketGroupResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List market groups
+      tags:
+      - MarketGroups
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Group details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/pkg_server.createGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/go-stock-prediction_proto_auth.MarketGroupResponse'
+      security:
+      - BearerAuth: []
+      summary: Create market group
+      tags:
+      - MarketGroups
+  /api/market-groups/{id}:
+    delete:
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete market group
+      tags:
+      - MarketGroups
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: New name/description
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/pkg_server.createGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/go-stock-prediction_proto_auth.MarketGroupResponse'
+      security:
+      - BearerAuth: []
+      summary: Update market group
+      tags:
+      - MarketGroups
+  /api/market-groups/{id}/markets:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Market keys
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/pkg_server.setGroupMarketsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Set markets for a group (replaces existing)
+      tags:
+      - MarketGroups
+  /api/market-groups/{id}/users:
+    get:
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/go-stock-prediction_proto_auth.UserResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List users in a market group
+      tags:
+      - MarketGroups
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: User ID
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/pkg_server.addUserToGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add user to market group
+      tags:
+      - MarketGroups
+  /api/market-groups/{id}/users/{uid}:
+    delete:
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: User ID
+        in: path
+        name: uid
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Remove user from market group
+      tags:
+      - MarketGroups
   /api/markets/{key}/predictions:
     get:
       description: Returns a paginated list of predictions for the specified market
-        (vn30 or gold). Supports filtering by algorithm, status, and free-text search.
-        Sortable by any field.
+        (gold, nasdaq, sp500, crypto). Supports filtering by algorithm, status, and
+        free-text search. Sortable by any field.
       parameters:
-      - description: 'Market key: vn30 or gold'
+      - description: 'Market key: gold, nasdaq, sp500, crypto'
         in: path
         name: key
         required: true
@@ -1741,24 +2230,53 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.marketPredictionsResponse'
+            $ref: '#/definitions/pkg_server.marketPredictionsResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: List predictions for a market
+      tags:
+      - Markets
+  /api/markets/{key}/session-stats:
+    get:
+      description: Returns per-algorithm direction accuracy and bot trading stats
+        for the current or most recent trading session.
+      parameters:
+      - description: 'Market key: gold, nasdaq100, crypto, sp500'
+        in: path
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.SessionStatsResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+      summary: Session stats for a market
       tags:
       - Markets
   /api/markets/{key}/training:
     get:
       description: Returns a paginated list of training sessions for the specified
-        market (vn30 or gold). Supports filtering by algorithm and sorting.
+        market (gold, nasdaq, sp500, crypto). Supports filtering by algorithm and
+        sorting.
       parameters:
-      - description: 'Market key: vn30 or gold'
+      - description: 'Market key: gold, nasdaq, sp500, crypto'
         in: path
         name: key
         required: true
@@ -1789,18 +2307,43 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.marketTrainingResponse'
+            $ref: '#/definitions/pkg_server.marketTrainingResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: List training sessions for a market
       tags:
       - Markets
+  /api/monitoring/overview:
+    get:
+      description: Returns a single aggregated view of crawl freshness, prediction
+        activity per algorithm per market, and bot trading win/loss stats. Response
+        is cached for 30 seconds. Requires JWT authentication.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/pkg_server.monitoringOverviewResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Get monitoring overview
+      tags:
+      - Monitoring
   /api/nasdaq/chart:
     get:
       description: Returns chronologically ordered date labels and closing prices
@@ -1822,11 +2365,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.nasdaqChartResponse'
+            $ref: '#/definitions/pkg_server.nasdaqChartResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get NASDAQ price chart data
       tags:
       - NASDAQ
@@ -1839,11 +2382,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.nasdaqLatestResponse'
+            $ref: '#/definitions/pkg_server.nasdaqLatestResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get latest NASDAQ prices
       tags:
       - NASDAQ
@@ -1886,11 +2429,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.nasdaqPredictionsPageResponse'
+            $ref: '#/definitions/pkg_server.nasdaqPredictionsPageResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: List NASDAQ predictions with pagination
       tags:
       - NASDAQ Predictions
@@ -1917,11 +2460,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.nasdaqPredictionChartResponse'
+            $ref: '#/definitions/pkg_server.nasdaqPredictionChartResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get NASDAQ prediction chart data
       tags:
       - NASDAQ Predictions
@@ -1934,11 +2477,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.nasdaqPredictionsResponse'
+            $ref: '#/definitions/pkg_server.nasdaqPredictionsResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get latest NASDAQ predictions
       tags:
       - NASDAQ Predictions
@@ -1952,11 +2495,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.nasdaqPredictionsResponse'
+            $ref: '#/definitions/pkg_server.nasdaqPredictionsResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get latest confirmed NASDAQ prediction results
       tags:
       - NASDAQ Predictions
@@ -1979,14 +2522,49 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.nasdaqPricesResponse'
+            $ref: '#/definitions/pkg_server.nasdaqPricesResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get historical NASDAQ prices
       tags:
       - NASDAQ
+  /api/pipeline/stream:
+    get:
+      description: Opens a Server-Sent Events connection and streams per-symbol/algo
+        progress
+      parameters:
+      - description: 'Market key: gold, nasdaq, crypto, sp500'
+        in: query
+        name: market
+        required: true
+        type: string
+      - description: JWT bearer token
+        in: query
+        name: token
+        required: true
+        type: string
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+      summary: Stream live predict logs via SSE
+      tags:
+      - Triggers
   /api/predictions/direction-accuracy:
     get:
       description: Returns the fraction of predictions where the price movement direction
@@ -1994,7 +2572,6 @@ paths:
       parameters:
       - description: Market key
         enum:
-        - VN30
         - GOLD
         - NASDAQ
         - CRYPTO
@@ -2009,15 +2586,15 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.directionAccuracyResponseDTO'
+            $ref: '#/definitions/pkg_server.directionAccuracyResponseDTO'
         "400":
           description: missing or unknown market
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Direction accuracy per algorithm
       tags:
       - predictions
@@ -2031,16 +2608,16 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/server.scheduleResponse'
+              $ref: '#/definitions/pkg_server.scheduleResponse'
             type: array
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: List cron schedules
@@ -2064,7 +2641,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/server.updateScheduleRequest'
+          $ref: '#/definitions/pkg_server.updateScheduleRequest'
       produces:
       - application/json
       responses:
@@ -2077,19 +2654,19 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "404":
           description: Schedule not found
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Update cron schedule
@@ -2106,12 +2683,12 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/server.simBotListItem'
+              $ref: '#/definitions/pkg_server.simBotListItem'
             type: array
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: List all simulation bots
       tags:
       - Simulation
@@ -2119,7 +2696,7 @@ paths:
     get:
       description: Returns full details and KPIs for a single bot identified by {id}.
       parameters:
-      - description: Bot ID (e.g. vn30_lstm_nn)
+      - description: Bot ID (e.g. gold_lstm_nn)
         in: path
         name: id
         required: true
@@ -2130,15 +2707,15 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.simBotDetail'
+            $ref: '#/definitions/pkg_server.simBotDetail'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get simulation bot details
       tags:
       - Simulation
@@ -2158,15 +2735,15 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.simChartResponse'
+            $ref: '#/definitions/pkg_server.simChartResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get bot portfolio value time series
       tags:
       - Simulation
@@ -2186,7 +2763,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/modelsdb.SimBot'
+          $ref: '#/definitions/go-stock-prediction_pkg_models_models_db.SimBot'
       produces:
       - application/json
       responses:
@@ -2199,23 +2776,23 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Update bot configuration
@@ -2250,19 +2827,19 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger backtest for a single bot
@@ -2288,23 +2865,23 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Toggle bot active status
@@ -2334,20 +2911,50 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.simTradesPage'
+            $ref: '#/definitions/pkg_server.simTradesPage'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get bot trade history
+      tags:
+      - Simulation
+  /api/simulation/bots/{id}/variants:
+    get:
+      description: Returns all bots sharing the same market and algorithm as {id},
+        each with KPIs from their best backtest session.
+      parameters:
+      - description: Bot ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/pkg_server.simBotVariant'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+      summary: Get variant bots for comparison
       tags:
       - Simulation
   /api/simulation/leaderboard:
@@ -2355,7 +2962,7 @@ paths:
       description: Returns all bots sorted by total_return_pct. Supports filtering
         by market, algorithm, and currency.
       parameters:
-      - description: Filter by market (e.g. VN30, CRYPTO)
+      - description: Filter by market (e.g. GOLD, CRYPTO)
         in: query
         name: market
         type: string
@@ -2373,11 +2980,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.leaderboardResponse'
+            $ref: '#/definitions/pkg_server.leaderboardResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get simulation leaderboard
       tags:
       - Simulation
@@ -2405,15 +3012,15 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger backtest for all bots
@@ -2440,11 +3047,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.sp500ChartResponse'
+            $ref: '#/definitions/pkg_server.sp500ChartResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get S&P 500 price chart data
       tags:
       - SP500
@@ -2458,11 +3065,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.sp500LatestResponse'
+            $ref: '#/definitions/pkg_server.sp500LatestResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get latest S&P 500 prices
       tags:
       - SP500
@@ -2505,11 +3112,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.sp500PredictionsPageResponse'
+            $ref: '#/definitions/pkg_server.sp500PredictionsPageResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: List S&P 500 predictions with pagination
       tags:
       - SP500 Predictions
@@ -2536,11 +3143,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.sp500PredictionChartResponse'
+            $ref: '#/definitions/pkg_server.sp500PredictionChartResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get S&P 500 prediction chart data
       tags:
       - SP500 Predictions
@@ -2553,11 +3160,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.sp500PredictionsResponse'
+            $ref: '#/definitions/pkg_server.sp500PredictionsResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get latest S&P 500 predictions
       tags:
       - SP500 Predictions
@@ -2571,11 +3178,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.sp500PredictionsResponse'
+            $ref: '#/definitions/pkg_server.sp500PredictionsResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get latest confirmed S&P 500 prediction results
       tags:
       - SP500 Predictions
@@ -2598,11 +3205,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/server.sp500PricesResponse'
+            $ref: '#/definitions/pkg_server.sp500PricesResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get historical S&P 500 prices
       tags:
       - SP500
@@ -2623,19 +3230,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/modelsapi.TrainingSessionDTO'
+            $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.TrainingSessionDTO'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get training session detail
       tags:
       - Training
@@ -2651,12 +3258,12 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/modelsapi.TrainingAlgorithmDTO'
+              $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.TrainingAlgorithmDTO'
             type: array
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: List training algorithms
       tags:
       - Training
@@ -2680,11 +3287,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/modelsapi.TrainingHistoryDTO'
+            $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.TrainingHistoryDTO'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get training history
       tags:
       - Training
@@ -2699,11 +3306,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/modelsapi.TrainingMetricsDTO'
+            $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.TrainingMetricsDTO'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get aggregate training metrics
       tags:
       - Training
@@ -2718,11 +3325,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/modelsapi.TrainingStatusDTO'
+            $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.TrainingStatusDTO'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       summary: Get current training status
       tags:
       - Training
@@ -2742,15 +3349,15 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger a database backup
@@ -2770,15 +3377,15 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger crypto price crawler
@@ -2798,15 +3405,15 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger crypto prediction
@@ -2826,15 +3433,15 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger gold price crawler
@@ -2859,19 +3466,19 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "409":
           description: Conflict
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger gold historical backtest
@@ -2891,15 +3498,15 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger gold price history import
@@ -2923,15 +3530,15 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger gold prediction
@@ -2943,8 +3550,8 @@ paths:
       - application/json
       description: 'Starts a walk-forward backtest in the background via the prediction
         service. Accepts optional query params: train_window (default 30), step_size
-        (default 6), and market (one of "", "VN30", "GOLD", "NASDAQ100", "CRYPTO",
-        "SP500", "ALL"). Returns 409 if a backtest is already running.'
+        (default 6), and market (one of "", "GOLD", "NASDAQ100", "CRYPTO", "SP500",
+        "ALL"). Returns 409 if a backtest is already running.'
       parameters:
       - description: Minimum data points before first prediction (default 30)
         in: query
@@ -2954,8 +3561,8 @@ paths:
         in: query
         name: step_size
         type: integer
-      - description: 'Target market key: VN30, GOLD, NASDAQ100, CRYPTO, SP500, ALL
-          (default: all)'
+      - description: 'Target market key: GOLD, NASDAQ100, CRYPTO, SP500, ALL (default:
+          all)'
         in: query
         name: market
         type: string
@@ -2971,19 +3578,19 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "409":
           description: Conflict
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger walk-forward historical backtest
@@ -3003,15 +3610,15 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger NASDAQ100 crawler
@@ -3031,15 +3638,15 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger NASDAQ100 prediction
@@ -3064,15 +3671,15 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger prediction reconciliation
@@ -3094,15 +3701,15 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Reset all active simulation bots
@@ -3133,15 +3740,15 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger trading simulation backtest
@@ -3163,15 +3770,15 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger simulation live step
@@ -3193,15 +3800,15 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger S&P 500 price crawler
@@ -3223,15 +3830,15 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger S&P 500 prediction
@@ -3249,34 +3856,34 @@ paths:
         in: body
         name: body
         schema:
-          $ref: '#/definitions/server.TriggerTrainRequest'
+          $ref: '#/definitions/pkg_server.TriggerTrainRequest'
       produces:
       - application/json
       responses:
         "202":
           description: Accepted
           schema:
-            $ref: '#/definitions/server.TriggerTrainResponse'
+            $ref: '#/definitions/pkg_server.TriggerTrainResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "409":
           description: Conflict
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Trigger model training
@@ -3284,7 +3891,7 @@ paths:
       - Triggers
   /api/users:
     get:
-      description: Returns all registered users; requires admin role
+      description: Returns all non-deleted users; admin or super_admin required
       produces:
       - application/json
       responses:
@@ -3292,64 +3899,55 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/server.userResponse'
+              $ref: '#/definitions/go-stock-prediction_proto_auth.UserResponse'
             type: array
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
-      summary: List all users
+      summary: List users
       tags:
       - Users
     post:
       consumes:
       - application/json
-      description: Creates a new user account; requires admin role. Role defaults
-        to "user" if an invalid value is supplied
+      description: Creates a new user; admin or super_admin required
       parameters:
-      - description: New user details
+      - description: User details
         in: body
         name: body
         required: true
         schema:
-          $ref: '#/definitions/server.createUserRequest'
+          $ref: '#/definitions/pkg_server.createUserRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/server.userResponse'
+            $ref: '#/definitions/go-stock-prediction_proto_auth.UserResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "409":
-          description: Username already exists
+          description: Conflict
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Create user
@@ -3357,8 +3955,7 @@ paths:
       - Users
   /api/users/{id}:
     delete:
-      description: Deletes a user by ID; requires admin role. An admin cannot delete
-        their own account
+      description: Soft-deletes a user by ID; cannot delete super_admin
       parameters:
       - description: User ID
         in: path
@@ -3377,22 +3974,145 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
-        "500":
-          description: Internal Server Error
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "404":
+          description: Not Found
           schema:
-            $ref: '#/definitions/server.ResponseFailure'
+            $ref: '#/definitions/pkg_server.ResponseFailure'
       security:
       - BearerAuth: []
       summary: Delete user
+      tags:
+      - Users
+    put:
+      consumes:
+      - application/json
+      description: Updates profile fields (full_name, email, phone) and/or role of
+        an existing user; admin or super_admin required
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/pkg_server.updateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/go-stock-prediction_proto_auth.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Update user
+      tags:
+      - Users
+  /api/users/{id}/market-groups:
+    get:
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/go-stock-prediction_proto_auth.MarketGroupResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: Get market groups for a user
+      tags:
+      - MarketGroups
+  /api/users/{id}/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Resets the password of an existing user; admin or super_admin required;
+        cannot reset super_admin password if caller is admin
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: New password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/pkg_server.resetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Reset user password
       tags:
       - Users
   /health:
@@ -3405,11 +4125,11 @@ paths:
         "200":
           description: System is healthy
           schema:
-            $ref: '#/definitions/server.HealthStatus'
+            $ref: '#/definitions/pkg_server.HealthStatus'
         "503":
           description: System is unhealthy or degraded
           schema:
-            $ref: '#/definitions/server.HealthStatus'
+            $ref: '#/definitions/pkg_server.HealthStatus'
       summary: Detailed health check
       tags:
       - health

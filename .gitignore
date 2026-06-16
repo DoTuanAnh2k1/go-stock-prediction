@@ -39,6 +39,7 @@ source_dump.txt
 
 # Claude Code internal
 memory/
+.superpowers/
 
 # Node
 node_modules/

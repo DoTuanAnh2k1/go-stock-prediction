@@ -18,7 +18,7 @@ const docTemplate = `{
     "paths": {
         "/api/auth/login": {
             "post": {
-                "description": "Authenticate with username and password, returns a JWT valid for 24 hours",
+                "description": "Authenticate with username/password; returns JWT signed by Java Auth Service",
                 "consumes": [
                     "application/json"
                 ],
@@ -36,7 +36,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/server.loginRequest"
+                            "$ref": "#/definitions/pkg_server.loginRequest"
                         }
                     }
                 ],
@@ -44,25 +44,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.loginResponse"
+                            "$ref": "#/definitions/pkg_server.loginResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
-                    "500": {
-                        "description": "Internal Server Error",
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -75,7 +75,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the authenticated user's username and role based on the JWT token",
+                "description": "Returns username and role from JWT claims (no DB call)",
                 "produces": [
                     "application/json"
                 ],
@@ -87,13 +87,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.userInfo"
+                            "$ref": "#/definitions/pkg_server.userInfo"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -106,7 +106,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Changes the authenticated user's password; requires the current password for verification",
+                "description": "Proxies to Java Auth Service — validates current password before updating",
                 "consumes": [
                     "application/json"
                 ],
@@ -124,7 +124,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/server.changePasswordRequest"
+                            "$ref": "#/definitions/pkg_server.changePasswordRequest"
                         }
                     }
                 ],
@@ -141,25 +141,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
-                    "404": {
-                        "description": "Not Found",
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -186,14 +180,14 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/server.BackupInfo"
+                                "$ref": "#/definitions/pkg_server.BackupInfo"
                             }
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -230,19 +224,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -281,25 +275,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -333,13 +327,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.cryptoChartResponse"
+                            "$ref": "#/definitions/pkg_server.cryptoChartResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -359,13 +353,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.cryptoLatestResponse"
+                            "$ref": "#/definitions/pkg_server.cryptoLatestResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -429,13 +423,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.cryptoPredictionsPageResponse"
+                            "$ref": "#/definitions/pkg_server.cryptoPredictionsPageResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -475,13 +469,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.cryptoPredictionChartResponse"
+                            "$ref": "#/definitions/pkg_server.cryptoPredictionChartResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -501,13 +495,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.cryptoPredictionsResponse"
+                            "$ref": "#/definitions/pkg_server.cryptoPredictionsResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -527,13 +521,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.cryptoPredictionsResponse"
+                            "$ref": "#/definitions/pkg_server.cryptoPredictionsResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -567,13 +561,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.cryptoPricesResponse"
+                            "$ref": "#/definitions/pkg_server.cryptoPricesResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -593,13 +587,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/modelsapi.DashboardStatsFullDTO"
+                            "$ref": "#/definitions/go-stock-prediction_pkg_models_models_api.DashboardStatsFullDTO"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -639,13 +633,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.goldChartResponse"
+                            "$ref": "#/definitions/pkg_server.goldChartResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -665,13 +659,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.goldLatestResponse"
+                            "$ref": "#/definitions/pkg_server.goldLatestResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -717,13 +711,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.goldPredictionsResponse"
+                            "$ref": "#/definitions/pkg_server.goldPredictionsResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -769,13 +763,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.goldPredictionChartResponse"
+                            "$ref": "#/definitions/pkg_server.goldPredictionChartResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -795,13 +789,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.goldPredictionsResponse"
+                            "$ref": "#/definitions/pkg_server.goldPredictionsResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -821,13 +815,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.goldPredictionsResponse"
+                            "$ref": "#/definitions/pkg_server.goldPredictionsResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -867,13 +861,328 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.goldPricesResponse"
+                            "$ref": "#/definitions/pkg_server.goldPricesResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/market-groups": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MarketGroups"
+                ],
+                "summary": "List market groups",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/go-stock-prediction_proto_auth.MarketGroupResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MarketGroups"
+                ],
+                "summary": "Create market group",
+                "parameters": [
+                    {
+                        "description": "Group details",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.createGroupRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/go-stock-prediction_proto_auth.MarketGroupResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/market-groups/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MarketGroups"
+                ],
+                "summary": "Update market group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "New name/description",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.createGroupRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/go-stock-prediction_proto_auth.MarketGroupResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MarketGroups"
+                ],
+                "summary": "Delete market group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/market-groups/{id}/markets": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MarketGroups"
+                ],
+                "summary": "Set markets for a group (replaces existing)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Market keys",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.setGroupMarketsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/market-groups/{id}/users": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MarketGroups"
+                ],
+                "summary": "List users in a market group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/go-stock-prediction_proto_auth.UserResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MarketGroups"
+                ],
+                "summary": "Add user to market group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "User ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.addUserToGroupRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/market-groups/{id}/users/{uid}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MarketGroups"
+                ],
+                "summary": "Remove user from market group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "uid",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -881,7 +1190,7 @@ const docTemplate = `{
         },
         "/api/markets/{key}/predictions": {
             "get": {
-                "description": "Returns a paginated list of predictions for the specified market (vn30 or gold). Supports filtering by algorithm, status, and free-text search. Sortable by any field.",
+                "description": "Returns a paginated list of predictions for the specified market (gold, nasdaq, sp500, crypto). Supports filtering by algorithm, status, and free-text search. Sortable by any field.",
                 "produces": [
                     "application/json"
                 ],
@@ -892,7 +1201,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Market key: vn30 or gold",
+                        "description": "Market key: gold, nasdaq, sp500, crypto",
                         "name": "key",
                         "in": "path",
                         "required": true
@@ -944,19 +1253,60 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.marketPredictionsResponse"
+                            "$ref": "#/definitions/pkg_server.marketPredictionsResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/markets/{key}/session-stats": {
+            "get": {
+                "description": "Returns per-algorithm direction accuracy and bot trading stats for the current or most recent trading session.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Markets"
+                ],
+                "summary": "Session stats for a market",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Market key: gold, nasdaq100, crypto, sp500",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/go-stock-prediction_pkg_models_models_api.SessionStatsResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -964,7 +1314,7 @@ const docTemplate = `{
         },
         "/api/markets/{key}/training": {
             "get": {
-                "description": "Returns a paginated list of training sessions for the specified market (vn30 or gold). Supports filtering by algorithm and sorting.",
+                "description": "Returns a paginated list of training sessions for the specified market (gold, nasdaq, sp500, crypto). Supports filtering by algorithm and sorting.",
                 "produces": [
                     "application/json"
                 ],
@@ -975,7 +1325,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Market key: vn30 or gold",
+                        "description": "Market key: gold, nasdaq, sp500, crypto",
                         "name": "key",
                         "in": "path",
                         "required": true
@@ -1015,19 +1365,56 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.marketTrainingResponse"
+                            "$ref": "#/definitions/pkg_server.marketTrainingResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/monitoring/overview": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a single aggregated view of crawl freshness, prediction activity per algorithm per market, and bot trading win/loss stats. Response is cached for 30 seconds. Requires JWT authentication.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Monitoring"
+                ],
+                "summary": "Get monitoring overview",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.monitoringOverviewResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1061,13 +1448,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.nasdaqChartResponse"
+                            "$ref": "#/definitions/pkg_server.nasdaqChartResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1087,13 +1474,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.nasdaqLatestResponse"
+                            "$ref": "#/definitions/pkg_server.nasdaqLatestResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1157,13 +1544,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.nasdaqPredictionsPageResponse"
+                            "$ref": "#/definitions/pkg_server.nasdaqPredictionsPageResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1203,13 +1590,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.nasdaqPredictionChartResponse"
+                            "$ref": "#/definitions/pkg_server.nasdaqPredictionChartResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1229,13 +1616,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.nasdaqPredictionsResponse"
+                            "$ref": "#/definitions/pkg_server.nasdaqPredictionsResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1255,13 +1642,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.nasdaqPredictionsResponse"
+                            "$ref": "#/definitions/pkg_server.nasdaqPredictionsResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1295,13 +1682,64 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.nasdaqPricesResponse"
+                            "$ref": "#/definitions/pkg_server.nasdaqPricesResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/pipeline/stream": {
+            "get": {
+                "description": "Opens a Server-Sent Events connection and streams per-symbol/algo progress",
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Stream live predict logs via SSE",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Market key: gold, nasdaq, crypto, sp500",
+                        "name": "market",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "JWT bearer token",
+                        "name": "token",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1320,7 +1758,6 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "enum": [
-                            "VN30",
                             "GOLD",
                             "NASDAQ",
                             "CRYPTO",
@@ -1337,19 +1774,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.directionAccuracyResponseDTO"
+                            "$ref": "#/definitions/pkg_server.directionAccuracyResponseDTO"
                         }
                     },
                     "400": {
                         "description": "missing or unknown market",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1376,20 +1813,20 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/server.scheduleResponse"
+                                "$ref": "#/definitions/pkg_server.scheduleResponse"
                             }
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1427,7 +1864,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/server.updateScheduleRequest"
+                            "$ref": "#/definitions/pkg_server.updateScheduleRequest"
                         }
                     }
                 ],
@@ -1444,25 +1881,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "404": {
                         "description": "Schedule not found",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1484,14 +1921,14 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/server.simBotListItem"
+                                "$ref": "#/definitions/pkg_server.simBotListItem"
                             }
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1510,7 +1947,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Bot ID (e.g. vn30_lstm_nn)",
+                        "description": "Bot ID (e.g. gold_lstm_nn)",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -1520,19 +1957,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.simBotDetail"
+                            "$ref": "#/definitions/pkg_server.simBotDetail"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1561,19 +1998,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.simChartResponse"
+                            "$ref": "#/definitions/pkg_server.simChartResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1611,7 +2048,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/modelsdb.SimBot"
+                            "$ref": "#/definitions/go-stock-prediction_pkg_models_models_db.SimBot"
                         }
                     }
                 ],
@@ -1628,31 +2065,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1706,25 +2143,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1765,31 +2202,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1830,25 +2267,69 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.simTradesPage"
+                            "$ref": "#/definitions/pkg_server.simTradesPage"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/simulation/bots/{id}/variants": {
+            "get": {
+                "description": "Returns all bots sharing the same market and algorithm as {id}, each with KPIs from their best backtest session.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Simulation"
+                ],
+                "summary": "Get variant bots for comparison",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bot ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/pkg_server.simBotVariant"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1867,7 +2348,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Filter by market (e.g. VN30, CRYPTO)",
+                        "description": "Filter by market (e.g. GOLD, CRYPTO)",
                         "name": "market",
                         "in": "query"
                     },
@@ -1888,13 +2369,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.leaderboardResponse"
+                            "$ref": "#/definitions/pkg_server.leaderboardResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1941,19 +2422,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -1987,13 +2468,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.sp500ChartResponse"
+                            "$ref": "#/definitions/pkg_server.sp500ChartResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2013,13 +2494,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.sp500LatestResponse"
+                            "$ref": "#/definitions/pkg_server.sp500LatestResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2083,13 +2564,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.sp500PredictionsPageResponse"
+                            "$ref": "#/definitions/pkg_server.sp500PredictionsPageResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2129,13 +2610,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.sp500PredictionChartResponse"
+                            "$ref": "#/definitions/pkg_server.sp500PredictionChartResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2155,13 +2636,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.sp500PredictionsResponse"
+                            "$ref": "#/definitions/pkg_server.sp500PredictionsResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2181,13 +2662,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.sp500PredictionsResponse"
+                            "$ref": "#/definitions/pkg_server.sp500PredictionsResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2221,13 +2702,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/server.sp500PricesResponse"
+                            "$ref": "#/definitions/pkg_server.sp500PricesResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2249,14 +2730,14 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/modelsapi.TrainingAlgorithmDTO"
+                                "$ref": "#/definitions/go-stock-prediction_pkg_models_models_api.TrainingAlgorithmDTO"
                             }
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2290,13 +2771,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/modelsapi.TrainingHistoryDTO"
+                            "$ref": "#/definitions/go-stock-prediction_pkg_models_models_api.TrainingHistoryDTO"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2316,13 +2797,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/modelsapi.TrainingMetricsDTO"
+                            "$ref": "#/definitions/go-stock-prediction_pkg_models_models_api.TrainingMetricsDTO"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2342,13 +2823,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/modelsapi.TrainingStatusDTO"
+                            "$ref": "#/definitions/go-stock-prediction_pkg_models_models_api.TrainingStatusDTO"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2377,25 +2858,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/modelsapi.TrainingSessionDTO"
+                            "$ref": "#/definitions/go-stock-prediction_pkg_models_models_api.TrainingSessionDTO"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2427,19 +2908,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2470,19 +2951,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2513,19 +2994,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2556,19 +3037,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2605,25 +3086,25 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2654,19 +3135,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2703,19 +3184,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2728,7 +3209,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Starts a walk-forward backtest in the background via the prediction service. Accepts optional query params: train_window (default 30), step_size (default 6), and market (one of \"\", \"VN30\", \"GOLD\", \"NASDAQ100\", \"CRYPTO\", \"SP500\", \"ALL\"). Returns 409 if a backtest is already running.",
+                "description": "Starts a walk-forward backtest in the background via the prediction service. Accepts optional query params: train_window (default 30), step_size (default 6), and market (one of \"\", \"GOLD\", \"NASDAQ100\", \"CRYPTO\", \"SP500\", \"ALL\"). Returns 409 if a backtest is already running.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2754,7 +3235,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Target market key: VN30, GOLD, NASDAQ100, CRYPTO, SP500, ALL (default: all)",
+                        "description": "Target market key: GOLD, NASDAQ100, CRYPTO, SP500, ALL (default: all)",
                         "name": "market",
                         "in": "query"
                     }
@@ -2772,25 +3253,25 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2821,19 +3302,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2864,19 +3345,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2913,19 +3394,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -2959,19 +3440,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -3018,19 +3499,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -3064,19 +3545,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -3110,19 +3591,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -3156,19 +3637,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -3198,7 +3679,7 @@ const docTemplate = `{
                         "name": "body",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/server.TriggerTrainRequest"
+                            "$ref": "#/definitions/pkg_server.TriggerTrainRequest"
                         }
                     }
                 ],
@@ -3206,37 +3687,37 @@ const docTemplate = `{
                     "202": {
                         "description": "Accepted",
                         "schema": {
-                            "$ref": "#/definitions/server.TriggerTrainResponse"
+                            "$ref": "#/definitions/pkg_server.TriggerTrainResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -3249,40 +3730,34 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns all registered users; requires admin role",
+                "description": "Returns all non-deleted users; admin or super_admin required",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Users"
                 ],
-                "summary": "List all users",
+                "summary": "List users",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/server.userResponse"
+                                "$ref": "#/definitions/go-stock-prediction_proto_auth.UserResponse"
                             }
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -3293,7 +3768,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates a new user account; requires admin role. Role defaults to \"user\" if an invalid value is supplied",
+                "description": "Creates a new user; admin or super_admin required",
                 "consumes": [
                     "application/json"
                 ],
@@ -3306,12 +3781,12 @@ const docTemplate = `{
                 "summary": "Create user",
                 "parameters": [
                     {
-                        "description": "New user details",
+                        "description": "User details",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/server.createUserRequest"
+                            "$ref": "#/definitions/pkg_server.createUserRequest"
                         }
                     }
                 ],
@@ -3319,50 +3794,118 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/server.userResponse"
+                            "$ref": "#/definitions/go-stock-prediction_proto_auth.UserResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "409": {
-                        "description": "Username already exists",
+                        "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
             }
         },
         "/api/users/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates profile fields (full_name, email, phone) and/or role of an existing user; admin or super_admin required",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Update user",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to update",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.updateUserRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/go-stock-prediction_proto_auth.UserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    }
+                }
+            },
             "delete": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Deletes a user by ID; requires admin role. An admin cannot delete their own account",
+                "description": "Soft-deletes a user by ID; cannot delete super_admin",
                 "produces": [
                     "application/json"
                 ],
@@ -3392,25 +3935,140 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     },
-                    "500": {
-                        "description": "Internal Server Error",
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/server.ResponseFailure"
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users/{id}/market-groups": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MarketGroups"
+                ],
+                "summary": "Get market groups for a user",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/go-stock-prediction_proto_auth.MarketGroupResponse"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users/{id}/reset-password": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Resets the password of an existing user; admin or super_admin required; cannot reset super_admin password if caller is admin",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Reset user password",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "New password",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.resetPasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
                         }
                     }
                 }
@@ -3430,13 +4088,13 @@ const docTemplate = `{
                     "200": {
                         "description": "System is healthy",
                         "schema": {
-                            "$ref": "#/definitions/server.HealthStatus"
+                            "$ref": "#/definitions/pkg_server.HealthStatus"
                         }
                     },
                     "503": {
                         "description": "System is unhealthy or degraded",
                         "schema": {
-                            "$ref": "#/definitions/server.HealthStatus"
+                            "$ref": "#/definitions/pkg_server.HealthStatus"
                         }
                     }
                 }
@@ -3490,7 +4148,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "modelsapi.AlgorithmResultDTO": {
+        "go-stock-prediction_pkg_models_models_api.AlgorithmResultDTO": {
             "type": "object",
             "properties": {
                 "accuracy": {
@@ -3510,7 +4168,7 @@ const docTemplate = `{
                 }
             }
         },
-        "modelsapi.AlgorithmStatsEntry": {
+        "go-stock-prediction_pkg_models_models_api.AlgorithmStatsEntry": {
             "type": "object",
             "properties": {
                 "accuracy": {
@@ -3521,13 +4179,13 @@ const docTemplate = `{
                 }
             }
         },
-        "modelsapi.DashboardStatsFullDTO": {
+        "go-stock-prediction_pkg_models_models_api.DashboardStatsFullDTO": {
             "type": "object",
             "properties": {
                 "algorithms": {
                     "type": "object",
                     "additionalProperties": {
-                        "$ref": "#/definitions/modelsapi.AlgorithmStatsEntry"
+                        "$ref": "#/definitions/go-stock-prediction_pkg_models_models_api.AlgorithmStatsEntry"
                     }
                 },
                 "avg_accuracy": {
@@ -3547,7 +4205,105 @@ const docTemplate = `{
                 }
             }
         },
-        "modelsapi.TrainingAlgorithmDTO": {
+        "go-stock-prediction_pkg_models_models_api.SessionBotDetail": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "bot_id": {
+                    "type": "string"
+                },
+                "breakeven": {
+                    "type": "integer"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "current_value": {
+                    "type": "number"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "initial_capital": {
+                    "type": "number"
+                },
+                "losses": {
+                    "type": "integer"
+                },
+                "session_pnl": {
+                    "type": "number"
+                },
+                "total_return_pct": {
+                    "type": "number"
+                },
+                "trades": {
+                    "type": "integer"
+                },
+                "win_rate": {
+                    "type": "number"
+                },
+                "wins": {
+                    "type": "integer"
+                }
+            }
+        },
+        "go-stock-prediction_pkg_models_models_api.SessionDirAccRow": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "algorithm": {
+                    "type": "string"
+                },
+                "correct": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "go-stock-prediction_pkg_models_models_api.SessionStatsResponse": {
+            "type": "object",
+            "properties": {
+                "bot_trades": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/go-stock-prediction_pkg_models_models_api.SessionBotDetail"
+                    }
+                },
+                "direction_accuracy": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/go-stock-prediction_pkg_models_models_api.SessionDirAccRow"
+                    }
+                },
+                "market": {
+                    "type": "string"
+                },
+                "session": {
+                    "$ref": "#/definitions/go-stock-prediction_pkg_models_models_api.SessionWindow"
+                }
+            }
+        },
+        "go-stock-prediction_pkg_models_models_api.SessionWindow": {
+            "type": "object",
+            "properties": {
+                "end": {
+                    "type": "string"
+                },
+                "is_open": {
+                    "type": "boolean"
+                },
+                "start": {
+                    "type": "string"
+                }
+            }
+        },
+        "go-stock-prediction_pkg_models_models_api.TrainingAlgorithmDTO": {
             "type": "object",
             "properties": {
                 "accuracy": {
@@ -3580,7 +4336,7 @@ const docTemplate = `{
                 }
             }
         },
-        "modelsapi.TrainingHistoryDTO": {
+        "go-stock-prediction_pkg_models_models_api.TrainingHistoryDTO": {
             "type": "object",
             "properties": {
                 "avg_accuracy": {
@@ -3592,7 +4348,7 @@ const docTemplate = `{
                 "sessions": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/modelsapi.TrainingSessionDTO"
+                        "$ref": "#/definitions/go-stock-prediction_pkg_models_models_api.TrainingSessionDTO"
                     }
                 },
                 "total": {
@@ -3600,7 +4356,7 @@ const docTemplate = `{
                 }
             }
         },
-        "modelsapi.TrainingMetricsDTO": {
+        "go-stock-prediction_pkg_models_models_api.TrainingMetricsDTO": {
             "type": "object",
             "properties": {
                 "avg_training_time": {
@@ -3626,13 +4382,13 @@ const docTemplate = `{
                 }
             }
         },
-        "modelsapi.TrainingSessionDTO": {
+        "go-stock-prediction_pkg_models_models_api.TrainingSessionDTO": {
             "type": "object",
             "properties": {
                 "algorithms": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/modelsapi.AlgorithmResultDTO"
+                        "$ref": "#/definitions/go-stock-prediction_pkg_models_models_api.AlgorithmResultDTO"
                     }
                 },
                 "duration_ms": {
@@ -3661,7 +4417,7 @@ const docTemplate = `{
                 }
             }
         },
-        "modelsapi.TrainingStatusDTO": {
+        "go-stock-prediction_pkg_models_models_api.TrainingStatusDTO": {
             "type": "object",
             "properties": {
                 "current_phase": {
@@ -3684,7 +4440,7 @@ const docTemplate = `{
                 }
             }
         },
-        "modelsdb.SimBot": {
+        "go-stock-prediction_pkg_models_models_db.SimBot": {
             "type": "object",
             "properties": {
                 "algorithm": {
@@ -3737,7 +4493,59 @@ const docTemplate = `{
                 }
             }
         },
-        "server.BackupInfo": {
+        "go-stock-prediction_proto_auth.MarketGroupResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "market_keys": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "go-stock-prediction_proto_auth.UserResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "pkg_server.BackupInfo": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -3754,7 +4562,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.HealthStatus": {
+        "pkg_server.HealthStatus": {
             "type": "object",
             "properties": {
                 "server_name": {
@@ -3770,7 +4578,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "system": {
-                    "$ref": "#/definitions/server.SystemInfo"
+                    "$ref": "#/definitions/pkg_server.SystemInfo"
                 },
                 "timestamp": {
                     "type": "string"
@@ -3783,7 +4591,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.MemoryStats": {
+        "pkg_server.MemoryStats": {
             "type": "object",
             "properties": {
                 "alloc_mb": {
@@ -3797,7 +4605,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.ResponseFailure": {
+        "pkg_server.ResponseFailure": {
             "type": "object",
             "properties": {
                 "message": {
@@ -3808,21 +4616,21 @@ const docTemplate = `{
                 }
             }
         },
-        "server.SystemInfo": {
+        "pkg_server.SystemInfo": {
             "type": "object",
             "properties": {
                 "go_version": {
                     "type": "string"
                 },
                 "memory": {
-                    "$ref": "#/definitions/server.MemoryStats"
+                    "$ref": "#/definitions/pkg_server.MemoryStats"
                 },
                 "num_goroutine": {
                     "type": "integer"
                 }
             }
         },
-        "server.TriggerTrainRequest": {
+        "pkg_server.TriggerTrainRequest": {
             "type": "object",
             "properties": {
                 "algorithm": {
@@ -3830,7 +4638,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.TriggerTrainResponse": {
+        "pkg_server.TriggerTrainResponse": {
             "type": "object",
             "properties": {
                 "message": {
@@ -3841,7 +4649,15 @@ const docTemplate = `{
                 }
             }
         },
-        "server.changePasswordRequest": {
+        "pkg_server.addUserToGroupRequest": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "pkg_server.changePasswordRequest": {
             "type": "object",
             "properties": {
                 "current_password": {
@@ -3852,14 +4668,33 @@ const docTemplate = `{
                 }
             }
         },
-        "server.createUserRequest": {
+        "pkg_server.createGroupRequest": {
             "type": "object",
             "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "pkg_server.createUserRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string"
+                },
                 "password": {
                     "type": "string"
                 },
+                "phone": {
+                    "type": "string"
+                },
                 "role": {
-                    "description": "\"admin\" or \"user\"",
                     "type": "string"
                 },
                 "username": {
@@ -3867,7 +4702,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.cryptoChartResponse": {
+        "pkg_server.cryptoChartResponse": {
             "type": "object",
             "properties": {
                 "coin_id": {
@@ -3890,7 +4725,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.cryptoLatestItem": {
+        "pkg_server.cryptoLatestItem": {
             "type": "object",
             "properties": {
                 "close_price": {
@@ -3916,13 +4751,13 @@ const docTemplate = `{
                 }
             }
         },
-        "server.cryptoLatestResponse": {
+        "pkg_server.cryptoLatestResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.cryptoLatestItem"
+                        "$ref": "#/definitions/pkg_server.cryptoLatestItem"
                     }
                 },
                 "updated_at": {
@@ -3930,7 +4765,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.cryptoPredictionChartPoint": {
+        "pkg_server.cryptoPredictionChartPoint": {
             "type": "object",
             "properties": {
                 "actual_price": {
@@ -3950,7 +4785,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.cryptoPredictionChartResponse": {
+        "pkg_server.cryptoPredictionChartResponse": {
             "type": "object",
             "properties": {
                 "algorithm": {
@@ -3962,12 +4797,12 @@ const docTemplate = `{
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.cryptoPredictionChartPoint"
+                        "$ref": "#/definitions/pkg_server.cryptoPredictionChartPoint"
                     }
                 }
             }
         },
-        "server.cryptoPredictionItem": {
+        "pkg_server.cryptoPredictionItem": {
             "type": "object",
             "properties": {
                 "accuracy": {
@@ -4005,13 +4840,13 @@ const docTemplate = `{
                 }
             }
         },
-        "server.cryptoPredictionsPageResponse": {
+        "pkg_server.cryptoPredictionsPageResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.cryptoPredictionItem"
+                        "$ref": "#/definitions/pkg_server.cryptoPredictionItem"
                     }
                 },
                 "limit": {
@@ -4025,13 +4860,13 @@ const docTemplate = `{
                 }
             }
         },
-        "server.cryptoPredictionsResponse": {
+        "pkg_server.cryptoPredictionsResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.cryptoPredictionItem"
+                        "$ref": "#/definitions/pkg_server.cryptoPredictionItem"
                     }
                 },
                 "total": {
@@ -4039,7 +4874,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.cryptoPricePoint": {
+        "pkg_server.cryptoPricePoint": {
             "type": "object",
             "properties": {
                 "close_price": {
@@ -4056,7 +4891,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.cryptoPricesResponse": {
+        "pkg_server.cryptoPricesResponse": {
             "type": "object",
             "properties": {
                 "coin_id": {
@@ -4065,12 +4900,12 @@ const docTemplate = `{
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.cryptoPricePoint"
+                        "$ref": "#/definitions/pkg_server.cryptoPricePoint"
                     }
                 }
             }
         },
-        "server.directionAccuracyAlgoDTO": {
+        "pkg_server.directionAccuracyAlgoDTO": {
             "type": "object",
             "properties": {
                 "algorithm": {
@@ -4087,13 +4922,13 @@ const docTemplate = `{
                 }
             }
         },
-        "server.directionAccuracyResponseDTO": {
+        "pkg_server.directionAccuracyResponseDTO": {
             "type": "object",
             "properties": {
                 "algorithms": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.directionAccuracyAlgoDTO"
+                        "$ref": "#/definitions/pkg_server.directionAccuracyAlgoDTO"
                     }
                 },
                 "market": {
@@ -4101,7 +4936,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.goldChartResponse": {
+        "pkg_server.goldChartResponse": {
             "type": "object",
             "properties": {
                 "buy_prices": {
@@ -4127,7 +4962,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.goldLatestItem": {
+        "pkg_server.goldLatestItem": {
             "type": "object",
             "properties": {
                 "buy_price": {
@@ -4150,13 +4985,13 @@ const docTemplate = `{
                 }
             }
         },
-        "server.goldLatestResponse": {
+        "pkg_server.goldLatestResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.goldLatestItem"
+                        "$ref": "#/definitions/pkg_server.goldLatestItem"
                     }
                 },
                 "updated_at": {
@@ -4164,7 +4999,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.goldPredictionChartPoint": {
+        "pkg_server.goldPredictionChartPoint": {
             "type": "object",
             "properties": {
                 "actual_price": {
@@ -4181,7 +5016,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.goldPredictionChartResponse": {
+        "pkg_server.goldPredictionChartResponse": {
             "type": "object",
             "properties": {
                 "algorithm": {
@@ -4190,7 +5025,7 @@ const docTemplate = `{
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.goldPredictionChartPoint"
+                        "$ref": "#/definitions/pkg_server.goldPredictionChartPoint"
                     }
                 },
                 "product_type": {
@@ -4201,7 +5036,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.goldPredictionItem": {
+        "pkg_server.goldPredictionItem": {
             "type": "object",
             "properties": {
                 "accuracy": {
@@ -4239,13 +5074,13 @@ const docTemplate = `{
                 }
             }
         },
-        "server.goldPredictionsResponse": {
+        "pkg_server.goldPredictionsResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.goldPredictionItem"
+                        "$ref": "#/definitions/pkg_server.goldPredictionItem"
                     }
                 },
                 "total": {
@@ -4253,7 +5088,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.goldPricePoint": {
+        "pkg_server.goldPricePoint": {
             "type": "object",
             "properties": {
                 "buy_price": {
@@ -4267,13 +5102,13 @@ const docTemplate = `{
                 }
             }
         },
-        "server.goldPricesResponse": {
+        "pkg_server.goldPricesResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.goldPricePoint"
+                        "$ref": "#/definitions/pkg_server.goldPricePoint"
                     }
                 },
                 "product_type": {
@@ -4284,7 +5119,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.leaderboardEntry": {
+        "pkg_server.leaderboardEntry": {
             "type": "object",
             "properties": {
                 "algorithm": {
@@ -4327,7 +5162,7 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "simulation_period": {
-                    "$ref": "#/definitions/server.simPeriod"
+                    "$ref": "#/definitions/pkg_server.simPeriod"
                 },
                 "total_return_pct": {
                     "type": "number"
@@ -4340,21 +5175,21 @@ const docTemplate = `{
                 }
             }
         },
-        "server.leaderboardResponse": {
+        "pkg_server.leaderboardResponse": {
             "type": "object",
             "properties": {
                 "leaderboard": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.leaderboardEntry"
+                        "$ref": "#/definitions/pkg_server.leaderboardEntry"
                     }
                 },
                 "summary": {
-                    "$ref": "#/definitions/server.leaderboardSummary"
+                    "$ref": "#/definitions/pkg_server.leaderboardSummary"
                 }
             }
         },
-        "server.leaderboardSummary": {
+        "pkg_server.leaderboardSummary": {
             "type": "object",
             "properties": {
                 "avg_return_pct": {
@@ -4371,7 +5206,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.loginRequest": {
+        "pkg_server.loginRequest": {
             "type": "object",
             "properties": {
                 "password": {
@@ -4382,18 +5217,18 @@ const docTemplate = `{
                 }
             }
         },
-        "server.loginResponse": {
+        "pkg_server.loginResponse": {
             "type": "object",
             "properties": {
                 "token": {
                     "type": "string"
                 },
                 "user": {
-                    "$ref": "#/definitions/server.userInfo"
+                    "$ref": "#/definitions/pkg_server.userInfo"
                 }
             }
         },
-        "server.marketPredictionsResponse": {
+        "pkg_server.marketPredictionsResponse": {
             "type": "object",
             "properties": {
                 "data": {},
@@ -4414,7 +5249,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.marketTrainingResponse": {
+        "pkg_server.marketTrainingResponse": {
             "type": "object",
             "properties": {
                 "data": {},
@@ -4435,7 +5270,210 @@ const docTemplate = `{
                 }
             }
         },
-        "server.nasdaqChartResponse": {
+        "pkg_server.monitoringAlgoStat": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "correct": {
+                    "type": "integer"
+                },
+                "direction_accuracy": {
+                    "description": "0..1",
+                    "type": "number"
+                },
+                "reconciled": {
+                    "type": "integer"
+                },
+                "today_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "pkg_server.monitoringBotByMarket": {
+            "type": "object",
+            "properties": {
+                "losses": {
+                    "type": "integer"
+                },
+                "market": {
+                    "type": "string"
+                },
+                "total_pnl": {
+                    "type": "number"
+                },
+                "trades": {
+                    "type": "integer"
+                },
+                "win_rate": {
+                    "description": "0..1",
+                    "type": "number"
+                },
+                "wins": {
+                    "type": "integer"
+                }
+            }
+        },
+        "pkg_server.monitoringBotSummary": {
+            "type": "object",
+            "properties": {
+                "active_bots": {
+                    "type": "integer"
+                },
+                "by_market": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/pkg_server.monitoringBotByMarket"
+                    }
+                },
+                "total_bots": {
+                    "type": "integer"
+                }
+            }
+        },
+        "pkg_server.monitoringBotTableRow": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "bot_id": {
+                    "type": "string"
+                },
+                "breakeven": {
+                    "type": "integer"
+                },
+                "losses": {
+                    "type": "integer"
+                },
+                "market": {
+                    "type": "string"
+                },
+                "profit_factor": {
+                    "type": "number"
+                },
+                "return_pct": {
+                    "type": "number"
+                },
+                "total_pnl": {
+                    "type": "number"
+                },
+                "trades": {
+                    "type": "integer"
+                },
+                "win_rate": {
+                    "description": "0..1",
+                    "type": "number"
+                },
+                "wins": {
+                    "type": "integer"
+                }
+            }
+        },
+        "pkg_server.monitoringBots": {
+            "type": "object",
+            "properties": {
+                "summary": {
+                    "$ref": "#/definitions/pkg_server.monitoringBotSummary"
+                },
+                "table": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/pkg_server.monitoringBotTableRow"
+                    }
+                }
+            }
+        },
+        "pkg_server.monitoringCrawl": {
+            "type": "object",
+            "properties": {
+                "daily_today": {
+                    "type": "integer"
+                },
+                "intraday_today": {
+                    "type": "integer"
+                },
+                "last_crawl_at": {
+                    "description": "RFC3339 or null",
+                    "type": "string"
+                },
+                "market_open": {
+                    "description": "true if market is currently in a trading session (ET-based)",
+                    "type": "boolean"
+                },
+                "stale": {
+                    "type": "boolean"
+                },
+                "staleness": {
+                    "description": "\"35m ago\" | \"2h ago\" | \"never\"",
+                    "type": "string"
+                }
+            }
+        },
+        "pkg_server.monitoringMarket": {
+            "type": "object",
+            "properties": {
+                "crawl": {
+                    "$ref": "#/definitions/pkg_server.monitoringCrawl"
+                },
+                "market": {
+                    "type": "string"
+                },
+                "predictions": {
+                    "$ref": "#/definitions/pkg_server.monitoringPredictions"
+                }
+            }
+        },
+        "pkg_server.monitoringOverviewResponse": {
+            "type": "object",
+            "properties": {
+                "bots": {
+                    "$ref": "#/definitions/pkg_server.monitoringBots"
+                },
+                "generated_at": {
+                    "description": "RFC3339",
+                    "type": "string"
+                },
+                "markets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/pkg_server.monitoringMarket"
+                    }
+                }
+            }
+        },
+        "pkg_server.monitoringPredictions": {
+            "type": "object",
+            "properties": {
+                "algorithms": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/pkg_server.monitoringAlgoStat"
+                    }
+                },
+                "expected_algos": {
+                    "type": "integer"
+                },
+                "last_predict_at": {
+                    "description": "RFC3339 or null",
+                    "type": "string"
+                },
+                "missing_today": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "staleness": {
+                    "type": "string"
+                },
+                "today_total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "pkg_server.nasdaqChartResponse": {
             "type": "object",
             "properties": {
                 "dates": {
@@ -4458,7 +5496,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.nasdaqLatestItem": {
+        "pkg_server.nasdaqLatestItem": {
             "type": "object",
             "properties": {
                 "close_price": {
@@ -4478,13 +5516,13 @@ const docTemplate = `{
                 }
             }
         },
-        "server.nasdaqLatestResponse": {
+        "pkg_server.nasdaqLatestResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.nasdaqLatestItem"
+                        "$ref": "#/definitions/pkg_server.nasdaqLatestItem"
                     }
                 },
                 "updated_at": {
@@ -4492,7 +5530,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.nasdaqPredictionChartPoint": {
+        "pkg_server.nasdaqPredictionChartPoint": {
             "type": "object",
             "properties": {
                 "actual_price": {
@@ -4512,7 +5550,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.nasdaqPredictionChartResponse": {
+        "pkg_server.nasdaqPredictionChartResponse": {
             "type": "object",
             "properties": {
                 "algorithm": {
@@ -4521,7 +5559,7 @@ const docTemplate = `{
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.nasdaqPredictionChartPoint"
+                        "$ref": "#/definitions/pkg_server.nasdaqPredictionChartPoint"
                     }
                 },
                 "symbol": {
@@ -4529,7 +5567,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.nasdaqPredictionItem": {
+        "pkg_server.nasdaqPredictionItem": {
             "type": "object",
             "properties": {
                 "accuracy": {
@@ -4564,13 +5602,13 @@ const docTemplate = `{
                 }
             }
         },
-        "server.nasdaqPredictionsPageResponse": {
+        "pkg_server.nasdaqPredictionsPageResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.nasdaqPredictionItem"
+                        "$ref": "#/definitions/pkg_server.nasdaqPredictionItem"
                     }
                 },
                 "limit": {
@@ -4584,13 +5622,13 @@ const docTemplate = `{
                 }
             }
         },
-        "server.nasdaqPredictionsResponse": {
+        "pkg_server.nasdaqPredictionsResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.nasdaqPredictionItem"
+                        "$ref": "#/definitions/pkg_server.nasdaqPredictionItem"
                     }
                 },
                 "total": {
@@ -4598,7 +5636,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.nasdaqPricePoint": {
+        "pkg_server.nasdaqPricePoint": {
             "type": "object",
             "properties": {
                 "close_price": {
@@ -4621,13 +5659,13 @@ const docTemplate = `{
                 }
             }
         },
-        "server.nasdaqPricesResponse": {
+        "pkg_server.nasdaqPricesResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.nasdaqPricePoint"
+                        "$ref": "#/definitions/pkg_server.nasdaqPricePoint"
                     }
                 },
                 "symbol": {
@@ -4635,7 +5673,15 @@ const docTemplate = `{
                 }
             }
         },
-        "server.scheduleResponse": {
+        "pkg_server.resetPasswordRequest": {
+            "type": "object",
+            "properties": {
+                "new_password": {
+                    "type": "string"
+                }
+            }
+        },
+        "pkg_server.scheduleResponse": {
             "type": "object",
             "properties": {
                 "cron_expression": {
@@ -4655,7 +5701,18 @@ const docTemplate = `{
                 }
             }
         },
-        "server.simBotDetail": {
+        "pkg_server.setGroupMarketsRequest": {
+            "type": "object",
+            "properties": {
+                "market_keys": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "pkg_server.simBotDetail": {
             "type": "object",
             "properties": {
                 "algorithm": {
@@ -4683,10 +5740,10 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "kpis": {
-                    "$ref": "#/definitions/server.simBotKPIs"
+                    "$ref": "#/definitions/pkg_server.simBotKPIs"
                 },
                 "last_session": {
-                    "$ref": "#/definitions/server.simSessionSummary"
+                    "$ref": "#/definitions/pkg_server.simSessionSummary"
                 },
                 "market": {
                     "type": "string"
@@ -4714,7 +5771,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.simBotKPIs": {
+        "pkg_server.simBotKPIs": {
             "type": "object",
             "properties": {
                 "annualized_return_pct": {
@@ -4749,7 +5806,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.simBotListItem": {
+        "pkg_server.simBotListItem": {
             "type": "object",
             "properties": {
                 "algorithm": {
@@ -4777,7 +5834,7 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "last_session": {
-                    "$ref": "#/definitions/server.simSessionSummary"
+                    "$ref": "#/definitions/pkg_server.simSessionSummary"
                 },
                 "market": {
                     "type": "string"
@@ -4811,7 +5868,63 @@ const docTemplate = `{
                 }
             }
         },
-        "server.simChartResponse": {
+        "pkg_server.simBotVariant": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string"
+                },
+                "buy_threshold": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "initial_capital": {
+                    "type": "number"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "kpis": {
+                    "$ref": "#/definitions/pkg_server.simBotKPIs"
+                },
+                "market": {
+                    "type": "string"
+                },
+                "max_position_pct": {
+                    "type": "number"
+                },
+                "max_positions": {
+                    "type": "integer"
+                },
+                "min_confidence": {
+                    "type": "number"
+                },
+                "sell_threshold": {
+                    "type": "number"
+                },
+                "stop_loss": {
+                    "type": "number"
+                },
+                "take_profit": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "pkg_server.simChartResponse": {
             "type": "object",
             "properties": {
                 "bot_id": {
@@ -4840,7 +5953,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.simPeriod": {
+        "pkg_server.simPeriod": {
             "type": "object",
             "properties": {
                 "end": {
@@ -4851,7 +5964,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.simSessionSummary": {
+        "pkg_server.simSessionSummary": {
             "type": "object",
             "properties": {
                 "end_date": {
@@ -4868,7 +5981,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.simTradeJSON": {
+        "pkg_server.simTradeJSON": {
             "type": "object",
             "properties": {
                 "action": {
@@ -4921,7 +6034,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.simTradesPage": {
+        "pkg_server.simTradesPage": {
             "type": "object",
             "properties": {
                 "bot_id": {
@@ -4930,7 +6043,7 @@ const docTemplate = `{
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.simTradeJSON"
+                        "$ref": "#/definitions/pkg_server.simTradeJSON"
                     }
                 },
                 "limit": {
@@ -4947,7 +6060,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.sp500ChartResponse": {
+        "pkg_server.sp500ChartResponse": {
             "type": "object",
             "properties": {
                 "dates": {
@@ -4970,7 +6083,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.sp500LatestItem": {
+        "pkg_server.sp500LatestItem": {
             "type": "object",
             "properties": {
                 "close_price": {
@@ -4990,13 +6103,13 @@ const docTemplate = `{
                 }
             }
         },
-        "server.sp500LatestResponse": {
+        "pkg_server.sp500LatestResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.sp500LatestItem"
+                        "$ref": "#/definitions/pkg_server.sp500LatestItem"
                     }
                 },
                 "updated_at": {
@@ -5004,7 +6117,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.sp500PredictionChartPoint": {
+        "pkg_server.sp500PredictionChartPoint": {
             "type": "object",
             "properties": {
                 "actual_price": {
@@ -5024,7 +6137,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.sp500PredictionChartResponse": {
+        "pkg_server.sp500PredictionChartResponse": {
             "type": "object",
             "properties": {
                 "algorithm": {
@@ -5033,7 +6146,7 @@ const docTemplate = `{
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.sp500PredictionChartPoint"
+                        "$ref": "#/definitions/pkg_server.sp500PredictionChartPoint"
                     }
                 },
                 "symbol": {
@@ -5041,7 +6154,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.sp500PredictionItem": {
+        "pkg_server.sp500PredictionItem": {
             "type": "object",
             "properties": {
                 "accuracy": {
@@ -5076,13 +6189,13 @@ const docTemplate = `{
                 }
             }
         },
-        "server.sp500PredictionsPageResponse": {
+        "pkg_server.sp500PredictionsPageResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.sp500PredictionItem"
+                        "$ref": "#/definitions/pkg_server.sp500PredictionItem"
                     }
                 },
                 "limit": {
@@ -5096,13 +6209,13 @@ const docTemplate = `{
                 }
             }
         },
-        "server.sp500PredictionsResponse": {
+        "pkg_server.sp500PredictionsResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.sp500PredictionItem"
+                        "$ref": "#/definitions/pkg_server.sp500PredictionItem"
                     }
                 },
                 "total": {
@@ -5110,7 +6223,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.sp500PricePoint": {
+        "pkg_server.sp500PricePoint": {
             "type": "object",
             "properties": {
                 "close_price": {
@@ -5133,13 +6246,13 @@ const docTemplate = `{
                 }
             }
         },
-        "server.sp500PricesResponse": {
+        "pkg_server.sp500PricesResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/server.sp500PricePoint"
+                        "$ref": "#/definitions/pkg_server.sp500PricePoint"
                     }
                 },
                 "symbol": {
@@ -5147,7 +6260,7 @@ const docTemplate = `{
                 }
             }
         },
-        "server.updateScheduleRequest": {
+        "pkg_server.updateScheduleRequest": {
             "type": "object",
             "properties": {
                 "cron_expression": {
@@ -5158,26 +6271,26 @@ const docTemplate = `{
                 }
             }
         },
-        "server.userInfo": {
+        "pkg_server.updateUserRequest": {
             "type": "object",
             "properties": {
-                "role": {
+                "email": {
                     "type": "string"
                 },
-                "username": {
+                "full_name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "role": {
                     "type": "string"
                 }
             }
         },
-        "server.userResponse": {
+        "pkg_server.userInfo": {
             "type": "object",
             "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
                 "role": {
                     "type": "string"
                 },
@@ -5204,7 +6317,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "Go Stock Prediction API",
-	Description:      "Vietnamese stock market prediction system — ML algorithms (VWMA, EMA, LSTM, ARIMA-GARCH, Ensemble) for VN30 stocks, gold, NASDAQ, crypto, and S&P 500.",
+	Description:      "Financial asset prediction system — ML algorithms (VWMA, EMA, LSTM, ARIMA-GARCH, Ensemble) for gold, NASDAQ, crypto, and S&P 500.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

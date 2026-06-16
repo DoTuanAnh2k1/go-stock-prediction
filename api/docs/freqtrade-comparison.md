@@ -28,7 +28,7 @@ Kien truc microservice tach biet ro rang theo trach nhiem, da ngon ngu:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Nginx (:80)  — reverse proxy                               │
+│  Rust Gateway (:80/:443)  — reverse proxy + TLS             │
 └─────────────────────┬───────────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────────┐
@@ -66,7 +66,7 @@ So sanh kien truc tong quan:
 | Ngon ngu chinh | Python | Go (API) + Python (ML) |
 | Kien truc | Monolithic | Microservice (gRPC) |
 | Database | SQLite | MySQL voi GORM |
-| Thi truong | Crypto (CCXT) | VN30, Gold, NASDAQ, SP500, Crypto |
+| Thi truong | Crypto (CCXT) | Gold, NASDAQ, SP500, Crypto |
 | Output chinh | BUY/SELL signal | Predicted price + confidence |
 | Settlement | Realtime | T+2.5 (VN), market-aware |
 | Giao tiep | Telegram, REST | JWT REST API, React dashboard |
@@ -266,7 +266,7 @@ for window_end in range(train_window, n, step_size):
         status = "confirmed" if accuracy >= 0.70 else "wrong"
 ```
 
-Ho tro tat ca 5 markets: VN30, Gold, NASDAQ, Crypto, SP500. Ket qua luu vao 5 prediction tables voi `direction_correct` tracking va concurrency guard (409 neu dang chay). Metrics: accuracy percentage, direction accuracy per algorithm per market.
+Ho tro tat ca 4 markets: Gold, NASDAQ, Crypto, SP500. Ket qua luu vao 4 prediction tables voi `direction_correct` tracking va concurrency guard (409 neu dang chay). Metrics: accuracy percentage, direction accuracy per algorithm per market.
 
 Diem con thieu so voi Freqtrade: khong co slippage simulation, khong co fees, khong co Sharpe/Sortino/Drawdown metrics, khong simulate P&L trading thuc te.
 
@@ -289,7 +289,6 @@ Custom crawlers cho tung data source, duoc deploy nhu APScheduler cron jobs:
 
 | Crawler | Source | Schedule |
 |---|---|---|
-| VN30 | VNDirect API | 12:00 hang ngay |
 | Gold | Yahoo Finance XAU + BTMC API + Phu Quy | Moi gio |
 | NASDAQ | Yahoo Finance (15 symbols) | Moi gio phut 15 |
 | Crypto BTC/ETH/SOL | CoinGecko | Moi gio phut 45 |
@@ -436,7 +435,7 @@ Danh sach cu the cac y tuong tu Freqtrade/FreqAI da duoc implement trong go-stoc
 Nhung thu Freqtrade khong co hoac khong thiet ke cho:
 
 ### 1. Da thi truong da loai tai san thuc su
-Freqtrade sinh ra cho crypto, CCXT chi ket noi san crypto. go-stock-prediction ho tro VN30 equity (VNDirect), vang vat ly SJC (gia mua/ban khac nhau), xang dau (khong co tren san nao), NASDAQ/S&P 500 stocks — qua custom crawlers cho tung nguon.
+Freqtrade sinh ra cho crypto, CCXT chi ket noi san crypto. go-stock-prediction ho tro vang vat ly SJC (gia mua/ban khac nhau), NASDAQ/S&P 500 stocks, crypto — qua custom crawlers cho tung nguon.
 
 ### 2. VN market-specific rules
 - T+2.5 settlement khong co trong bat ky framework quoc te nao

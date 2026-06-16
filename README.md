@@ -29,7 +29,7 @@ Financial asset price prediction system with RBAC — crawls Gold SJC/XAU, NASDA
 **Services:**
 - **Gateway** (`gateway-svc/`) — Rust Axum `:80`/`:443`; TLS termination, longest-prefix routing: `/swagger` → block, `/api` → API Backend, `/health` → API Backend, `/` → Frontend
 - **API Backend** (`api/`) — Go HTTP `:8118` (internal); thin auth proxy to Java Auth Service via gRPC, reads DB directly for market data, triggers Python Prediction Service via gRPC
-- **Auth Service** (`auth-service/`) — Java Spring Boot 3, gRPC `:8120` (internal); owns all RBAC: login, JWT generation, user CRUD, market groups, Flyway migrations
+- **Auth Service** (`auth-service/`) — Java Spring Boot 3, gRPC `:8120` (internal); owns all RBAC: login, JWT generation, user CRUD, market groups, Flyway migrations (V1: auth + RBAC tables; V2: `full_name`/`email`/`phone` profile fields)
 - **Prediction Service** (`prediction/`) — Python gRPC `:8119` (internal); crawling, 11 ML algorithms, training, APScheduler cron jobs
 - **MySQL** `:3306` — shared database for all services
 - **Frontend** (`frontend/`) — React + TypeScript SPA, static nginx on internal port `:3000` (accessed via Gateway only)
@@ -143,9 +143,11 @@ curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&s
 | `POST` | `/api/auth/login` | Login — returns JWT with `accessible_markets` claim |
 | `GET` | `/api/auth/me` | Verify token |
 | `PUT` | `/api/auth/password` | Change password (JWT required) |
-| `GET` | `/api/users` | List users (admin) |
-| `POST` | `/api/users` | Create user (admin) |
+| `GET` | `/api/users` | List users (admin) — includes `full_name`, `email`, `phone` fields |
+| `POST` | `/api/users` | Create user (admin) — body accepts optional `full_name`, `email`, `phone` |
+| `PUT` | `/api/users/{id}` | Update user profile/role (admin) — body: `{"full_name":"...","email":"...","phone":"...","role":"user\|admin"}` (all optional; omit `role` to leave unchanged); super_admin cannot be modified by non-super_admin; only super_admin can assign the super_admin role |
 | `DELETE` | `/api/users/{id}` | Delete user (admin) |
+| `POST` | `/api/users/{id}/reset-password` | Reset user password (admin) — body: `{"new_password":"..."}` min 6 chars; super_admin can reset admin/user; admin can reset user only; super_admin password cannot be reset |
 
 ### Market Groups (admin only)
 
@@ -197,7 +199,7 @@ Stored in `cron_schedules` DB table. Edit live via `PUT /api/schedules/{key}` or
 | `train_sp500` | Sunday 7 AM | Retrain S&P 500 models |
 | `daily_reconcile` | Daily 6 AM | Reconcile predictions with actual prices |
 | `simulation_daily` | Daily 8 PM | Bot trading step |
-| `daily_backup` | Daily 3 AM | mysqldump to `BACKUP_DIR` |
+| `daily_backup` | Daily 3 AM | mysqldump to `BACKUP_DIR` — run by **Go API Backend** (`backup_scheduler.go`) |
 
 ## ML Algorithms (11)
 
