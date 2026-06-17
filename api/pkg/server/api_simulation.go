@@ -343,6 +343,11 @@ type leaderboardEntry struct {
 	ProfitFactor        float64            `json:"profit_factor"`
 	TotalTrades         int                `json:"total_trades"`
 	SimulationPeriod    *simPeriod         `json:"simulation_period,omitempty"`
+	BuyThreshold        float64            `json:"buy_threshold"`
+	SellThreshold       float64            `json:"sell_threshold"`
+	MinConfidence       float64            `json:"min_confidence"`
+	StopLoss            float64            `json:"stop_loss"`
+	TakeProfit          float64            `json:"take_profit"`
 }
 
 type simPeriod struct {
@@ -685,6 +690,35 @@ func GetSimBotChart(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// pickBestSession picks the best session from a slice ordered by id DESC.
+// Priority: live+running first, then session with most snapshots, then latest (first in slice).
+func pickBestSession(sessions []modelsdb.SimSessionWithCount) *modelsdb.SimSession {
+	if len(sessions) == 0 {
+		return nil
+	}
+	// Priority 1: live+running (earliest in list since ordered id DESC = latest first)
+	for i := range sessions {
+		if sessions[i].Mode == "live" && sessions[i].Status == "running" {
+			s := sessions[i].SimSession
+			return &s
+		}
+	}
+	// Priority 2: most snapshots
+	best := 0
+	for i := range sessions[1:] {
+		if sessions[i+1].SnapCount > sessions[best].SnapCount {
+			best = i + 1
+		}
+	}
+	if sessions[best].SnapCount > 0 {
+		s := sessions[best].SimSession
+		return &s
+	}
+	// Priority 3: latest (first in id-desc ordered slice)
+	s := sessions[0].SimSession
+	return &s
+}
+
 // GetSimLeaderboard godoc
 //
 //	@Summary      Get simulation leaderboard
@@ -702,7 +736,15 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 	algoFilter := r.URL.Query().Get("algorithm")
 	currencyFilter := r.URL.Query().Get("currency")
 
+	// -- 1. Check cache --
+	const cacheKey = "simulation:leaderboard"
+	if cached, ok := globalCache.Get(cacheKey); ok {
+		ResponseSuccess(w, http.StatusOK, cached)
+		return
+	}
+
 	store := repository.GetSingleton()
+
 	bots, err := store.GetAllSimBots()
 	if err != nil {
 		logger.Logger.Errorf("GetSimLeaderboard: %v", err)
@@ -710,6 +752,45 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// -- 2. Get all sessions with snap counts (1 query) --
+	allSessions, err := store.GetAllSessionsWithSnapCount()
+	if err != nil {
+		logger.Logger.Errorf("GetSimLeaderboard sessions: %v", err)
+		// fall through with empty sessions
+	}
+	// Group sessions by bot_id
+	sessionsByBot := make(map[string][]modelsdb.SimSessionWithCount)
+	for _, s := range allSessions {
+		sessionsByBot[s.BotID] = append(sessionsByBot[s.BotID], s)
+	}
+
+	// Pick best session per bot: live+running > most snapshots > latest (sessions already id DESC)
+	chosenSessions := make(map[string]*modelsdb.SimSession)
+	for botID, sessions := range sessionsByBot {
+		chosenSessions[botID] = pickBestSession(sessions)
+	}
+
+	// Collect chosen session IDs
+	sessionIDs := make([]int64, 0, len(chosenSessions))
+	for _, sess := range chosenSessions {
+		if sess != nil {
+			sessionIDs = append(sessionIDs, sess.ID)
+		}
+	}
+
+	// -- 3. Batch load all snapshots + trades (2 queries) --
+	allSnaps, err := store.GetAllSnapshotsBatch(sessionIDs)
+	if err != nil {
+		logger.Logger.Errorf("GetSimLeaderboard snaps: %v", err)
+		allSnaps = map[int64][]modelsdb.SimPortfolioSnapshot{}
+	}
+	allTrades, err := store.GetAllTradesBatch(sessionIDs)
+	if err != nil {
+		logger.Logger.Errorf("GetSimLeaderboard trades: %v", err)
+		allTrades = map[int64][]modelsdb.SimTrade{}
+	}
+
+	// -- 4. Build entries --
 	entries := make([]leaderboardEntry, 0, len(bots))
 	for _, bot := range bots {
 		if marketFilter != "" && bot.Market != marketFilter {
@@ -722,6 +803,13 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		ic, _ := bot.InitialCapital.Float64()
+		bt, _ := bot.BuyThreshold.Float64()
+		st2, _ := bot.SellThreshold.Float64()
+		mc, _ := bot.MinConfidence.Float64()
+		sl, _ := bot.StopLoss.Float64()
+		tp, _ := bot.TakeProfit.Float64()
+
 		entry := leaderboardEntry{
 			BotID:          bot.ID,
 			DisplayName:    bot.DisplayName,
@@ -729,19 +817,16 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 			Algorithm:      bot.Algorithm,
 			Currency:       bot.Currency,
 			IsActive:       bot.IsActive,
+			InitialCapital: ic,
+			BuyThreshold:   bt,
+			SellThreshold:  st2,
+			MinConfidence:  mc,
+			StopLoss:       sl,
+			TakeProfit:     tp,
 		}
-		ic, _ := bot.InitialCapital.Float64()
-		entry.InitialCapital = ic
 
-		// Prefer running live session; fall back to best chart session (completed backtest)
-		sess, err := store.GetLatestLiveSimSession(bot.ID)
-		if err != nil || sess == nil {
-			sess, err = store.GetBestSimSessionForChart(bot.ID)
-		}
-		if err != nil || sess == nil {
-			sess, err = store.GetLatestSimSession(bot.ID)
-		}
-		if err == nil && sess != nil {
+		sess := chosenSessions[bot.ID]
+		if sess != nil {
 			entry.SimulationPeriod = &simPeriod{
 				Start: sess.StartDate.Format("2006-01-02"),
 			}
@@ -749,14 +834,8 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 				entry.SimulationPeriod.End = sess.EndDate.Format("2006-01-02")
 			}
 
-			snaps, err := store.GetSimPortfolioSnapshots(sess.ID)
-			if err != nil {
-				snaps = nil
-			}
-			trades, _, err := store.GetSimTrades(sess.ID, 0, 100000)
-			if err != nil {
-				trades = nil
-			}
+			snaps := allSnaps[sess.ID]
+			trades := allTrades[sess.ID]
 			kpis := computeKPIs(snaps, trades)
 
 			entry.TotalReturnPct = kpis.TotalReturnPct
@@ -775,7 +854,6 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 		entries = append(entries, entry)
 	}
 
-	// Sort by TotalReturnPct DESC.
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].TotalReturnPct > entries[j].TotalReturnPct
 	})
@@ -783,7 +861,6 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 		entries[i].Rank = i + 1
 	}
 
-	// Compute summary.
 	summary := leaderboardSummary{TotalBots: len(entries)}
 	if len(entries) > 0 {
 		sum := 0.0
@@ -795,10 +872,9 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 		summary.BestAlgorithm = entries[0].Algorithm
 	}
 
-	ResponseSuccess(w, http.StatusOK, leaderboardResponse{
-		Leaderboard: entries,
-		Summary:     summary,
-	})
+	resp := leaderboardResponse{Leaderboard: entries, Summary: summary}
+	globalCache.Set(cacheKey, resp, 60*time.Second)
+	ResponseSuccess(w, http.StatusOK, resp)
 }
 
 // TriggerSimBotRun godoc

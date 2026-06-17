@@ -28,7 +28,7 @@ DEFAULT_SCHEDULES = [
     ("crawler_sp500", "Pipeline S&P 500 (30 phút, phút 0 và 30, mọi ngày — is_market_open lọc theo ET)", "0 0,30 * * * *", True),
     ("crawler_gold", "Pipeline Gold (mỗi giờ, phút 0)", "0 0 * * * *", True),
     ("gold_predict", "Dự đoán vàng (disabled — trong pipeline)", "0 0 11 * * *", False),
-    ("crawler_nasdaq", "Pipeline NASDAQ (mỗi giờ, phút 15, mọi ngày — is_market_open lọc theo ET)", "0 15 * * * *", True),
+    ("crawler_nasdaq", "Pipeline NASDAQ (30 phút, phút 15 và 45, mọi ngày — is_market_open lọc theo ET)", "0 15,45 * * * *", True),
     ("crawler_crypto", "Pipeline Crypto (mỗi giờ, phút 0)", "0 0 * * * *", True),
     ("weekly_training", "Huấn luyện mô hình (Chủ nhật 9AM)", "0 0 9 * * 0", False),
     # Per-market training jobs — staggered on Sunday to avoid overlap

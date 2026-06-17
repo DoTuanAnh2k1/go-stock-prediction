@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { Panel, KPI, Icon, Chg } from '../components/ui';
 import { HBars } from '../components/charts';
@@ -167,8 +167,124 @@ function MarketStatusCard({ market }: { market: MonitoringMarket }) {
             </span>
           )}
         </div>
+        {(crawl.daily_today > 0 || crawl.intraday_today > 0) && (
+          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
+            {crawl.daily_today}d · {crawl.intraday_today}i
+          </div>
+        )}
       </div>
     </Link>
+  );
+}
+
+// ── Pipeline Summary Table ─────────────────────────────────────────────────────
+
+function SummaryRow({ market: m }: { market: MonitoringMarket }) {
+  const navigate = useNavigate();
+  const color = MARKET_COLORS[m.market] || 'var(--accent)';
+  const icon = MARKET_ICONS[m.market] || 'candles';
+  const link = MARKET_LINKS[m.market] || '/';
+  const { crawl, predictions } = m;
+
+  const top3 = [...(predictions.algorithms || [])]
+    .filter(a => a.reconciled > 0)
+    .sort((a, b) => b.direction_accuracy - a.direction_accuracy)
+    .slice(0, 3);
+
+  return (
+    <tr
+      onClick={() => navigate(link)}
+      style={{ cursor: 'pointer' }}
+      onMouseEnter={e => { (e.currentTarget as HTMLTableRowElement).style.background = 'var(--surface-2)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLTableRowElement).style.background = ''; }}
+    >
+      <td style={{ padding: '7px 8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Icon name={icon} size={13} style={{ color }} />
+          <span style={{ fontWeight: 700, color, fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.5px' }}>
+            {m.market}
+          </span>
+        </div>
+      </td>
+      <td style={{ padding: '7px 8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-2)', fontSize: 11 }}>
+            {crawl.staleness || '—'}
+          </span>
+          <span style={{
+            fontSize: 9, padding: '1px 5px',
+            background: crawl.stale ? 'var(--down-bg)' : 'var(--up-bg)',
+            color: crawl.stale ? 'var(--down)' : 'var(--up)',
+            fontFamily: 'var(--font-mono)',
+          }}>
+            {crawl.stale ? 'STALE' : 'OK'}
+          </span>
+        </div>
+      </td>
+      <td style={{ padding: '7px 8px' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-3)', fontSize: 11 }}>
+          {crawl.daily_today}d / {crawl.intraday_today}i
+        </span>
+      </td>
+      <td style={{ padding: '7px 8px', textAlign: 'right' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 12 }}>
+          {predictions.today_total.toLocaleString()}
+        </span>
+      </td>
+      <td className="pipeline-hide-mobile" style={{ padding: '7px 8px' }}>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {top3.length === 0 ? (
+            <span style={{ color: 'var(--text-3)', fontSize: 11 }}>—</span>
+          ) : top3.map(a => {
+            const acc = a.direction_accuracy * 100;
+            const bg = acc >= 55
+              ? 'var(--up-bg)'
+              : acc >= 45
+                ? 'color-mix(in oklch, var(--gold) 15%, transparent)'
+                : 'var(--down-bg)';
+            const fg = acc >= 55 ? 'var(--up)' : acc >= 45 ? 'var(--gold)' : 'var(--down)';
+            return (
+              <span key={a.algorithm} style={{
+                fontSize: 10, padding: '2px 6px',
+                background: bg, color: fg,
+                fontFamily: 'var(--font-mono)',
+                whiteSpace: 'nowrap',
+              }}>
+                {algoLabel(a.algorithm)} {acc.toFixed(0)}%
+              </span>
+            );
+          })}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function PipelineSummaryTable({ markets }: { markets: MonitoringMarket[] }) {
+  if (markets.length === 0) return null;
+  const headerCell: React.CSSProperties = {
+    textAlign: 'left', padding: '3px 8px', fontSize: 10,
+    fontWeight: 500, color: 'var(--text-3)',
+    textTransform: 'uppercase', letterSpacing: '0.5px',
+    borderBottom: '1px solid var(--border)',
+  };
+  return (
+    <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={headerCell}>Market</th>
+            <th style={headerCell}>Crawl</th>
+            <th style={headerCell}>Data</th>
+            <th style={{ ...headerCell, textAlign: 'right' }}>Preds</th>
+            <th className="pipeline-hide-mobile" style={headerCell}>Top Algo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {markets.map(m => <SummaryRow key={m.market} market={m} />)}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -287,6 +403,7 @@ export default function Dashboard() {
                 <MarketStatusCard key={m.market} market={m} />
               ))}
             </div>
+            <PipelineSummaryTable markets={accessibleMarkets} />
             {/* Footer summary */}
             <div style={{ marginTop: 10, display: 'flex', gap: 20, fontSize: 11, color: 'var(--text-3)', flexWrap: 'wrap', alignItems: 'center' }}>
               <span>
@@ -453,39 +570,12 @@ function TopSimulationBots() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('vns_token') || '';
-    const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
-
     fetch('/api/simulation/leaderboard?limit=5', { headers: { Accept: 'application/json' } })
       .then((r) => r.ok ? r.json() : null)
       .then((d) => {
         if (!d || !Array.isArray(d.leaderboard)) { setLoaded(true); return; }
-        const top = d.leaderboard.slice(0, 5) as SimBotFull[];
-
-        // Fetch bot configs in parallel
-        Promise.all(
-          top.map((b) =>
-            fetch(`/api/simulation/bots/${b.bot_id}`, {
-              headers: { Accept: 'application/json', ...authHeader },
-            })
-              .then((r) => r.ok ? r.json() : null)
-              .catch(() => null)
-          )
-        ).then((details) => {
-          setBots(top.map((b, i) => {
-            const detail = details[i];
-            if (!detail) return b;
-            return {
-              ...b,
-              buy_threshold: detail.buy_threshold,
-              sell_threshold: detail.sell_threshold,
-              min_confidence: detail.min_confidence,
-              stop_loss: detail.stop_loss,
-              take_profit: detail.take_profit,
-            };
-          }));
-          setLoaded(true);
-        });
+        setBots(d.leaderboard.slice(0, 5) as SimBotFull[]);
+        setLoaded(true);
       })
       .catch(() => setLoaded(true));
   }, []);

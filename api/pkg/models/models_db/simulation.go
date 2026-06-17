@@ -77,3 +77,21 @@ type SimPortfolioSnapshot struct {
 }
 
 func (SimPortfolioSnapshot) TableName() string { return "sim_portfolio_snapshots" }
+
+// SimSessionWithCount extends SimSession with the number of portfolio snapshots.
+// Used by batch leaderboard/monitoring queries.
+type SimSessionWithCount struct {
+	SimSession
+	SnapCount int
+}
+
+// SimTradeStats holds pre-aggregated trade metrics from SQL for a session.
+type SimTradeStats struct {
+	TotalTrades int
+	Wins        int
+	Losses      int
+	Breakeven   int
+	TotalPnl    float64
+	WinPnl      float64
+	LossPnl     float64
+}

@@ -870,3 +870,8 @@ body {
 .pg-btn:hover:not(:disabled) { background: color-mix(in oklch, var(--accent) 12%, transparent); border-color: var(--accent); }
 .pg-btn:disabled { opacity: 0.35; cursor: default; }
 .pg-info { font-size: 12px; color: var(--fg-dim); padding: 0 6px; }
+
+/* Dashboard pipeline summary table — hide top-algo column on small screens */
+@media (max-width: 640px) {
+  .pipeline-hide-mobile { display: none; }
+}

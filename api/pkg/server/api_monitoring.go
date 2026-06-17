@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"math"
 	"net/http"
 	"sort"
 	"time"
@@ -253,7 +252,7 @@ func buildMarketOverview(
 	}
 }
 
-// buildBotSection builds the bots monitoring section by reusing simulation store methods.
+// buildBotSection builds the bots monitoring section using batch queries (N+1 → 4 queries).
 func buildBotSection(store repository.DatabaseStore) monitoringBots {
 	bots, err := store.GetAllSimBots()
 	if err != nil {
@@ -264,129 +263,85 @@ func buildBotSection(store repository.DatabaseStore) monitoringBots {
 		}
 	}
 
-	type botStats struct {
-		wins, losses, breakeven, trades int
-		totalPnl, returnPct             float64
-		profitFactor                    float64
+	// -- 1. Get all sessions with snap counts (1 query) --
+	allSessions, _ := store.GetAllSessionsWithSnapCount()
+	sessionsByBot := make(map[string][]modelsdb.SimSessionWithCount)
+	for _, s := range allSessions {
+		sessionsByBot[s.BotID] = append(sessionsByBot[s.BotID], s)
+	}
+	chosenSessions := make(map[string]*modelsdb.SimSession)
+	for _, bot := range bots {
+		chosenSessions[bot.ID] = pickBestSession(sessionsByBot[bot.ID])
 	}
 
+	sessionIDs := make([]int64, 0, len(chosenSessions))
+	for _, sess := range chosenSessions {
+		if sess != nil {
+			sessionIDs = append(sessionIDs, sess.ID)
+		}
+	}
+
+	// -- 2. Batch trade stats + last snapshots (2 queries) --
+	tradeStats, _ := store.GetSessionTradeStatsBatch(sessionIDs)
+	lastSnaps, _ := store.GetLastSnapshotsBatch(sessionIDs)
+
+	// -- 3. Build table rows --
 	tableRows := make([]monitoringBotTableRow, 0, len(bots))
 	byMarketMap := make(map[string]*monitoringBotByMarket)
-	totalBots := 0
+	totalBots := len(bots)
 	activeBots := 0
 
 	for _, bot := range bots {
-		totalBots++
 		if bot.IsActive {
 			activeBots++
 		}
 
-		// Prefer live session → best chart session → latest session (same as leaderboard).
-		var sess *modelsdb.SimSession
-		sess, err = store.GetLatestLiveSimSession(bot.ID)
-		if err != nil || sess == nil {
-			sess, err = store.GetBestSimSessionForChart(bot.ID)
-		}
-		if err != nil || sess == nil {
-			sess, err = store.GetLatestSimSession(bot.ID)
-		}
+		sess := chosenSessions[bot.ID]
+		var stats modelsdb.SimTradeStats
+		var returnPct float64
 
-		var stats botStats
-		if err == nil && sess != nil {
-			trades, _, tErr := store.GetSimTrades(sess.ID, 0, 100000)
-			if tErr == nil {
-				for _, t := range trades {
-					if t.Action != "SELL" {
-						continue
-					}
-					stats.trades++
-					pnl := 0.0
-					if t.PnL != nil {
-						pnl, _ = t.PnL.Float64()
-					}
-					stats.totalPnl += pnl
-					// Dùng pnl_pct (4 decimal places) để phân loại W/L/BE —
-					// tránh pnl tuyệt đối bị làm tròn thành $0.00 khi gain rất nhỏ.
-					var classify float64
-					if t.PnLPct != nil {
-						classify, _ = t.PnLPct.Float64()
-					} else {
-						classify = pnl
-					}
-					switch {
-					case classify > 0:
-						stats.wins++
-					case classify < 0:
-						stats.losses++
-					default:
-						stats.breakeven++
-					}
-				}
-			}
-
-			// Profit factor = sum(win pnl) / abs(sum(loss pnl))
-			winSum, lossSum := 0.0, 0.0
-			if tErr == nil {
-				for _, t := range trades {
-					if t.Action != "SELL" || t.PnL == nil {
-						continue
-					}
-					pnl, _ := t.PnL.Float64()
-					if pnl > 0 {
-						winSum += pnl
-					} else if pnl < 0 {
-						lossSum += math.Abs(pnl)
-					}
-				}
-			}
-			if lossSum > 0 {
-				stats.profitFactor = winSum / lossSum
-			}
-
-			// Return pct from last snapshot.
-			snaps, sErr := store.GetSimPortfolioSnapshots(sess.ID)
-			if sErr == nil && len(snaps) > 0 {
-				last := snaps[len(snaps)-1]
-				if last.TotalReturnPct != nil {
-					stats.returnPct, _ = last.TotalReturnPct.Float64()
-				}
+		if sess != nil {
+			stats = tradeStats[sess.ID]
+			if snap, ok := lastSnaps[sess.ID]; ok && snap != nil && snap.TotalReturnPct != nil {
+				returnPct, _ = snap.TotalReturnPct.Float64()
 			}
 		}
 
-		// win_rate: wins / (wins+losses), ignoring breakeven.
-		denominator := stats.wins + stats.losses
+		denominator := stats.Wins + stats.Losses
 		winRate := 0.0
 		if denominator > 0 {
-			winRate = float64(stats.wins) / float64(denominator)
+			winRate = float64(stats.Wins) / float64(denominator)
+		}
+		profitFactor := 0.0
+		if stats.LossPnl > 0 {
+			profitFactor = stats.WinPnl / stats.LossPnl
 		}
 
 		tableRows = append(tableRows, monitoringBotTableRow{
 			BotID:        bot.ID,
 			Market:       bot.Market,
 			Algorithm:    bot.Algorithm,
-			Trades:       stats.trades,
-			Wins:         stats.wins,
-			Losses:       stats.losses,
-			Breakeven:    stats.breakeven,
+			Trades:       stats.TotalTrades,
+			Wins:         stats.Wins,
+			Losses:       stats.Losses,
+			Breakeven:    stats.Breakeven,
 			WinRate:      winRate,
-			TotalPnl:     stats.totalPnl,
-			ReturnPct:    stats.returnPct,
-			ProfitFactor: stats.profitFactor,
+			TotalPnl:     stats.TotalPnl,
+			ReturnPct:    returnPct,
+			ProfitFactor: profitFactor,
 		})
 
-		// Accumulate by-market summary.
 		bm, exists := byMarketMap[bot.Market]
 		if !exists {
 			bm = &monitoringBotByMarket{Market: bot.Market}
 			byMarketMap[bot.Market] = bm
 		}
-		bm.Trades += stats.trades
-		bm.Wins += stats.wins
-		bm.Losses += stats.losses
-		bm.TotalPnl += stats.totalPnl
+		bm.Trades += stats.TotalTrades
+		bm.Wins += stats.Wins
+		bm.Losses += stats.Losses
+		bm.TotalPnl += stats.TotalPnl
 	}
 
-	// Sort table: win_rate DESC, then total_pnl DESC.
 	sort.Slice(tableRows, func(i, j int) bool {
 		if tableRows[i].WinRate != tableRows[j].WinRate {
 			return tableRows[i].WinRate > tableRows[j].WinRate
@@ -394,7 +349,6 @@ func buildBotSection(store repository.DatabaseStore) monitoringBots {
 		return tableRows[i].TotalPnl > tableRows[j].TotalPnl
 	})
 
-	// Build by_market slice.
 	byMarketSlice := make([]monitoringBotByMarket, 0, len(byMarketMap))
 	for _, bm := range byMarketMap {
 		denom := bm.Wins + bm.Losses
