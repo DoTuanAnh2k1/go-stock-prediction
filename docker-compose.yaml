@@ -11,6 +11,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123}
       POSTGRES_DB: ${POSTGRES_DB:-go_stock_prediction}
+      PGTZ: Asia/Ho_Chi_Minh
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d go_stock_prediction"]
       interval: 10s

@@ -733,7 +733,7 @@ FROM (
         'GOLD'             AS market,
         MAX(trading_date)  AS last_daily_at,
         NULL::TIMESTAMP    AS last_intraday_at,
-        COUNT(*) FILTER (WHERE trading_date::date = CURRENT_DATE) AS daily_today,
+        COUNT(*) FILTER (WHERE trading_date::date = (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) AS daily_today,
         0                  AS intraday_today
     FROM gold_prices
     WHERE deleted_at IS NULL
@@ -746,7 +746,7 @@ FROM (
         NULL::TIMESTAMP    AS last_daily_at,
         MAX(timestamp)     AS last_intraday_at,
         0                  AS daily_today,
-        COUNT(*) FILTER (WHERE timestamp::date = CURRENT_DATE) AS intraday_today
+        COUNT(*) FILTER (WHERE timestamp::date = (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) AS intraday_today
     FROM gold_intraday_prices
 
     UNION ALL
@@ -756,7 +756,7 @@ FROM (
         'NASDAQ'           AS market,
         MAX(trading_date)  AS last_daily_at,
         NULL::TIMESTAMP    AS last_intraday_at,
-        COUNT(*) FILTER (WHERE trading_date::date = CURRENT_DATE) AS daily_today,
+        COUNT(*) FILTER (WHERE trading_date::date = (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) AS daily_today,
         0                  AS intraday_today
     FROM nasdaq_prices
     WHERE deleted_at IS NULL
@@ -769,7 +769,7 @@ FROM (
         NULL::TIMESTAMP    AS last_daily_at,
         MAX(timestamp)     AS last_intraday_at,
         0                  AS daily_today,
-        COUNT(*) FILTER (WHERE timestamp::date = CURRENT_DATE) AS intraday_today
+        COUNT(*) FILTER (WHERE timestamp::date = (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) AS intraday_today
     FROM nasdaq_intraday_prices
 
     UNION ALL
@@ -779,7 +779,7 @@ FROM (
         'SP500'            AS market,
         MAX(trading_date)  AS last_daily_at,
         NULL::TIMESTAMP    AS last_intraday_at,
-        COUNT(*) FILTER (WHERE trading_date::date = CURRENT_DATE) AS daily_today,
+        COUNT(*) FILTER (WHERE trading_date::date = (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) AS daily_today,
         0                  AS intraday_today
     FROM sp500_prices
     WHERE deleted_at IS NULL
@@ -792,7 +792,7 @@ FROM (
         NULL::TIMESTAMP    AS last_daily_at,
         MAX(timestamp)     AS last_intraday_at,
         0                  AS daily_today,
-        COUNT(*) FILTER (WHERE timestamp::date = CURRENT_DATE) AS intraday_today
+        COUNT(*) FILTER (WHERE timestamp::date = (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) AS intraday_today
     FROM sp500_intraday_prices
 
     UNION ALL
@@ -802,7 +802,7 @@ FROM (
         'CRYPTO'           AS market,
         MAX(trading_date)  AS last_daily_at,
         NULL::TIMESTAMP    AS last_intraday_at,
-        COUNT(*) FILTER (WHERE trading_date::date = CURRENT_DATE) AS daily_today,
+        COUNT(*) FILTER (WHERE trading_date::date = (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) AS daily_today,
         0                  AS intraday_today
     FROM crypto_prices
     WHERE deleted_at IS NULL
@@ -815,7 +815,7 @@ FROM (
         NULL::TIMESTAMP    AS last_daily_at,
         MAX(timestamp)     AS last_intraday_at,
         0                  AS daily_today,
-        COUNT(*) FILTER (WHERE timestamp::date = CURRENT_DATE) AS intraday_today
+        COUNT(*) FILTER (WHERE timestamp::date = (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) AS intraday_today
     FROM crypto_intraday_prices
 ) sub
 GROUP BY market
