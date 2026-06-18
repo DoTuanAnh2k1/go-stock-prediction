@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"math"
 	"net/http"
-	"sort"
 	"strconv"
 	"time"
 
@@ -736,7 +735,6 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 	algoFilter := r.URL.Query().Get("algorithm")
 	currencyFilter := r.URL.Query().Get("currency")
 
-	// -- 1. Check cache --
 	const cacheKey = "simulation:leaderboard"
 	if cached, ok := globalCache.Get(cacheKey); ok {
 		ResponseSuccess(w, http.StatusOK, cached)
@@ -745,118 +743,89 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 	store := repository.GetSingleton()
 
-	bots, err := store.GetAllSimBots()
+	rows, err := store.GetLeaderboardEntries()
 	if err != nil {
 		logger.Logger.Errorf("GetSimLeaderboard: %v", err)
-		ResponseError(w, http.StatusInternalServerError, "failed to fetch bots")
+		ResponseError(w, http.StatusInternalServerError, "failed to fetch leaderboard")
 		return
 	}
 
-	// -- 2. Get all sessions with snap counts (1 query) --
-	allSessions, err := store.GetAllSessionsWithSnapCount()
-	if err != nil {
-		logger.Logger.Errorf("GetSimLeaderboard sessions: %v", err)
-		// fall through with empty sessions
-	}
-	// Group sessions by bot_id
-	sessionsByBot := make(map[string][]modelsdb.SimSessionWithCount)
-	for _, s := range allSessions {
-		sessionsByBot[s.BotID] = append(sessionsByBot[s.BotID], s)
-	}
-
-	// Pick best session per bot: live+running > most snapshots > latest (sessions already id DESC)
-	chosenSessions := make(map[string]*modelsdb.SimSession)
-	for botID, sessions := range sessionsByBot {
-		chosenSessions[botID] = pickBestSession(sessions)
-	}
-
-	// Collect chosen session IDs
-	sessionIDs := make([]int64, 0, len(chosenSessions))
-	for _, sess := range chosenSessions {
-		if sess != nil {
-			sessionIDs = append(sessionIDs, sess.ID)
-		}
-	}
-
-	// -- 3. Batch load all snapshots + trades (2 queries) --
-	allSnaps, err := store.GetAllSnapshotsBatch(sessionIDs)
-	if err != nil {
-		logger.Logger.Errorf("GetSimLeaderboard snaps: %v", err)
-		allSnaps = map[int64][]modelsdb.SimPortfolioSnapshot{}
-	}
-	allTrades, err := store.GetAllTradesBatch(sessionIDs)
-	if err != nil {
-		logger.Logger.Errorf("GetSimLeaderboard trades: %v", err)
-		allTrades = map[int64][]modelsdb.SimTrade{}
-	}
-
-	// -- 4. Build entries --
-	entries := make([]leaderboardEntry, 0, len(bots))
-	for _, bot := range bots {
-		if marketFilter != "" && bot.Market != marketFilter {
+	entries := make([]leaderboardEntry, 0, len(rows))
+	for _, row := range rows {
+		if marketFilter != "" && row.Market != marketFilter {
 			continue
 		}
-		if algoFilter != "" && bot.Algorithm != algoFilter {
+		if algoFilter != "" && row.Algorithm != algoFilter {
 			continue
 		}
-		if currencyFilter != "" && bot.Currency != currencyFilter {
+		if currencyFilter != "" && row.Currency != currencyFilter {
 			continue
 		}
 
-		ic, _ := bot.InitialCapital.Float64()
-		bt, _ := bot.BuyThreshold.Float64()
-		st2, _ := bot.SellThreshold.Float64()
-		mc, _ := bot.MinConfidence.Float64()
-		sl, _ := bot.StopLoss.Float64()
-		tp, _ := bot.TakeProfit.Float64()
+		ic, _ := row.InitialCapital.Float64()
+		bt, _ := row.BuyThreshold.Float64()
+		st, _ := row.SellThreshold.Float64()
+		mc, _ := row.MinConfidence.Float64()
+		sl, _ := row.StopLoss.Float64()
+		tp, _ := row.TakeProfit.Float64()
+
+		totalReturnPct := 0.0
+		if row.TotalReturnPct != nil {
+			totalReturnPct, _ = row.TotalReturnPct.Float64()
+		}
+		winRatePct := 0.0
+		if row.WinRate != nil {
+			wr, _ := row.WinRate.Float64()
+			winRatePct = wr * 100.0
+		}
+		profitFactor := 0.0
+		if row.ProfitFactor != nil {
+			profitFactor, _ = row.ProfitFactor.Float64()
+		}
+		maxDrawdownPct := 0.0
+		if row.MaxDrawdownPct != nil {
+			v, _ := row.MaxDrawdownPct.Float64()
+			maxDrawdownPct = -v // Python stores positive; response convention is negative
+		}
+		finalValue := 0.0
+		if row.CurrentValue != nil {
+			finalValue, _ = row.CurrentValue.Float64()
+		}
 
 		entry := leaderboardEntry{
-			BotID:          bot.ID,
-			DisplayName:    bot.DisplayName,
-			Market:         bot.Market,
-			Algorithm:      bot.Algorithm,
-			Currency:       bot.Currency,
-			IsActive:       bot.IsActive,
+			BotID:          row.BotID,
+			DisplayName:    row.DisplayName,
+			Market:         row.Market,
+			Algorithm:      row.Algorithm,
+			Currency:       row.Currency,
+			IsActive:       row.IsActive,
 			InitialCapital: ic,
+			FinalValue:     finalValue,
+			TotalReturnPct: totalReturnPct,
+			// AnnualizedReturnPct and SharpeRatio: not pre-computed, remain 0
+			MaxDrawdownPct: maxDrawdownPct,
+			WinRatePct:     winRatePct,
+			ProfitFactor:   profitFactor,
+			TotalTrades:    row.TotalTrades,
 			BuyThreshold:   bt,
-			SellThreshold:  st2,
+			SellThreshold:  st,
 			MinConfidence:  mc,
 			StopLoss:       sl,
 			TakeProfit:     tp,
 		}
 
-		sess := chosenSessions[bot.ID]
-		if sess != nil {
+		if row.SessionID > 0 {
 			entry.SimulationPeriod = &simPeriod{
-				Start: sess.StartDate.Format("2006-01-02"),
+				Start: row.StartDate.Format("2006-01-02"),
 			}
-			if sess.EndDate != nil {
-				entry.SimulationPeriod.End = sess.EndDate.Format("2006-01-02")
-			}
-
-			snaps := allSnaps[sess.ID]
-			trades := allTrades[sess.ID]
-			kpis := computeKPIs(snaps, trades)
-
-			entry.TotalReturnPct = kpis.TotalReturnPct
-			entry.AnnualizedReturnPct = kpis.AnnualizedReturnPct
-			entry.SharpeRatio = kpis.SharpeRatio
-			entry.MaxDrawdownPct = kpis.MaxDrawdownPct
-			entry.WinRatePct = kpis.WinRatePct
-			entry.ProfitFactor = kpis.ProfitFactor
-			entry.TotalTrades = kpis.TotalTrades
-
-			if len(snaps) > 0 {
-				fv, _ := snaps[len(snaps)-1].TotalValue.Float64()
-				entry.FinalValue = fv
+			if row.EndDate != nil {
+				entry.SimulationPeriod.End = row.EndDate.Format("2006-01-02")
 			}
 		}
+
 		entries = append(entries, entry)
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].TotalReturnPct > entries[j].TotalReturnPct
-	})
 	for i := range entries {
 		entries[i].Rank = i + 1
 	}

@@ -267,40 +267,59 @@ func (c *Client) GetLastSnapshotsBatch(sessionIDs []int64) (map[int64]*modelsdb.
 	return result, nil
 }
 
-// GetAllSnapshotsBatch returns all snapshots for the given sessions, grouped by session_id.
-func (c *Client) GetAllSnapshotsBatch(sessionIDs []int64) (map[int64][]modelsdb.SimPortfolioSnapshot, error) {
-	if len(sessionIDs) == 0 {
-		return map[int64][]modelsdb.SimPortfolioSnapshot{}, nil
-	}
-	var snaps []modelsdb.SimPortfolioSnapshot
-	err := c.Db.Where("session_id IN ?", sessionIDs).
-		Order("session_id ASC, snapshot_date ASC").
-		Find(&snaps).Error
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[int64][]modelsdb.SimPortfolioSnapshot)
-	for _, s := range snaps {
-		result[s.SessionID] = append(result[s.SessionID], s)
-	}
-	return result, nil
-}
-
-// GetAllTradesBatch returns all trades for the given sessions, grouped by session_id.
-func (c *Client) GetAllTradesBatch(sessionIDs []int64) (map[int64][]modelsdb.SimTrade, error) {
-	if len(sessionIDs) == 0 {
-		return map[int64][]modelsdb.SimTrade{}, nil
-	}
-	var trades []modelsdb.SimTrade
-	err := c.Db.Where("session_id IN ?", sessionIDs).
-		Order("session_id ASC, trade_date ASC").
-		Find(&trades).Error
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[int64][]modelsdb.SimTrade)
-	for _, t := range trades {
-		result[t.SessionID] = append(result[t.SessionID], t)
-	}
-	return result, nil
+// GetLeaderboardEntries returns one row per bot using pre-computed KPI columns.
+// Picks the best session per bot: live+running > most snapshots > latest ID.
+// Results sorted by total_return_pct DESC NULLS LAST.
+func (c *Client) GetLeaderboardEntries() ([]modelsdb.LeaderboardEntry, error) {
+	var rows []modelsdb.LeaderboardEntry
+	err := c.Db.Raw(`
+		SELECT
+			s.id              AS session_id,
+			b.id              AS bot_id,
+			b.market,
+			b.algorithm,
+			b.display_name,
+			b.initial_capital,
+			b.currency,
+			b.is_active,
+			b.buy_threshold,
+			b.sell_threshold,
+			b.min_confidence,
+			b.stop_loss,
+			b.take_profit,
+			s.start_date,
+			s.end_date,
+			s.mode,
+			s.status,
+			s.total_trades,
+			s.wins,
+			s.losses,
+			s.breakeven,
+			s.total_pnl,
+			s.total_return_pct,
+			s.win_rate,
+			s.profit_factor,
+			s.max_drawdown_pct,
+			snap.total_value  AS current_value
+		FROM sim_bots b
+		LEFT JOIN LATERAL (
+			SELECT ss.*
+			FROM sim_sessions ss
+			WHERE ss.bot_id = b.id
+			ORDER BY
+				(ss.mode = 'live' AND ss.status = 'running') DESC,
+				(SELECT COUNT(*) FROM sim_portfolio_snapshots WHERE session_id = ss.id) DESC,
+				ss.id DESC
+			LIMIT 1
+		) s ON true
+		LEFT JOIN LATERAL (
+			SELECT ps.total_value
+			FROM sim_portfolio_snapshots ps
+			WHERE ps.session_id = s.id
+			ORDER BY ps.snapshot_date DESC
+			LIMIT 1
+		) snap ON true
+		ORDER BY s.total_return_pct DESC NULLS LAST
+	`).Scan(&rows).Error
+	return rows, err
 }

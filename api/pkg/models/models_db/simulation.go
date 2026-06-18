@@ -116,6 +116,13 @@ type LeaderboardEntry struct {
 	DisplayName     string           `gorm:"column:display_name"`
 	InitialCapital  decimal.Decimal  `gorm:"column:initial_capital"`
 	Currency        string           `gorm:"column:currency"`
+	// Bot config fields
+	IsActive       bool             `gorm:"column:is_active"`
+	BuyThreshold   decimal.Decimal  `gorm:"column:buy_threshold"`
+	SellThreshold  decimal.Decimal  `gorm:"column:sell_threshold"`
+	MinConfidence  decimal.Decimal  `gorm:"column:min_confidence"`
+	StopLoss       decimal.Decimal  `gorm:"column:stop_loss"`
+	TakeProfit     decimal.Decimal  `gorm:"column:take_profit"`
 	StartDate       time.Time        `gorm:"column:start_date"`
 	EndDate         *time.Time       `gorm:"column:end_date"`
 	Mode            string           `gorm:"column:mode"`
