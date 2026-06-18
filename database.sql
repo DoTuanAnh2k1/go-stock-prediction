@@ -1,191 +1,830 @@
--- ============================================
--- VN STOCK PREDICTION DATABASE SCHEMA
--- Fixed version based on models_db structs
--- ============================================
+-- ============================================================
+-- FINANCIAL PREDICTION SYSTEM — PostgreSQL + TimescaleDB Schema
+-- Replaces legacy MySQL VN-stock schema.
+-- ICT-at-rest: ALL TIMESTAMP columns store Asia/Ho_Chi_Minh
+-- wallclock time without timezone conversion (plain TIMESTAMP).
+-- ============================================================
 
--- Drop existing tables if needed (uncomment if you want fresh start)
--- DROP TABLE IF EXISTS predictions;
--- DROP TABLE IF EXISTS stock_prices;
--- DROP TABLE IF EXISTS stocks;
--- DROP TABLE IF EXISTS exchanges;
--- DROP TABLE IF EXISTS sync_logs;
+-- Enable TimescaleDB
+CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 
--- ============================================
--- EXCHANGES TABLE
--- ============================================
-CREATE TABLE IF NOT EXISTS exchanges (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    code VARCHAR(10) NOT NULL UNIQUE COMMENT 'Exchange code: HOSE, HNX, UPCOM',
-    name VARCHAR(100) NOT NULL COMMENT 'Exchange full name',
-    timezone VARCHAR(50) DEFAULT 'Asia/Ho_Chi_Minh' COMMENT 'Exchange timezone',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP NULL DEFAULT NULL,
-    INDEX idx_exchanges_code (code),
-    INDEX idx_exchanges_deleted_at (deleted_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Stock exchanges table';
+-- ============================================================
+-- OPERATIONAL / METADATA TABLES
+-- ============================================================
 
--- ============================================
--- STOCKS TABLE
--- ============================================
-CREATE TABLE IF NOT EXISTS stocks (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    symbol VARCHAR(10) NOT NULL UNIQUE COMMENT 'Stock symbol: VCB, VIC, FPT',
-    company_name VARCHAR(200) NOT NULL COMMENT 'Company full name',
-    exchange_id INT UNSIGNED NOT NULL COMMENT 'Foreign key to exchanges',
-    is_vn100 BOOLEAN DEFAULT FALSE COMMENT 'Is VN100 stock',
-    listing_date DATE NULL COMMENT 'Stock listing date',
-    sector VARCHAR(100) NULL COMMENT 'Business sector: Banking, Tech, etc',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP NULL DEFAULT NULL,
-    
-    -- Indexes
-    INDEX idx_stocks_symbol (symbol),
-    INDEX idx_stocks_exchange_id (exchange_id),
-    INDEX idx_stocks_sector (sector),
-    INDEX idx_stocks_deleted_at (deleted_at),
-    
-    -- Foreign key
-    FOREIGN KEY (exchange_id) REFERENCES exchanges(id) ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Stocks master data';
-
--- ============================================
--- STOCK_PRICES TABLE
--- ============================================
-CREATE TABLE IF NOT EXISTS stock_prices (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    stock_id INT UNSIGNED NOT NULL COMMENT 'Foreign key to stocks',
-    trading_date DATE NOT NULL COMMENT 'Trading date',
-    open_price DECIMAL(15,2) NOT NULL COMMENT 'Opening price',
-    high_price DECIMAL(15,2) NOT NULL COMMENT 'Highest price',
-    low_price DECIMAL(15,2) NOT NULL COMMENT 'Lowest price',
-    close_price DECIMAL(15,2) NOT NULL COMMENT 'Closing price',
-    volume BIGINT NOT NULL COMMENT 'Trading volume',
-    value DECIMAL(20,2) DEFAULT 0 COMMENT 'Trading value in VND',
-    
-    -- THESE ARE THE MISSING COLUMNS IN YOUR DB!
-    `change` DECIMAL(15,2) DEFAULT 0 COMMENT 'Price change amount',
-    change_percent DECIMAL(5,4) DEFAULT 0 COMMENT 'Price change percentage',
-    
-    foreign_buy BIGINT DEFAULT 0 COMMENT 'Foreign buy volume',
-    foreign_sell BIGINT DEFAULT 0 COMMENT 'Foreign sell volume',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP NULL DEFAULT NULL,
-    
-    -- Indexes
-    UNIQUE KEY uk_stock_prices_stock_date (stock_id, trading_date),
-    INDEX idx_stock_prices_trading_date (trading_date),
-    INDEX idx_stock_prices_deleted_at (deleted_at),
-    
-    -- Foreign key
-    FOREIGN KEY (stock_id) REFERENCES stocks(id) ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ============================================
--- PREDICTIONS TABLE  
--- ============================================
-CREATE TABLE IF NOT EXISTS predictions (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    stock_id INT UNSIGNED NOT NULL COMMENT 'Foreign key to stocks',
-    predicted_price DECIMAL(15,2) NOT NULL COMMENT 'ML predicted price',
-    confidence DECIMAL(5,4) DEFAULT 0.0000 COMMENT 'Prediction confidence 0-1',
-    algorithm_name VARCHAR(50) NOT NULL COMMENT 'ML algorithm used',
-    
-    -- FIX: Use DATETIME instead of TIMESTAMP to avoid timezone issues
-    prediction_date DATETIME NOT NULL COMMENT 'When prediction was made',
-    target_date DATETIME NOT NULL COMMENT 'Target date for prediction',
-    
-    actual_price DECIMAL(15,2) NULL COMMENT 'Actual price on target date',
-    accuracy DECIMAL(5,4) NULL COMMENT 'Prediction accuracy 0-1',
-    
-    -- FIX: Only one TIMESTAMP column can have DEFAULT CURRENT_TIMESTAMP
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP NULL DEFAULT NULL,
-    
-    -- Indexes
-    INDEX idx_predictions_stock_id (stock_id),
-    INDEX idx_predictions_algorithm (algorithm_name),
-    INDEX idx_predictions_prediction_date (prediction_date),
-    INDEX idx_predictions_target_date (target_date),
-    INDEX idx_predictions_deleted_at (deleted_at),
-    
-    -- Foreign key constraint
-    CONSTRAINT fk_predictions_stock_id 
-        FOREIGN KEY (stock_id) REFERENCES stocks(id) 
-        ON DELETE RESTRICT ON UPDATE CASCADE
-        
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci 
-COMMENT='ML predictions data';
-
--- ============================================
--- SYNC_LOGS TABLE
--- ============================================
+-- sync_logs: track crawl / data-sync runs
 CREATE TABLE IF NOT EXISTS sync_logs (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    sync_date TIMESTAMP NOT NULL COMMENT 'When sync happened',
-    success_count INT NOT NULL DEFAULT 0 COMMENT 'Number of successful syncs',
-    error_count INT NOT NULL DEFAULT 0 COMMENT 'Number of failed syncs',
-    duration_ms BIGINT NOT NULL COMMENT 'Sync duration in milliseconds',
-    source VARCHAR(50) NULL COMMENT 'Data source: VietStock, CafeF, etc',
-    error_message TEXT NULL COMMENT 'Error details if any',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP NULL DEFAULT NULL,
-    
-    -- Indexes
-    INDEX idx_sync_logs_sync_date (sync_date),
-    INDEX idx_sync_logs_source (source),
-    INDEX idx_sync_logs_deleted_at (deleted_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Data synchronization logs';
+    id            BIGSERIAL    PRIMARY KEY,
+    sync_date     TIMESTAMP    NOT NULL,
+    success_count INT          NOT NULL DEFAULT 0,
+    error_count   INT          NOT NULL DEFAULT 0,
+    duration_ms   BIGINT       NOT NULL,
+    source        VARCHAR(50),
+    error_message TEXT,
+    created_at    TIMESTAMP    NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMP    NOT NULL DEFAULT NOW(),
+    deleted_at    TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_sync_logs_sync_date  ON sync_logs(sync_date);
+CREATE INDEX IF NOT EXISTS idx_sync_logs_source     ON sync_logs(source);
+CREATE INDEX IF NOT EXISTS idx_sync_logs_deleted_at ON sync_logs(deleted_at);
 
--- ============================================
--- SAMPLE DATA INSERTION
--- ============================================
+-- macro_indicators: economic indicator time-series
+CREATE TABLE IF NOT EXISTS macro_indicators (
+    id             BIGSERIAL      PRIMARY KEY,
+    indicator_name VARCHAR(30)    NOT NULL,
+    indicator_date TIMESTAMP      NOT NULL,
+    value          NUMERIC(20,6)  NOT NULL,
+    source         VARCHAR(50),
+    created_at     TIMESTAMP      NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMP      NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_macro_name_date
+    ON macro_indicators(indicator_name, indicator_date);
 
--- Insert sample exchanges
-INSERT IGNORE INTO exchanges (code, name, timezone) VALUES
-('HOSE', 'Ho Chi Minh Stock Exchange', 'Asia/Ho_Chi_Minh'),
-('HNX', 'Hanoi Stock Exchange', 'Asia/Ho_Chi_Minh'),
-('UPCOM', 'Unlisted Public Company Market', 'Asia/Ho_Chi_Minh');
+-- training_logs: per-session per-algorithm training records
+CREATE TABLE IF NOT EXISTS training_logs (
+    id             BIGSERIAL    PRIMARY KEY,
+    session_id     VARCHAR(36)  NOT NULL,
+    algorithm_name VARCHAR(50)  NOT NULL,
+    market_key     VARCHAR(20)  NOT NULL DEFAULT 'gold',
+    total_stocks   INT          NOT NULL,
+    success_count  INT          NOT NULL,
+    error_count    INT          NOT NULL,
+    accuracy       NUMERIC(5,2),
+    duration_ms    BIGINT       NOT NULL,
+    error_details  TEXT,
+    started_at     TIMESTAMP    NOT NULL,
+    completed_at   TIMESTAMP    NOT NULL,
+    created_at     TIMESTAMP    NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMP    NOT NULL DEFAULT NOW(),
+    deleted_at     TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_training_logs_session_id    ON training_logs(session_id);
+CREATE INDEX IF NOT EXISTS idx_training_logs_algorithm     ON training_logs(algorithm_name);
+CREATE INDEX IF NOT EXISTS idx_training_logs_market_key    ON training_logs(market_key);
+CREATE INDEX IF NOT EXISTS idx_training_logs_started_at    ON training_logs(started_at);
+CREATE INDEX IF NOT EXISTS idx_training_logs_deleted_at    ON training_logs(deleted_at);
 
--- Insert sample stocks
-INSERT IGNORE INTO stocks (symbol, company_name, exchange_id, is_vn100, sector) VALUES
-('VCB', 'Ngân hàng Ngoại thương Việt Nam', 1, TRUE, 'Banking'),
-('VIC', 'Tập đoàn Vingroup', 1, TRUE, 'Real Estate'),
-('FPT', 'Tập đoàn FPT', 1, TRUE, 'Technology'),
-('VNM', 'Công ty Cổ phần Sữa Việt Nam', 1, TRUE, 'Consumer Goods'),
-('HPG', 'Tập đoàn Hòa Phát', 1, TRUE, 'Industrial'),
-('GAS', 'Tổng công ty Khí Việt Nam', 1, TRUE, 'Energy'),
-('MBB', 'Ngân hàng Quân đội', 1, TRUE, 'Banking'),
-('TCB', 'Ngân hàng Kỹ thương Việt Nam', 1, TRUE, 'Banking'),
-('BID', 'Ngân hàng Đầu tư và Phát triển Việt Nam', 1, TRUE, 'Banking'),
-('VRE', 'Vincom Retail', 1, TRUE, 'Real Estate');
+-- cron_schedules: DB-backed dynamic cron configuration
+CREATE TABLE IF NOT EXISTS cron_schedules (
+    id              BIGSERIAL    PRIMARY KEY,
+    job_key         VARCHAR(100) NOT NULL UNIQUE,
+    job_name        VARCHAR(200) NOT NULL,
+    cron_expression VARCHAR(100) NOT NULL,
+    enabled         BOOLEAN      NOT NULL DEFAULT TRUE,
+    updated_at      TIMESTAMP    NOT NULL DEFAULT NOW()
+);
 
--- ============================================
--- USEFUL QUERIES FOR DEBUGGING
--- ============================================
+-- users: application user accounts (GORM managed; Java Auth Service also writes here)
+CREATE TABLE IF NOT EXISTS users (
+    id            BIGSERIAL    PRIMARY KEY,
+    created_at    TIMESTAMP    NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMP    NOT NULL DEFAULT NOW(),
+    deleted_at    TIMESTAMP,
+    username      VARCHAR(50)  NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role          VARCHAR(255) NOT NULL DEFAULT 'user',
+    full_name     VARCHAR(100),
+    email         VARCHAR(255),
+    phone         VARCHAR(30)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username   ON users(username);
+CREATE INDEX        IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);
 
--- Check table structures
--- DESCRIBE exchanges;
--- DESCRIBE stocks; 
--- DESCRIBE stock_prices;
--- DESCRIBE predictions;
--- DESCRIBE sync_logs;
+-- ============================================================
+-- AUTH / RBAC TABLES  (Flyway V1+V2 — using PostgreSQL syntax)
+-- Java Auth Service owns these; CREATE IF NOT EXISTS is safe.
+-- ============================================================
 
--- Check foreign key constraints
--- SELECT * FROM information_schema.TABLE_CONSTRAINTS 
--- WHERE CONSTRAINT_SCHEMA = 'your_database_name' 
--- AND CONSTRAINT_TYPE = 'FOREIGN KEY';
+CREATE TABLE IF NOT EXISTS market_groups (
+    id          BIGSERIAL    PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL,
+    description TEXT,
+    created_at  TIMESTAMP    NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMP    NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_market_groups_name UNIQUE (name)
+);
 
--- Check indexes
--- SHOW INDEX FROM stocks;
--- SHOW INDEX FROM stock_prices;
--- SHOW INDEX FROM predictions;
+CREATE TABLE IF NOT EXISTS market_group_markets (
+    group_id   BIGINT      NOT NULL REFERENCES market_groups(id) ON DELETE CASCADE,
+    market_key VARCHAR(20) NOT NULL,
+    PRIMARY KEY (group_id, market_key)
+);
 
--- Sample queries to verify data
--- SELECT s.symbol, s.company_name, e.name as exchange
--- FROM stocks s JOIN exchanges e ON s.exchange_id = e.id
--- WHERE s.is_vn100 = TRUE;
+CREATE TABLE IF NOT EXISTS user_market_groups (
+    user_id  BIGINT NOT NULL,
+    group_id BIGINT NOT NULL REFERENCES market_groups(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, group_id)
+);
+CREATE INDEX IF NOT EXISTS idx_umg_user_id ON user_market_groups(user_id);
+
+-- ============================================================
+-- GOLD TABLES
+-- ============================================================
+
+-- gold_prices: daily buy/sell prices per source × product
+CREATE TABLE IF NOT EXISTS gold_prices (
+    id           BIGSERIAL      PRIMARY KEY,
+    source       VARCHAR(10)    NOT NULL,
+    product_type VARCHAR(20)    NOT NULL,
+    trading_date TIMESTAMP      NOT NULL,
+    buy_price    NUMERIC(15,2),
+    sell_price   NUMERIC(15,2),
+    currency     VARCHAR(3)     NOT NULL,
+    created_at   TIMESTAMP      NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMP      NOT NULL DEFAULT NOW(),
+    deleted_at   TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_gold_source_product_date
+    ON gold_prices(source, product_type, trading_date);
+CREATE INDEX IF NOT EXISTS idx_gold_prices_deleted_at ON gold_prices(deleted_at);
+
+-- gold_intraday_prices: sub-daily gold price ticks
+CREATE TABLE IF NOT EXISTS gold_intraday_prices (
+    id           BIGSERIAL      PRIMARY KEY,
+    source       VARCHAR(50)    NOT NULL,
+    product_type VARCHAR(50)    NOT NULL,
+    timestamp    TIMESTAMP      NOT NULL,
+    buy_price    NUMERIC(15,2),
+    sell_price   NUMERIC(15,2),
+    currency     VARCHAR(3)     NOT NULL,
+    created_at   TIMESTAMP      NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMP      NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_gold_intraday_src_prod_ts
+    ON gold_intraday_prices(source, product_type, timestamp);
+
+-- gold_predictions: ML algorithm predictions for gold
+CREATE TABLE IF NOT EXISTS gold_predictions (
+    id                BIGSERIAL      PRIMARY KEY,
+    source            VARCHAR(50)    NOT NULL,
+    product_type      VARCHAR(50)    NOT NULL,
+    predicted_price   NUMERIC(20,2)  NOT NULL,
+    current_price     NUMERIC(20,2)  NOT NULL,
+    confidence        NUMERIC(5,4),
+    algorithm_name    VARCHAR(50)    NOT NULL,
+    prediction_date   TIMESTAMP      NOT NULL,
+    target_date       TIMESTAMP      NOT NULL,
+    actual_price      NUMERIC(20,2),
+    accuracy          NUMERIC(5,4),
+    direction_correct BOOLEAN,
+    status            VARCHAR(20)    NOT NULL DEFAULT 'pending',
+    created_at        TIMESTAMP      NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMP      NOT NULL DEFAULT NOW(),
+    deleted_at        TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_gold_pred_src_type_algo
+    ON gold_predictions(source, product_type, algorithm_name);
+CREATE INDEX IF NOT EXISTS idx_gold_pred_prediction_date ON gold_predictions(prediction_date);
+CREATE INDEX IF NOT EXISTS idx_gold_pred_target_date     ON gold_predictions(target_date);
+CREATE INDEX IF NOT EXISTS idx_gold_pred_deleted_at      ON gold_predictions(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_gold_pred_direction
+    ON gold_predictions(algorithm_name, created_at)
+    WHERE direction_correct IS NOT NULL;
+
+-- ============================================================
+-- NASDAQ TABLES
+-- ============================================================
+
+-- nasdaq_prices: daily OHLCV for NASDAQ 100 symbols
+CREATE TABLE IF NOT EXISTS nasdaq_prices (
+    id           BIGSERIAL      PRIMARY KEY,
+    symbol       VARCHAR(10)    NOT NULL,
+    company_name VARCHAR(200),
+    open_price   NUMERIC(15,4),
+    high_price   NUMERIC(15,4),
+    low_price    NUMERIC(15,4),
+    close_price  NUMERIC(15,4)  NOT NULL,
+    volume       BIGINT,
+    trading_date TIMESTAMP      NOT NULL,
+    currency     VARCHAR(3)     NOT NULL DEFAULT 'USD',
+    created_at   TIMESTAMP      NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMP      NOT NULL DEFAULT NOW(),
+    deleted_at   TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nasdaq_symbol_date
+    ON nasdaq_prices(symbol, trading_date);
+CREATE INDEX IF NOT EXISTS idx_nasdaq_prices_deleted_at ON nasdaq_prices(deleted_at);
+
+-- nasdaq_intraday_prices: sub-daily OHLCV for NASDAQ symbols
+CREATE TABLE IF NOT EXISTS nasdaq_intraday_prices (
+    id          BIGSERIAL      PRIMARY KEY,
+    symbol      VARCHAR(20)    NOT NULL,
+    timestamp   TIMESTAMP      NOT NULL,
+    open_price  NUMERIC(20,6),
+    high_price  NUMERIC(20,6),
+    low_price   NUMERIC(20,6),
+    close_price NUMERIC(20,6),
+    volume      BIGINT,
+    created_at  TIMESTAMP      NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMP      NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nasdaq_intraday_symbol_ts
+    ON nasdaq_intraday_prices(symbol, timestamp);
+
+-- nasdaq_predictions: ML predictions for NASDAQ symbols
+CREATE TABLE IF NOT EXISTS nasdaq_predictions (
+    id                BIGSERIAL      PRIMARY KEY,
+    symbol            VARCHAR(10)    NOT NULL,
+    algorithm_name    VARCHAR(100)   NOT NULL,
+    predicted_price   NUMERIC(15,4)  NOT NULL,
+    current_price     NUMERIC(15,4)  NOT NULL,
+    confidence        NUMERIC(5,4),
+    prediction_date   TIMESTAMP      NOT NULL,
+    target_date       TIMESTAMP      NOT NULL,
+    actual_price      NUMERIC(15,4),
+    accuracy          NUMERIC(5,4),
+    direction_correct BOOLEAN,
+    status            VARCHAR(20)    NOT NULL DEFAULT 'pending',
+    created_at        TIMESTAMP      NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMP      NOT NULL DEFAULT NOW(),
+    deleted_at        TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_nasdaq_pred ON nasdaq_predictions(symbol, algorithm_name);
+CREATE INDEX IF NOT EXISTS idx_nasdaq_pred_prediction_date ON nasdaq_predictions(prediction_date);
+CREATE INDEX IF NOT EXISTS idx_nasdaq_pred_target_date     ON nasdaq_predictions(target_date);
+CREATE INDEX IF NOT EXISTS idx_nasdaq_pred_deleted_at      ON nasdaq_predictions(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_nasdaq_pred_direction
+    ON nasdaq_predictions(algorithm_name, created_at)
+    WHERE direction_correct IS NOT NULL;
+
+-- ============================================================
+-- S&P 500 TABLES
+-- ============================================================
+
+-- sp500_prices: daily OHLCV for S&P 500 symbols
+CREATE TABLE IF NOT EXISTS sp500_prices (
+    id           BIGSERIAL      PRIMARY KEY,
+    symbol       VARCHAR(10)    NOT NULL,
+    company_name VARCHAR(200),
+    open_price   NUMERIC(15,4),
+    high_price   NUMERIC(15,4),
+    low_price    NUMERIC(15,4),
+    close_price  NUMERIC(15,4)  NOT NULL,
+    volume       BIGINT,
+    trading_date TIMESTAMP      NOT NULL,
+    currency     VARCHAR(3)     NOT NULL DEFAULT 'USD',
+    created_at   TIMESTAMP      NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMP      NOT NULL DEFAULT NOW(),
+    deleted_at   TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sp500_symbol_date
+    ON sp500_prices(symbol, trading_date);
+CREATE INDEX IF NOT EXISTS idx_sp500_prices_deleted_at ON sp500_prices(deleted_at);
+
+-- sp500_intraday_prices: sub-daily OHLCV for S&P 500 symbols
+CREATE TABLE IF NOT EXISTS sp500_intraday_prices (
+    id          BIGSERIAL      PRIMARY KEY,
+    symbol      VARCHAR(20)    NOT NULL,
+    timestamp   TIMESTAMP      NOT NULL,
+    open_price  NUMERIC(20,6),
+    high_price  NUMERIC(20,6),
+    low_price   NUMERIC(20,6),
+    close_price NUMERIC(20,6),
+    volume      BIGINT,
+    created_at  TIMESTAMP      NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMP      NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sp500_intraday_symbol_ts
+    ON sp500_intraday_prices(symbol, timestamp);
+
+-- sp500_predictions: ML predictions for S&P 500 symbols
+CREATE TABLE IF NOT EXISTS sp500_predictions (
+    id                BIGSERIAL      PRIMARY KEY,
+    symbol            VARCHAR(10)    NOT NULL,
+    algorithm_name    VARCHAR(100)   NOT NULL,
+    predicted_price   NUMERIC(15,4)  NOT NULL,
+    current_price     NUMERIC(15,4)  NOT NULL,
+    confidence        NUMERIC(5,4),
+    prediction_date   TIMESTAMP      NOT NULL,
+    target_date       TIMESTAMP      NOT NULL,
+    actual_price      NUMERIC(15,4),
+    accuracy          NUMERIC(5,4),
+    direction_correct BOOLEAN,
+    status            VARCHAR(20)    NOT NULL DEFAULT 'pending',
+    created_at        TIMESTAMP      NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMP      NOT NULL DEFAULT NOW(),
+    deleted_at        TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_sp500_pred ON sp500_predictions(symbol, algorithm_name);
+CREATE INDEX IF NOT EXISTS idx_sp500_pred_prediction_date ON sp500_predictions(prediction_date);
+CREATE INDEX IF NOT EXISTS idx_sp500_pred_target_date     ON sp500_predictions(target_date);
+CREATE INDEX IF NOT EXISTS idx_sp500_pred_deleted_at      ON sp500_predictions(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_sp500_pred_direction
+    ON sp500_predictions(algorithm_name, created_at)
+    WHERE direction_correct IS NOT NULL;
+
+-- ============================================================
+-- CRYPTO TABLES
+-- ============================================================
+
+-- crypto_prices: daily price data for tracked cryptocurrencies
+CREATE TABLE IF NOT EXISTS crypto_prices (
+    id           BIGSERIAL      PRIMARY KEY,
+    coin_id      VARCHAR(50)    NOT NULL,
+    symbol       VARCHAR(10)    NOT NULL,
+    close_price  NUMERIC(20,2)  NOT NULL,
+    market_cap   NUMERIC(30,2),
+    volume_24h   NUMERIC(30,2),
+    trading_date TIMESTAMP      NOT NULL,
+    currency     VARCHAR(3)     NOT NULL DEFAULT 'USD',
+    created_at   TIMESTAMP      NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMP      NOT NULL DEFAULT NOW(),
+    deleted_at   TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_crypto_coin_date
+    ON crypto_prices(coin_id, trading_date);
+CREATE INDEX IF NOT EXISTS idx_crypto_prices_deleted_at ON crypto_prices(deleted_at);
+
+-- crypto_intraday_prices: sub-daily price/market-cap/volume for cryptos
+CREATE TABLE IF NOT EXISTS crypto_intraday_prices (
+    id         BIGSERIAL      PRIMARY KEY,
+    coin_id    VARCHAR(50)    NOT NULL,
+    timestamp  TIMESTAMP      NOT NULL,
+    price      NUMERIC(30,8),
+    market_cap NUMERIC(30,2),
+    volume     NUMERIC(30,2),
+    created_at TIMESTAMP      NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP      NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_crypto_intraday_coin_ts
+    ON crypto_intraday_prices(coin_id, timestamp);
+
+-- crypto_predictions: ML predictions for tracked cryptos
+CREATE TABLE IF NOT EXISTS crypto_predictions (
+    id                BIGSERIAL      PRIMARY KEY,
+    coin_id           VARCHAR(50)    NOT NULL,
+    symbol            VARCHAR(10)    NOT NULL,
+    algorithm_name    VARCHAR(100)   NOT NULL,
+    predicted_price   NUMERIC(20,2)  NOT NULL,
+    current_price     NUMERIC(20,2)  NOT NULL,
+    confidence        NUMERIC(5,4),
+    prediction_date   TIMESTAMP      NOT NULL,
+    target_date       TIMESTAMP      NOT NULL,
+    actual_price      NUMERIC(20,2),
+    accuracy          NUMERIC(5,4),
+    direction_correct BOOLEAN,
+    status            VARCHAR(20)    NOT NULL DEFAULT 'pending',
+    created_at        TIMESTAMP      NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMP      NOT NULL DEFAULT NOW(),
+    deleted_at        TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_crypto_pred ON crypto_predictions(coin_id, algorithm_name);
+CREATE INDEX IF NOT EXISTS idx_crypto_pred_prediction_date ON crypto_predictions(prediction_date);
+CREATE INDEX IF NOT EXISTS idx_crypto_pred_target_date     ON crypto_predictions(target_date);
+CREATE INDEX IF NOT EXISTS idx_crypto_pred_deleted_at      ON crypto_predictions(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_crypto_pred_direction
+    ON crypto_predictions(algorithm_name, created_at)
+    WHERE direction_correct IS NOT NULL;
+
+-- ============================================================
+-- SIMULATION TABLES
+-- ============================================================
+
+-- sim_bots: trading bot configuration (market × algorithm pairs)
+CREATE TABLE IF NOT EXISTS sim_bots (
+    id               VARCHAR(50)   PRIMARY KEY,
+    market           VARCHAR(20)   NOT NULL,
+    algorithm        VARCHAR(50)   NOT NULL,
+    display_name     VARCHAR(100)  NOT NULL,
+    initial_capital  NUMERIC(20,2) NOT NULL,
+    currency         VARCHAR(5)    NOT NULL,
+    buy_threshold    NUMERIC(5,2)  DEFAULT 1.50,
+    sell_threshold   NUMERIC(5,2)  DEFAULT 1.00,
+    min_confidence   NUMERIC(4,2)  DEFAULT 0.60,
+    stop_loss        NUMERIC(5,2)  DEFAULT 5.00,
+    take_profit      NUMERIC(5,2)  DEFAULT 8.00,
+    max_position_pct NUMERIC(5,2)  DEFAULT 15.00,
+    max_positions    INT           DEFAULT 5,
+    is_active        BOOLEAN       DEFAULT TRUE,
+    created_at       TIMESTAMP     NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMP     NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sim_bots_market ON sim_bots(market);
+
+-- sim_sessions: backtest and live simulation runs per bot
+CREATE TABLE IF NOT EXISTS sim_sessions (
+    id               BIGSERIAL     PRIMARY KEY,
+    bot_id           VARCHAR(50)   NOT NULL REFERENCES sim_bots(id),
+    start_date       TIMESTAMP     NOT NULL,
+    end_date         TIMESTAMP,
+    status           VARCHAR(20)   NOT NULL DEFAULT 'running',
+    mode             VARCHAR(20)   NOT NULL DEFAULT 'backtest',
+    -- Pre-computed KPI columns (populated by Python after session end)
+    total_trades     INT           DEFAULT 0,
+    wins             INT           DEFAULT 0,
+    losses           INT           DEFAULT 0,
+    breakeven        INT           DEFAULT 0,
+    total_pnl        NUMERIC(20,2) DEFAULT 0,
+    total_return_pct NUMERIC(8,4),
+    win_rate         NUMERIC(5,4),
+    profit_factor    NUMERIC(8,4),
+    max_drawdown_pct NUMERIC(8,4),
+    kpi_updated_at   TIMESTAMP,
+    created_at       TIMESTAMP     NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sim_sessions_bot_id ON sim_sessions(bot_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_sim_sessions_status ON sim_sessions(status, mode);
+
+-- sim_trades: individual BUY/SELL trade records
+CREATE TABLE IF NOT EXISTS sim_trades (
+    id              BIGSERIAL      PRIMARY KEY,
+    session_id      BIGINT         NOT NULL REFERENCES sim_sessions(id),
+    bot_id          VARCHAR(50)    NOT NULL,
+    symbol          VARCHAR(20)    NOT NULL,
+    action          VARCHAR(5)     NOT NULL,
+    quantity        NUMERIC(20,6)  NOT NULL,
+    price           NUMERIC(20,4)  NOT NULL,
+    trade_value     NUMERIC(20,2)  NOT NULL,
+    signal_strength NUMERIC(8,4),
+    confidence      NUMERIC(4,3),
+    trade_date      TIMESTAMP      NOT NULL,
+    close_reason    VARCHAR(20),
+    entry_trade_id  BIGINT,
+    pnl             NUMERIC(20,2),
+    pnl_pct         NUMERIC(8,4),
+    created_at      TIMESTAMP      NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sim_trades_session ON sim_trades(session_id, trade_date);
+CREATE INDEX IF NOT EXISTS idx_sim_trades_bot     ON sim_trades(bot_id, trade_date DESC);
+CREATE INDEX IF NOT EXISTS idx_sim_trades_created ON sim_trades(created_at DESC);
+
+-- sim_portfolio_snapshots: daily portfolio state snapshots per bot/session
+CREATE TABLE IF NOT EXISTS sim_portfolio_snapshots (
+    id               BIGSERIAL      PRIMARY KEY,
+    session_id       BIGINT         NOT NULL REFERENCES sim_sessions(id),
+    bot_id           VARCHAR(50)    NOT NULL,
+    snapshot_date    TIMESTAMP      NOT NULL,
+    cash_balance     NUMERIC(20,2)  NOT NULL,
+    positions_value  NUMERIC(20,2)  NOT NULL,
+    total_value      NUMERIC(20,2)  NOT NULL,
+    total_return_pct NUMERIC(8,4),
+    open_positions   INT            DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_sim_snap_session_date
+    ON sim_portfolio_snapshots(session_id, snapshot_date DESC);
+CREATE INDEX IF NOT EXISTS idx_sim_snap_bot_date
+    ON sim_portfolio_snapshots(bot_id, snapshot_date DESC);
+
+-- ============================================================
+-- TIMESCALEDB HYPERTABLES
+-- Chunk intervals chosen by data frequency:
+--   daily price/pred  → 1 month (INTERVAL '1 month')
+--   intraday          → 1 week  (INTERVAL '7 days')
+--   predictions       → 3 months
+--   sim time-series   → 3 months
+--   operational logs  → 1 month
+-- ============================================================
+
+-- Daily price tables (1-month chunks)
+SELECT create_hypertable('gold_prices',   'trading_date', chunk_time_interval => INTERVAL '1 month', if_not_exists => TRUE);
+SELECT create_hypertable('nasdaq_prices', 'trading_date', chunk_time_interval => INTERVAL '1 month', if_not_exists => TRUE);
+SELECT create_hypertable('sp500_prices',  'trading_date', chunk_time_interval => INTERVAL '1 month', if_not_exists => TRUE);
+SELECT create_hypertable('crypto_prices', 'trading_date', chunk_time_interval => INTERVAL '1 month', if_not_exists => TRUE);
+
+-- Intraday price tables (1-week chunks)
+SELECT create_hypertable('gold_intraday_prices',   'timestamp', chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE);
+SELECT create_hypertable('nasdaq_intraday_prices', 'timestamp', chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE);
+SELECT create_hypertable('sp500_intraday_prices',  'timestamp', chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE);
+SELECT create_hypertable('crypto_intraday_prices', 'timestamp', chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE);
+
+-- Prediction tables (3-month chunks)
+SELECT create_hypertable('gold_predictions',   'prediction_date', chunk_time_interval => INTERVAL '3 months', if_not_exists => TRUE);
+SELECT create_hypertable('nasdaq_predictions', 'prediction_date', chunk_time_interval => INTERVAL '3 months', if_not_exists => TRUE);
+SELECT create_hypertable('sp500_predictions',  'prediction_date', chunk_time_interval => INTERVAL '3 months', if_not_exists => TRUE);
+SELECT create_hypertable('crypto_predictions', 'prediction_date', chunk_time_interval => INTERVAL '3 months', if_not_exists => TRUE);
+
+-- Simulation time-series tables (3-month chunks)
+SELECT create_hypertable('sim_trades',              'trade_date',    chunk_time_interval => INTERVAL '3 months', if_not_exists => TRUE);
+SELECT create_hypertable('sim_portfolio_snapshots', 'snapshot_date', chunk_time_interval => INTERVAL '3 months', if_not_exists => TRUE);
+
+-- Operational log tables (1-month chunks)
+SELECT create_hypertable('sync_logs',     'created_at', chunk_time_interval => INTERVAL '1 month', if_not_exists => TRUE);
+SELECT create_hypertable('training_logs', 'created_at', chunk_time_interval => INTERVAL '1 month', if_not_exists => TRUE);
+
+-- ============================================================
+-- TIMESCALEDB COMPRESSION POLICIES
+-- Compress old chunks to save storage; retain query speed on
+-- recent data. compress_segmentby improves per-entity scan speed.
+-- ============================================================
+
+-- Daily price tables: compress after 30 days
+ALTER TABLE gold_prices   SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'trading_date DESC',
+    timescaledb.compress_segmentby = 'source'
+);
+SELECT add_compression_policy('gold_prices', INTERVAL '30 days', if_not_exists => TRUE);
+
+ALTER TABLE nasdaq_prices SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'trading_date DESC',
+    timescaledb.compress_segmentby = 'symbol'
+);
+SELECT add_compression_policy('nasdaq_prices', INTERVAL '30 days', if_not_exists => TRUE);
+
+ALTER TABLE sp500_prices  SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'trading_date DESC',
+    timescaledb.compress_segmentby = 'symbol'
+);
+SELECT add_compression_policy('sp500_prices', INTERVAL '30 days', if_not_exists => TRUE);
+
+ALTER TABLE crypto_prices SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'trading_date DESC',
+    timescaledb.compress_segmentby = 'symbol'
+);
+SELECT add_compression_policy('crypto_prices', INTERVAL '30 days', if_not_exists => TRUE);
+
+-- Intraday price tables: compress after 7 days
+ALTER TABLE gold_intraday_prices SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'timestamp DESC',
+    timescaledb.compress_segmentby = 'source'
+);
+SELECT add_compression_policy('gold_intraday_prices', INTERVAL '7 days', if_not_exists => TRUE);
+
+ALTER TABLE nasdaq_intraday_prices SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'timestamp DESC',
+    timescaledb.compress_segmentby = 'symbol'
+);
+SELECT add_compression_policy('nasdaq_intraday_prices', INTERVAL '7 days', if_not_exists => TRUE);
+
+ALTER TABLE sp500_intraday_prices SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'timestamp DESC',
+    timescaledb.compress_segmentby = 'symbol'
+);
+SELECT add_compression_policy('sp500_intraday_prices', INTERVAL '7 days', if_not_exists => TRUE);
+
+ALTER TABLE crypto_intraday_prices SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'timestamp DESC',
+    timescaledb.compress_segmentby = 'coin_id'
+);
+SELECT add_compression_policy('crypto_intraday_prices', INTERVAL '7 days', if_not_exists => TRUE);
+
+-- Prediction tables: compress after 30 days
+ALTER TABLE gold_predictions SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'prediction_date DESC',
+    timescaledb.compress_segmentby = 'algorithm_name'
+);
+SELECT add_compression_policy('gold_predictions', INTERVAL '30 days', if_not_exists => TRUE);
+
+ALTER TABLE nasdaq_predictions SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'prediction_date DESC',
+    timescaledb.compress_segmentby = 'algorithm_name'
+);
+SELECT add_compression_policy('nasdaq_predictions', INTERVAL '30 days', if_not_exists => TRUE);
+
+ALTER TABLE sp500_predictions SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'prediction_date DESC',
+    timescaledb.compress_segmentby = 'algorithm_name'
+);
+SELECT add_compression_policy('sp500_predictions', INTERVAL '30 days', if_not_exists => TRUE);
+
+ALTER TABLE crypto_predictions SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'prediction_date DESC',
+    timescaledb.compress_segmentby = 'algorithm_name'
+);
+SELECT add_compression_policy('crypto_predictions', INTERVAL '30 days', if_not_exists => TRUE);
+
+-- Simulation time-series: compress after 30 days
+ALTER TABLE sim_trades SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'trade_date DESC',
+    timescaledb.compress_segmentby = 'bot_id'
+);
+SELECT add_compression_policy('sim_trades', INTERVAL '30 days', if_not_exists => TRUE);
+
+ALTER TABLE sim_portfolio_snapshots SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'snapshot_date DESC',
+    timescaledb.compress_segmentby = 'bot_id'
+);
+SELECT add_compression_policy('sim_portfolio_snapshots', INTERVAL '30 days', if_not_exists => TRUE);
+
+-- Operational log tables: compress after 30 days
+ALTER TABLE sync_logs SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby = 'created_at DESC'
+);
+SELECT add_compression_policy('sync_logs', INTERVAL '30 days', if_not_exists => TRUE);
+
+ALTER TABLE training_logs SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby = 'created_at DESC'
+);
+SELECT add_compression_policy('training_logs', INTERVAL '30 days', if_not_exists => TRUE);
+
+-- ============================================================
+-- CONTINUOUS AGGREGATES — Direction Accuracy per Market
+-- Materialized views with daily refresh for fast dashboard queries.
+-- ============================================================
+
+-- Gold direction accuracy by algorithm (daily grain)
+CREATE MATERIALIZED VIEW IF NOT EXISTS gold_direction_accuracy_daily
+WITH (timescaledb.continuous) AS
+SELECT
+    time_bucket('1 day', prediction_date) AS bucket,
+    algorithm_name,
+    COUNT(*) FILTER (WHERE direction_correct IS NOT NULL) AS total,
+    COUNT(*) FILTER (WHERE direction_correct = TRUE)      AS correct
+FROM gold_predictions
+WHERE direction_correct IS NOT NULL
+GROUP BY bucket, algorithm_name
+WITH NO DATA;
+
+SELECT add_continuous_aggregate_policy(
+    'gold_direction_accuracy_daily',
+    start_offset => INTERVAL '7 days',
+    end_offset   => INTERVAL '1 hour',
+    schedule_interval => INTERVAL '1 day',
+    if_not_exists => TRUE
+);
+
+-- NASDAQ direction accuracy by algorithm (daily grain)
+CREATE MATERIALIZED VIEW IF NOT EXISTS nasdaq_direction_accuracy_daily
+WITH (timescaledb.continuous) AS
+SELECT
+    time_bucket('1 day', prediction_date) AS bucket,
+    algorithm_name,
+    COUNT(*) FILTER (WHERE direction_correct IS NOT NULL) AS total,
+    COUNT(*) FILTER (WHERE direction_correct = TRUE)      AS correct
+FROM nasdaq_predictions
+WHERE direction_correct IS NOT NULL
+GROUP BY bucket, algorithm_name
+WITH NO DATA;
+
+SELECT add_continuous_aggregate_policy(
+    'nasdaq_direction_accuracy_daily',
+    start_offset => INTERVAL '7 days',
+    end_offset   => INTERVAL '1 hour',
+    schedule_interval => INTERVAL '1 day',
+    if_not_exists => TRUE
+);
+
+-- S&P 500 direction accuracy by algorithm (daily grain)
+CREATE MATERIALIZED VIEW IF NOT EXISTS sp500_direction_accuracy_daily
+WITH (timescaledb.continuous) AS
+SELECT
+    time_bucket('1 day', prediction_date) AS bucket,
+    algorithm_name,
+    COUNT(*) FILTER (WHERE direction_correct IS NOT NULL) AS total,
+    COUNT(*) FILTER (WHERE direction_correct = TRUE)      AS correct
+FROM sp500_predictions
+WHERE direction_correct IS NOT NULL
+GROUP BY bucket, algorithm_name
+WITH NO DATA;
+
+SELECT add_continuous_aggregate_policy(
+    'sp500_direction_accuracy_daily',
+    start_offset => INTERVAL '7 days',
+    end_offset   => INTERVAL '1 hour',
+    schedule_interval => INTERVAL '1 day',
+    if_not_exists => TRUE
+);
+
+-- Crypto direction accuracy by algorithm (daily grain)
+CREATE MATERIALIZED VIEW IF NOT EXISTS crypto_direction_accuracy_daily
+WITH (timescaledb.continuous) AS
+SELECT
+    time_bucket('1 day', prediction_date) AS bucket,
+    algorithm_name,
+    COUNT(*) FILTER (WHERE direction_correct IS NOT NULL) AS total,
+    COUNT(*) FILTER (WHERE direction_correct = TRUE)      AS correct
+FROM crypto_predictions
+WHERE direction_correct IS NOT NULL
+GROUP BY bucket, algorithm_name
+WITH NO DATA;
+
+SELECT add_continuous_aggregate_policy(
+    'crypto_direction_accuracy_daily',
+    start_offset => INTERVAL '7 days',
+    end_offset   => INTERVAL '1 hour',
+    schedule_interval => INTERVAL '1 day',
+    if_not_exists => TRUE
+);
+
+-- ============================================================
+-- MONITORING MATERIALIZED VIEW
+-- Provides a fast, refreshable snapshot of crawl/prediction
+-- freshness per market for the /api/monitoring/overview endpoint.
+-- UNIQUE index on market allows CONCURRENTLY refresh.
+-- ============================================================
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS monitoring_crawl_stats AS
+SELECT
+    market,
+    MAX(last_daily_at)    AS last_daily_at,
+    MAX(last_intraday_at) AS last_intraday_at,
+    SUM(daily_today)      AS daily_today,
+    SUM(intraday_today)   AS intraday_today
+FROM (
+    -- Gold daily
+    SELECT
+        'GOLD'             AS market,
+        MAX(trading_date)  AS last_daily_at,
+        NULL::TIMESTAMP    AS last_intraday_at,
+        COUNT(*) FILTER (WHERE trading_date::date = CURRENT_DATE) AS daily_today,
+        0                  AS intraday_today
+    FROM gold_prices
+    WHERE deleted_at IS NULL
+
+    UNION ALL
+
+    -- Gold intraday
+    SELECT
+        'GOLD'             AS market,
+        NULL::TIMESTAMP    AS last_daily_at,
+        MAX(timestamp)     AS last_intraday_at,
+        0                  AS daily_today,
+        COUNT(*) FILTER (WHERE timestamp::date = CURRENT_DATE) AS intraday_today
+    FROM gold_intraday_prices
+
+    UNION ALL
+
+    -- NASDAQ daily
+    SELECT
+        'NASDAQ'           AS market,
+        MAX(trading_date)  AS last_daily_at,
+        NULL::TIMESTAMP    AS last_intraday_at,
+        COUNT(*) FILTER (WHERE trading_date::date = CURRENT_DATE) AS daily_today,
+        0                  AS intraday_today
+    FROM nasdaq_prices
+    WHERE deleted_at IS NULL
+
+    UNION ALL
+
+    -- NASDAQ intraday
+    SELECT
+        'NASDAQ'           AS market,
+        NULL::TIMESTAMP    AS last_daily_at,
+        MAX(timestamp)     AS last_intraday_at,
+        0                  AS daily_today,
+        COUNT(*) FILTER (WHERE timestamp::date = CURRENT_DATE) AS intraday_today
+    FROM nasdaq_intraday_prices
+
+    UNION ALL
+
+    -- S&P 500 daily
+    SELECT
+        'SP500'            AS market,
+        MAX(trading_date)  AS last_daily_at,
+        NULL::TIMESTAMP    AS last_intraday_at,
+        COUNT(*) FILTER (WHERE trading_date::date = CURRENT_DATE) AS daily_today,
+        0                  AS intraday_today
+    FROM sp500_prices
+    WHERE deleted_at IS NULL
+
+    UNION ALL
+
+    -- S&P 500 intraday
+    SELECT
+        'SP500'            AS market,
+        NULL::TIMESTAMP    AS last_daily_at,
+        MAX(timestamp)     AS last_intraday_at,
+        0                  AS daily_today,
+        COUNT(*) FILTER (WHERE timestamp::date = CURRENT_DATE) AS intraday_today
+    FROM sp500_intraday_prices
+
+    UNION ALL
+
+    -- Crypto daily
+    SELECT
+        'CRYPTO'           AS market,
+        MAX(trading_date)  AS last_daily_at,
+        NULL::TIMESTAMP    AS last_intraday_at,
+        COUNT(*) FILTER (WHERE trading_date::date = CURRENT_DATE) AS daily_today,
+        0                  AS intraday_today
+    FROM crypto_prices
+    WHERE deleted_at IS NULL
+
+    UNION ALL
+
+    -- Crypto intraday
+    SELECT
+        'CRYPTO'           AS market,
+        NULL::TIMESTAMP    AS last_daily_at,
+        MAX(timestamp)     AS last_intraday_at,
+        0                  AS daily_today,
+        COUNT(*) FILTER (WHERE timestamp::date = CURRENT_DATE) AS intraday_today
+    FROM crypto_intraday_prices
+) sub
+GROUP BY market
+WITH NO DATA;
+
+-- UNIQUE index enables REFRESH MATERIALIZED VIEW CONCURRENTLY
+CREATE UNIQUE INDEX IF NOT EXISTS idx_monitoring_crawl_stats_market
+    ON monitoring_crawl_stats(market);
+
+-- ============================================================
+-- END OF SCHEMA
+-- ============================================================
