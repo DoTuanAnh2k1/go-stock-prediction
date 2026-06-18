@@ -9,7 +9,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o api-server ./cmd
 
 # Run stage
 FROM alpine:latest
-RUN apk add --no-cache ca-certificates wget tzdata mysql-client
+RUN apk add --no-cache ca-certificates wget tzdata postgresql-client
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 WORKDIR /app
 COPY --from=builder /app/api-server .

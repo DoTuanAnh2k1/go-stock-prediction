@@ -264,11 +264,22 @@ class SimSession(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     bot_id = Column(String(50), nullable=False, index=True)
-    start_date = Column(Date, nullable=False)
-    end_date = Column(Date)
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime)
     status = Column(String(20), default="running")  # running, completed, paused
     mode = Column(String(20), default="backtest")   # backtest, live
     created_at = Column(DateTime, default=datetime.now)
+    # Pre-computed KPIs (set by update_session_kpis after each session end)
+    total_trades     = Column(Integer,    nullable=False, default=0)
+    wins             = Column(Integer,    nullable=False, default=0)
+    losses           = Column(Integer,    nullable=False, default=0)
+    breakeven        = Column(Integer,    nullable=False, default=0)
+    total_pnl        = Column(Numeric(20, 2), nullable=False, default=0)
+    total_return_pct = Column(Numeric(8, 4),  nullable=True)
+    win_rate         = Column(Numeric(5, 4),  nullable=True)
+    profit_factor    = Column(Numeric(8, 4),  nullable=True)
+    max_drawdown_pct = Column(Numeric(8, 4),  nullable=True)
+    kpi_updated_at   = Column(DateTime,  nullable=True)
 
 
 class SimTrade(Base):

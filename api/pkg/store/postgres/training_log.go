@@ -159,7 +159,17 @@ func (c *Client) GetTrainingMetricsAggregate() (modelsdb.TrainingMetricsAggregat
 	}
 
 	// Total predictions (from predictions table)
-	c.Db.Raw("SELECT COUNT(*) FROM predictions WHERE deleted_at IS NULL").Scan(&agg.TotalPredictions)
+	c.Db.Raw(`
+		SELECT (
+			SELECT COUNT(*) FROM gold_predictions   WHERE deleted_at IS NULL
+		) + (
+			SELECT COUNT(*) FROM nasdaq_predictions WHERE deleted_at IS NULL
+		) + (
+			SELECT COUNT(*) FROM sp500_predictions  WHERE deleted_at IS NULL
+		) + (
+			SELECT COUNT(*) FROM crypto_predictions WHERE deleted_at IS NULL
+		) AS total
+	`).Scan(&agg.TotalPredictions)
 
 	return agg, nil
 }

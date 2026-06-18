@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"go-stock-prediction/pkg/logger"
 	"go-stock-prediction/pkg/models/models_config"
-	modelsdb "go-stock-prediction/pkg/models/models_db"
 
 	gormpostgres "gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -45,11 +44,9 @@ func (c *Client) Init(cfg models_config.DatabaseConfig) error {
 	c.Db = db
 	c.cfg = pg
 
-	if err := db.AutoMigrate(modelsdb.AllModels...); err != nil {
-		logger.Logger.Errorf("AutoMigrate failed: %v", err)
-		return err
-	}
-	logger.Logger.Info("AutoMigrate completed successfully")
+	// Schema is managed by database.sql (TimescaleDB init script) and Flyway (auth tables).
+	// AutoMigrate is skipped for PostgreSQL to avoid conflicts with hypertable composite PKs.
+	logger.Logger.Info("PostgreSQL store initialized — schema managed by database.sql")
 
 	return nil
 }

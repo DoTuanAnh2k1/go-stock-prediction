@@ -477,6 +477,42 @@ CREATE INDEX IF NOT EXISTS idx_sim_snap_bot_date
 --   operational logs  → 1 month
 -- ============================================================
 
+-- ============================================================
+-- FIX PKs: TimescaleDB requires partition column in every PK/unique index.
+-- ============================================================
+ALTER TABLE sync_logs                DROP CONSTRAINT IF EXISTS sync_logs_pkey;
+ALTER TABLE sync_logs                ADD PRIMARY KEY (id, created_at);
+ALTER TABLE training_logs            DROP CONSTRAINT IF EXISTS training_logs_pkey;
+ALTER TABLE training_logs            ADD PRIMARY KEY (id, created_at);
+ALTER TABLE gold_prices              DROP CONSTRAINT IF EXISTS gold_prices_pkey;
+ALTER TABLE gold_prices              ADD PRIMARY KEY (id, trading_date);
+ALTER TABLE nasdaq_prices            DROP CONSTRAINT IF EXISTS nasdaq_prices_pkey;
+ALTER TABLE nasdaq_prices            ADD PRIMARY KEY (id, trading_date);
+ALTER TABLE sp500_prices             DROP CONSTRAINT IF EXISTS sp500_prices_pkey;
+ALTER TABLE sp500_prices             ADD PRIMARY KEY (id, trading_date);
+ALTER TABLE crypto_prices            DROP CONSTRAINT IF EXISTS crypto_prices_pkey;
+ALTER TABLE crypto_prices            ADD PRIMARY KEY (id, trading_date);
+ALTER TABLE gold_intraday_prices     DROP CONSTRAINT IF EXISTS gold_intraday_prices_pkey;
+ALTER TABLE gold_intraday_prices     ADD PRIMARY KEY (id, timestamp);
+ALTER TABLE nasdaq_intraday_prices   DROP CONSTRAINT IF EXISTS nasdaq_intraday_prices_pkey;
+ALTER TABLE nasdaq_intraday_prices   ADD PRIMARY KEY (id, timestamp);
+ALTER TABLE sp500_intraday_prices    DROP CONSTRAINT IF EXISTS sp500_intraday_prices_pkey;
+ALTER TABLE sp500_intraday_prices    ADD PRIMARY KEY (id, timestamp);
+ALTER TABLE crypto_intraday_prices   DROP CONSTRAINT IF EXISTS crypto_intraday_prices_pkey;
+ALTER TABLE crypto_intraday_prices   ADD PRIMARY KEY (id, timestamp);
+ALTER TABLE gold_predictions         DROP CONSTRAINT IF EXISTS gold_predictions_pkey;
+ALTER TABLE gold_predictions         ADD PRIMARY KEY (id, prediction_date);
+ALTER TABLE nasdaq_predictions       DROP CONSTRAINT IF EXISTS nasdaq_predictions_pkey;
+ALTER TABLE nasdaq_predictions       ADD PRIMARY KEY (id, prediction_date);
+ALTER TABLE sp500_predictions        DROP CONSTRAINT IF EXISTS sp500_predictions_pkey;
+ALTER TABLE sp500_predictions        ADD PRIMARY KEY (id, prediction_date);
+ALTER TABLE crypto_predictions       DROP CONSTRAINT IF EXISTS crypto_predictions_pkey;
+ALTER TABLE crypto_predictions       ADD PRIMARY KEY (id, prediction_date);
+ALTER TABLE sim_trades               DROP CONSTRAINT IF EXISTS sim_trades_pkey;
+ALTER TABLE sim_trades               ADD PRIMARY KEY (id, trade_date);
+ALTER TABLE sim_portfolio_snapshots  DROP CONSTRAINT IF EXISTS sim_portfolio_snapshots_pkey;
+ALTER TABLE sim_portfolio_snapshots  ADD PRIMARY KEY (id, snapshot_date);
+
 -- Daily price tables (1-month chunks)
 SELECT create_hypertable('gold_prices',   'trading_date', chunk_time_interval => INTERVAL '1 month', if_not_exists => TRUE);
 SELECT create_hypertable('nasdaq_prices', 'trading_date', chunk_time_interval => INTERVAL '1 month', if_not_exists => TRUE);

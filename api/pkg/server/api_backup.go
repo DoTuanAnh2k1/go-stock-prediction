@@ -136,7 +136,7 @@ func ListBackupsHandler(w http.ResponseWriter, r *http.Request) {
 // TriggerBackupHandler godoc
 //
 //	@Summary      Trigger a database backup
-//	@Description  Runs mysqldump, compresses the output with gzip, and saves it to the backup directory. Keeps only the 10 most recent backups. Requires admin role.
+//	@Description  Runs pg_dump, compresses the output with gzip, and saves it to the backup directory. Keeps only the 10 most recent backups. Requires admin role.
 //	@Tags         Backup
 //	@Produce      json
 //	@Success      200  {object}  map[string]interface{}
@@ -163,25 +163,24 @@ func TriggerBackupHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// runBackup runs mysqldump, gzips the output to the backup directory, prunes to
+// runBackup runs pg_dump, gzips the output to the backup directory, prunes to
 // the 10 most recent backups, and returns the new file's name and size.
 // Shared by the manual trigger endpoint and the scheduled backup job.
 func runBackup(ctx context.Context) (string, int64, error) {
-	// Collect DB connection params from environment.
-	host := os.Getenv("MYSQL_HOST")
+	host := os.Getenv("POSTGRES_HOST")
 	if host == "" {
 		host = "localhost"
 	}
-	port := os.Getenv("MYSQL_PORT")
+	port := os.Getenv("POSTGRES_PORT")
 	if port == "" {
-		port = "3306"
+		port = "5432"
 	}
-	user := os.Getenv("MYSQL_USER")
+	user := os.Getenv("POSTGRES_USER")
 	if user == "" {
-		user = "root"
+		user = "postgres"
 	}
-	password := os.Getenv("MYSQL_PASSWORD")
-	dbName := os.Getenv("MYSQL_DB_NAME")
+	password := os.Getenv("POSTGRES_PASSWORD")
+	dbName := os.Getenv("POSTGRES_DB")
 	if dbName == "" {
 		dbName = "go_stock_prediction"
 	}
@@ -206,27 +205,22 @@ func runBackup(ctx context.Context) (string, int64, error) {
 	gzWriter := gzip.NewWriter(outFile)
 	defer gzWriter.Close()
 
-	// Build mysqldump command. --skip-ssl avoids the MariaDB client rejecting
-	// MySQL 8's auto-generated server cert ("certificate is NOT trusted") on the
-	// internal Docker network where TLS is unnecessary.
+	// pg_dump connects via PGPASSWORD env var (no plaintext in args).
 	args := []string{
 		fmt.Sprintf("--host=%s", host),
 		fmt.Sprintf("--port=%s", port),
-		fmt.Sprintf("--user=%s", user),
-	}
-	if password != "" {
-		args = append(args, fmt.Sprintf("--password=%s", password))
-	}
-	args = append(args,
-		"--skip-ssl",
-		"--single-transaction",
-		"--routines",
-		"--triggers",
-		"--add-drop-table",
+		fmt.Sprintf("--username=%s", user),
+		"--no-password",
+		"--format=plain",
+		"--no-owner",
+		"--no-acl",
 		dbName,
-	)
+	}
 
-	cmd := exec.CommandContext(ctx, "mysqldump", args...)
+	cmd := exec.CommandContext(ctx, "pg_dump", args...)
+	if password != "" {
+		cmd.Env = append(os.Environ(), fmt.Sprintf("PGPASSWORD=%s", password))
+	}
 	cmd.Stdout = gzWriter
 
 	var stderrBuf strings.Builder
@@ -234,14 +228,12 @@ func runBackup(ctx context.Context) (string, int64, error) {
 
 	logger.Logger.Infof("Starting database backup to %s", filename)
 	if err := cmd.Run(); err != nil {
-		// Remove the incomplete file.
 		outFile.Close()
 		os.Remove(filePath)
-		logger.Logger.Errorf("mysqldump failed: %v — stderr: %s", err, stderrBuf.String())
-		return "", 0, fmt.Errorf("mysqldump failed: %v", err)
+		logger.Logger.Errorf("pg_dump failed: %v — stderr: %s", err, stderrBuf.String())
+		return "", 0, fmt.Errorf("pg_dump failed: %v", err)
 	}
 
-	// Flush gzip writer before stat.
 	if err := gzWriter.Close(); err != nil {
 		logger.Logger.Errorf("Failed to finalize gzip for %s: %v", filename, err)
 		return "", 0, fmt.Errorf("failed to finalize backup file: %w", err)
@@ -255,7 +247,6 @@ func runBackup(ctx context.Context) (string, int64, error) {
 
 	logger.Logger.Infof("Backup completed: %s (%s)", filename, formatSizeHuman(info.Size()))
 
-	// Cleanup: keep only the 10 most recent backup files.
 	cleanupOldBackups(backupDir, 10)
 
 	return filename, info.Size(), nil
