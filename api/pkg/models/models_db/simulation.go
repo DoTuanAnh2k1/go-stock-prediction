@@ -30,13 +30,24 @@ func (SimBot) TableName() string { return "sim_bots" }
 
 // SimSession represents a backtest or live simulation run for a bot.
 type SimSession struct {
-	ID        int64      `gorm:"primaryKey;autoIncrement" json:"id"`
-	BotID     string     `gorm:"size:50;not null;index" json:"bot_id"`
-	StartDate time.Time  `gorm:"not null" json:"start_date"`
-	EndDate   *time.Time `json:"end_date,omitempty"`
-	Status    string     `gorm:"size:20;default:'running'" json:"status"` // running, completed, paused
-	Mode      string     `gorm:"size:20;default:'backtest'" json:"mode"`  // backtest, live
-	CreatedAt time.Time  `json:"created_at"`
+	ID             int64            `gorm:"primaryKey;autoIncrement" json:"id"`
+	BotID          string           `gorm:"size:50;not null;index" json:"bot_id"`
+	StartDate      time.Time        `gorm:"not null" json:"start_date"`
+	EndDate        *time.Time       `json:"end_date,omitempty"`
+	Status         string           `gorm:"size:20;default:'running'" json:"status"` // running, completed, paused
+	Mode           string           `gorm:"size:20;default:'backtest'" json:"mode"`  // backtest, live
+	CreatedAt      time.Time        `json:"created_at"`
+	// Pre-computed KPIs — set by Python after session end
+	TotalTrades    int              `gorm:"default:0" json:"total_trades"`
+	Wins           int              `gorm:"default:0" json:"wins"`
+	Losses         int              `gorm:"default:0" json:"losses"`
+	Breakeven      int              `gorm:"default:0" json:"breakeven"`
+	TotalPnl       decimal.Decimal  `gorm:"type:decimal(20,2);default:0" json:"total_pnl"`
+	TotalReturnPct *decimal.Decimal `gorm:"type:decimal(8,4)" json:"total_return_pct,omitempty"`
+	WinRate        *decimal.Decimal `gorm:"type:decimal(5,4)" json:"win_rate,omitempty"`
+	ProfitFactor   *decimal.Decimal `gorm:"type:decimal(8,4)" json:"profit_factor,omitempty"`
+	MaxDrawdownPct *decimal.Decimal `gorm:"type:decimal(8,4)" json:"max_drawdown_pct,omitempty"`
+	KpiUpdatedAt   *time.Time       `json:"kpi_updated_at,omitempty"`
 }
 
 func (SimSession) TableName() string { return "sim_sessions" }
@@ -94,4 +105,29 @@ type SimTradeStats struct {
 	TotalPnl    float64
 	WinPnl      float64
 	LossPnl     float64
+}
+
+// LeaderboardEntry is the result of a single JOIN query for the leaderboard.
+type LeaderboardEntry struct {
+	SessionID       int64            `gorm:"column:session_id"`
+	BotID           string           `gorm:"column:bot_id"`
+	Market          string           `gorm:"column:market"`
+	Algorithm       string           `gorm:"column:algorithm"`
+	DisplayName     string           `gorm:"column:display_name"`
+	InitialCapital  decimal.Decimal  `gorm:"column:initial_capital"`
+	Currency        string           `gorm:"column:currency"`
+	StartDate       time.Time        `gorm:"column:start_date"`
+	EndDate         *time.Time       `gorm:"column:end_date"`
+	Mode            string           `gorm:"column:mode"`
+	Status          string           `gorm:"column:status"`
+	TotalTrades     int              `gorm:"column:total_trades"`
+	Wins            int              `gorm:"column:wins"`
+	Losses          int              `gorm:"column:losses"`
+	Breakeven       int              `gorm:"column:breakeven"`
+	TotalPnl        decimal.Decimal  `gorm:"column:total_pnl"`
+	TotalReturnPct  *decimal.Decimal `gorm:"column:total_return_pct"`
+	WinRate         *decimal.Decimal `gorm:"column:win_rate"`
+	ProfitFactor    *decimal.Decimal `gorm:"column:profit_factor"`
+	MaxDrawdownPct  *decimal.Decimal `gorm:"column:max_drawdown_pct"`
+	CurrentValue    *decimal.Decimal `gorm:"column:current_value"`
 }
