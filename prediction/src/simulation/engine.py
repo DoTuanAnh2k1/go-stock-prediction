@@ -10,6 +10,7 @@ import sqlalchemy
 
 from src.database.connection import session_scope
 from src.database.models import SimBot, SimSession, SimTrade, SimPortfolioSnapshot
+from src.database.repository import update_session_kpis
 from src.simulation.bot import TradingBot, BotConfig
 from src.utils.logger import get_logger
 
@@ -299,6 +300,12 @@ class SimulationEngine:
                 s.status = status
                 s.end_date = end_date
                 session.commit()
+        # Compute and store pre-aggregated KPI metrics whenever a session completes.
+        if status == "completed":
+            try:
+                update_session_kpis(session_id)
+            except Exception as kpi_exc:
+                log.warning("sim.kpi.finalize_failed", session_id=session_id, error=str(kpi_exc))
 
     def run_all_bots_backtest(self, start_date: date, end_date: date) -> int:
         """Backtest all active bots sequentially. Returns count of completed."""
@@ -438,6 +445,13 @@ class SimulationEngine:
                     session.merge(db_snap)
                     session.commit()
 
+                # Refresh KPI columns after each live step so leaderboard/monitoring
+                # queries can read directly from sim_sessions without aggregating.
+                try:
+                    update_session_kpis(session_id)
+                except Exception as kpi_exc:
+                    log.warning("sim.kpi.live_step_failed", bot_id=bot_id, session_id=session_id, error=str(kpi_exc))
+
             except Exception as exc:
                 log.error("sim.live_step.bot_error", bot_id=bot_id, error=str(exc))
 
@@ -493,6 +507,7 @@ class SimulationEngine:
         count = 0
         for bot_id in bot_ids:
             try:
+                stale_ids: list[int] = []
                 with session_scope() as session:
                     stale = session.query(SimSession).filter(
                         SimSession.bot_id == bot_id,
@@ -500,9 +515,17 @@ class SimulationEngine:
                         SimSession.status.in_(["running", "paused"]),
                     ).all()
                     for s in stale:
+                        stale_ids.append(s.id)
                         s.status = "completed"
                         s.end_date = today
                     session.commit()
+
+                # Compute KPIs for each freshly-closed session
+                for sid in stale_ids:
+                    try:
+                        update_session_kpis(sid)
+                    except Exception as kpi_exc:
+                        log.warning("sim.kpi.reset_failed", session_id=sid, error=str(kpi_exc))
 
                 with session_scope() as session:
                     new_sess = SimSession(

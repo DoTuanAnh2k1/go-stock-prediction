@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import Optional
 
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 
 from src.database.connection import get_session, session_scope
 from src.database.models import (
@@ -932,3 +933,135 @@ def create_sync_log(
                 error_message=error_message or None,
             )
         )
+
+
+# ---------------------------------------------------------------------------
+# Simulation KPI aggregation
+# ---------------------------------------------------------------------------
+
+def update_session_kpis(session_id: int) -> None:
+    """Compute and store pre-aggregated KPI metrics in sim_sessions.
+
+    Reads sim_trades (SELL rows) and sim_portfolio_snapshots for the given
+    session_id, computes trade stats + max drawdown, then UPDATEs sim_sessions
+    in a single statement. Safe to call multiple times (idempotent).
+
+    Uses datetime.now() — container TZ is Asia/Ho_Chi_Minh (ICT).
+    """
+    with session_scope() as session:
+        # ── 1. Pull initial_capital from sim_bots via sim_sessions ──────────
+        capital_row = session.execute(
+            text("""
+                SELECT b.initial_capital
+                FROM sim_sessions s
+                JOIN sim_bots b ON b.id = s.bot_id
+                WHERE s.id = :sid
+            """),
+            {"sid": session_id},
+        ).fetchone()
+
+        if capital_row is None:
+            log.warning("sim.kpi.session_not_found", session_id=session_id)
+            return
+
+        initial_capital = float(capital_row[0]) if capital_row[0] else 0.0
+
+        # ── 2. Trade stats from SELL rows ────────────────────────────────────
+        trade_row = session.execute(
+            text("""
+                SELECT
+                    COUNT(*)                                                AS total_trades,
+                    COALESCE(SUM(CASE WHEN pnl > 0  THEN 1 ELSE 0 END), 0) AS wins,
+                    COALESCE(SUM(CASE WHEN pnl < 0  THEN 1 ELSE 0 END), 0) AS losses,
+                    COALESCE(SUM(CASE WHEN pnl = 0 OR pnl IS NULL THEN 1 ELSE 0 END), 0) AS breakeven,
+                    COALESCE(SUM(pnl), 0)                                  AS total_pnl,
+                    COALESCE(SUM(CASE WHEN pnl > 0 THEN pnl ELSE 0 END), 0) AS gross_win,
+                    COALESCE(SUM(CASE WHEN pnl < 0 THEN ABS(pnl) ELSE 0 END), 0) AS gross_loss
+                FROM sim_trades
+                WHERE session_id = :sid
+                  AND action = 'SELL'
+            """),
+            {"sid": session_id},
+        ).fetchone()
+
+        total_trades = int(trade_row[0]) if trade_row else 0
+        wins         = int(trade_row[1]) if trade_row else 0
+        losses       = int(trade_row[2]) if trade_row else 0
+        breakeven    = int(trade_row[3]) if trade_row else 0
+        total_pnl    = float(trade_row[4]) if trade_row else 0.0
+        gross_win    = float(trade_row[5]) if trade_row else 0.0
+        gross_loss   = float(trade_row[6]) if trade_row else 0.0
+
+        win_rate: Optional[float] = (wins / total_trades) if total_trades > 0 else None
+        profit_factor: Optional[float] = (gross_win / gross_loss) if gross_loss > 0 else None
+        total_return_pct: Optional[float] = (
+            (total_pnl / initial_capital * 100.0) if initial_capital > 0 else None
+        )
+
+        # ── 3. Max drawdown from portfolio snapshots (peak-to-trough on total_value) ─
+        snap_rows = session.execute(
+            text("""
+                SELECT total_value
+                FROM sim_portfolio_snapshots
+                WHERE session_id = :sid
+                ORDER BY snapshot_date ASC
+            """),
+            {"sid": session_id},
+        ).fetchall()
+
+        max_drawdown_pct: Optional[float] = None
+        if snap_rows:
+            peak = float(snap_rows[0][0])
+            max_dd = 0.0
+            for row in snap_rows:
+                val = float(row[0])
+                if val > peak:
+                    peak = val
+                if peak > 0:
+                    dd = (peak - val) / peak * 100.0
+                    if dd > max_dd:
+                        max_dd = dd
+            max_drawdown_pct = max_dd
+
+        # ── 4. UPDATE sim_sessions with all computed KPIs ────────────────────
+        session.execute(
+            text("""
+                UPDATE sim_sessions
+                SET
+                    total_trades     = :total_trades,
+                    wins             = :wins,
+                    losses           = :losses,
+                    breakeven        = :breakeven,
+                    total_pnl        = :total_pnl,
+                    total_return_pct = :total_return_pct,
+                    win_rate         = :win_rate,
+                    profit_factor    = :profit_factor,
+                    max_drawdown_pct = :max_drawdown_pct,
+                    kpi_updated_at   = :now
+                WHERE id = :sid
+            """),
+            {
+                "total_trades":     total_trades,
+                "wins":             wins,
+                "losses":           losses,
+                "breakeven":        breakeven,
+                "total_pnl":        round(total_pnl, 2),
+                "total_return_pct": round(total_return_pct, 4) if total_return_pct is not None else None,
+                "win_rate":         round(win_rate, 4) if win_rate is not None else None,
+                "profit_factor":    round(profit_factor, 4) if profit_factor is not None else None,
+                "max_drawdown_pct": round(max_drawdown_pct, 4) if max_drawdown_pct is not None else None,
+                "now":              datetime.now(),
+                "sid":              session_id,
+            },
+        )
+
+    log.debug(
+        "sim.kpi.updated",
+        session_id=session_id,
+        total_trades=total_trades,
+        wins=wins,
+        losses=losses,
+        total_pnl=round(total_pnl, 2),
+        win_rate=round(win_rate, 4) if win_rate is not None else None,
+        max_drawdown_pct=round(max_drawdown_pct, 4) if max_drawdown_pct is not None else None,
+    )
