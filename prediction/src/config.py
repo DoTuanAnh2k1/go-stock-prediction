@@ -8,14 +8,17 @@ class Settings(BaseSettings):
     # gRPC
     grpc_server_port: int = 8119
 
-    # Database
-    db_driver: str = "mysql"
+    # Database — PostgreSQL
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    postgres_user: str = "postgres"
+    postgres_password: str = "123"
+    postgres_db: str = "go_stock_prediction"
+    postgres_debug: bool = False
+
+    # Deprecated MySQL vars — kept so docker-compose .env files with MYSQL_* don't error
     mysql_host: str = "localhost"
     mysql_port: int = 3306
-    mysql_user: str = "root"
-    mysql_password: str = "123"
-    mysql_db_name: str = "go_stock_prediction"
-    mysql_debug: bool = False
 
     # Logging
     log_level: str = "INFO"

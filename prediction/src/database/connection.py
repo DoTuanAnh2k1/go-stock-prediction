@@ -34,23 +34,23 @@ def init_db() -> None:
     cfg = get_settings()
 
     connection_string = (
-        f"mysql+pymysql://{cfg.mysql_user}:{cfg.mysql_password}"
-        f"@{cfg.mysql_host}:{cfg.mysql_port}/{cfg.mysql_db_name}"
-        f"?charset=utf8mb4"
+        f"postgresql+psycopg2://{cfg.postgres_user}:{cfg.postgres_password}"
+        f"@{cfg.postgres_host}:{cfg.postgres_port}/{cfg.postgres_db}"
     )
 
     _engine = create_engine(
         connection_string,
-        echo=cfg.mysql_debug,
+        echo=cfg.postgres_debug,
         pool_pre_ping=True,
         pool_size=10,
         max_overflow=20,
         pool_recycle=3600,
+        connect_args={"options": "-c TimeZone=Asia/Ho_Chi_Minh"},
     )
 
     _SessionLocal = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
 
-    log.info("database.connected", host=cfg.mysql_host, db=cfg.mysql_db_name)
+    log.info("database.connected", host=cfg.postgres_host, db=cfg.postgres_db)
 
 
 def get_session() -> Session:
