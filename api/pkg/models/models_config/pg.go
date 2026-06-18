@@ -7,4 +7,5 @@ type PostgresConfig struct {
 	Password string
 	DbName   string
 	Schema   string
+	Debug    bool
 }

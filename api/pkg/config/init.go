@@ -36,6 +36,14 @@ func InitConfig(filenames ...string) {
 				Name:     env.GetEnv("MYSQL_DB_NAME", "go_stock_prediction"),
 				Debug:    env.GetEnv("MYSQL_DEBUG", "false") == "true",
 			},
+			Pgsql: models_config.PostgresConfig{
+				Host:     env.GetEnv("POSTGRES_HOST", "localhost"),
+				Port:     env.GetEnv("POSTGRES_PORT", "5432"),
+				User:     env.GetEnv("POSTGRES_USER", "postgres"),
+				Password: env.GetEnv("POSTGRES_PASSWORD", "123"),
+				DbName:   env.GetEnv("POSTGRES_DB", "go_stock_prediction"),
+				Debug:    env.GetEnv("POSTGRES_DEBUG", "false") == "true",
+			},
 		},
 		Log: models_config.LogConfig{
 			Level:   env.GetEnv("LOG_LEVEL", "DEBUG"),
