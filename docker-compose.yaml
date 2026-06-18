@@ -1,24 +1,24 @@
 services:
-  # Database
+  # Database — TimescaleDB (PostgreSQL 16 with time-series extensions)
   db:
-    image: mysql:8.0
-    container_name: mysql_db
-    command: --default-authentication-plugin=mysql_native_password
+    image: timescale/timescaledb:latest-pg16
+    container_name: timescaledb
     volumes:
-      - db_data:/var/lib/mysql
-      - ./database.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    restart: always
+      - postgres_data:/var/lib/postgresql/data
+      - ./database.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: go_stock_prediction
-      MYSQL_USER: dbuser
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123}
+      POSTGRES_DB: ${POSTGRES_DB:-go_stock_prediction}
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d go_stock_prediction"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 40s
+    ports:
+      - "5432:5432"
     networks:
       - app-network
 
@@ -34,13 +34,13 @@ services:
     restart: unless-stopped
     environment:
       GRPC_SERVER_PORT: "8119"
-      DB_DRIVER: mysql
-      MYSQL_HOST: db
-      MYSQL_PORT: 3306
-      MYSQL_USER: root
-      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DB_NAME: go_stock_prediction
-      MYSQL_DEBUG: "true"
+      DB_DRIVER: postgresql
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123}
+      POSTGRES_DB: go_stock_prediction
+      POSTGRES_DEBUG: "true"
       LOG_LEVEL: DEBUG
       ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-https://localhost}"
     networks:
@@ -58,10 +58,10 @@ services:
     restart: unless-stopped
     environment:
       DB_HOST: db
-      DB_PORT: "3306"
-      DB_NAME: ${MYSQL_DB_NAME:-go_stock_prediction}
-      DB_USER: root
-      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      DB_PORT: "5432"
+      DB_NAME: go_stock_prediction
+      DB_USER: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-123}
       JWT_SECRET: ${JWT_SECRET}
       GRPC_PORT: "8120"
     expose:
@@ -86,13 +86,13 @@ services:
     environment:
       SERVER_PORT: "8118"
       GRPC_TARGET: "prediction:8119"
-      DB_DRIVER: mysql
-      MYSQL_HOST: db
-      MYSQL_PORT: 3306
-      MYSQL_USER: root
-      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DB_NAME: go_stock_prediction
-      MYSQL_DEBUG: "${MYSQL_DEBUG:-false}"
+      DB_DRIVER: postgresql
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123}
+      POSTGRES_DB: go_stock_prediction
+      POSTGRES_DEBUG: "${POSTGRES_DEBUG:-false}"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
       DB_LOG_LEVEL: "${DB_LOG_LEVEL:-WARN}"
       API_KEY: ""
@@ -139,22 +139,18 @@ services:
     networks:
       - app-network
 
-  # phpMyAdmin
-  phpmyadmin:
+  # pgAdmin — PostgreSQL web administration UI
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
     depends_on:
       - db
-    image: phpmyadmin/phpmyadmin:latest
-    container_name: phpmyadmin_app
-    restart: always
+    restart: unless-stopped
     ports:
       - "127.0.0.1:8081:80"
     environment:
-      PMA_HOST: db
-      PMA_PORT: 3306
-      PMA_USER: root
-      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      UPLOAD_LIMIT: 100M
+      PGADMIN_DEFAULT_EMAIL: admin@local.dev
+      PGADMIN_DEFAULT_PASSWORD: admin
     networks:
       - app-network
 
@@ -163,5 +159,5 @@ networks:
     driver: bridge
 
 volumes:
-  db_data:
+  postgres_data:
   backup_data:
