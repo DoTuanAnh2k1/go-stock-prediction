@@ -326,7 +326,7 @@ CREATE TABLE IF NOT EXISTS crypto_prices (
     symbol       VARCHAR(10)    NOT NULL,
     close_price  NUMERIC(20,2)  NOT NULL,
     market_cap   NUMERIC(30,2),
-    volume_24h   NUMERIC(30,2),
+    volume24h    NUMERIC(30,2),
     trading_date TIMESTAMP      NOT NULL,
     currency     VARCHAR(3)     NOT NULL DEFAULT 'USD',
     created_at   TIMESTAMP      NOT NULL DEFAULT NOW(),

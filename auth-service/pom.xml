@@ -70,7 +70,11 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
         </dependency>
-        <!-- flyway-core supports PostgreSQL natively; no extra module needed -->
+        <!-- Flyway 10.x tách hỗ trợ PostgreSQL ra module riêng; bắt buộc có để nhận diện PG16 -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
 
         <!-- Lombok -->
         <dependency>
