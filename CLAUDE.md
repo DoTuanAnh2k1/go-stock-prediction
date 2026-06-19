@@ -92,6 +92,7 @@ api/pkg/server/api_backup.go                # GET /api/backups, POST /api/trigge
 api/pkg/server/backup_scheduler.go         # StartBackupScheduler(store)/StopBackupScheduler() — CronManager poll DB mỗi 60s, seed dòng daily_backup (insert-if-not-exists, mặc định 0 0 3 * * *)
 api/pkg/server/api_simulation.go            # GET /api/simulation/leaderboard, bots, trades, chart; PUT config; POST toggle/run
 api/pkg/server/api_monitoring.go            # GET /api/monitoring/overview — monitoring overview: crawl freshness, prediction activity per algo per market, bot win/loss (JWT required, cache 30s)
+api/pkg/server/api_pipeline_reports.go      # GET /api/pipeline-reports — danh sách báo cáo pipeline (AuthRequired); query ?pipeline=<key>&limit=<n>
 api/pkg/server/middleware_jwt.go            # JWTMiddleware (non-blocking, inject claims vào context), getClaims(), requireAuth(), requireAdmin(), AuthRequired(), MarketRequired("KEY"), AdminRequired()
 api/pkg/server/helper.go                    # requireGRPCClient(), ResponseError(), ResponseSuccess() và các helper
 api/pkg/service/predict/registry/registry.go   # AlgorithmDef struct (metadata only — không có Factory), Register(), All()
@@ -100,17 +101,20 @@ api/pkg/store/repository/repository.go     # Interface DatabaseStore (composite)
 api/pkg/store/repository/direction_accuracy.go # DirectionAccuracyStore interface — GetDirectionAccuracy(market)
 api/pkg/store/repository/user.go           # UserStore interface — CreateUser, GetUserByUsername, GetUserByID, GetAllUsers, DeleteUser, AdminExists
 api/pkg/store/repository/monitoring.go     # MonitoringStore interface — GetMarketCrawlStats(market), GetMarketPredStats(market)
+api/pkg/store/repository/pipeline_report.go # PipelineReportStore interface — GetPipelineReports(pipelineKey, limit), GetDistinctPipelineKeys(), DeletePipelineReportsBefore(cutoff)
 api/pkg/store/postgres/                     # Triển khai PostgreSQL/TimescaleDB dùng GORM
 api/pkg/store/postgres/user.go              # PostgreSQL implementation của UserStore
 api/pkg/store/postgres/cron_schedule.go     # PostgreSQL implementation của CronScheduleStore — GetAllCronSchedules, GetCronScheduleByKey, UpsertCronSchedule
 api/pkg/store/postgres/direction_accuracy.go # PostgreSQL implementation của DirectionAccuracyStore — raw SQL query GROUP BY algorithm trên 4 prediction tables
 api/pkg/store/postgres/monitoring.go        # PostgreSQL implementation của MonitoringStore — raw SQL crawl freshness (daily+intraday tables) và per-algo pred counts per market
-api/pkg/models/models_db/                   # GORM struct: GoldPrice, GoldPrediction, NasdaqPrice, Sp500Price, CryptoPrice, intraday prices, SyncLog, TrainingLog, TrainingMetrics, User, CronSchedule
+api/pkg/store/postgres/pipeline_report.go   # PostgreSQL implementation của PipelineReportStore
+api/pkg/models/models_db/                   # GORM struct: GoldPrice, GoldPrediction, NasdaqPrice, Sp500Price, CryptoPrice, intraday prices, SyncLog, TrainingLog, TrainingMetrics, User, CronSchedule, PipelineReport
 api/pkg/models/models_db/cron_schedule.go   # CronSchedule GORM struct (JobKey, JobName, CronExpression, Enabled, UpdatedAt)
 api/pkg/models/models_db/user.go            # User GORM struct (Username, PasswordHash, Role, FullName, Email, Phone — FullName/Email/Phone nullable)
 api/pkg/models/models_db/gold_price.go      # GoldPrice GORM struct
 api/pkg/models/models_db/training_log.go    # TrainingLog GORM struct
 api/pkg/models/models_db/training_metrics.go # TrainingMetrics struct
+api/pkg/models/models_db/pipeline_report.go  # PipelineReport GORM struct (ID, PipelineKey, Market, Status, StartedAt, FinishedAt, DurationMs, CrawledCount, PredictionsCount, Trained bool, Steps JSONB, Error, CreatedAt)
 # Tất cả 4 prediction structs (GoldPrediction, NasdaqPrediction, Sp500Prediction, CryptoPrediction)
 # đều có trường DirectionCorrect *bool (nullable, cột direction_correct trong DB)
 api/pkg/models/models_api/                  # DTO cho JSON response — bao gồm DirectionAccuracyRow{Algorithm, Total, Correct}, MarketCrawlStats, AlgoPredStats
@@ -125,6 +129,7 @@ frontend/src/components/LoginModal.tsx  # Login modal component — gọi POST /
 frontend/src/pages/Users.tsx            # Trang quản lý user — chỉ hiển thị với role admin; role badges, disable delete cho super_admin
 frontend/src/pages/MarketGroups.tsx     # Trang quản lý market groups — chỉ hiển thị với role admin; route /admin/market-groups
 frontend/src/pages/Monitoring.tsx       # Trang Data Pipeline — gọi GET /api/monitoring/overview; hiển thị 4 market cards (crawl freshness, per-algo prediction stats) + bots summary table + bots full table (sortable); route /monitoring, sidebar "Giám sát dữ liệu" (VI) / "Data Pipeline" (EN)
+frontend/src/pages/Settings.tsx         # Trang cài đặt — tab "Lịch cron" (GET/PUT /api/schedules) và tab "Báo cáo" (GET /api/pipeline-reports, lọc theo pipeline_key)
 ```
 
 ### Python Prediction Service
@@ -392,7 +397,8 @@ Các bước bắt buộc:
 - **Engine:** TimescaleDB (PostgreSQL 16) — image `timescale/timescaledb:latest-pg16`, container `timescaledb`, port nội bộ 5432
 - **ORM:** GORM v2 với GORM postgres driver (`api/pkg/store/postgres/`)
 - **Auto-migrate:** Đã tắt — schema do `database.sql` quản lý (vì hypertable composite PK xung đột với AutoMigrate). Schema init tự động khi container `db` lần đầu lên qua mount `/docker-entrypoint-initdb.d/01-schema.sql`.
-- **Tables chính:** `sync_logs`, `gold_prices`, `gold_predictions`, `nasdaq_prices`, `nasdaq_predictions`, `sp500_prices`, `sp500_predictions`, `crypto_prices`, `crypto_predictions`, `training_logs`, `training_metrics`, `users`, `cron_schedules`, `market_groups`, `market_group_markets`, `user_market_groups`
+- **Tables chính:** `sync_logs`, `gold_prices`, `gold_predictions`, `nasdaq_prices`, `nasdaq_predictions`, `sp500_prices`, `sp500_predictions`, `crypto_prices`, `crypto_predictions`, `training_logs`, `training_metrics`, `users`, `cron_schedules`, `market_groups`, `market_group_markets`, `user_market_groups`, `pipeline_reports`
+- **`pipeline_reports` (KHÔNG phải hypertable):** Lưu báo cáo mỗi lần pipeline chạy. Cột: `id` BIGSERIAL PK, `pipeline_key` (crawler_gold/crawler_nasdaq/crawler_sp500/crawler_crypto), `market`, `status` (success/partial/failed/skipped), `started_at`, `finished_at`, `duration_ms` BIGINT, `crawled_count` INT, `predictions_count` INT, `trained` BOOLEAN, `steps` JSONB array `[{label, status, detail}]`, `error` TEXT nullable, `created_at` TIMESTAMP. Retention: sau mỗi lần ghi, pipeline gọi `delete_old_pipeline_reports(7)` trong `repository.py` để xóa row cũ hơn 7 ngày. Schema khai báo trong `database.sql`.
 - **Hypertables (TimescaleDB):** `gold_prices`, `nasdaq_prices`, `sp500_prices`, `crypto_prices`, `*_intraday_prices` (theo time column), `gold_predictions`, `nasdaq_predictions`, `sp500_predictions`, `crypto_predictions` (theo `prediction_date`), `sim_trades` (theo `trade_date`), `sim_portfolio_snapshots` (theo `snapshot_date`), `sync_logs`, `training_logs` (theo `created_at`). Tất cả hypertable có **composite PK** (id + time column).
 - **RBAC tables:** `market_groups`, `market_group_markets`, `user_market_groups` — quản lý bởi Java Auth Service qua Flyway (không trong GORM auto-migrate). Bảng `users` có thêm cột nullable `full_name`, `email`, `phone` (thêm qua Flyway V2). Auth Service dùng dependency `flyway-database-postgresql` (Flyway 10.x) để nhận diện PG16.
 - **Schema đầy đủ:** `database.sql` ở root (PostgreSQL syntax: BIGSERIAL, NUMERIC, TIMESTAMP, NOW())
@@ -437,6 +443,8 @@ Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`
 1. Crawl dữ liệu mới
 2. Tăng counter per-market; mỗi 10 lần crawl → trigger `train_for_market()`
 3. Chạy `run_for_market()` để sinh dự đoán mới
+4. Ghi một row vào bảng `pipeline_reports` (status, steps, crawled_count, predictions_count, duration_ms, v.v.) qua `repository.py`
+5. Chạy `delete_old_pipeline_reports(7)` để xóa báo cáo cũ hơn 7 ngày (retention tự động)
 
 ## Ports
 
@@ -586,6 +594,12 @@ Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`
 |--------|------|---------|
 | `GET` | `/api/schedules` | Danh sách lịch tác vụ — yêu cầu JWT; trả `[{"job_key":"...","job_name":"...","cron_expression":"...","enabled":true,"updated_at":"..."}]` |
 | `PUT` | `/api/schedules/{key}` | Cập nhật lịch tác vụ — yêu cầu JWT; body: `{"cron_expression":"0 0 12 * * *","enabled":true}`; validate cron expression trước khi lưu |
+
+### Pipeline Reports
+
+| Method | Path | Ghi chú |
+|--------|------|---------|
+| `GET` | `/api/pipeline-reports` | Danh sách báo cáo pipeline — yêu cầu JWT (AuthRequired); query `?pipeline=<key>&limit=<n>` (default 50, max 200); filter theo `pipeline_key`; trả `{data:[{id, pipeline_key, market, status, started_at, finished_at, duration_ms, crawled_count, predictions_count, trained, steps:[{label,status,detail}], error}], pipelines:[distinct keys]}`; sort `created_at DESC` |
 
 ### Backup
 

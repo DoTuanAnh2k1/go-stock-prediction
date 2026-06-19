@@ -33,6 +33,7 @@ type DatabaseStore interface {
 	DirectionAccuracyStore
 	MonitoringStore
 	SessionStatsStore
+	PipelineReportStore
 }
 
 // CronScheduleStore - interface cho cron schedule operations

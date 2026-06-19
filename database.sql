@@ -862,5 +862,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_monitoring_crawl_stats_market
     ON monitoring_crawl_stats(market);
 
 -- ============================================================
+-- Pipeline Reports — stores per-run metadata written by the Python prediction service
+-- ============================================================
+CREATE TABLE IF NOT EXISTS pipeline_reports (
+    id                BIGSERIAL       PRIMARY KEY,
+    pipeline_key      VARCHAR(50)     NOT NULL,
+    market            VARCHAR(20)     NOT NULL,
+    status            VARCHAR(20)     NOT NULL,
+    started_at        TIMESTAMP       NOT NULL,
+    finished_at       TIMESTAMP       NULL,
+    duration_ms       BIGINT          NOT NULL DEFAULT 0,
+    crawled_count     INTEGER         NOT NULL DEFAULT 0,
+    predictions_count INTEGER         NOT NULL DEFAULT 0,
+    trained           BOOLEAN         NOT NULL DEFAULT FALSE,
+    steps             JSONB,
+    error             TEXT,
+    created_at        TIMESTAMP       NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pipeline_reports_key
+    ON pipeline_reports(pipeline_key, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_pipeline_reports_created
+    ON pipeline_reports(created_at);
+
+-- ============================================================
 -- END OF SCHEMA
 -- ============================================================

@@ -390,7 +390,7 @@ export default function SimulationBot() {
     }
     setTradesLoading(true);
     apiFetch(
-      `/api/simulation/bots/${encodeURIComponent(botId)}/trades?page=${tradePage}&limit=${TRADE_LIMIT}&session_id=${sessionId}`
+      `/api/simulation/bots/${encodeURIComponent(botId)}/trades?page=${tradePage}&limit=${TRADE_LIMIT}&session_id=${sessionId}&exclude_hold=${hideHold}`
     )
       .then((d: TradesResponse) => {
         setTrades(Array.isArray(d.data) ? d.data : []);
@@ -401,7 +401,7 @@ export default function SimulationBot() {
         setTrades([]);
         setTradesLoading(false);
       });
-  }, [botId, tradePage, chart, liveChart, tradeSession]);
+  }, [botId, tradePage, chart, liveChart, tradeSession, hideHold]);
 
   useEffect(() => {
     if (!botId) return;
@@ -795,7 +795,7 @@ export default function SimulationBot() {
             color: hideHold ? 'var(--accent, var(--text-1))' : 'var(--text-3)',
             border: '1px solid ' + (hideHold ? 'var(--accent, var(--border))' : 'var(--border)'),
           }}
-          onClick={() => setHideHold(h => !h)}
+          onClick={() => { setHideHold(h => !h); setTradePage(1); }}
           title="Ẩn tín hiệu HOLD (không phát sinh giao dịch)"
         >
           {hideHold ? 'Ẩn HOLD' : 'Hiện HOLD'}

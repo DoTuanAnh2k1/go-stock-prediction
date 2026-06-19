@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Panel, Icon } from '../components/ui';
+import { Panel, Icon, Seg } from '../components/ui';
 import { useLanguage } from '../context/LangContext';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface SessionWindow {
+  offset: number;
   start: string;
   end: string;
   is_open: boolean;
@@ -35,7 +36,9 @@ interface BotDetail {
 
 interface SessionStatsData {
   market: string;
+  period: string;
   session: SessionWindow;
+  available: SessionWindow[];
   direction_accuracy: DirAccRow[];
   bot_trades: BotDetail[];
 }
@@ -49,12 +52,25 @@ const ALGO_DISPLAY: Record<string, string> = {
 };
 function algoName(key: string) { return ALGO_DISPLAY[key.toLowerCase()] || key; }
 
-function fmtTime(iso: string) {
+/** dd/MM HH:mm */
+function fmtDateTime(iso: string): string {
   try {
-    return new Date(iso).toLocaleString('vi-VN', {
-      hour: '2-digit', minute: '2-digit',
-      day: '2-digit', month: '2-digit', year: 'numeric',
-    });
+    const d = new Date(iso);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mi = String(d.getMinutes()).padStart(2, '0');
+    return `${dd}/${mm} ${hh}:${mi}`;
+  } catch { return iso; }
+}
+
+/** dd/MM */
+function fmtDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return `${dd}/${mm}`;
   } catch { return iso; }
 }
 
@@ -74,6 +90,15 @@ async function apiFetch(path: string) {
   return res.json();
 }
 
+function sessionLabel(w: SessionWindow, period: string): string {
+  if (period === 'week') {
+    const suffix = w.offset === 0 ? ' (hiện tại)' : '';
+    return `Tuần ${fmtDate(w.start)} → ${fmtDate(w.end)}${suffix}`;
+  }
+  const suffix = w.offset === 0 && w.is_open ? ' (đang mở)' : '';
+  return `${fmtDateTime(w.start)} → ${fmtDateTime(w.end)}${suffix}`;
+}
+
 // ── Sort key type ─────────────────────────────────────────────────────────────
 type SortKey = 'display_name' | 'algorithm' | 'session_pnl' | 'current_value' | 'total_return_pct' | 'trades' | 'win_rate';
 
@@ -84,6 +109,9 @@ export default function SessionStats() {
   const [data, setData] = useState<SessionStatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const [period, setPeriod] = useState<'session' | 'week'>('session');
+  const [offset, setOffset] = useState(0);
 
   const [sortKey, setSortKey] = useState<SortKey>('session_pnl');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -97,22 +125,27 @@ export default function SessionStats() {
     setPage(1);
   }
 
+  function handlePeriodChange(v: string) {
+    setPeriod(v as 'session' | 'week');
+    setOffset(0);
+  }
+
   useEffect(() => {
     if (!marketKey) return;
     setPage(1);
     setSearch('');
     setLoading(true);
     setError('');
-    apiFetch(`/api/markets/${marketKey}/session-stats`)
+    apiFetch(`/api/markets/${marketKey}/session-stats?period=${period}&offset=${offset}`)
       .then(setData)
       .catch(() => setError('Lỗi tải dữ liệu'))
       .finally(() => setLoading(false));
-  }, [marketKey]);
+  }, [marketKey, period, offset]);
 
   if (loading) return <div className="page-loading">{t.common.loading}</div>;
   if (error || !data) return <div className="page-error">{error || t.common.noData}</div>;
 
-  const { session, direction_accuracy, bot_trades } = data;
+  const { session, available, direction_accuracy, bot_trades } = data;
   const totalDir = direction_accuracy.reduce((s, r) => s + r.total, 0);
   const totalCorrect = direction_accuracy.reduce((s, r) => s + r.correct, 0);
   const overallAcc = totalDir > 0 ? totalCorrect / totalDir : null;
@@ -139,8 +172,38 @@ export default function SessionStats() {
   const totalPages = Math.ceil(sortedBots.length / PAGE_SIZE);
   const pagedBots = sortedBots.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  // Build banner label for selected session
+  const bannerLabel = period === 'week'
+    ? `Tuần: ${fmtDate(session.start)} → ${fmtDate(session.end)}`
+    : `${fmtDateTime(session.start)} → ${fmtDateTime(session.end)}`;
+
   return (
     <div className="session-stats">
+      {/* Period + offset controls */}
+      <div className="session-controls">
+        <Seg
+          options={[
+            { value: 'session', label: 'Theo phiên' },
+            { value: 'week', label: 'Theo tuần' },
+          ]}
+          value={period}
+          onChange={handlePeriodChange}
+        />
+        {available && available.length > 0 && (
+          <select
+            className="session-select"
+            value={offset}
+            onChange={e => setOffset(Number(e.target.value))}
+          >
+            {available.map(w => (
+              <option key={w.offset} value={w.offset}>
+                {sessionLabel(w, period)}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
       {/* Session banner */}
       <div className={'session-banner' + (session.is_open ? ' open' : ' closed')}>
         <Icon name={session.is_open ? 'activity' : 'clock'} size={16} />
@@ -148,7 +211,7 @@ export default function SessionStats() {
           {session.is_open ? 'Đang mở' : 'Đã đóng'}
         </span>
         <span className="session-window">
-          {fmtTime(session.start)} → {fmtTime(session.end)}
+          {bannerLabel}
         </span>
       </div>
 
@@ -248,7 +311,7 @@ export default function SessionStats() {
                         ['algorithm', 'Thuật toán', 100],
                         ['current_value', 'Tài khoản', 140],
                         ['session_pnl', 'PnL phiên', 110],
-                        ['total_return_pct', 'Tổng lợi nhuận', 160],
+                        ['total_return_pct', 'Lãi/lỗ tích lũy', 160],
                         ['trades', 'Lệnh', 70],
                         ['wins_col', 'Thắng', 70],
                         ['losses_col', 'Thua', 70],

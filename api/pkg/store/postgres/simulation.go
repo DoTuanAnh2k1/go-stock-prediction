@@ -118,11 +118,14 @@ func (c *Client) CreateSimTrade(t *modelsdb.SimTrade) error {
 
 // GetSimTrades returns paginated trades for a session, ordered by trade_date ASC.
 // It also returns the total count (before pagination).
-func (c *Client) GetSimTrades(sessionID int64, offset, limit int) ([]modelsdb.SimTrade, int64, error) {
+func (c *Client) GetSimTrades(sessionID int64, offset, limit int, excludeHold bool) ([]modelsdb.SimTrade, int64, error) {
 	var trades []modelsdb.SimTrade
 	var total int64
 
 	query := c.Db.Model(&modelsdb.SimTrade{}).Where("session_id = ?", sessionID)
+	if excludeHold {
+		query = query.Where("action <> ?", "HOLD")
+	}
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

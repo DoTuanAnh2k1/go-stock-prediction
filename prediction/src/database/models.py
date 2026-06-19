@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 
 from src.database.connection import Base
 
@@ -391,5 +392,24 @@ class GoldIntradayPrice(Base):
     currency = Column(String(3), nullable=False)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class PipelineReport(Base):
+    """One row per pipeline run — records outcome of crawl→train→predict pipeline."""
+    __tablename__ = "pipeline_reports"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    pipeline_key = Column(String(50), nullable=False)
+    market = Column(String(20), nullable=False)
+    status = Column(String(20), nullable=False)          # success | partial | failed | skipped
+    started_at = Column(DateTime, nullable=False)
+    finished_at = Column(DateTime, nullable=True)
+    duration_ms = Column(BigInteger, nullable=True)
+    crawled_count = Column(Integer, nullable=False, default=0)
+    predictions_count = Column(Integer, nullable=False, default=0)
+    trained = Column(Boolean, nullable=False, default=False)
+    steps = Column(JSONB, nullable=True)                 # list[{label, status, detail}]
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.now)
 
 

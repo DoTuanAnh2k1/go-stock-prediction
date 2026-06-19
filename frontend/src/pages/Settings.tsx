@@ -1141,25 +1141,92 @@ function BackupPanel() {
   );
 }
 
-// ── Past report detail modal ───────────────────────────────────────────────────
-function PastReportDetailModal({ report, onClose }: { report: PipelineReport; onClose: () => void }) {
-  const logRef = useRef<HTMLDivElement>(null);
+// ── Server pipeline report types ──────────────────────────────────────────────
+interface ServerPipelineReport {
+  id: number;
+  pipeline_key: string;
+  market: string;
+  status: 'success' | 'partial' | 'failed' | 'skipped';
+  started_at: string;
+  finished_at: string;
+  duration_ms: number;
+  crawled_count: number;
+  predictions_count: number;
+  trained: boolean;
+  steps: { label: string; status: string; detail?: string }[];
+  error: string;
+}
 
-  const fmtDuration = (ms: number) => {
-    if (ms < 1000) return ms + 'ms';
-    if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
-    return Math.floor(ms / 60000) + 'm ' + Math.floor((ms % 60000) / 1000) + 's';
+// ── Helpers shared by server report components ─────────────────────────────────
+function _fmtTs(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const dd = ('0' + d.getDate()).slice(-2);
+    const mm = ('0' + (d.getMonth() + 1)).slice(-2);
+    const hh = ('0' + d.getHours()).slice(-2);
+    const mi = ('0' + d.getMinutes()).slice(-2);
+    return `${dd}/${mm} ${hh}:${mi}`;
+  } catch { return iso.slice(0, 16); }
+}
+
+function _fmtDuration(ms: number): string {
+  if (!ms) return '';
+  if (ms < 1000) return ms + 'ms';
+  if (ms < 60000) return (ms / 1000).toFixed(0) + 's';
+  return Math.floor(ms / 60000) + 'm' + Math.floor((ms % 60000) / 1000) + 's';
+}
+
+const PIPELINE_LABEL: Record<string, string> = {
+  crawler_gold:   'Gold',
+  crawler_nasdaq: 'NASDAQ',
+  crawler_sp500:  'S&P 500',
+  crawler_crypto: 'Crypto',
+};
+
+function _pipelineLabel(key: string): string {
+  return PIPELINE_LABEL[key] || key;
+}
+
+const MARKET_TO_ICON: Record<string, string> = {
+  GOLD:      'gold',
+  NASDAQ:    'nasdaq',
+  NASDAQ100: 'nasdaq',
+  SP500:     'pulse',
+  CRYPTO:    'crypto',
+};
+
+function _marketIcon(market: string): string {
+  return MARKET_TO_ICON[market.toUpperCase()] || 'pulse';
+}
+
+// ── Server report detail modal ─────────────────────────────────────────────────
+function ServerReportDetailModal({ report, onClose }: { report: ServerPipelineReport; onClose: () => void }) {
+  const statusBadge = (s: string) => {
+    const cfg: Record<string, { bg: string; border: string; color: string; label: string }> = {
+      success: { bg: 'rgba(47,181,124,0.1)',  border: 'rgba(47,181,124,0.35)', color: 'var(--up)',   label: 'OK'      },
+      partial: { bg: 'rgba(201,162,63,0.12)', border: 'rgba(201,162,63,0.4)',  color: '#C9A23F',     label: 'PARTIAL' },
+      failed:  { bg: 'rgba(220,60,60,0.1)',   border: 'rgba(220,60,60,0.35)', color: 'var(--down)', label: 'ERR'     },
+      skipped: { bg: 'var(--surface-2)',       border: 'var(--border)',         color: 'var(--text-3)', label: 'SKIP'  },
+    };
+    const c = cfg[s] || cfg.skipped;
+    return (
+      <span style={{
+        fontSize: 10, fontFamily: 'var(--font-mono)', padding: '2px 8px',
+        borderRadius: 4, border: `1px solid ${c.border}`,
+        background: c.bg, color: c.color,
+      }}>
+        {c.label}
+      </span>
+    );
   };
 
-  const fmtTs = (iso: string) => {
-    try {
-      const d = new Date(iso);
-      const dd = ('0' + d.getDate()).slice(-2);
-      const mm = ('0' + (d.getMonth() + 1)).slice(-2);
-      const hh = ('0' + d.getHours()).slice(-2);
-      const mi = ('0' + d.getMinutes()).slice(-2);
-      return `${dd}/${mm} ${hh}:${mi}`;
-    } catch { return iso.slice(0, 16); }
+  const stepStatusBadge = (s: string) => {
+    const colors: Record<string, string> = { success: 'var(--up)', ok: 'var(--up)', failed: 'var(--down)', error: 'var(--down)', skipped: 'var(--text-3)' };
+    return (
+      <span style={{ fontSize: 10, color: colors[s] || 'var(--text-3)', fontWeight: 600 }}>
+        {s === 'success' || s === 'ok' ? '✓' : s === 'failed' || s === 'error' ? '✗' : '○'}
+      </span>
+    );
   };
 
   return (
@@ -1176,7 +1243,7 @@ function PastReportDetailModal({ report, onClose }: { report: PipelineReport; on
         background: 'var(--surface)',
         border: '1px solid var(--border)',
         borderRadius: 12,
-        width: '100%', maxWidth: 680, maxHeight: '88vh',
+        width: '100%', maxWidth: 640, maxHeight: '88vh',
         display: 'flex', flexDirection: 'column',
         overflow: 'hidden',
         boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
@@ -1186,171 +1253,106 @@ function PastReportDetailModal({ report, onClose }: { report: PipelineReport; on
           padding: '14px 18px', borderBottom: '1px solid var(--border)',
           display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
         }}>
+          <Icon name={_marketIcon(report.market)} size={16} />
           <span style={{ fontWeight: 700, fontSize: 15, flex: 1 }}>
-            Bao cao: {report.market}
+            Báo cáo: {_pipelineLabel(report.pipeline_key)} — {report.market}
           </span>
-          <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-            {fmtTs(report.timestamp)} · {fmtDuration(report.durationMs)}
-          </span>
-          <span style={{
-            fontSize: 11, fontFamily: 'var(--font-mono)', padding: '2px 8px',
-            borderRadius: 4, border: '1px solid',
-            ...(report.success
-              ? { color: 'var(--up)',   borderColor: 'var(--up)',   background: 'rgba(47,181,124,0.1)' }
-              : { color: 'var(--down)', borderColor: 'var(--down)', background: 'rgba(220,60,60,0.1)' }),
-          }}>
-            {report.success ? 'SUCCESS' : 'FAILED'}
-          </span>
+          {statusBadge(report.status)}
           <button
             onClick={onClose}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 20, lineHeight: 1, padding: '0 4px' }}
-          >x</button>
-        </div>
-
-        {/* Steps summary */}
-        <div style={{
-          padding: '10px 18px', borderBottom: '1px solid var(--border)',
-          display: 'flex', gap: 6, flexWrap: 'wrap', flexShrink: 0,
-        }}>
-          {report.steps.map((step, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {i > 0 && <span style={{ color: 'var(--border-strong)', fontSize: 10, margin: '0 2px' }}>›</span>}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '4px 10px', borderRadius: 20, fontSize: 12,
-                background: step.status === 'ok'    ? 'rgba(47,181,124,0.1)'
-                           : step.status === 'error'  ? 'rgba(220,60,60,0.1)'
-                           : 'var(--surface-2)',
-                border: '1px solid ' + (
-                  step.status === 'ok'   ? 'var(--up)'
-                  : step.status === 'error' ? 'var(--down)'
-                  : 'var(--border)'
-                ),
-                color: step.status === 'ok'    ? 'var(--up)'
-                      : step.status === 'error'  ? 'var(--down)'
-                      : 'var(--text-3)',
-              }}>
-                <span style={{ fontSize: 10 }}>
-                  {step.status === 'ok' ? '✓' : step.status === 'error' ? '✗' : '○'}
-                </span>
-                {step.label}
-              </div>
-            </div>
-          ))}
+          >×</button>
         </div>
 
         {/* Scrollable body */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-          {/* Logs */}
-          <div>
-            <div style={{ fontSize: 10, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 600, marginBottom: 6 }}>
-              Logs ({report.logs.length} dong)
+          {/* Meta fields */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px',
+            background: 'var(--surface-2)', borderRadius: 8, padding: '12px 14px',
+            border: '1px solid var(--border)',
+          }}>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Bắt đầu</div>
+              <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-1)' }}>{_fmtTs(report.started_at)}</div>
             </div>
-            <div
-              ref={logRef}
-              style={{
-                background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6,
-                padding: '8px 10px', height: 180, overflowY: 'auto',
-                fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.65,
-              }}
-            >
-              {report.logs.length === 0
-                ? <span style={{ color: 'var(--text-3)' }}>Khong co log</span>
-                : report.logs.map((log, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8 }}>
-                    <span style={{ color: 'var(--text-3)', minWidth: 64, flexShrink: 0 }}>{log.ts}</span>
-                    <span style={{
-                      minWidth: 48, flexShrink: 0, fontWeight: 600,
-                      color: log.level === 'ok'    ? 'var(--up)'
-                           : log.level === 'error'  ? 'var(--down)'
-                           : log.level === 'warn'   ? '#C9A23F'
-                           : 'var(--accent)',
-                    }}>
-                      {log.level === 'ok' ? '[ OK ]' : log.level === 'error' ? '[ERR]' : log.level === 'warn' ? '[WARN]' : '[INFO]'}
-                    </span>
-                    <span style={{ color: 'var(--text-2)', flex: 1, wordBreak: 'break-word' }}>{log.msg}</span>
-                  </div>
-                ))
-              }
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Kết thúc</div>
+              <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-1)' }}>{_fmtTs(report.finished_at)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Thời lượng</div>
+              <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-1)' }}>{_fmtDuration(report.duration_ms) || '—'}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Đã train</div>
+              <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: report.trained ? 'var(--up)' : 'var(--text-3)' }}>
+                {report.trained ? 'Có' : 'Không'}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Dữ liệu crawl</div>
+              <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-1)' }}>{report.crawled_count}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Dự đoán</div>
+              <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-1)' }}>{report.predictions_count}</div>
             </div>
           </div>
 
-          {/* Algorithm results */}
-          {report.algorithms.length > 0 && (
+          {/* Steps */}
+          {report.steps && report.steps.length > 0 && (
             <div>
               <div style={{ fontSize: 10, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 600, marginBottom: 8 }}>
-                Ket qua thuat toan · {report.predictionsCount} du doan tong
+                Các bước
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {report.algorithms.map((a) => (
-                  <div key={a.key} style={{
-                    display: 'flex', alignItems: 'center', gap: 5,
-                    padding: '5px 12px', borderRadius: 6, fontSize: 12,
-                    background: a.status === 'ok' ? 'rgba(47,181,124,0.08)' : 'rgba(220,60,60,0.05)',
-                    border: '1px solid ' + (a.status === 'ok' ? 'rgba(47,181,124,0.3)' : 'rgba(220,60,60,0.2)'),
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {report.steps.map((step, i) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 8,
+                    padding: '7px 10px', borderRadius: 6,
+                    background: 'var(--surface-2)', border: '1px solid var(--border)',
                   }}>
-                    <span style={{ color: a.status === 'ok' ? 'var(--up)' : 'var(--down)', fontWeight: 700, fontSize: 11 }}>
-                      {a.status === 'ok' ? '✓' : '✗'}
+                    <div style={{ paddingTop: 1, flexShrink: 0 }}>{stepStatusBadge(step.status)}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-1)' }}>{step.label}</span>
+                      {step.detail && (
+                        <span style={{ fontSize: 11, color: 'var(--text-3)', marginLeft: 8, fontFamily: 'var(--font-mono)' }}>
+                          {step.detail}
+                        </span>
+                      )}
+                    </div>
+                    <span style={{
+                      fontSize: 10, fontFamily: 'var(--font-mono)', padding: '1px 6px', borderRadius: 3, flexShrink: 0,
+                      background: step.status === 'success' || step.status === 'ok' ? 'rgba(47,181,124,0.1)'
+                               : step.status === 'failed' || step.status === 'error' ? 'rgba(220,60,60,0.1)'
+                               : 'var(--surface-2)',
+                      color: step.status === 'success' || step.status === 'ok' ? 'var(--up)'
+                           : step.status === 'failed' || step.status === 'error' ? 'var(--down)'
+                           : 'var(--text-3)',
+                      border: '1px solid ' + (
+                        step.status === 'success' || step.status === 'ok' ? 'rgba(47,181,124,0.3)'
+                        : step.status === 'failed' || step.status === 'error' ? 'rgba(220,60,60,0.3)'
+                        : 'var(--border)'
+                      ),
+                    }}>
+                      {step.status}
                     </span>
-                    <span style={{ color: a.status === 'ok' ? 'var(--text-1)' : 'var(--text-3)', fontWeight: 500 }}>
-                      {a.name}
-                    </span>
-                    {a.count > 0 && <span style={{ color: 'var(--text-3)', fontSize: 10 }}>({a.count})</span>}
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Bot results */}
-          {report.botResults && report.botResults.length > 0 && (
-            <div>
-              <div style={{ fontSize: 10, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 600, marginBottom: 8 }}>
-                Bot giao dich ({report.botResults.length} bot)
-              </div>
-              <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 6 }}>
-                <table className="tbl" style={{ fontSize: 11, width: '100%' }}>
-                  <thead>
-                    <tr>
-                      <th>Bot</th>
-                      <th>Algo</th>
-                      <th className="r">Return</th>
-                      <th className="r">Win Rate</th>
-                      <th className="r">Sharpe</th>
-                      <th className="c">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.botResults.map((b, i) => {
-                      const ret = b.kpis?.total_return_pct;
-                      const win = b.kpis?.win_rate_pct;
-                      const sharpe = b.kpis?.sharpe_ratio;
-                      return (
-                        <tr key={i}>
-                          <td style={{ fontSize: 11 }}>{b.display_name}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-2)' }}>{b.algorithm}</td>
-                          <td className="r num" style={{ color: ret != null ? (ret > 0 ? 'var(--up)' : 'var(--down)') : undefined, fontWeight: 600 }}>
-                            {ret != null ? (ret > 0 ? '+' : '') + ret.toFixed(1) + '%' : '—'}
-                          </td>
-                          <td className="r num">{win != null ? win.toFixed(0) + '%' : '—'}</td>
-                          <td className="r num">{sharpe != null ? sharpe.toFixed(2) : '—'}</td>
-                          <td className="c">
-                            <span style={{
-                              fontSize: 10, padding: '1px 7px', borderRadius: 3,
-                              background: b.is_active ? 'rgba(47,181,124,0.1)' : 'var(--surface-2)',
-                              color: b.is_active ? 'var(--up)' : 'var(--text-3)',
-                              border: '1px solid ' + (b.is_active ? 'rgba(47,181,124,0.4)' : 'var(--border)'),
-                            }}>
-                              {b.is_active ? 'ACTIVE' : 'OFF'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+          {/* Error */}
+          {report.error && (
+            <div style={{
+              padding: '10px 12px', borderRadius: 6, fontSize: 12,
+              background: 'rgba(220,60,60,0.08)', border: '1px solid rgba(220,60,60,0.3)',
+              color: 'var(--down)', fontFamily: 'var(--font-mono)', wordBreak: 'break-word',
+            }}>
+              {report.error}
             </div>
           )}
         </div>
@@ -1361,10 +1363,10 @@ function PastReportDetailModal({ report, onClose }: { report: PipelineReport; on
           display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0,
         }}>
           <span style={{ fontSize: 11, color: 'var(--text-3)', flex: 1 }}>
-            Luu luc {fmtTs(report.timestamp)}
+            {report.status === 'skipped' ? 'Market đóng cửa — pipeline bị bỏ qua.' : ''}
           </span>
           <button className="btn btn--primary btn--sm" style={{ fontSize: 12 }} onClick={onClose}>
-            Dong
+            Đóng
           </button>
         </div>
       </div>
@@ -1374,190 +1376,146 @@ function PastReportDetailModal({ report, onClose }: { report: PipelineReport; on
 
 // ── Past reports panel ────────────────────────────────────────────────────────
 function PastReportsPanel() {
-  const [reports,        setReports]        = useState<PipelineReport[]>([]);
-  const [selectedReport, setSelectedReport] = useState<PipelineReport | null>(null);
-  const [expanded,       setExpanded]       = useState(false);
+  const [reports,   setReports]   = useState<ServerPipelineReport[]>([]);
+  const [pipelines, setPipelines] = useState<string[]>([]);
+  const [filter,    setFilter]    = useState('');
+  const [selected,  setSelected]  = useState<ServerPipelineReport | null>(null);
+  const [expanded,  setExpanded]  = useState(false);
+  const [loading,   setLoading]   = useState(false);
 
-  const loadReports = () => {
+  const loadReports = async () => {
+    setLoading(true);
     try {
-      const saved = JSON.parse(localStorage.getItem('vns_pipeline_reports') || '[]');
-      setReports(Array.isArray(saved) ? saved : []);
+      let url = '/api/pipeline-reports?limit=100';
+      if (filter) url += `&pipeline=${encodeURIComponent(filter)}`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('vns_token') || ''}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setReports(Array.isArray(json.data) ? json.data : []);
+      if (Array.isArray(json.pipelines)) setPipelines(json.pipelines);
     } catch {
       setReports([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  useEffect(() => { loadReports(); }, [expanded]);
+  useEffect(() => { loadReports(); }, [filter]);
 
-  const clearAll = () => {
-    localStorage.removeItem('vns_pipeline_reports');
-    setReports([]);
-  };
-
-  const fmtTs = (iso: string) => {
-    try {
-      const d = new Date(iso);
-      const dd = ('0' + d.getDate()).slice(-2);
-      const mm = ('0' + (d.getMonth() + 1)).slice(-2);
-      const hh = ('0' + d.getHours()).slice(-2);
-      const mi = ('0' + d.getMinutes()).slice(-2);
-      return `${dd}/${mm} ${hh}:${mi}`;
-    } catch { return iso.slice(0, 16); }
-  };
-
-  const fmtDuration = (ms: number) => {
-    if (!ms) return '';
-    if (ms < 1000) return ms + 'ms';
-    if (ms < 60000) return (ms / 1000).toFixed(0) + 's';
-    return Math.floor(ms / 60000) + 'm' + Math.floor((ms % 60000) / 1000) + 's';
-  };
-
-  const MARKET_ICON: Record<string, string> = {
-    gold: 'gold', nasdaq100: 'nasdaq', sp500: 'pulse', crypto: 'crypto',
-  };
+  const displayList = expanded ? reports : reports.slice(0, 3);
 
   return (
     <>
       <Panel
-        title={`Bao cao pipeline${reports.length > 0 && !expanded ? ` (${reports.length})` : ''}`}
+        title={`Báo cáo pipeline${reports.length > 0 && !expanded ? ` (${reports.length})` : ''}`}
         tools={
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {/* Pipeline filter dropdown */}
+            <select
+              className="sel"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              style={{ fontSize: 11, padding: '3px 7px', height: 28 }}
+            >
+              <option value="">Tất cả pipeline</option>
+              {pipelines.map((p) => (
+                <option key={p} value={p}>{_pipelineLabel(p)}</option>
+              ))}
+            </select>
             <button
               className="btn btn--ghost btn--icon"
               onClick={loadReports}
-              title="Tai lai"
+              disabled={loading}
+              title="Tải lại"
             >
               <Icon name="refresh" size={14} />
             </button>
-            {reports.length > 0 && (
-              <button
-                className="btn btn--ghost btn--sm"
-                style={{ fontSize: 11, color: 'var(--down)' }}
-                onClick={clearAll}
-              >
-                Xoa tat ca
-              </button>
-            )}
             <button
               className="btn btn--ghost btn--sm"
               style={{ fontSize: 11 }}
               onClick={() => setExpanded(e => !e)}
             >
-              {expanded ? 'Thu gon' : 'Xem tat ca'}
+              {expanded ? 'Thu gọn' : 'Xem tất cả'}
             </button>
           </div>
         }
       >
-        {reports.length === 0 ? (
+        {loading && reports.length === 0 ? (
           <div style={{ padding: '20px', color: 'var(--text-3)', fontSize: 13, textAlign: 'center' }}>
-            Chua co bao cao nao. Chay pipeline de tao bao cao dau tien.
+            Đang tải...
           </div>
-        ) : !expanded ? (
-          /* Collapsed: show only the 3 most recent */
+        ) : reports.length === 0 ? (
+          <div style={{ padding: '20px', color: 'var(--text-3)', fontSize: 13, textAlign: 'center' }}>
+            Chưa có báo cáo nào. Pipeline sẽ tự tạo báo cáo khi chạy.
+          </div>
+        ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {reports.slice(0, 3).map((r, i) => (
-              <div
-                key={r.id}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 14px',
-                  borderBottom: i < Math.min(reports.length, 3) - 1 ? '1px solid var(--border)' : undefined,
-                  cursor: 'pointer',
-                }}
-                onClick={() => setSelectedReport(r)}
-              >
-                <Icon name={MARKET_ICON[r.marketKey] || 'pulse'} size={14} style={{ color: 'var(--text-2)', flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{r.market}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginTop: 1 }}>
-                    {fmtTs(r.timestamp)} · {r.predictionsCount} du doan · {fmtDuration(r.durationMs)}
+            {displayList.map((r, i) => {
+              const statusCfg: Record<string, { bg: string; border: string; color: string; label: string }> = {
+                success: { bg: 'rgba(47,181,124,0.1)',  border: 'rgba(47,181,124,0.3)',  color: 'var(--up)',   label: 'OK'      },
+                partial: { bg: 'rgba(201,162,63,0.12)', border: 'rgba(201,162,63,0.35)', color: '#C9A23F',     label: 'PARTIAL' },
+                failed:  { bg: 'rgba(220,60,60,0.1)',   border: 'rgba(220,60,60,0.3)',   color: 'var(--down)', label: 'ERR'     },
+                skipped: { bg: 'var(--surface-2)',       border: 'var(--border)',          color: 'var(--text-3)', label: 'SKIP'  },
+              };
+              const sc = statusCfg[r.status] || statusCfg.skipped;
+              const isLast = i === displayList.length - 1;
+              return (
+                <div
+                  key={r.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 14px',
+                    borderBottom: !isLast ? '1px solid var(--border)' : undefined,
+                    cursor: 'pointer',
+                    background: 'transparent',
+                    transition: 'background 0.15s',
+                  }}
+                  onClick={() => setSelected(r)}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <Icon name={_marketIcon(r.market)} size={14} style={{ color: 'var(--text-2)', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>
+                      {_pipelineLabel(r.pipeline_key)} · {r.market}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginTop: 1 }}>
+                      {_fmtTs(r.started_at)}
+                      {r.predictions_count > 0 ? ` · ${r.predictions_count} dự đoán` : ''}
+                      {r.crawled_count > 0 ? ` · ${r.crawled_count} crawl` : ''}
+                      {r.duration_ms > 0 ? ` · ${_fmtDuration(r.duration_ms)}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                    <span style={{
+                      fontSize: 10, padding: '1px 7px', borderRadius: 3,
+                      background: sc.bg, color: sc.color, border: `1px solid ${sc.border}`,
+                    }}>
+                      {sc.label}
+                    </span>
+                    <Icon name="arrowUp" size={11} style={{ color: 'var(--text-3)', transform: 'rotate(90deg)' }} />
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-                  {r.algorithms.length > 0 && (
-                    <span style={{ fontSize: 10, color: 'var(--text-3)' }}>
-                      {r.algorithms.filter(a => a.status === 'ok').length}/{r.algorithms.length} algo
-                    </span>
-                  )}
-                  {r.botResults && r.botResults.length > 0 && (
-                    <span style={{ fontSize: 10, color: 'var(--text-3)' }}>
-                      {r.botResults.length} bot
-                    </span>
-                  )}
-                  <span style={{
-                    fontSize: 10, padding: '1px 7px', borderRadius: 3,
-                    background: r.success ? 'rgba(47,181,124,0.1)' : 'rgba(220,60,60,0.1)',
-                    color: r.success ? 'var(--up)' : 'var(--down)',
-                    border: '1px solid ' + (r.success ? 'rgba(47,181,124,0.3)' : 'rgba(220,60,60,0.3)'),
-                  }}>
-                    {r.success ? 'OK' : 'ERR'}
-                  </span>
-                  <Icon name="arrowUp" size={11} style={{ color: 'var(--text-3)', transform: 'rotate(90deg)' }} />
-                </div>
-              </div>
-            ))}
-            {reports.length > 3 && (
+              );
+            })}
+            {!expanded && reports.length > 3 && (
               <div
                 style={{ padding: '10px 14px', fontSize: 12, color: 'var(--accent)', cursor: 'pointer', textAlign: 'center' }}
                 onClick={() => setExpanded(true)}
               >
-                Xem them {reports.length - 3} bao cao cu →
+                Xem thêm {reports.length - 3} báo cáo →
               </div>
             )}
-          </div>
-        ) : (
-          /* Expanded: show all */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {reports.map((r, i) => (
-              <div
-                key={r.id}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 14px',
-                  borderBottom: i < reports.length - 1 ? '1px solid var(--border)' : undefined,
-                  cursor: 'pointer',
-                  background: 'transparent',
-                  transition: 'background 0.15s',
-                }}
-                onClick={() => setSelectedReport(r)}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              >
-                <Icon name={MARKET_ICON[r.marketKey] || 'pulse'} size={14} style={{ color: 'var(--text-2)', flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{r.market}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginTop: 1 }}>
-                    {fmtTs(r.timestamp)} · {r.predictionsCount} du doan
-                    {r.botResults && r.botResults.length > 0 ? ` · ${r.botResults.length} bot` : ''}
-                    {r.durationMs ? ` · ${fmtDuration(r.durationMs)}` : ''}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-                  {r.algorithms.length > 0 && (
-                    <span style={{ fontSize: 10, color: 'var(--text-3)' }}>
-                      {r.algorithms.filter(a => a.status === 'ok').length}/{r.algorithms.length} algo
-                    </span>
-                  )}
-                  <span style={{
-                    fontSize: 10, padding: '1px 7px', borderRadius: 3,
-                    background: r.success ? 'rgba(47,181,124,0.1)' : 'rgba(220,60,60,0.1)',
-                    color: r.success ? 'var(--up)' : 'var(--down)',
-                    border: '1px solid ' + (r.success ? 'rgba(47,181,124,0.3)' : 'rgba(220,60,60,0.3)'),
-                  }}>
-                    {r.success ? 'OK' : 'ERR'}
-                  </span>
-                  <Icon name="arrowUp" size={11} style={{ color: 'var(--text-3)', transform: 'rotate(90deg)' }} />
-                </div>
-              </div>
-            ))}
           </div>
         )}
       </Panel>
 
-      {selectedReport && (
-        <PastReportDetailModal
-          report={selectedReport}
-          onClose={() => setSelectedReport(null)}
+      {selected && (
+        <ServerReportDetailModal
+          report={selected}
+          onClose={() => setSelected(null)}
         />
       )}
     </>

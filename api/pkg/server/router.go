@@ -157,6 +157,9 @@ func addHandler() *http.ServeMux {
 	// Monitoring APIs (require JWT authentication)
 	mux.HandleFunc("GET /api/monitoring/overview", AuthRequired(GetMonitoringOverview))
 
+	// Pipeline Reports (require JWT authentication)
+	mux.HandleFunc("GET /api/pipeline-reports", AuthRequired(GetPipelineReports))
+
 	// Pipeline SSE stream (auth via ?token= query param, admin only)
 	mux.HandleFunc("GET /api/pipeline/stream", StreamPipelinePredictHandler)
 
@@ -256,4 +259,5 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  POST /api/trigger/simulation-live-step [admin]")
 	logger.Logger.Info("  POST /api/trigger/sim-reset            [admin]")
 	logger.Logger.Info("  GET  /api/monitoring/overview")
+	logger.Logger.Info("  GET  /api/pipeline-reports          [auth]")
 }

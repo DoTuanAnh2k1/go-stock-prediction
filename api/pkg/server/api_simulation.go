@@ -410,7 +410,7 @@ func GetSimBots(w http.ResponseWriter, r *http.Request) {
 					item.TotalReturnPct = v
 				}
 			}
-			trades, _, err := store.GetSimTrades(sess.ID, 0, 10000)
+			trades, _, err := store.GetSimTrades(sess.ID, 0, 10000, false)
 			if err == nil {
 				for _, t := range trades {
 					if t.Action == "SELL" {
@@ -477,7 +477,7 @@ func GetSimBot(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			snaps = nil
 		}
-		trades, _, err := store.GetSimTrades(sess.ID, 0, 100000)
+		trades, _, err := store.GetSimTrades(sess.ID, 0, 100000, false)
 		if err != nil {
 			trades = nil
 		}
@@ -530,7 +530,7 @@ func GetSimBotVariants(w http.ResponseWriter, r *http.Request) {
 		}
 		if sessErr == nil && sess != nil {
 			snaps, _ := store.GetSimPortfolioSnapshots(sess.ID)
-			trades, _, _ := store.GetSimTrades(sess.ID, 0, 100000)
+			trades, _, _ := store.GetSimTrades(sess.ID, 0, 100000, false)
 			v.KPIs = computeKPIs(snaps, trades)
 		}
 
@@ -549,6 +549,7 @@ func GetSimBotVariants(w http.ResponseWriter, r *http.Request) {
 //	@Param        id     path      string  true   "Bot ID"
 //	@Param        page   query     int     false  "Page number (default 1)"
 //	@Param        limit  query     int     false  "Results per page (default 50, max 500)"
+//	@Param        exclude_hold  query  bool  false  "Exclude HOLD rows (only BUY/SELL) — affects total & pagination"
 //	@Success      200    {object}  simTradesPage
 //	@Failure      400    {object}  ResponseFailure
 //	@Failure      404    {object}  ResponseFailure
@@ -595,8 +596,12 @@ func GetSimBotTrades(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// exclude_hold=true filters out HOLD rows server-side so total & pagination
+	// reflect only BUY/SELL trades (not just a per-page client filter).
+	excludeHold := r.URL.Query().Get("exclude_hold") == "true"
+
 	offset := (page - 1) * limit
-	trades, total, err := store.GetSimTrades(sess.ID, offset, limit)
+	trades, total, err := store.GetSimTrades(sess.ID, offset, limit, excludeHold)
 	if err != nil {
 		logger.Logger.Errorf("GetSimBotTrades: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "failed to fetch trades")
@@ -735,7 +740,10 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 	algoFilter := r.URL.Query().Get("algorithm")
 	currencyFilter := r.URL.Query().Get("currency")
 
-	const cacheKey = "simulation:leaderboard"
+	// Cache key must include the active filters — otherwise the first cached
+	// response (e.g. ALL) is served for every filter combination until TTL expires,
+	// making market/algorithm/currency filters appear broken.
+	cacheKey := "simulation:leaderboard|m=" + marketFilter + "|a=" + algoFilter + "|c=" + currencyFilter
 	if cached, ok := globalCache.Get(cacheKey); ok {
 		ResponseSuccess(w, http.StatusOK, cached)
 		return

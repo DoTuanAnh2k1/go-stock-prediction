@@ -19,6 +19,7 @@ from src.database.models import (
     NasdaqIntradayPrice,
     NasdaqPrediction,
     NasdaqPrice,
+    PipelineReport,
     SP500IntradayPrice,
     SP500Prediction,
     SP500Price,
@@ -933,6 +934,63 @@ def create_sync_log(
                 error_message=error_message or None,
             )
         )
+
+
+# ---------------------------------------------------------------------------
+# Pipeline reports
+# ---------------------------------------------------------------------------
+
+def create_pipeline_report(
+    pipeline_key: str,
+    market: str,
+    status: str,
+    started_at: datetime,
+    finished_at: datetime | None,
+    duration_ms: int,
+    crawled_count: int,
+    predictions_count: int,
+    trained: bool,
+    steps: list[dict],
+    error: str | None = None,
+) -> None:
+    """Insert one pipeline run report row.  Never raises — logs warning on failure."""
+    try:
+        with session_scope() as session:
+            session.add(
+                PipelineReport(
+                    pipeline_key=pipeline_key,
+                    market=market,
+                    status=status,
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    duration_ms=duration_ms,
+                    crawled_count=crawled_count,
+                    predictions_count=predictions_count,
+                    trained=trained,
+                    steps=steps,
+                    error=error,
+                    created_at=datetime.now(),
+                )
+            )
+    except Exception as exc:
+        log.warning("pipeline_report.create.error", error=str(exc))
+
+
+def delete_old_pipeline_reports(days: int = 7) -> int:
+    """Delete pipeline_reports older than *days* days.  Returns deleted row count.  Never raises."""
+    try:
+        cutoff = datetime.now() - timedelta(days=days)
+        with session_scope() as session:
+            deleted = (
+                session.query(PipelineReport)
+                .filter(PipelineReport.created_at < cutoff)
+                .delete(synchronize_session=False)
+            )
+        log.debug("pipeline_report.cleanup", deleted=deleted, cutoff=cutoff.isoformat())
+        return deleted
+    except Exception as exc:
+        log.warning("pipeline_report.cleanup.error", error=str(exc))
+        return 0
 
 
 # ---------------------------------------------------------------------------

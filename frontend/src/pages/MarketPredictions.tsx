@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, NavLink } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { Panel, Icon, Chg, ConfBar, MarketTabs } from '../components/ui';
+import { LineChart } from '../components/charts';
 import { fetchMarketPredictions } from '../api';
 import { useLanguage } from '../context/LangContext';
 
@@ -13,6 +14,20 @@ function ddmm(s: any): string {
     if (isNaN(d.getTime())) return String(s).slice(0, 10);
     return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '/' + d.getFullYear().toString().slice(-2);
   } catch (_e) { return String(s).slice(0, 10); }
+}
+// Like ddmm but includes the prediction time — predictions run many times per day,
+// so the hour:minute matters to tell them apart.
+function ddmmhm(s: any): string {
+  if (!s) return '—';
+  try {
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return String(s).slice(0, 16).replace('T', ' ');
+    const dd = ('0' + d.getDate()).slice(-2);
+    const mm = ('0' + (d.getMonth() + 1)).slice(-2);
+    const hh = ('0' + d.getHours()).slice(-2);
+    const mi = ('0' + d.getMinutes()).slice(-2);
+    return `${dd}/${mm} ${hh}:${mi}`;
+  } catch (_e) { return String(s).slice(0, 16).replace('T', ' '); }
 }
 function num(x: any): number {
   const n = typeof x === 'number' ? x : parseFloat(x);
@@ -173,6 +188,36 @@ export default function MarketPredictions() {
     { id: 'ensemble', short: 'ENS', name: 'Ensemble' },
   ];
   const algos = D.algos.length > 0 ? D.algos : FALLBACK_ALGOS;
+  const algoShort = algos.find((a) => a.id === algorithm)?.short || algorithm.toUpperCase();
+
+  // Chart shows predicted vs actual for a SINGLE instrument. Different instruments
+  // have wildly different price scales (e.g. BTC ~$63k vs ETH ~$1.7k), so plotting
+  // them on one line produces a meaningless zig-zag. We focus on the instrument the
+  // user is looking at: the most-represented symbol in the rows currently shown
+  // (narrows to exactly that symbol once they search/filter by mã).
+  const fmtChart = isGold
+    ? fmtGold
+    : (isNasdaq || isCrypto)
+    ? (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : fmtPrice;
+  const symbolOf = (r: any): string =>
+    (isGold ? (r.product_type || r.source) : (r.symbol || r.coin_id)) || '—';
+  const symCounts: Record<string, number> = {};
+  rows.forEach((r) => { const s = symbolOf(r); symCounts[s] = (symCounts[s] || 0) + 1; });
+  const distinctSyms = Object.keys(symCounts).length;
+  const chartSym = Object.entries(symCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+  const chartRows = [...rows]
+    .filter((r) => symbolOf(r) === chartSym)
+    .sort((a, b) => String(a.prediction_date || '').localeCompare(String(b.prediction_date || '')));
+  const chartLabels = chartRows.map((r) => ddmmhm(r.prediction_date));
+  const predictedData = chartRows.map((r) => num(r.predicted_price));
+  const actualData = chartRows.map((r) => (r.actual_price != null ? num(r.actual_price) : null));
+  const chartSeries = [
+    { name: t.common.predicted, data: predictedData, color: 'var(--accent)', w: 2 },
+    ...(actualData.some((v) => v != null)
+      ? [{ name: t.common.actual, data: actualData as (number | null)[], color: 'var(--text)', w: 2.2 }]
+      : []),
+  ];
 
   return (
     <div className="content__inner fade">
@@ -225,6 +270,29 @@ export default function MarketPredictions() {
           </span>
         </div>
       </Panel>
+
+      {/* Chart — predicted vs actual for the rows currently displayed */}
+      {chartRows.length > 0 && (
+        <Panel flush className="section-gap">
+          <div style={{ padding: '14px 16px 6px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>
+              {t.common.predicted} vs {t.common.actual} — {algoShort} · <span style={{ color: 'var(--accent)' }}>{chartSym}</span>
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+              {distinctSyms > 1 ? `${distinctSyms} mã · lọc theo mã để xem mã khác` : `${chartRows.length} ${t.marketPredictions.records}`}
+            </span>
+          </div>
+          <div style={{ padding: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .15s' }}>
+            <LineChart
+              series={chartSeries}
+              labels={chartLabels}
+              height={320}
+              yFmt={fmtChart}
+              valueFmt={fmtChart}
+            />
+          </div>
+        </Panel>
+      )}
 
       {/* Table */}
       <Panel flush className="section-gap">
@@ -296,7 +364,7 @@ export default function MarketPredictions() {
                           {acc != null ? acc + '%' : <span style={{ color: 'var(--text-3)' }}>—</span>}
                         </td>
                         <td className="c"><StatusBadge status={row.status} acc={acc ?? undefined} /></td>
-                        <td className="r" style={{ color: 'var(--text-3)', fontSize: 12, fontFamily: 'var(--font-mono)' }}>{ddmm(row.prediction_date)}</td>
+                        <td className="r" style={{ color: 'var(--text-3)', fontSize: 12, fontFamily: 'var(--font-mono)' }}>{ddmmhm(row.prediction_date)}</td>
                       </tr>
                     );
                   })}

@@ -46,6 +46,7 @@ const I: Record<string, React.ReactNode> = {
   chevrLeft:  <polyline points="15 18 9 12 15 6"/>,
   chevrRight: <polyline points="9 18 15 12 9 6"/>,
   activity:   <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></>,
+  'bar-chart': <><line x1="6" y1="20" x2="6" y2="13"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="9"/><line x1="3" y1="20" x2="21" y2="20"/></>,
 };
 
 export function Icon({ name, size = 18, sw = 1.7, style, ...p }: { name: string; size?: number; sw?: number; style?: React.CSSProperties; [key: string]: any }) {
@@ -204,10 +205,6 @@ export function MarketTabs({ marketKey }: { marketKey: string }) {
       <NavLink to={base + '/predictions'} className={cls}>
         <Icon name="pulse" size={14} />
         {t.marketTabs.predictions}
-      </NavLink>
-      <NavLink to={base + '/detail'} className={cls}>
-        <Icon name="layers" size={14} />
-        {t.marketTabs.detail}
       </NavLink>
       <NavLink to={base + '/session'} className={cls}>
         <Icon name="bar-chart" size={14} />

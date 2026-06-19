@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"go-stock-prediction/pkg/logger"
@@ -48,13 +49,50 @@ func dailySessionWindow(now time.Time) (start, end time.Time, isOpen bool) {
 	return
 }
 
+// sessionWindowAt computes the trading window for a given period/offset.
+//   - period "week": a calendar week in ICT [Monday 00:00, next Monday 00:00),
+//     stepped back `offset` weeks (applies to all markets).
+//   - otherwise ("session"): the per-session window. offset 0 = current/most
+//     recent session; offset>0 steps back that many calendar days (NASDAQ/SP500
+//     use the 20:00→03:30 NYSE window, GOLD/CRYPTO use a full calendar day).
+func sessionWindowAt(marketKey, period string, offset int, now time.Time) (start, end time.Time, isOpen bool) {
+	if period == "week" {
+		// Monday 00:00 of the current week (Go: Sunday=0 → shift so Monday=0).
+		daysSinceMon := (int(now.Weekday()) + 6) % 7
+		monday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -daysSinceMon)
+		start = monday.AddDate(0, 0, -7*offset)
+		end = start.AddDate(0, 0, 7)
+		isOpen = !now.Before(start) && now.Before(end)
+		return
+	}
+
+	var bStart, bEnd time.Time
+	var bOpen bool
+	switch marketKey {
+	case "NASDAQ", "SP500":
+		bStart, bEnd, bOpen = nyseSessionWindow(now)
+	default:
+		bStart, bEnd, bOpen = dailySessionWindow(now)
+	}
+	if offset <= 0 {
+		return bStart, bEnd, bOpen
+	}
+	// Past session: shift the base window back `offset` days; always closed.
+	start = bStart.AddDate(0, 0, -offset)
+	end = bEnd.AddDate(0, 0, -offset)
+	isOpen = false
+	return
+}
+
 // GetMarketSessionStats godoc
 //
 //	@Summary		Session stats for a market
 //	@Description	Returns per-algorithm direction accuracy and bot trading stats for the current or most recent trading session.
 //	@Tags			Markets
 //	@Produce		json
-//	@Param			key	path		string	true	"Market key: gold, nasdaq100, crypto, sp500"
+//	@Param			key		path		string	true	"Market key: gold, nasdaq100, crypto, sp500"
+//	@Param			period	query		string	false	"session (mặc định) hoặc week"
+//	@Param			offset	query		int		false	"0 = phiên/tuần hiện tại, 1 = liền trước, ... (max 52)"
 //	@Success		200	{object}	modelsapi.SessionStatsResponse
 //	@Failure		403	{object}	ResponseFailure
 //	@Failure		500	{object}	ResponseFailure
@@ -67,16 +105,30 @@ func GetMarketSessionStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	var from, to time.Time
-	var isOpen bool
 
-	switch marketKey {
-	case "NASDAQ", "SP500":
-		from, to, isOpen = nyseSessionWindow(now)
-	default:
-		// GOLD, CRYPTO: trade 24/7 — one session is a full calendar day,
-		// from today 00:00 to the nearest next midnight (tomorrow 00:00).
-		from, to, isOpen = dailySessionWindow(now)
+	// period: "session" (default) hoặc "week"; offset: 0 = hiện tại, 1 = liền trước, ...
+	period := r.URL.Query().Get("period")
+	if period != "week" {
+		period = "session"
+	}
+	offset := 0
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if v, err := strconv.Atoi(o); err == nil && v >= 0 && v <= 52 {
+			offset = v
+		}
+	}
+
+	from, to, isOpen := sessionWindowAt(marketKey, period, offset, now)
+
+	// Danh sách phiên/tuần gần đây để frontend render dropdown chọn.
+	n := 10
+	if period == "week" {
+		n = 8
+	}
+	available := make([]modelsapi.SessionWindow, 0, n)
+	for i := 0; i < n; i++ {
+		s, e, open := sessionWindowAt(marketKey, period, i, now)
+		available = append(available, modelsapi.SessionWindow{Offset: i, Start: s, End: e, IsOpen: open})
 	}
 
 	store := repository.GetSingleton()
@@ -103,11 +155,14 @@ func GetMarketSessionStats(w http.ResponseWriter, r *http.Request) {
 
 	ResponseSuccess(w, http.StatusOK, modelsapi.SessionStatsResponse{
 		Market: marketKey,
+		Period: period,
 		Session: modelsapi.SessionWindow{
+			Offset: offset,
 			Start:  from,
 			End:    to,
 			IsOpen: isOpen,
 		},
+		Available:         available,
 		DirectionAccuracy: dirAcc,
 		BotTrades:         botTrades,
 	})

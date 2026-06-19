@@ -24,7 +24,9 @@ type SimulationStore interface {
 
 	// Trades
 	CreateSimTrade(t *modelsdb.SimTrade) error
-	GetSimTrades(sessionID int64, offset, limit int) ([]modelsdb.SimTrade, int64, error)
+	// GetSimTrades returns paginated trades for a session. When excludeHold is true,
+	// HOLD rows are filtered out at the DB level so total/pagination reflect only BUY/SELL.
+	GetSimTrades(sessionID int64, offset, limit int, excludeHold bool) ([]modelsdb.SimTrade, int64, error)
 
 	// Snapshots
 	CreateSimPortfolioSnapshot(s *modelsdb.SimPortfolioSnapshot) error

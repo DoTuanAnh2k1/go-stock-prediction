@@ -549,19 +549,22 @@ export function fetchMarketPredictions(
   const p = new URLSearchParams();
   if (params.page)      p.set('page', String(params.page));
   if (params.limit)     p.set('limit', String(params.limit));
-  if (params.search)    p.set('search', params.search);
   if (params.sort_by)   p.set('sort_by', params.sort_by);
   if (params.sort_dir)  p.set('sort_dir', params.sort_dir);
   if (params.algorithm) p.set('algorithm', params.algorithm);
   if (params.status)    p.set('status', params.status);
 
-  // Route to the correct market-specific predictions endpoint
+  // Route to the correct market-specific predictions endpoint.
+  // The symbol search box maps to a DIFFERENT query param per market: NASDAQ uses
+  // `symbol`, CRYPTO uses `coin`, GOLD uses `source`. The backend does NOT read a
+  // generic `search` param, so routing it correctly is what makes per-symbol
+  // filtering actually work.
   let endpoint: string;
   switch (marketKey) {
-    case 'nasdaq100': endpoint = '/nasdaq/predictions';  break;
-    case 'crypto':    endpoint = '/crypto/predictions';  break;
-    case 'gold':      endpoint = '/gold/predictions';    break;
-    default:          endpoint = '/gold/predictions';    break;
+    case 'nasdaq100': endpoint = '/nasdaq/predictions'; if (params.search) p.set('symbol', params.search); break;
+    case 'crypto':    endpoint = '/crypto/predictions'; if (params.search) p.set('coin', params.search);   break;
+    case 'gold':      endpoint = '/gold/predictions';   if (params.search) p.set('source', params.search); break;
+    default:          endpoint = '/gold/predictions';   if (params.search) p.set('source', params.search); break;
   }
 
   return fetchJSON(endpoint + '?' + p.toString())
@@ -579,6 +582,64 @@ export function fetchMarketPredictions(
       } as MarketPageResponse;
     })
     .catch(() => ({ market: marketKey, data: [], total: 0, page: 1, limit: params.limit || 20, total_pages: 0 }));
+}
+
+// Prediction chart point as returned by the per-market /predictions/chart endpoints.
+export interface MarketPredChartPoint {
+  date: string;
+  algorithm_name: string;
+  predicted_price: string | number;
+  actual_price: string | number | null;
+}
+
+// fetchMarketPredictionChart hits the per-market /predictions/chart endpoint, which
+// filters by instrument + days SERVER-SIDE (no pagination/limit cap). This is the
+// correct source for the algorithm-comparison detail view — the paginated
+// /predictions list endpoints filter by symbol/coin/source (not `search`) and cap
+// limit at ~100, so they cannot drive a multi-day, multi-algo comparison chart.
+// Algorithms shown in the comparison chart. Used to fan out gold requests, whose
+// chart endpoint tags the algorithm at the top level (one call per algorithm)
+// rather than per data point.
+const COMPARISON_ALGOS = ['ema', 'lstm_nn', 'arima_garch', 'moving_average', 'ensemble'];
+
+export function fetchMarketPredictionChart(
+  marketKey: string,
+  instrument: string,
+  days: number,
+  algorithm?: string,
+): Promise<MarketPredChartPoint[]> {
+  // NASDAQ & CRYPTO: a single call returns points already tagged with algorithm_name.
+  if (marketKey === 'nasdaq100' || marketKey === 'crypto') {
+    const p = new URLSearchParams();
+    p.set('days', String(days));
+    if (marketKey === 'nasdaq100') p.set('symbol', instrument);
+    else p.set('coin', instrument);
+    if (algorithm) p.set('algorithm', algorithm);
+    const endpoint = marketKey === 'nasdaq100' ? '/nasdaq/predictions/chart' : '/crypto/predictions/chart';
+    return fetchJSON(endpoint + '?' + p.toString())
+      .then((res: any) => (Array.isArray(res?.data) ? res.data : []))
+      .catch(() => []);
+  }
+
+  // GOLD: chart endpoint puts algorithm at the response top level, so one call per
+  // algorithm is needed. When a single algorithm is requested, call once; otherwise
+  // fan out across the comparison algorithms and tag each point with algorithm_name.
+  const base = new URLSearchParams();
+  base.set('days', String(days));
+  if (instrument === 'BTMC_SJC') { base.set('source', 'BTMC'); base.set('product_type', 'sjc'); }
+  else if (instrument === 'BTMC_NHAN') { base.set('source', 'BTMC'); base.set('product_type', 'nhan_tron'); }
+  else { base.set('source', 'XAU'); }
+
+  const algos = algorithm ? [algorithm] : COMPARISON_ALGOS;
+  return Promise.all(
+    algos.map((algo) => {
+      const p = new URLSearchParams(base);
+      p.set('algorithm', algo);
+      return fetchJSON('/gold/predictions/chart?' + p.toString())
+        .then((res: any) => (Array.isArray(res?.data) ? res.data : []).map((pt: any) => ({ ...pt, algorithm_name: algo })))
+        .catch(() => [] as MarketPredChartPoint[]);
+    }),
+  ).then((lists) => lists.flat());
 }
 
 // ── Monitoring overview ──────────────────────────────────────────────────────

@@ -16,37 +16,45 @@ concurrency:
 jobs:
 
   # ╔═══════════════════════════════════════════════════════════════════════════
-  # ║  Go API Backend
+  # ║  Go API Backend  (api/)
   # ╚═══════════════════════════════════════════════════════════════════════════
 
   go-build:
     name: "[API] Build"
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: api/go.mod
           cache: true
+          cache-dependency-path: api/go.sum
 
       - name: Download modules
         run: go mod download
 
       - name: Build
-        run: go build -o /dev/null ./cmd/api
+        run: go build -o /dev/null ./cmd
 
   # ─────────────────────────────────────────────────────────────────────────
   go-vet:
     name: "[API] Vet"
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: api/go.mod
           cache: true
+          cache-dependency-path: api/go.sum
 
       - name: Download modules
         run: go mod download
@@ -55,45 +63,30 @@ jobs:
         run: go vet ./...
 
   # ─────────────────────────────────────────────────────────────────────────
+  # Handler tests use the recover/mock pattern (no live DB), so no database
+  # service is needed here — see api/pkg/server/*_test.go.
   go-test:
     name: "[API] Unit Tests"
     runs-on: ubuntu-latest
-
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: test123
-          MYSQL_DATABASE: go_stock_prediction_test
-        ports:
-          - 3307:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h localhost -u root -ptest123"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=10
-
-    env:
-      TEST_MYSQL_HOST: 127.0.0.1
-      TEST_MYSQL_PORT: "3307"
-      TEST_MYSQL_USER: root
-      TEST_MYSQL_PASSWORD: test123
-      TEST_MYSQL_DB: go_stock_prediction_test
+    defaults:
+      run:
+        working-directory: api
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: api/go.mod
           cache: true
+          cache-dependency-path: api/go.sum
 
       - name: Download modules
         run: go mod download
 
       - name: Run tests
         run: |
-          go test ./... -v -count=1 \
+          go test ./... -v -count=1 -short \
             -coverprofile=coverage.out \
             -timeout 120s \
             2>&1 | tee test-output.txt
@@ -140,12 +133,65 @@ jobs:
           name: go-results
           retention-days: 7
           path: |
-            coverage.out
-            coverage-total.txt
-            package-results.txt
+            api/coverage.out
+            api/coverage-total.txt
+            api/package-results.txt
 
   # ╔═══════════════════════════════════════════════════════════════════════════
-  # ║  Python Prediction Service
+  # ║  Java Auth Service  (auth-service/)
+  # ╚═══════════════════════════════════════════════════════════════════════════
+
+  java-test:
+    name: "[Auth] Build & Test"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: auth-service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Build & test (Maven)
+        run: mvn -B verify
+
+      - name: Write step summary
+        if: always()
+        run: |
+          {
+            echo "### Java Auth Service"
+            echo ""
+            if ls target/surefire-reports/*.txt >/dev/null 2>&1; then
+              echo "| Suite | Tests | Failures | Errors | Skipped |"
+              echo "|-------|:-----:|:--------:|:------:|:-------:|"
+              for f in target/surefire-reports/*.txt; do
+                NAME=$(basename "$f" .txt | sed 's/^.*\.//')
+                LINE=$(grep -m1 "Tests run:" "$f" || true)
+                T=$(echo "$LINE" | grep -oP 'Tests run: \K[0-9]+' || echo "?")
+                FA=$(echo "$LINE" | grep -oP 'Failures: \K[0-9]+' || echo "?")
+                ER=$(echo "$LINE" | grep -oP 'Errors: \K[0-9]+' || echo "?")
+                SK=$(echo "$LINE" | grep -oP 'Skipped: \K[0-9]+' || echo "?")
+                echo "| \`${NAME}\` | ${T} | ${FA} | ${ER} | ${SK} |"
+              done
+            else
+              echo "_No surefire reports found._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: java-results
+          retention-days: 7
+          path: auth-service/target/surefire-reports/
+
+  # ╔═══════════════════════════════════════════════════════════════════════════
+  # ║  Python Prediction Service  (prediction/)
   # ╚═══════════════════════════════════════════════════════════════════════════
 
   python-lint:
@@ -236,7 +282,44 @@ jobs:
           path: prediction/junit.xml
 
   # ╔═══════════════════════════════════════════════════════════════════════════
-  # ║  Frontend
+  # ║  Rust Gateway Service  (gateway-svc/)
+  # ╚═══════════════════════════════════════════════════════════════════════════
+
+  rust-gateway:
+    name: "[Gateway] Build, Test & Clippy"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gateway-svc
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy,rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gateway-svc
+
+      # Style gates report issues but don't block the pipeline (retrofit onto
+      # existing code). Tighten by removing continue-on-error once it's clean.
+      - name: Format check
+        run: cargo fmt --check
+        continue-on-error: true
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+        continue-on-error: true
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Test
+        run: cargo test --locked
+
+  # ╔═══════════════════════════════════════════════════════════════════════════
+  # ║  Frontend  (frontend/)
   # ╚═══════════════════════════════════════════════════════════════════════════
 
   frontend-build:
@@ -283,11 +366,31 @@ jobs:
       - name: Build
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: Dockerfile.api
+          context: ./api
+          file: api/Dockerfile
           push: false
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
+
+  # ─────────────────────────────────────────────────────────────────────────
+  docker-auth:
+    name: "[Docker] Auth Image"
+    runs-on: ubuntu-latest
+    needs: [java-test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./auth-service
+          file: auth-service/Dockerfile
+          push: false
+          cache-from: type=gha,scope=auth
+          cache-to: type=gha,mode=max,scope=auth
 
   # ─────────────────────────────────────────────────────────────────────────
   docker-prediction:
@@ -308,6 +411,26 @@ jobs:
           push: false
           cache-from: type=gha,scope=prediction
           cache-to: type=gha,mode=max,scope=prediction
+
+  # ─────────────────────────────────────────────────────────────────────────
+  docker-gateway:
+    name: "[Docker] Gateway Image"
+    runs-on: ubuntu-latest
+    needs: [rust-gateway]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./gateway-svc
+          file: gateway-svc/Dockerfile
+          push: false
+          cache-from: type=gha,scope=gateway
+          cache-to: type=gha,mode=max,scope=gateway
 
   # ─────────────────────────────────────────────────────────────────────────
   docker-frontend:
@@ -341,11 +464,15 @@ jobs:
       - go-build
       - go-vet
       - go-test
+      - java-test
       - python-lint
       - python-test
+      - rust-gateway
       - frontend-build
       - docker-api
+      - docker-auth
       - docker-prediction
+      - docker-gateway
       - docker-frontend
 
     steps:
@@ -370,11 +497,15 @@ jobs:
           GO_BUILD="${{ needs.go-build.result }}"
           GO_VET="${{ needs.go-vet.result }}"
           GO_TEST="${{ needs.go-test.result }}"
+          JAVA_TEST="${{ needs.java-test.result }}"
           PY_LINT="${{ needs.python-lint.result }}"
           PY_TEST="${{ needs.python-test.result }}"
+          RUST_GW="${{ needs.rust-gateway.result }}"
           FE_BUILD="${{ needs.frontend-build.result }}"
           DK_API="${{ needs.docker-api.result }}"
+          DK_AUTH="${{ needs.docker-auth.result }}"
           DK_PRED="${{ needs.docker-prediction.result }}"
+          DK_GW="${{ needs.docker-gateway.result }}"
           DK_FE="${{ needs.docker-frontend.result }}"
 
           {
@@ -386,9 +517,13 @@ jobs:
             echo "| | Vet | $(icon "$GO_VET") \`${GO_VET}\` |"
             echo "| | Unit Tests | $(icon "$GO_TEST") \`${GO_TEST}\` |"
             echo "| | Docker Image | $(icon "$DK_API") \`${DK_API}\` |"
+            echo "| **Java Auth Service** | Build & Test | $(icon "$JAVA_TEST") \`${JAVA_TEST}\` |"
+            echo "| | Docker Image | $(icon "$DK_AUTH") \`${DK_AUTH}\` |"
             echo "| **Python Prediction** | Lint (ruff) | $(icon "$PY_LINT") \`${PY_LINT}\` |"
             echo "| | Unit Tests | $(icon "$PY_TEST") \`${PY_TEST}\` |"
             echo "| | Docker Image | $(icon "$DK_PRED") \`${DK_PRED}\` |"
+            echo "| **Rust Gateway** | Build, Test & Clippy | $(icon "$RUST_GW") \`${RUST_GW}\` |"
+            echo "| | Docker Image | $(icon "$DK_GW") \`${DK_GW}\` |"
             echo "| **Frontend** | Type-check & Build | $(icon "$FE_BUILD") \`${FE_BUILD}\` |"
             echo "| | Docker Image | $(icon "$DK_FE") \`${DK_FE}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -431,7 +566,8 @@ jobs:
 
           # Final verdict
           FAILED_CORE=0
-          for r in "$GO_BUILD" "$GO_VET" "$GO_TEST" "$PY_LINT" "$PY_TEST" "$FE_BUILD"; do
+          for r in "$GO_BUILD" "$GO_VET" "$GO_TEST" "$JAVA_TEST" \
+                   "$PY_LINT" "$PY_TEST" "$RUST_GW" "$FE_BUILD"; do
             [ "$r" = "failure" ] && FAILED_CORE=$((FAILED_CORE + 1))
           done
 

@@ -3,7 +3,9 @@ package modelsapi
 import "time"
 
 // SessionWindow mô tả phiên giao dịch được truy vấn.
+// Offset: 0 = phiên/tuần hiện tại, 1 = liền trước, ...
 type SessionWindow struct {
+	Offset int       `json:"offset"`
 	Start  time.Time `json:"start"`
 	End    time.Time `json:"end"`
 	IsOpen bool      `json:"is_open"`
@@ -35,9 +37,13 @@ type SessionBotDetail struct {
 }
 
 // SessionStatsResponse — full response của GET /api/markets/{key}/session-stats.
+// Period: "session" (mặc định) hoặc "week". Available: danh sách phiên/tuần gần đây
+// để frontend render dropdown chọn phiên.
 type SessionStatsResponse struct {
 	Market            string             `json:"market"`
+	Period            string             `json:"period"`
 	Session           SessionWindow      `json:"session"`
+	Available         []SessionWindow    `json:"available"`
 	DirectionAccuracy []SessionDirAccRow `json:"direction_accuracy"`
 	BotTrades         []SessionBotDetail `json:"bot_trades"`
 }

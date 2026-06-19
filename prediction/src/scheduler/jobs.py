@@ -1,6 +1,7 @@
 """Cron job definitions registered with the scheduler."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Callable
 
 from src.utils.logger import get_logger
@@ -9,6 +10,14 @@ log = get_logger("jobs")
 
 # Crawl counter per market — triggers retraining every 10 crawls
 _crawl_counts: dict[str, int] = {}
+
+# Maps market_key → pipeline_key (matches cron_schedules job_key in DB)
+PIPELINE_KEY_MAP: dict[str, str] = {
+    "GOLD": "crawler_gold",
+    "NASDAQ100": "crawler_nasdaq",
+    "SP500": "crawler_sp500",
+    "CRYPTO": "crawler_crypto",
+}
 
 
 def _run_pipeline(market_key: str, crawl_fn: Callable) -> None:
@@ -22,19 +31,72 @@ def _run_pipeline(market_key: str, crawl_fn: Callable) -> None:
 
     Aborts the full pipeline if crawl fails (no point predicting stale data).
     Skips entirely if the market is closed (weekend/holiday for NASDAQ/SP500).
+    A PipelineReport row is written to DB at the end of every branch.
     """
-    # Step 0: Skip closed markets (NASDAQ/SP500 cuối tuần & ngày lễ US)
+    from src.database.repository import create_pipeline_report, delete_old_pipeline_reports
     from src.utils.market_calendar import is_market_open
+
+    pipeline_key = PIPELINE_KEY_MAP.get(market_key, market_key.lower())
+    started_at = datetime.now()
+    steps: list[dict] = []
+    crawled_count = 0
+    predictions_count = 0
+    trained = False
+    status = "success"
+    error_msg: str | None = None
+
+    # Step 0: Skip closed markets (NASDAQ/SP500 cuối tuần & ngày lễ US)
     if not is_market_open(market_key):
         log.info("pipeline.skip.market_closed", market=market_key)
+        steps.append({"label": "Skip", "status": "skipped", "detail": "market closed"})
+        finished_at = datetime.now()
+        try:
+            create_pipeline_report(
+                pipeline_key=pipeline_key,
+                market=market_key,
+                status="skipped",
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_ms=int((finished_at - started_at).total_seconds() * 1000),
+                crawled_count=0,
+                predictions_count=0,
+                trained=False,
+                steps=steps,
+                error=None,
+            )
+            delete_old_pipeline_reports(7)
+        except Exception as exc:
+            log.warning("pipeline.report.write.error", market=market_key, error=str(exc))
         return
 
     # Step 1: Crawl
     try:
         saved = crawl_fn()
+        crawled_count = saved if isinstance(saved, int) else 0
         log.info("pipeline.crawl.done", market=market_key, saved=saved)
+        steps.append({"label": "Crawl", "status": "success", "detail": f"saved {saved}"})
     except Exception as exc:
         log.error("pipeline.crawl.error", market=market_key, error=str(exc))
+        error_msg = str(exc)
+        steps.append({"label": "Crawl", "status": "failed", "detail": str(exc)})
+        finished_at = datetime.now()
+        try:
+            create_pipeline_report(
+                pipeline_key=pipeline_key,
+                market=market_key,
+                status="failed",
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_ms=int((finished_at - started_at).total_seconds() * 1000),
+                crawled_count=0,
+                predictions_count=0,
+                trained=False,
+                steps=steps,
+                error=error_msg,
+            )
+            delete_old_pipeline_reports(7)
+        except Exception as rep_exc:
+            log.warning("pipeline.report.write.error", market=market_key, error=str(rep_exc))
         return  # Abort if crawl fails
 
     # Step 2: Increment counter and train every 10th crawl
@@ -47,17 +109,50 @@ def _run_pipeline(market_key: str, crawl_fn: Callable) -> None:
         try:
             from src.orchestrator.training import train_for_market
             success, sid = train_for_market(market_key)
+            trained = True
             log.info("pipeline.training.done", market=market_key, success=success, session_id=sid)
+            steps.append({"label": "Train", "status": "success", "detail": f"session_id={sid}"})
         except Exception as exc:
             log.warning("pipeline.training.error", market=market_key, error=str(exc))
+            steps.append({"label": "Train", "status": "failed", "detail": str(exc)})
+            # Training failure → pipeline continues but marks partial
+            if status == "success":
+                status = "partial"
 
     # Step 3: Predict (run_for_market also triggers sim step internally)
     try:
         from src.orchestrator.runner import run_for_market
         n = run_for_market(market_key)
+        predictions_count = n if isinstance(n, int) else 0
         log.info("pipeline.predict.done", market=market_key, predictions=n)
+        steps.append({"label": "Predict", "status": "success", "detail": f"{n} predictions"})
     except Exception as exc:
         log.error("pipeline.predict.error", market=market_key, error=str(exc))
+        steps.append({"label": "Predict", "status": "failed", "detail": str(exc)})
+        if error_msg is None:
+            error_msg = str(exc)
+        # Crawl succeeded but predict failed → partial if training ran, failed otherwise
+        status = "partial" if trained or crawled_count > 0 else "failed"
+
+    # Write report — wrap entirely so DB errors never break the pipeline
+    try:
+        finished_at = datetime.now()
+        create_pipeline_report(
+            pipeline_key=pipeline_key,
+            market=market_key,
+            status=status,
+            started_at=started_at,
+            finished_at=finished_at,
+            duration_ms=int((finished_at - started_at).total_seconds() * 1000),
+            crawled_count=crawled_count,
+            predictions_count=predictions_count,
+            trained=trained,
+            steps=steps,
+            error=error_msg,
+        )
+        delete_old_pipeline_reports(7)
+    except Exception as exc:
+        log.warning("pipeline.report.write.error", market=market_key, error=str(exc))
 
 
 def job_crawl_gold() -> None:
