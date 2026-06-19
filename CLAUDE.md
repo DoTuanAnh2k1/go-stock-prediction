@@ -17,11 +17,12 @@ Hệ thống dự đoán giá tài sản tài chính. Thu thập dữ liệu t�
 # Build API Backend (Go) — chạy từ trong thư mục api/
 cd api && go build -o api-server ./cmd
 
-# Start tất cả services (DB + Java Auth + Python Prediction + API + Gateway + Frontend + phpMyAdmin)
+# Start tất cả services (DB + Java Auth + Python Prediction + API + Gateway + Frontend + pgAdmin)
 docker-compose up -d
 
-# Import schema
-mysql -u root -p go_stock_prediction < database.sql
+# Import schema (lần đầu container db khởi động sẽ tự init từ database.sql;
+# nếu cần import thủ công):
+psql -U postgres -d go_stock_prediction -f database.sql
 
 # Regenerate proto Go stubs (cần protoc + plugins) — chạy từ thư mục api/
 cd api && protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/prediction/prediction.proto
@@ -99,11 +100,11 @@ api/pkg/store/repository/repository.go     # Interface DatabaseStore (composite)
 api/pkg/store/repository/direction_accuracy.go # DirectionAccuracyStore interface — GetDirectionAccuracy(market)
 api/pkg/store/repository/user.go           # UserStore interface — CreateUser, GetUserByUsername, GetUserByID, GetAllUsers, DeleteUser, AdminExists
 api/pkg/store/repository/monitoring.go     # MonitoringStore interface — GetMarketCrawlStats(market), GetMarketPredStats(market)
-api/pkg/store/mysql/                        # Triển khai MySQL dùng GORM
-api/pkg/store/mysql/user.go                 # MySQL implementation của UserStore
-api/pkg/store/mysql/cron_schedule.go        # MySQL implementation của CronScheduleStore — GetAllCronSchedules, GetCronScheduleByKey, UpsertCronSchedule
-api/pkg/store/mysql/direction_accuracy.go   # MySQL implementation của DirectionAccuracyStore — raw SQL query GROUP BY algorithm trên 4 prediction tables
-api/pkg/store/mysql/monitoring.go           # MySQL implementation của MonitoringStore — raw SQL crawl freshness (daily+intraday tables) và per-algo pred counts per market
+api/pkg/store/postgres/                     # Triển khai PostgreSQL/TimescaleDB dùng GORM
+api/pkg/store/postgres/user.go              # PostgreSQL implementation của UserStore
+api/pkg/store/postgres/cron_schedule.go     # PostgreSQL implementation của CronScheduleStore — GetAllCronSchedules, GetCronScheduleByKey, UpsertCronSchedule
+api/pkg/store/postgres/direction_accuracy.go # PostgreSQL implementation của DirectionAccuracyStore — raw SQL query GROUP BY algorithm trên 4 prediction tables
+api/pkg/store/postgres/monitoring.go        # PostgreSQL implementation của MonitoringStore — raw SQL crawl freshness (daily+intraday tables) và per-algo pred counts per market
 api/pkg/models/models_db/                   # GORM struct: GoldPrice, GoldPrediction, NasdaqPrice, Sp500Price, CryptoPrice, intraday prices, SyncLog, TrainingLog, TrainingMetrics, User, CronSchedule
 api/pkg/models/models_db/cron_schedule.go   # CronSchedule GORM struct (JobKey, JobName, CronExpression, Enabled, UpdatedAt)
 api/pkg/models/models_db/user.go            # User GORM struct (Username, PasswordHash, Role, FullName, Email, Phone — FullName/Email/Phone nullable)
@@ -247,7 +248,7 @@ gateway-svc/                            # Rust Axum HTTP/HTTPS Gateway — expos
 1. `config.InitConfig()` — Load file `.env`
 2. Set timezone — `Asia/Ho_Chi_Minh`
 3. `logger.Init()` — Khởi tạo ZeroLog
-4. `repository.Init()` — Kết nối MySQL (shared DB, dùng cho read queries)
+4. `repository.Init()` — Kết nối PostgreSQL/TimescaleDB (shared DB, dùng cho read queries)
 5. `authclient.Init(config.GetAuthGRPCTarget())` — Kết nối tới Java Auth Service (gRPC :8120)
 6. `grpcclient.Init(config.GetGRPCConfig().ClientTarget)` — Kết nối tới Python Prediction Service
 7. `server.StartBackupScheduler(store)` — Khởi động Go-side backup scheduler (seed + cron poll)
@@ -284,21 +285,22 @@ ADMIN_USERNAME=admin           # Username đăng nhập dashboard (default: admi
 ADMIN_PASSWORD=admin123        # Password đăng nhập dashboard (default: admin123)
 JWT_SECRET=change-me-in-production  # Secret ký JWT — bắt buộc đổi trong production
 
-# Database
-DB_DRIVER=mysql
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=123
-MYSQL_DB_NAME=go_stock_prediction
-MYSQL_DEBUG=false
+# Database (PostgreSQL / TimescaleDB)
+DB_DRIVER=postgresql
+POSTGRES_HOST=db               # Docker: db; local: localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=123
+POSTGRES_DB=go_stock_prediction
+POSTGRES_DEBUG=false
+DB_PASSWORD=123                # Dùng bởi Java Auth Service (Flyway/datasource)
 
 # Logging
 LOG_LEVEL=DEBUG
 DB_LOG_LEVEL=DEBUG
 
 # Backup
-BACKUP_DIR=/backups              # Thư mục lưu file backup mysqldump (chỉ mount vào container api — prediction không còn dùng)
+BACKUP_DIR=/backups              # Thư mục lưu file backup pg_dump (chỉ mount vào container api — prediction không còn dùng)
 ```
 
 ## Công cụ khám phá code (cho AI assistant)
@@ -334,7 +336,7 @@ BACKUP_DIR=/backups              # Thư mục lưu file backup mysqldump (chỉ 
 - **Shared feature builder (Python):** `prediction/src/algorithms/features.py` cung cấp hai hàm dùng chung cho LightGBM, XGBoost, RandomForest: `build_basic_features()` (14 features: lag returns 1-10, RSI, MA5/20 ratios, vol ratio) và `build_enhanced_features()` (~30 features: lag returns 1-10, MA5/10/20/50 ratios, multi-timeframe returns 5/10/20d, RSI, StochRSI %K/%D, Bollinger %B, MACD line/hist normalized, rolling volatility 5/10/20d, ROC(10), momentum 5/10, volume ratio). Khi `pandas-ta` có sẵn thì dùng pandas-ta; nếu không dùng numpy-only fallback hoàn toàn tương đương. Minimum data: `MIN_DATA_POINTS = 80`.
 - **Optuna hyperparameter tuning:** LightGBM và XGBoost chạy Optuna Bayesian search khi data >= 200 points và optuna được cài (`[ml]` extras). Search tối đa 30 trials, timeout 120s; fallback về `_DEFAULT_PARAMS` nếu optuna không có hoặc data không đủ. Search space — LightGBM: learning_rate, num_leaves, min_data_in_leaf, n_estimators, subsample, colsample_bytree. XGBoost: n_estimators, learning_rate, max_depth, subsample, colsample_bytree, min_child_weight. RandomForest không dùng Optuna (fixed: n_estimators=200, max_depth=8, min_samples_leaf=5).
 - **Market calendar — đóng cửa cuối tuần/lễ NYSE:** NASDAQ và SP500 không chạy crawl/predict/bot-trade vào Thứ 7, Chủ nhật và ngày lễ NYSE (New Year's Day, MLK Day, Presidents' Day, Good Friday, Memorial Day, Juneteenth, Independence Day, Labor Day, Thanksgiving, Christmas). Logic tập trung tại `prediction/src/utils/market_calendar.py` — hàm `is_market_open(market_key, when)`, không phụ thuộc thư viện ngoài, tự tính ngày lễ theo năm. Ba điểm guard trong Python service: (1) `scheduler/jobs.py::_run_pipeline` — skip toàn bộ pipeline nếu market đóng; (2) `orchestrator/runner.py::run_for_market` — return 0 predictions và bỏ qua sim live step; (3) `simulation/engine.py::run_live_step` — lọc bỏ bot thuộc market đóng trong job bot 8PM hàng ngày. GOLD và CRYPTO không bị ảnh hưởng — luôn trả `True`.
-- **Timezone — ICT-at-rest:** Toàn bộ cột `datetime` trong DB lưu theo múi giờ `Asia/Ho_Chi_Minh` (ICT, UTC+7) dưới dạng wallclock — **không dùng UTC**. MySQL container chạy UTC nhưng không ảnh hưởng vì kiểu cột là `datetime` (lưu verbatim, không có timezone conversion). Hai quy tắc bắt buộc: (1) **Python** luôn dùng `datetime.now()` — container được set `TZ=Asia/Ho_Chi_Minh` nên trả naive ICT. **Tuyệt đối không dùng `datetime.utcnow()`** — sẽ ghi UTC vào DB, lệch 7 tiếng so với giá trị nghiệp vụ. (2) **Go** giữ `loc=Asia%2FHo_Chi_Minh` trong DSN (xem `api/pkg/store/mysql/mysql.go`) và set `time.Local = Asia/Ho_Chi_Minh` trong `api/cmd/main.go` — mọi `time.Now()` và so sánh thời gian trong API Backend đều theo ICT. Frontend không cần xử lý đặc biệt: `new Date(s).toLocaleString()` hiển thị đúng giờ local của trình duyệt. Các cột vốn đã ICT và không bị ảnh hưởng: `prediction_date`, `target_date`, `trade_date`, `snapshot_date`, `trading_date`, `indicator_date`, `start_date`, intraday `timestamp`.
+- **Timezone — ICT-at-rest:** Toàn bộ cột `TIMESTAMP` trong DB lưu theo múi giờ `Asia/Ho_Chi_Minh` (ICT, UTC+7) dưới dạng wallclock — **không dùng UTC**. PostgreSQL container chạy UTC nhưng không ảnh hưởng vì kiểu cột là `TIMESTAMP WITHOUT TIME ZONE` (lưu verbatim, không có timezone conversion). Hai quy tắc bắt buộc: (1) **Python** luôn dùng `datetime.now()` — container được set `TZ=Asia/Ho_Chi_Minh` nên trả naive ICT. **Tuyệt đối không dùng `datetime.utcnow()`** — sẽ ghi UTC vào DB, lệch 7 tiếng so với giá trị nghiệp vụ. (2) **Go** set `time.Local = Asia/Ho_Chi_Minh` trong `api/cmd/main.go` — mọi `time.Now()` và so sánh thời gian trong API Backend đều theo ICT. Frontend không cần xử lý đặc biệt: `new Date(s).toLocaleString()` hiển thị đúng giờ local của trình duyệt. Các cột vốn đã ICT và không bị ảnh hưởng: `prediction_date`, `target_date`, `trade_date`, `snapshot_date`, `trading_date`, `indicator_date`, `start_date`, intraday `timestamp`.
 
 ## Hướng dẫn mở rộng (Extension Guide)
 
@@ -379,7 +381,7 @@ Orchestrator Python (`prediction/src/orchestrator/runner.py`) tự động picks
 
 Các bước bắt buộc:
 1. Tạo DB model + migration trong `api/pkg/models/models_db/` (Go GORM struct) — Python ORM model tương ứng trong `prediction/src/database/models.py`.
-2. Thêm repository methods trong `prediction/src/database/repository.py` và (nếu cần) trong Go `api/pkg/store/repository/repository.go` + `api/pkg/store/mysql/`.
+2. Thêm repository methods trong `prediction/src/database/repository.py` và (nếu cần) trong Go `api/pkg/store/repository/repository.go` + `api/pkg/store/postgres/`.
 3. Tạo crawler trong `prediction/src/crawlers/<tên>.py` — implement `BaseCrawler`.
 4. Đăng ký cron job trong `prediction/src/scheduler/jobs.py`.
 5. Thêm prediction logic vào orchestrator hoặc tạo market-specific predict function.
@@ -387,11 +389,14 @@ Các bước bắt buộc:
 
 ## Database
 
-- **ORM:** GORM v2
+- **Engine:** TimescaleDB (PostgreSQL 16) — image `timescale/timescaledb:latest-pg16`, container `timescaledb`, port nội bộ 5432
+- **ORM:** GORM v2 với GORM postgres driver (`api/pkg/store/postgres/`)
+- **Auto-migrate:** Đã tắt — schema do `database.sql` quản lý (vì hypertable composite PK xung đột với AutoMigrate). Schema init tự động khi container `db` lần đầu lên qua mount `/docker-entrypoint-initdb.d/01-schema.sql`.
 - **Tables chính:** `sync_logs`, `gold_prices`, `gold_predictions`, `nasdaq_prices`, `nasdaq_predictions`, `sp500_prices`, `sp500_predictions`, `crypto_prices`, `crypto_predictions`, `training_logs`, `training_metrics`, `users`, `cron_schedules`, `market_groups`, `market_group_markets`, `user_market_groups`
-- **RBAC tables:** `market_groups`, `market_group_markets`, `user_market_groups` — quản lý bởi Java Auth Service qua Flyway (không trong GORM auto-migrate). Bảng `users` có thêm cột nullable `full_name`, `email`, `phone` (thêm qua Flyway V2).
-- **Auto-migrate:** Chạy khi start app qua `api/pkg/models/models_db/migrations.go`
-- **Schema đầy đủ:** `database.sql` ở root
+- **Hypertables (TimescaleDB):** `gold_prices`, `nasdaq_prices`, `sp500_prices`, `crypto_prices`, `*_intraday_prices` (theo time column), `gold_predictions`, `nasdaq_predictions`, `sp500_predictions`, `crypto_predictions` (theo `prediction_date`), `sim_trades` (theo `trade_date`), `sim_portfolio_snapshots` (theo `snapshot_date`), `sync_logs`, `training_logs` (theo `created_at`). Tất cả hypertable có **composite PK** (id + time column).
+- **RBAC tables:** `market_groups`, `market_group_markets`, `user_market_groups` — quản lý bởi Java Auth Service qua Flyway (không trong GORM auto-migrate). Bảng `users` có thêm cột nullable `full_name`, `email`, `phone` (thêm qua Flyway V2). Auth Service dùng dependency `flyway-database-postgresql` (Flyway 10.x) để nhận diện PG16.
+- **Schema đầy đủ:** `database.sql` ở root (PostgreSQL syntax: BIGSERIAL, NUMERIC, TIMESTAMP, NOW())
+- **ORM column convention:** Cột volume của `crypto_prices` là `volume24h` (Go GORM field `Volume24h`, Python ORM `volume24h`).
 - **direction_correct (nullable boolean):** Có mặt trong tất cả 4 prediction tables. Được set bởi `reconcile_predictions()` trong Python; `NULL` = chưa reconcile, `1` = hướng đúng, `0` = hướng sai. Dùng cho endpoint `/api/predictions/direction-accuracy`.
 
 ## Cron schedules
@@ -424,7 +429,7 @@ Go-side `seedCronSchedules()` trong `api/pkg/server/api_schedules.go` chỉ inse
 | `weekly_training` | `0 0 9 * * 0` | **tắt** | Huấn luyện toàn bộ tất cả markets — disabled (thay bằng per-market training jobs) |
 | `daily_prediction` | `0 0 */1 * * *` | **tắt** | Dự đoán tất cả markets — disabled (thay bằng pipeline trong từng crawler job) |
 | `simulation_daily` | `0 0 20 * * *` | bật | Bot trading hàng ngày (8PM) |
-| `daily_backup` | `0 0 3 * * *` | bật | Backup MySQL database hàng ngày lúc 3AM — **chạy bởi Go API Backend** (`backup_scheduler.go`), không phải Python |
+| `daily_backup` | `0 0 3 * * *` | bật | Backup PostgreSQL database hàng ngày lúc 3AM — **chạy bởi Go API Backend** (`backup_scheduler.go`), không phải Python |
 
 ### Pipeline logic
 
@@ -442,21 +447,21 @@ Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`
 | API Backend | 8118 | HTTP | Internal only — toàn bộ `/api/*` endpoints; Swagger UI tại `http://localhost:8118/swagger/` |
 | Prediction Service | 8119 | gRPC | Internal only (không expose ra ngoài) |
 | Auth Service | 8120 | gRPC | Internal only — Java Spring Boot RBAC service |
-| MySQL | 3306 | TCP | Docker |
-| phpMyAdmin | 8081 | HTTP | Docker (bind 127.0.0.1) |
+| TimescaleDB (PostgreSQL) | 5432 | TCP | Docker internal (container `timescaledb`) |
+| pgAdmin | 8081 | HTTP | Docker (bind 127.0.0.1) |
 | Frontend | 3000 | HTTP | Internal only — static nginx serving React SPA (qua gateway) |
 
 ## Docker Compose Services
 
 | Service | Image/Dockerfile | Depends On | Ghi chú |
 |---------|-----------------|------------|---------|
-| `db` | `mysql:8.0` | — | Schema tự init từ `database.sql` |
+| `db` | `timescale/timescaledb:latest-pg16` | — | Container `timescaledb`; schema tự init từ `database.sql` (mount `/docker-entrypoint-initdb.d/01-schema.sql`); volume `postgres_data:/var/lib/postgresql/data` |
 | `prediction` | `prediction/Dockerfile` | `db` (healthy) | **Python** Prediction Service — gRPC :8119 (internal); không còn mount backup volume |
-| `auth` | `auth-service/Dockerfile` | `db` (healthy) | **Java** Spring Boot Auth Service — gRPC :8120 (internal); Flyway migrations, seeds super_admin |
-| `api` | `api/Dockerfile` | `db` (healthy), `prediction`, `auth` | Go API Backend — HTTP :8118 (internal); mount volume `backup_data:/backups`; chạy scheduled backup (`backup_scheduler.go`) |
+| `auth` | `auth-service/Dockerfile` | `db` (healthy) | **Java** Spring Boot Auth Service — gRPC :8120 (internal); Flyway migrations (PostgreSQL), seeds super_admin |
+| `api` | `api/Dockerfile` | `db` (healthy), `prediction`, `auth` | Go API Backend — HTTP :8118 (internal); mount volume `backup_data:/backups`; chạy scheduled backup pg_dump (`backup_scheduler.go`); image cài `postgresql-client` |
 | `gateway` | `gateway-svc/Dockerfile` | `api`, `frontend` | **Rust** Axum gateway — expose :80/:443; TLS termination; route `/api` → api:8118, `/` → frontend:3000; bind-mount `./gateway-svc/certs:/etc/gateway/certs` |
 | `frontend` | `frontend/Dockerfile` | `api` | React SPA — static nginx internal port 3000 (không expose trực tiếp — qua gateway) |
-| `phpmyadmin` | `phpmyadmin/phpmyadmin` | `db` | Admin UI — expose 127.0.0.1:8081 |
+| `pgadmin` | `dpage/pgadmin4:latest` | `db` | Admin UI — expose 127.0.0.1:8081 (thay phpMyAdmin) |
 
 ## API Endpoints
 
@@ -587,7 +592,7 @@ Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`
 | Method | Path | Ghi chú |
 |--------|------|---------|
 | `GET` | `/api/backups` | Danh sách file backup — yêu cầu JWT; trả `[{filename, size, size_human, created_at}]` |
-| `POST` | `/api/trigger/backup` | Tạo backup ngay (mysqldump → gzip) — yêu cầu admin JWT; trả `{filename, size, message}`; giữ 10 backup gần nhất |
+| `POST` | `/api/trigger/backup` | Tạo backup ngay (pg_dump → gzip) — yêu cầu admin JWT; trả `{filename, size, message}`; giữ 10 backup gần nhất |
 | `GET` | `/api/backups/{filename}` | Tải xuống file backup — yêu cầu JWT; stream file .sql.gz |
 | `DELETE` | `/api/backups/{filename}` | Xóa file backup — yêu cầu admin JWT |
 
@@ -707,7 +712,7 @@ cd api && make test-unit
 # Xem coverage
 cd api && make test-coverage   # tạo coverage.html
 
-# Khởi tạo test DB (MySQL port 3307)
+# Khởi tạo test DB (PostgreSQL port 5433)
 cd api && make test-db-up
 cd api && make test-db-down
 ```
