@@ -1,15 +1,24 @@
 package shell
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 )
 
-// splitPipe splits "cmd | grep ..." into the command and the grep spec. If
-// there is no pipe, grep is "".
+// splitPipe splits "cmd | grep ..." into the command and the grep spec, ignoring
+// any '|' that appears inside "double quotes" (so a regex like "A|B" survives).
 func splitPipe(line string) (cmd, grep string) {
-	if i := strings.IndexByte(line, '|'); i >= 0 {
-		return strings.TrimSpace(line[:i]), strings.TrimSpace(line[i+1:])
+	inQuote := false
+	for i, r := range line {
+		switch r {
+		case '"':
+			inQuote = !inQuote
+		case '|':
+			if !inQuote {
+				return strings.TrimSpace(line[:i]), strings.TrimSpace(line[i+1:])
+			}
+		}
 	}
 	return strings.TrimSpace(line), ""
 }
@@ -21,9 +30,11 @@ type grepSpec struct {
 	before     int // -B
 }
 
-// parseGrep parses "grep [-i] [-A n] [-B n] [-C n] pattern...".
+// parseGrep parses `grep [-i] [-A n] [-B n] [-C n] pattern`. The pattern may be
+// quoted (to include spaces or a leading '-') and is treated as a regular
+// expression. Uses the shared tokenizer so "abc xyz" stays one token.
 func parseGrep(spec string) (*grepSpec, bool) {
-	toks := strings.Fields(spec)
+	toks := tokenize(spec)
 	if len(toks) == 0 || toks[0] != "grep" {
 		return nil, false
 	}
@@ -66,27 +77,43 @@ func parseGrep(spec string) (*grepSpec, bool) {
 	return g, true
 }
 
-// applyGrep filters rendered output by a grep spec (substring match, with -A/-B
-// context lines, "--" separators between non-adjacent groups, like Unix grep).
+// matcher returns the line-matching function for the spec: a regular expression
+// when the pattern compiles, otherwise a literal substring match.
+func (g *grepSpec) matcher() func(string) bool {
+	expr := g.pattern
+	if g.ignoreCase {
+		expr = "(?i)" + expr
+	}
+	if re, err := regexp.Compile(expr); err == nil {
+		return re.MatchString
+	}
+	needle := g.pattern
+	if g.ignoreCase {
+		needle = strings.ToLower(needle)
+	}
+	return func(line string) bool {
+		hay := line
+		if g.ignoreCase {
+			hay = strings.ToLower(line)
+		}
+		return strings.Contains(hay, needle)
+	}
+}
+
+// applyGrep filters rendered output by a grep spec (regex match, with -A/-B
+// context lines and "--" separators between non-adjacent groups, like Unix grep).
 func applyGrep(output, spec string) string {
 	g, ok := parseGrep(spec)
 	if !ok || g.pattern == "" {
 		return output
 	}
 	lines := strings.Split(output, "\n")
-	needle := g.pattern
-	if g.ignoreCase {
-		needle = strings.ToLower(needle)
-	}
+	match := g.matcher()
 
 	keep := make([]bool, len(lines))
 	any := false
 	for i, l := range lines {
-		hay := l
-		if g.ignoreCase {
-			hay = strings.ToLower(l)
-		}
-		if strings.Contains(hay, needle) {
+		if match(l) {
 			any = true
 			for j := i - g.before; j <= i+g.after; j++ {
 				if j >= 0 && j < len(lines) {

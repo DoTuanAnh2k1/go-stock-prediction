@@ -61,9 +61,14 @@ Pipe any command's output through a built-in `grep` with `-A`/`-B`/`-C`/`-i`:
 get session list | grep -i gold
 get market prices market crypto | grep -A 2 BTC
 get schedules list | grep -B 1 -A 1 crawler
+get session list | grep "GOLD|CRYPTO"        # regex alternation
+get session list | grep -i "gold gru"         # quoted phrase with a space
 ```
 
 `-A n` keeps n lines after a match, `-B n` before, `-C n` both, `-i` ignores case.
+The pattern is a **regular expression** (so `A|B` matches A or B); **quote** it to
+include spaces or a leading `-`. A `|` inside the quotes is part of the pattern,
+not the pipe.
 
 ## Command reference
 
