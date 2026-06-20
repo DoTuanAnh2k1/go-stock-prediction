@@ -3,11 +3,10 @@ from __future__ import annotations
 
 import threading
 import uuid
-from datetime import date as date_type
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from src.algorithms.registry import build_algorithms, set_algos_for_market
+from src.algorithms.registry import build_algorithms, get_algos_for_market, set_algos_for_market
 from src.crawlers.crypto import COINS as CRYPTO_COINS
 from src.crawlers.nasdaq import NASDAQ_SYMBOLS
 from src.crawlers.sp500 import SP500_SYMBOLS
@@ -316,7 +315,14 @@ def train_all_algorithms() -> tuple[bool, str]:
 
 
 def train_single_algorithm(algorithm_name: str) -> tuple[bool, str]:
-    """Train a single named algorithm."""
+    """Train a single named algorithm — per-market (market-aware).
+
+    Builds/uses the market-scoped cached instance for each market and trains
+    only the requested algorithm on that market's series. This keeps the
+    algorithm's ``_market_key`` correct, so market-aware/stateful models
+    (e.g. rl_dqn) write properly scoped per-market checkpoints, and it does
+    NOT clobber the trained state of the other cached algorithms.
+    """
     global _is_training, _last_trained
 
     with _lock:
@@ -324,50 +330,63 @@ def train_single_algorithm(algorithm_name: str) -> tuple[bool, str]:
             return False, ""
         _is_training = True
 
-    algos = build_algorithms()
-    algo = algos.get(algorithm_name)
-
-    if not algo:
-        with _lock:
-            _is_training = False
-        raise ValueError(f"Unknown algorithm: {algorithm_name}")
-
     session_id = str(uuid.uuid4())
-    started_at = datetime.now()
+    found = False
 
     try:
-        all_series = _collect_all_training_series()
+        for mk in ("GOLD", "NASDAQ100", "CRYPTO", "SP500"):
+            # Cached, market-scoped instances (_market_key already set to mk).
+            algos = get_algos_for_market(mk)
+            algo = algos.get(algorithm_name)
+            if not algo:
+                continue
+            found = True
 
-        # Convert to (prices, volumes) tuples — drop label
-        series_data = [
-            (price_list, vol_list if vol_list else None)
-            for price_list, vol_list, _label in all_series
-        ]
+            series = _collect_series_for_market(mk)
+            if not series:
+                log.warning("training.single.no_data", algo=algorithm_name, market=mk)
+                continue
 
-        try:
-            algo.train_batch(series_data)
-            success = len(series_data)
-            error = 0
-        except Exception as exc:
-            log.warning("training.single.algo.failed", algo=algorithm_name, error=str(exc))
-            success = 0
-            error = len(series_data)
+            series_data = [
+                (price_list, vol_list if vol_list else None)
+                for price_list, vol_list, _label in series
+            ]
 
-        duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
-        accuracy = Decimal(str(round(success / max(1, success + error), 4)))
+            algo_started = datetime.now()
+            try:
+                # Trains the cached instance in place; market-aware models save
+                # their per-market checkpoint here (e.g. rl_dqn_{mk}.pt).
+                algo.train_batch(series_data)
+                success = len(series_data)
+                error = 0
+            except Exception as exc:
+                log.warning("training.single.algo.failed", algo=algorithm_name, market=mk, error=str(exc))
+                success = 0
+                error = len(series_data)
 
-        repo.create_training_log(
-            session_id=session_id,
-            algorithm_name=algorithm_name,
-            market_key="all",
-            total_stocks=len(series_data),
-            success_count=success,
-            error_count=error,
-            accuracy=accuracy,
-            duration_ms=duration_ms,
-            started_at=started_at,
-            completed_at=datetime.now(),
-        )
+            # Re-store the cache (other algorithms untouched).
+            set_algos_for_market(mk, algos)
+
+            duration_ms = int((datetime.now() - algo_started).total_seconds() * 1000)
+            accuracy = Decimal(str(round(success / max(1, success + error), 4)))
+            try:
+                repo.create_training_log(
+                    session_id=session_id,
+                    algorithm_name=algorithm_name,
+                    market_key=mk.lower(),
+                    total_stocks=len(series_data),
+                    success_count=success,
+                    error_count=error,
+                    accuracy=accuracy,
+                    duration_ms=duration_ms,
+                    started_at=algo_started,
+                    completed_at=datetime.now(),
+                )
+            except Exception as exc:
+                log.warning("training.log.failed", error=str(exc))
+
+        if not found:
+            raise ValueError(f"Unknown algorithm: {algorithm_name}")
 
     finally:
         with _lock:
@@ -375,6 +394,19 @@ def train_single_algorithm(algorithm_name: str) -> tuple[bool, str]:
             _last_trained = datetime.now()
 
     return True, session_id
+
+
+def _to_date(value):
+    """Normalise a date/datetime to a plain ``date`` for safe comparison.
+
+    DB columns return datetime in some markets (e.g. crypto_prices.trading_date)
+    and date in others. ``datetime`` is a subclass of ``date``, so an
+    ``isinstance(x, date)`` guard does NOT prevent a ``datetime >= date``
+    comparison, which raises TypeError. Always normalise both sides first.
+    """
+    if isinstance(value, datetime):
+        return value.date()
+    return value
 
 
 def reconcile_predictions() -> int:
@@ -451,7 +483,7 @@ def reconcile_predictions() -> int:
 
         for pred in nasdaq_pending:
             # target_date is DATETIME, trading_date in NasdaqPrice is DATE — convert
-            target_d = pred.target_date.date() if isinstance(pred.target_date, datetime) else pred.target_date
+            target_d = _to_date(pred.target_date)
 
             prices = repo.get_nasdaq_prices_asc(pred.symbol, limit=60)
             if not prices:
@@ -460,7 +492,7 @@ def reconcile_predictions() -> int:
             # Find first price ON OR AFTER target_d — avoids using same-day price as actual
             prices_after = [
                 p for p in prices
-                if isinstance(p.trading_date, date_type) and p.trading_date >= target_d
+                if p.trading_date is not None and _to_date(p.trading_date) >= target_d
             ]
             if not prices_after:
                 continue  # data not available yet for this target date
@@ -497,7 +529,7 @@ def reconcile_predictions() -> int:
         log.info("reconcile.sp500.pending", count=len(sp500_pending))
 
         for pred in sp500_pending:
-            target_d = pred.target_date.date() if isinstance(pred.target_date, datetime) else pred.target_date
+            target_d = _to_date(pred.target_date)
 
             prices = repo.get_sp500_prices_asc(pred.symbol, limit=60)
             if not prices:
@@ -506,7 +538,7 @@ def reconcile_predictions() -> int:
             # Find first price ON OR AFTER target_d — avoids using same-day price as actual
             prices_after = [
                 p for p in prices
-                if isinstance(p.trading_date, date_type) and p.trading_date >= target_d
+                if p.trading_date is not None and _to_date(p.trading_date) >= target_d
             ]
             if not prices_after:
                 continue  # data not available yet for this target date
@@ -543,7 +575,7 @@ def reconcile_predictions() -> int:
         log.info("reconcile.crypto.pending", count=len(crypto_pending))
 
         for pred in crypto_pending:
-            target_d = pred.target_date.date() if isinstance(pred.target_date, datetime) else pred.target_date
+            target_d = _to_date(pred.target_date)
 
             prices = repo.get_crypto_prices_asc(pred.coin_id, limit=60)
             if not prices:
@@ -552,7 +584,7 @@ def reconcile_predictions() -> int:
             # Find first price ON OR AFTER target_d — same pattern as NASDAQ/SP500
             prices_after = [
                 p for p in prices
-                if isinstance(p.trading_date, date_type) and p.trading_date >= target_d
+                if p.trading_date is not None and _to_date(p.trading_date) >= target_d
             ]
             if not prices_after:
                 continue  # data not available yet for this target date
