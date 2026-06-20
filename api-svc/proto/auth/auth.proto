@@ -29,6 +29,29 @@ service AuthService {
   rpc AddUserToGroup(UserGroupRequest)        returns (Empty);
   rpc RemoveUserFromGroup(UserGroupRequest)   returns (Empty);
   rpc GetUserMarketGroups(UserRequest)        returns (ListGroupsResponse);
+
+  // Command RBAC — handler catalog (source of truth = cli-svc, upserted on boot)
+  rpc UpsertHandlers(UpsertHandlersRequest) returns (Empty);
+  rpc ListHandlers(CallerMeta)              returns (ListHandlersResponse);
+
+  // Command RBAC — commands
+  rpc ListCommands(CallerMeta)            returns (ListCommandsResponse);
+  rpc CreateCommand(CreateCommandRequest) returns (CommandResponse);
+  rpc UpdateCommand(UpdateCommandRequest) returns (CommandResponse);
+  rpc DeleteCommand(DeleteCommandRequest) returns (Empty);
+
+  // Command RBAC — command groups (mirror market groups)
+  rpc ListCommandGroups(CallerMeta)               returns (ListCommandGroupsResponse);
+  rpc CreateCommandGroup(CreateCmdGroupRequest)   returns (CommandGroupResponse);
+  rpc UpdateCommandGroup(UpdateCmdGroupRequest)   returns (CommandGroupResponse);
+  rpc DeleteCommandGroup(DeleteCmdGroupRequest)   returns (Empty);
+  rpc SetGroupCommands(SetGroupCommandsRequest)   returns (Empty);
+  rpc ListCmdGroupUsers(CmdGroupRequest)          returns (ListUsersResponse);
+  rpc AddUserToCmdGroup(UserCmdGroupRequest)      returns (Empty);
+  rpc RemoveUserFromCmdGroup(UserCmdGroupRequest) returns (Empty);
+
+  // Command RBAC — enforcement: commands a user is allowed to execute
+  rpc GetUserCommands(UserRequest) returns (ListCommandsResponse);
 }
 
 message CallerMeta {
@@ -156,4 +179,115 @@ message UserGroupRequest {
 message UserRequest {
   CallerMeta caller  = 1;
   int64      user_id = 2;
+}
+
+// ---- Command RBAC ----
+
+message CliHandler {
+  string handler_key  = 1;
+  string display_name = 2;
+  string verb         = 3;  // get/set/update/delete
+  string resource     = 4;
+  string arg_schema   = 5;  // JSON array string
+  bool   enabled      = 6;
+}
+
+message UpsertHandlersRequest {
+  string              secret   = 1;  // internal shared secret (cli-svc -> auth)
+  repeated CliHandler handlers = 2;
+}
+
+message ListHandlersResponse {
+  repeated CliHandler handlers = 1;
+}
+
+message Command {
+  int64  id          = 1;
+  string name        = 2;
+  string description = 3;
+  string handler_key = 4;
+  string args        = 5;  // JSON object string
+  bool   enabled     = 6;
+  string created_at  = 7;
+  string updated_at  = 8;
+}
+
+message ListCommandsResponse {
+  repeated Command commands = 1;
+}
+
+message CommandResponse {
+  Command command = 1;
+}
+
+message CreateCommandRequest {
+  CallerMeta caller      = 1;
+  string     name        = 2;
+  string     description = 3;
+  string     handler_key = 4;
+  string     args        = 5;
+  bool       enabled     = 6;
+}
+
+message UpdateCommandRequest {
+  CallerMeta caller      = 1;
+  int64      command_id  = 2;
+  string     name        = 3;
+  string     description = 4;
+  string     handler_key = 5;
+  string     args        = 6;
+  bool       enabled     = 7;
+}
+
+message DeleteCommandRequest {
+  CallerMeta caller     = 1;
+  int64      command_id = 2;
+}
+
+message CommandGroupResponse {
+  int64          id          = 1;
+  string         name        = 2;
+  string         description = 3;
+  repeated int64 command_ids = 4;
+  string         created_at  = 5;
+  string         updated_at  = 6;
+}
+
+message ListCommandGroupsResponse {
+  repeated CommandGroupResponse groups = 1;
+}
+
+message CreateCmdGroupRequest {
+  CallerMeta caller      = 1;
+  string     name        = 2;
+  string     description = 3;
+}
+
+message UpdateCmdGroupRequest {
+  CallerMeta caller      = 1;
+  int64      group_id    = 2;
+  string     name        = 3;
+  string     description = 4;
+}
+
+message DeleteCmdGroupRequest {
+  CallerMeta caller   = 1;
+  int64      group_id = 2;
+}
+
+message SetGroupCommandsRequest {
+  CallerMeta     caller      = 1;
+  int64          group_id    = 2;
+  repeated int64 command_ids = 3;
+}
+
+message CmdGroupRequest {
+  CallerMeta caller   = 1;
+  int64      group_id = 2;
+}
+
+message UserCmdGroupRequest {
+  CallerMeta caller   = 1;
+  int64      user_id  = 2;
+  int64      group_id = 3;
 }
