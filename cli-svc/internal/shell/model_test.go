@@ -75,18 +75,43 @@ func TestEnterBeforeLoadedIsSafe(t *testing.T) {
 	}
 }
 
-// The core report: with the dropdown open, Enter PICKS the highlighted item and
-// advances — it does NOT execute (which previously ran an incomplete command and
-// errored).
-func TestEnterPicksNotRuns(t *testing.T) {
+// Dropdown stays hidden until Tab; then Enter PICKS the highlighted item and
+// advances (it does not run).
+func TestTabOpensThenEnterPicks(t *testing.T) {
 	m := newTestModel(t, "super_admin", true)
-	m = setInput(m, "get market prices")
+	m = setInput(m, "get market ")
+	if m.showSuggest {
+		t.Fatal("dropdown should be hidden until Tab")
+	}
+	m, _ = step(t, m, key(tea.KeyTab))
+	if !m.showSuggest {
+		t.Fatal("Tab should open the dropdown")
+	}
 	m, cmd := step(t, m, key(tea.KeyEnter))
 	if cmd != nil {
 		t.Fatal("Enter with open dropdown should pick, not run (no cmd)")
 	}
-	if m.input.Value() != "get market prices " {
+	if m.input.Value() != "get market latest " {
 		t.Fatalf("Enter should commit the highlighted name + space, got %q", m.input.Value())
+	}
+	if m.showSuggest {
+		t.Fatal("dropdown should hide after a pick")
+	}
+}
+
+// A typed command + Enter (no Tab → dropdown hidden) RUNS and records history.
+func TestEnterRunsWhenClosed(t *testing.T) {
+	m := newTestModel(t, "super_admin", true)
+	m = setInput(m, "get schedules list")
+	m, cmd := step(t, m, key(tea.KeyEnter))
+	if cmd == nil {
+		t.Fatal("typed command + Enter should run")
+	}
+	if m.input.Value() != "" {
+		t.Errorf("input not cleared after run: %q", m.input.Value())
+	}
+	if len(m.cmdHistory) != 1 || m.cmdHistory[0] != "get schedules list" {
+		t.Errorf("history not recorded: %v", m.cmdHistory)
 	}
 }
 
@@ -102,7 +127,7 @@ func TestEnterBehaviour(t *testing.T) {
 
 	t.Run("exit quits", func(t *testing.T) {
 		m := newTestModel(t, "super_admin", true)
-		m = setInput(m, "exit") // no verb matches → dropdown empty → Enter runs
+		m = setInput(m, "exit")
 		_, cmd := step(t, m, key(tea.KeyEnter))
 		if cmd == nil {
 			t.Fatal("exit produced no cmd")
@@ -112,30 +137,46 @@ func TestEnterBehaviour(t *testing.T) {
 		}
 	})
 
-	t.Run("Esc then Enter runs and clears input", func(t *testing.T) {
+	t.Run("Esc closes the dropdown", func(t *testing.T) {
 		m := newTestModel(t, "super_admin", true)
-		m = setInput(m, "get schedules list")
-		m, _ = step(t, m, key(tea.KeyEsc)) // close dropdown
-		if !m.dismissed {
-			t.Fatal("Esc should dismiss the dropdown")
+		m = setInput(m, "get market ")
+		m, _ = step(t, m, key(tea.KeyTab))
+		if !m.showSuggest {
+			t.Fatal("Tab should open dropdown")
 		}
-		m, cmd := step(t, m, key(tea.KeyEnter))
-		if cmd == nil {
-			t.Fatal("Esc+Enter should run the command")
-		}
-		if m.input.Value() != "" {
-			t.Errorf("input not cleared after run: %q", m.input.Value())
+		m, _ = step(t, m, key(tea.KeyEsc))
+		if m.showSuggest {
+			t.Fatal("Esc should close the dropdown")
 		}
 	})
+}
+
+// ↑/↓ recall command history when the dropdown is closed.
+func TestHistoryRecall(t *testing.T) {
+	m := newTestModel(t, "super_admin", true)
+	m = setInput(m, "get schedules list")
+	m, _ = step(t, m, key(tea.KeyEnter))
+	m = setInput(m, "get monitoring overview")
+	m, _ = step(t, m, key(tea.KeyEnter))
+
+	m, _ = step(t, m, key(tea.KeyUp)) // newest
+	if m.input.Value() != "get monitoring overview" {
+		t.Fatalf("Up #1 → %q", m.input.Value())
+	}
+	m, _ = step(t, m, key(tea.KeyUp)) // older
+	if m.input.Value() != "get schedules list" {
+		t.Fatalf("Up #2 → %q", m.input.Value())
+	}
+	m, _ = step(t, m, key(tea.KeyDown)) // back to newer
+	if m.input.Value() != "get monitoring overview" {
+		t.Fatalf("Down → %q", m.input.Value())
+	}
 }
 
 // Tab cycles DOWN through the candidate list, inserting each value.
 func TestTabCyclesThroughChoices(t *testing.T) {
 	m := newTestModel(t, "super_admin", true)
 	m = setInput(m, "get market latest market ")
-	if len(m.suggest) != 4 {
-		t.Fatalf("expected 4 market choices, got %d: %v", len(m.suggest), m.suggest)
-	}
 	want := []string{
 		"get market latest market gold",
 		"get market latest market nasdaq",
@@ -172,17 +213,18 @@ func TestCycleSurvivesSpuriousMessages(t *testing.T) {
 	}
 }
 
+// With the dropdown OPEN (after Tab), ↑/↓ navigate the selection.
 func TestDropdownNavigation(t *testing.T) {
 	m := newTestModel(t, "super_admin", true)
 	m = setInput(m, "")
+	m, _ = step(t, m, key(tea.KeyTab)) // open verbs, idx 0
 	n := len(m.suggest)
 	if n < 2 {
 		t.Fatalf("expected several verb suggestions, got %d", n)
 	}
 	m, _ = step(t, m, key(tea.KeyDown))
-	m, _ = step(t, m, key(tea.KeyDown))
 	if m.sugIdx != 1 {
-		t.Fatalf("two Downs → sugIdx %d, want 1", m.sugIdx)
+		t.Fatalf("Down → sugIdx %d, want 1", m.sugIdx)
 	}
 	m, _ = step(t, m, key(tea.KeyUp))
 	m, _ = step(t, m, key(tea.KeyUp))

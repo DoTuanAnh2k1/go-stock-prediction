@@ -12,6 +12,11 @@ import (
 // The shell runs INLINE (no alt-screen): the live View (prompt + dropdown) is
 // pinned at the bottom, and output is pushed into the scrollback above via
 // tea.Println — the familiar shell / kube-prompt feel.
+//
+// Interaction model:
+//   - Dropdown is hidden until Tab is pressed.
+//   - Dropdown OPEN:  Tab/↓ next · Shift+Tab/↑ prev · Enter pick+advance · Esc close
+//   - Dropdown CLOSED: ↑/↓ recall command history · Enter run
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -30,12 +35,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loaded = true
 		m.runner = NewRunner(m.reg, m.client, m.allowed, m.sess.JWT)
 		m.comp = NewCompleter(m.reg, m.allowed)
-		m.recomputeSuggest()
 		return m, tea.Println(m.banner())
 
 	case resultMsg:
-		// Output already scrolled above via Println below; nothing to do but
-		// keep the prompt responsive.
 		return m, tea.Println(msg.output)
 
 	case tea.KeyMsg:
@@ -43,19 +45,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC, tea.KeyCtrlD:
 			return m, tea.Quit
 
-		case tea.KeyTab, tea.KeyDown, tea.KeyCtrlN:
+		case tea.KeyTab:
+			// Open the dropdown on first Tab, then cycle.
+			if !m.showSuggest {
+				m.recomputeSuggest()
+				if len(m.suggest) == 0 {
+					return m, nil
+				}
+				m.showSuggest = true
+			}
 			m.cycle(+1)
 			return m, nil
 
-		case tea.KeyShiftTab, tea.KeyUp, tea.KeyCtrlP:
-			m.cycle(-1)
+		case tea.KeyShiftTab:
+			if m.showSuggest {
+				m.cycle(-1)
+			}
+			return m, nil
+
+		case tea.KeyDown, tea.KeyCtrlN:
+			if m.showSuggest {
+				m.cycle(+1)
+			} else {
+				m.historyNext()
+			}
+			return m, nil
+
+		case tea.KeyUp, tea.KeyCtrlP:
+			if m.showSuggest {
+				m.cycle(-1)
+			} else {
+				m.historyPrev()
+			}
 			return m, nil
 
 		case tea.KeyEsc:
-			// Hide the dropdown so the next Enter runs the command.
-			m.suggest = nil
+			m.showSuggest = false
 			m.completing = false
-			m.dismissed = true
+			m.suggest = nil
 			return m, nil
 
 		case tea.KeyEnter:
@@ -63,18 +90,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if line == "" {
 				return m, nil
 			}
-			// If the dropdown is open, Enter PICKS the highlighted suggestion and
-			// advances to the next token — it does not run the command. The user
-			// presses Esc (or completes the line) and Enter again to run.
-			if !m.dismissed && len(m.suggest) > 0 {
+			// Dropdown open → Enter picks the highlighted item and advances; it
+			// does NOT run. Dropdown closed → Enter runs.
+			if m.showSuggest && len(m.suggest) > 0 {
 				m.commitSuggest()
 				return m, nil
 			}
 
 			m.suggest = nil
+			m.showSuggest = false
+			m.completing = false
 			m.input.SetValue("")
 			m.err = ""
-			m.dismissed = false
+			m.pushHistory(line)
 			if line == "exit" || line == "quit" {
 				return m, tea.Quit
 			}
@@ -82,11 +110,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.ClearScreen
 			}
 			if !m.loaded || m.runner == nil {
-				m.recomputeSuggest()
 				return m, tea.Println(m.th.Dim.Render("still loading your permissions, please wait…"))
 			}
 			echo := tea.Println(m.th.Prompt.Render("> ") + line)
-			m.recomputeSuggest()
 			if line == "help" || line == "?" {
 				return m, tea.Sequence(echo, tea.Println(m.helpText()))
 			}
@@ -94,21 +120,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Default: forward to the text input. Only refresh the dropdown when the
-	// input VALUE actually changed — otherwise spurious messages (notably the
-	// cursor-blink tick) would reset an in-progress Tab completion cycle.
+	// Default: forward to the text input. When the input VALUE changes (the user
+	// typed), hide the dropdown (only Tab reopens it) and reset the history
+	// cursor. Spurious messages (blink ticks) leave the value unchanged.
 	old := m.input.Value()
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 	if m.input.Value() != old {
-		m.recomputeSuggest()
+		m.showSuggest = false
+		m.completing = false
+		m.histIdx = len(m.cmdHistory)
 	}
 	return m, cmd
 }
 
-// commitSuggest inserts the highlighted suggestion, adds a trailing space and
-// advances to the next token's dropdown — this is what Enter does while the
-// dropdown is open (pick, don't run).
+// commitSuggest inserts the highlighted suggestion + a trailing space and hides
+// the dropdown (the user presses Tab again for the next token). This is Enter's
+// behaviour while the dropdown is open.
 func (m *Model) commitSuggest() {
 	if len(m.suggest) == 0 {
 		return
@@ -117,14 +145,14 @@ func (m *Model) commitSuggest() {
 	m.input.SetValue(tokenBase(m.input.Value()) + s.Text + " ")
 	m.input.CursorEnd()
 	m.completing = false
-	m.recomputeSuggest()
+	m.showSuggest = false
+	m.suggest = nil
 }
 
-// recomputeSuggest refreshes the live dropdown for the current input value. It
-// ends any in-progress completion cycle (the user typed/edited the line).
+// recomputeSuggest populates the candidate list for the current token. Called
+// when the dropdown is opened with Tab.
 func (m *Model) recomputeSuggest() {
 	m.completing = false
-	m.dismissed = false
 	if m.comp == nil {
 		m.suggest = nil
 		return
@@ -138,10 +166,8 @@ func (m *Model) recomputeSuggest() {
 }
 
 // cycle moves through the suggestion list (dir +1 down, -1 up), inserting the
-// highlighted candidate into the input — kube-prompt style. The candidate list
-// is frozen for the duration of the cycle so repeated Tab keeps walking the
-// full list instead of collapsing to the just-inserted value. The user types a
-// space (or any character) to end the cycle and advance to the next token.
+// highlighted candidate. The candidate list is frozen for the cycle so repeated
+// Tab walks the full list instead of collapsing to the just-inserted value.
 func (m *Model) cycle(dir int) {
 	if !m.completing {
 		if len(m.suggest) == 0 {
@@ -163,6 +189,41 @@ func (m *Model) cycle(dir int) {
 	}
 	m.suggest = m.compList
 	m.input.SetValue(m.compBase + m.compList[m.sugIdx].Text)
+	m.input.CursorEnd()
+}
+
+// pushHistory records a run command and resets the recall cursor to the end.
+func (m *Model) pushHistory(line string) {
+	if n := len(m.cmdHistory); n == 0 || m.cmdHistory[n-1] != line {
+		m.cmdHistory = append(m.cmdHistory, line)
+	}
+	m.histIdx = len(m.cmdHistory)
+}
+
+// historyPrev recalls an older command (Up).
+func (m *Model) historyPrev() {
+	if len(m.cmdHistory) == 0 {
+		return
+	}
+	if m.histIdx > 0 {
+		m.histIdx--
+	}
+	m.input.SetValue(m.cmdHistory[m.histIdx])
+	m.input.CursorEnd()
+}
+
+// historyNext recalls a newer command (Down); past the newest clears the input.
+func (m *Model) historyNext() {
+	if len(m.cmdHistory) == 0 {
+		return
+	}
+	if m.histIdx < len(m.cmdHistory)-1 {
+		m.histIdx++
+		m.input.SetValue(m.cmdHistory[m.histIdx])
+	} else {
+		m.histIdx = len(m.cmdHistory)
+		m.input.SetValue("")
+	}
 	m.input.CursorEnd()
 }
 

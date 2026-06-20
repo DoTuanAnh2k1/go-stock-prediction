@@ -48,9 +48,13 @@ type Model struct {
 	compBase   string       // input text before the token being completed
 	compList   []Suggestion // frozen candidate list for the cycle
 
-	// dismissed: the user pressed Esc to hide the dropdown; Enter then runs the
-	// command instead of picking a suggestion. Cleared as soon as they type.
-	dismissed bool
+	// showSuggest: the dropdown is only visible after the user presses Tab; it
+	// stays hidden while typing so the screen isn't cluttered.
+	showSuggest bool
+
+	// command history (most-recent last); histIdx is the recall cursor.
+	cmdHistory []string
+	histIdx    int
 }
 
 // commandsLoadedMsg is emitted once GET /me/commands resolves.
@@ -103,10 +107,14 @@ func (m Model) loadCommands() tea.Cmd {
 
 func (m Model) runCommand(line string) tea.Cmd {
 	runner := m.runner
+	cmdPart, grepPart := splitPipe(line)
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 60e9)
 		defer cancel()
-		out, _ := runner.Run(ctx, line)
+		out, _ := runner.Run(ctx, cmdPart)
+		if grepPart != "" {
+			out = applyGrep(out, grepPart)
+		}
 		return resultMsg{output: out}
 	}
 }

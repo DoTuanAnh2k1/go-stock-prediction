@@ -103,6 +103,13 @@ func defaultHandlers() []Handler {
 			},
 			render: autoRender("Backups"),
 		},
+		{
+			Key: "session.list", DisplayName: "Bot trading sessions", Verb: "get", Resource: "session.list",
+			execute: func(ctx context.Context, c client.HTTPClient, jwt string, a map[string]string) (any, int, error) {
+				return getJSON(ctx, c, jwt, "/simulation/leaderboard", nil)
+			},
+			render: autoRender("Bot sessions"),
+		},
 
 		// ---- SET (POST) ----
 		{

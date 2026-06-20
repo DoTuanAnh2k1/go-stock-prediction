@@ -54,13 +54,13 @@ func (m Model) headerBar() string {
 }
 
 func (m Model) hintLine() string {
-	return "Tab/↑↓ browse · Enter pick · Esc then Enter to run · help · clear · exit"
+	return "Tab suggest · ↑↓ history · Enter run · cmd | grep -A 2 X · help · clear · exit"
 }
 
 // renderSuggest draws the floating completion dropdown. Returns "" when there is
 // nothing to suggest.
 func (m Model) renderSuggest() string {
-	if len(m.suggest) == 0 {
+	if !m.showSuggest || len(m.suggest) == 0 {
 		return ""
 	}
 
@@ -149,7 +149,7 @@ func (m Model) welcome() string {
 		n := len(m.allowed.Commands())
 		b.WriteString(m.th.Dim.Render(fmt.Sprintf("%s — %d command(s) granted.", roleLabel(m.sess.Role), n)) + "\n")
 	}
-	b.WriteString(m.th.Dim.Render("Type a verb (get/set/update/delete); suggestions appear below. Tab browses, Enter picks."))
+	b.WriteString(m.th.Dim.Render("Type a command (get/set/update/delete). Press Tab for suggestions, ↑/↓ for history, Enter to run."))
 	return b.String()
 }
 

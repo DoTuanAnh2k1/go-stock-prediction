@@ -44,11 +44,26 @@ Inside the shell:
 | Input | Effect |
 |-------|--------|
 | `help` or `?` | Show the command reference (only commands you may run) |
-| `Tab` / `↓` / `↑` | Browse the suggestion dropdown (cycles, fills the current token) |
+| `Tab` | Open the suggestion dropdown (hidden by default); press again to cycle |
+| `↓` / `↑` (dropdown open) | Navigate the suggestions; `Shift+Tab` goes back |
 | `Enter` (dropdown open) | **Pick** the highlighted suggestion and advance to the next token |
-| `Esc` then `Enter` | Close the dropdown, then run the command |
+| `↑` / `↓` (dropdown closed) | Recall previous / next command from history |
+| `Enter` (dropdown closed) | **Run** the command |
+| `Esc` | Close the dropdown |
 | `clear` | Clear the screen |
 | `exit` / `quit` / `Ctrl-C` / `Ctrl-D` | Disconnect |
+
+### Filtering output (grep)
+
+Pipe any command's output through a built-in `grep` with `-A`/`-B`/`-C`/`-i`:
+
+```
+get session list | grep -i gold
+get market prices market crypto | grep -A 2 BTC
+get schedules list | grep -B 1 -A 1 crawler
+```
+
+`-A n` keeps n lines after a match, `-B n` before, `-C n` both, `-i` ignores case.
 
 ## Command reference
 
@@ -71,6 +86,7 @@ Verbs map to HTTP methods: `get`→GET, `set`→POST, `update`→PUT, `delete`�
 | `training status` | — | `get training status` |
 | `users list` | — | `get users list` |
 | `backups list` | — | `get backups list` |
+| `session list` | — | `get session list` (bot trading sessions / leaderboard) |
 
 ### set (POST)
 
@@ -98,16 +114,18 @@ Verbs map to HTTP methods: `get`→GET, `set`→POST, `update`→PUT, `delete`�
 
 ## Tab completion
 
-The dropdown is context-aware and **filtered to what you are allowed to run**:
+The dropdown is **hidden until you press `Tab`**, context-aware, and **filtered to
+what you are allowed to run**:
 
 1. Empty / typing the verb → allowed verbs (`get`, `set`, `update`, `delete`).
 2. After a verb → allowed categories under that verb (`market`, `schedules`, …).
 3. After a category → names under it (`latest`, `prices`, …).
 4. After the name → remaining argument names, then each argument's value choices.
 
-`Tab`/`↓`/`↑` cycle through the candidates (filling the current token); `Enter`
-**picks** the highlighted candidate and moves to the next token. When the command
-is ready, press `Esc` to close the dropdown and `Enter` to run it.
+`Tab` opens the dropdown and cycles through candidates (filling the current token);
+`↑`/`↓`/`Shift+Tab` navigate it; `Enter` **picks** the highlighted candidate and
+moves to the next token. With the dropdown closed, `↑`/`↓` recall command history
+and `Enter` runs the command.
 
 ## Configuration
 

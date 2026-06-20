@@ -6,9 +6,26 @@ Architecture:
   MLP: in_dim → 128 → 64 → 3 (hold / buy / sell)
 
 Training:
-  DQN with replay buffer, target network (periodic hard update), ε-greedy decay,
-  Huber loss, Adam optimizer.  One market = one episode-sequence built from the
-  concatenated price history of all instruments in that market.
+  DQN with replay buffer, target network (periodic hard update), ε-greedy decay
+  per environment-step (not per episode), Huber loss, Adam optimizer, Double-DQN.
+
+  Improvements over v1:
+  - Mirror/inverted-return augmentation  — every real series is paired with a
+    "mirror" series whose log-returns are negated.  This gives the agent equal
+    exposure to downtrends, preventing the "always long" degenerate policy that
+    forms when data is mostly uptrending (NASDAQ / SP500).
+  - Sliding-window episodes — each obs-matrix is sliced into overlapping windows
+    (EPISODE_WINDOW steps, stride EPISODE_STRIDE) so GOLD/CRYPTO with few symbols
+    still generate many training episodes.  Total windows are capped at
+    MAX_EPISODES_PER_MARKET to bound training time.
+  - Epsilon decays per environment-step (global_step) from EPSILON_START to
+    EPSILON_END over TARGET_EXPLORE_STEPS, using linear annealing.  This ensures
+    exploration finishes well before training ends even when there are few series.
+  - Greedy evaluation pass after training — runs epsilon=0 on real (non-mirror)
+    series and logs greedy_total_reward, giving a reliable quality signal.
+  - avg_loss logged per epoch alongside epsilon and buffer size.
+  - Small per-step long-holding penalty (-HOLD_LONG_PENALTY) discourages the
+    agent from blindly holding forever even when the market is flat.
 
 Persistence:
   Checkpoint saved to ${RL_MODEL_DIR}/rl_dqn_{market_key}.pt after train_batch().
@@ -50,10 +67,23 @@ GAMMA = 0.99
 LR_DQN = 1e-3
 EPSILON_START = 1.0
 EPSILON_END = 0.05
-EPSILON_DECAY = 0.995
-TARGET_UPDATE_EVERY = 50  # hard update every N steps
-TRAIN_EPOCHS = 3          # passes over the collected experience
-MIN_REPLAY = 200          # start training after this many transitions
+# Number of env-steps over which epsilon decays from START to END (linear).
+# With sliding windows + augmentation, a typical market produces ~2 000–8 000
+# steps per epoch; 10 epochs × 4 000 = 40 000 steps → decay_per_step calibrated.
+TARGET_EXPLORE_STEPS = 15_000
+TARGET_UPDATE_EVERY = 50    # hard-copy target net every N gradient steps
+TRAIN_EPOCHS = 12           # passes over the full (windowed + augmented) episode set
+MIN_REPLAY = 200            # start gradient updates after this many transitions
+
+# Sliding-window episode parameters
+EPISODE_WINDOW = 130        # steps per sliding-window episode
+EPISODE_STRIDE = 35         # stride between consecutive windows
+MAX_EPISODES_PER_MARKET = 400   # cap total episodes (real + mirror) to bound time
+
+# Per-step penalty for holding a long position — prevents "always long" policy.
+# Value is very small (1/10 of a typical transaction cost) to avoid overriding
+# the primary dense reward signal.
+HOLD_LONG_PENALTY = 0.0001
 
 # Prediction magnitude
 K_SIGMA = 1.5             # predicted change = K_SIGMA * rolling_σ of log-returns
@@ -131,19 +161,75 @@ class _ReplayBuffer:
 
 
 # ---------------------------------------------------------------------------
-# Environment helper
+# Mirror / augmentation helpers
 # ---------------------------------------------------------------------------
+
+def _build_mirror_prices(prices: np.ndarray) -> np.ndarray:
+    """Build a mirrored price series by negating log-returns.
+
+    Given prices p[0..T], compute log-returns r[t] = log(p[t]/p[t-1]).
+    The mirror series keeps p_mirror[0] = p[0] and evolves as:
+        p_mirror[t] = p_mirror[t-1] * exp(-r[t])   for t = 1 .. T
+
+    The mirror series has the SAME amplitude of moves as the original but
+    in the OPPOSITE direction: every uptrend becomes a downtrend and vice
+    versa.  Feeding both the original and its mirror to the agent ensures
+    roughly 50/50 up/down exposure regardless of the market's historical bias.
+    """
+    if len(prices) < 2:
+        return prices.copy()
+    log_ret = np.diff(np.log(prices.astype(np.float64) + 1e-12))
+    mirror = np.empty(len(prices), dtype=np.float32)
+    mirror[0] = prices[0]
+    for t in range(1, len(prices)):
+        mirror[t] = mirror[t - 1] * np.exp(-log_ret[t - 1])
+    # Ensure strictly positive
+    mirror = np.maximum(mirror, 1e-6)
+    return mirror.astype(np.float32)
+
 
 def _build_obs_matrix(prices: np.ndarray, volumes: np.ndarray | None) -> np.ndarray:
     """Build enhanced-feature matrix for a price series.
 
     Returns array of shape (T, n_features) where T = len(features).
     Uses build_enhanced_features() which returns (features_list, targets_list).
-    The last row is the inference row; we keep ALL rows.
     """
     feats, _ = build_enhanced_features(prices, volumes)
     return np.array(feats, dtype=np.float32)
 
+
+def _make_windows(
+    obs_matrix: np.ndarray,
+    prices: np.ndarray,
+    window: int,
+    stride: int,
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Slice (obs_matrix, prices) into overlapping windows.
+
+    Each window is (obs_window, prices_window) of length `window`.
+    If the series is shorter than `window`, return it as a single episode.
+    """
+    n = len(obs_matrix)
+    if n < window:
+        return [(obs_matrix, prices[:n])]
+
+    windows = []
+    start = 0
+    while start + window <= n:
+        windows.append((
+            obs_matrix[start: start + window],
+            prices[start: start + window],
+        ))
+        start += stride
+    # Always include the tail segment if it was not covered exactly
+    if start < n and (n - start) >= window // 2:
+        windows.append((obs_matrix[n - window: n], prices[n - window: n]))
+    return windows
+
+
+# ---------------------------------------------------------------------------
+# Environment helper
+# ---------------------------------------------------------------------------
 
 def _run_episode(
     obs_matrix: np.ndarray,
@@ -151,17 +237,23 @@ def _run_episode(
     policy_net,
     buffer: _ReplayBuffer,
     epsilon: float,
+    global_step: int,
     transaction_cost: float = 0.0005,
-) -> float:
+    target_explore_steps: int = TARGET_EXPLORE_STEPS,
+) -> tuple[float, int]:
     """Simulate one episode over obs_matrix, collecting transitions into buffer.
 
+    Epsilon is computed PER ENVIRONMENT STEP using linear annealing:
+        eps(t) = max(END, START - (START - END) * t / target_explore_steps)
+    `global_step` is the cumulative env-step count across ALL episodes so far;
+    it is updated locally and returned so the caller can persist it.
+
     Position model: flat or long-only (all-in / all-out).
-    Returns total episode reward.
+    Returns (total_episode_reward, updated_global_step).
     """
     import torch
 
     n_steps, n_base = obs_matrix.shape
-    in_dim = n_base + N_POS_FEATURES
 
     position: float = 0.0       # 1.0 = long, 0.0 = flat
     entry_price: float = 0.0
@@ -169,6 +261,12 @@ def _run_episode(
     total_reward = 0.0
 
     for t in range(n_steps - 1):
+        # Linear epsilon annealing per step
+        eps = max(
+            EPSILON_END,
+            EPSILON_START - (EPSILON_START - EPSILON_END) * global_step / max(target_explore_steps, 1),
+        )
+
         # Build state
         unrealized_pnl = (prices[t] / entry_price - 1.0) if (position > 0 and entry_price > 0) else 0.0
         days_held_norm = min(days_held / 30.0, 1.0)
@@ -176,7 +274,7 @@ def _run_episode(
         state = np.concatenate([obs_matrix[t], pos_feats])
 
         # ε-greedy action
-        if random.random() < epsilon:
+        if random.random() < eps:
             action = random.randrange(N_ACTIONS)
         else:
             with torch.no_grad():
@@ -196,7 +294,11 @@ def _run_episode(
 
         # Dense step reward
         price_return = prices[t + 1] / prices[t] - 1.0
-        reward = position * price_return - transaction_cost * abs(position - prev_position)
+        reward = (
+            position * price_return
+            - transaction_cost * abs(position - prev_position)
+            - HOLD_LONG_PENALTY * position   # small penalty for holding long
+        )
         total_reward += reward
 
         # Next state
@@ -208,6 +310,58 @@ def _run_episode(
 
         done = (t == n_steps - 2)
         buffer.push(state, action, reward, next_state, done)
+
+        global_step += 1
+
+    return total_reward, global_step
+
+
+def _run_episode_greedy(
+    obs_matrix: np.ndarray,
+    prices: np.ndarray,
+    policy_net,
+    transaction_cost: float = 0.0005,
+) -> float:
+    """Greedy (epsilon=0) evaluation episode — no buffer writes.
+
+    Returns total episode reward under the current policy.
+    Used after training to measure true policy quality.
+    """
+    import torch
+
+    n_steps, _ = obs_matrix.shape
+    position: float = 0.0
+    entry_price: float = 0.0
+    days_held: int = 0
+    total_reward = 0.0
+
+    for t in range(n_steps - 1):
+        unrealized_pnl = (prices[t] / entry_price - 1.0) if (position > 0 and entry_price > 0) else 0.0
+        days_held_norm = min(days_held / 30.0, 1.0)
+        pos_feats = np.array([position, unrealized_pnl, days_held_norm], dtype=np.float32)
+        state = np.concatenate([obs_matrix[t], pos_feats])
+
+        with torch.no_grad():
+            q = policy_net(torch.tensor(state, dtype=torch.float32).unsqueeze(0))
+            action = int(q.argmax(dim=1).item())
+
+        prev_position = position
+        if action == 1 and position == 0.0:
+            position = 1.0
+            entry_price = prices[t]
+            days_held = 0
+        elif action == 2 and position == 1.0:
+            position = 0.0
+            days_held = 0
+
+        price_return = prices[t + 1] / prices[t] - 1.0
+        reward = (
+            position * price_return
+            - transaction_cost * abs(position - prev_position)
+            - HOLD_LONG_PENALTY * position
+        )
+        total_reward += reward
+        days_held += 1 if position > 0 else 0
 
     return total_reward
 
@@ -393,8 +547,17 @@ class RLDQNPredictor(PredictionAlgorithm):
     def train_batch(self, series: list[tuple[list[float], "list[float] | None"]]) -> None:
         """Train DQN on all price series for the market.
 
-        Runs episode collection + mini-batch gradient updates in multiple passes.
-        After training, saves checkpoint and updates self._qnet.
+        Strategy (v2):
+        1. Build obs-matrix for each real series.
+        2. Build mirror obs-matrix (negated log-returns) for each series.
+        3. Slice every (real + mirror) matrix into overlapping windows
+           (EPISODE_WINDOW, stride EPISODE_STRIDE).
+        4. Cap total episode count at MAX_EPISODES_PER_MARKET.
+        5. Run TRAIN_EPOCHS passes; epsilon decays by global_step (linear).
+        6. Collect mini-batch gradient updates (Double DQN, Huber loss).
+        7. After training, run a greedy evaluation pass on real series only
+           and log greedy_total_reward.
+        8. Save checkpoint and cache network.
         """
         if len(series) == 0:
             return
@@ -407,27 +570,57 @@ class RLDQNPredictor(PredictionAlgorithm):
             return
 
         # ------------------------------------------------------------------
-        # Build observation matrices for all series
+        # Build observation matrices for all series (real + mirror)
         # ------------------------------------------------------------------
-        obs_mats: list[tuple[np.ndarray, np.ndarray]] = []
+        real_episodes: list[tuple[np.ndarray, np.ndarray]] = []   # (obs_mat, prices)
+        mirror_episodes: list[tuple[np.ndarray, np.ndarray]] = [] # (obs_mat, prices)
+
         for prices_list, vols_list in series:
             if len(prices_list) < MIN_DATA_POINTS:
                 continue
             arr = np.array(prices_list, dtype=np.float32)
             vol_arr = np.array(vols_list, dtype=np.float32) if vols_list else None
+
+            # Real series
             try:
                 mat = _build_obs_matrix(arr, vol_arr)
                 if len(mat) > 0:
-                    obs_mats.append((mat, arr))
+                    for win_mat, win_prices in _make_windows(mat, arr, EPISODE_WINDOW, EPISODE_STRIDE):
+                        real_episodes.append((win_mat, win_prices))
             except Exception as exc:
-                log.warning("rl_dqn.train.obs_failed", error=str(exc))
+                log.warning("rl_dqn.train.obs_failed", series="real", error=str(exc))
+                continue
 
-        if not obs_mats:
+            # Mirror series — build mirror prices, then features on top of them
+            try:
+                mirror_arr = _build_mirror_prices(arr)
+                # volumes stay the same (mirror only flips price direction)
+                mirror_mat = _build_obs_matrix(mirror_arr, vol_arr)
+                if len(mirror_mat) > 0:
+                    for win_mat, win_prices in _make_windows(mirror_mat, mirror_arr, EPISODE_WINDOW, EPISODE_STRIDE):
+                        mirror_episodes.append((win_mat, win_prices))
+            except Exception as exc:
+                log.warning("rl_dqn.train.obs_failed", series="mirror", error=str(exc))
+
+        all_episodes = real_episodes + mirror_episodes
+
+        if not all_episodes:
             log.warning("rl_dqn.train.skip", reason="no valid series after feature build")
             return
 
+        # Cap total episodes to bound training time
+        if len(all_episodes) > MAX_EPISODES_PER_MARKET:
+            # Shuffle first so the cap samples from the full distribution
+            random.shuffle(all_episodes)
+            all_episodes = all_episodes[:MAX_EPISODES_PER_MARKET]
+            log.info(
+                "rl_dqn.train.episodes_capped",
+                market=self._market_key,
+                capped_to=MAX_EPISODES_PER_MARKET,
+            )
+
         # in_dim: enhanced feature count + position features
-        in_dim = obs_mats[0][0].shape[1] + N_POS_FEATURES
+        in_dim = all_episodes[0][0].shape[1] + N_POS_FEATURES
 
         # ------------------------------------------------------------------
         # Build networks
@@ -440,48 +633,78 @@ class RLDQNPredictor(PredictionAlgorithm):
         optimizer = torch.optim.Adam(policy_net.parameters(), lr=LR_DQN)
         buffer = _ReplayBuffer(REPLAY_CAPACITY)
 
-        epsilon = EPSILON_START
-        step_count = 0
+        global_step = 0      # cumulative env-steps across all episodes + epochs
+        grad_step = 0        # cumulative gradient steps (for target-net sync)
         total_reward = 0.0
 
         # ------------------------------------------------------------------
-        # Collect experience: run TRAIN_EPOCHS passes over all series
+        # Collect experience: TRAIN_EPOCHS passes over all windowed episodes
         # ------------------------------------------------------------------
         for epoch in range(TRAIN_EPOCHS):
-            for obs_mat, prices_arr in obs_mats:
-                ep_reward = _run_episode(
+            epoch_losses: list[float] = []
+            # Shuffle episode order each epoch for diversity
+            epoch_episodes = all_episodes.copy()
+            random.shuffle(epoch_episodes)
+
+            for obs_mat, prices_arr in epoch_episodes:
+                ep_reward, global_step = _run_episode(
                     obs_matrix=obs_mat,
                     prices=prices_arr,
                     policy_net=policy_net,
                     buffer=buffer,
-                    epsilon=epsilon,
+                    epsilon=0.0,            # epsilon is computed inside per-step
+                    global_step=global_step,
+                    target_explore_steps=TARGET_EXPLORE_STEPS,
                 )
                 total_reward += ep_reward
-                epsilon = max(EPSILON_END, epsilon * EPSILON_DECAY)
-                step_count += len(obs_mat)
 
                 # Mini-batch updates whenever buffer is large enough
                 if len(buffer) >= MIN_REPLAY:
-                    for _ in range(min(10, len(buffer) // BATCH_SIZE)):
-                        loss = self._update_step(
-                            policy_net, target_net, buffer, optimizer
-                        )
-                        step_count += 1
-                        if step_count % TARGET_UPDATE_EVERY == 0:
+                    n_updates = min(10, len(buffer) // BATCH_SIZE)
+                    for _ in range(n_updates):
+                        loss_val = self._update_step(policy_net, target_net, buffer, optimizer)
+                        epoch_losses.append(loss_val)
+                        grad_step += 1
+                        if grad_step % TARGET_UPDATE_EVERY == 0:
                             target_net.load_state_dict(policy_net.state_dict())
+
+            # Compute current epsilon for logging (post-epoch)
+            current_eps = max(
+                EPSILON_END,
+                EPSILON_START - (EPSILON_START - EPSILON_END) * global_step / max(TARGET_EXPLORE_STEPS, 1),
+            )
+            avg_loss = float(np.mean(epoch_losses)) if epoch_losses else float("nan")
 
             log.info(
                 "rl_dqn.train.epoch",
                 market=self._market_key,
                 epoch=epoch + 1,
-                epsilon=round(epsilon, 4),
+                epsilon=round(current_eps, 4),
                 buffer_size=len(buffer),
                 total_reward=round(total_reward, 4),
+                avg_loss=round(avg_loss, 6) if not (avg_loss != avg_loss) else None,
+                episodes=len(epoch_episodes),
+                global_steps=global_step,
             )
 
         # Final target-net sync
         target_net.load_state_dict(policy_net.state_dict())
         policy_net.eval()
+
+        # ------------------------------------------------------------------
+        # Greedy evaluation pass — real series only, epsilon=0
+        # Measures true policy quality (independent of exploration noise).
+        # ------------------------------------------------------------------
+        greedy_reward = 0.0
+        for obs_mat, prices_arr in real_episodes:
+            greedy_reward += _run_episode_greedy(obs_mat, prices_arr, policy_net)
+
+        log.info(
+            "rl_dqn.train.eval",
+            market=self._market_key,
+            greedy_total_reward=round(greedy_reward, 6),
+            real_episodes=len(real_episodes),
+        )
 
         # ------------------------------------------------------------------
         # Save and cache
@@ -494,8 +717,12 @@ class RLDQNPredictor(PredictionAlgorithm):
         log.info(
             "rl_dqn.train.done",
             market=self._market_key,
-            series=len(obs_mats),
-            steps=step_count,
+            series=len(series),
+            real_episodes=len(real_episodes),
+            mirror_episodes=len(mirror_episodes),
+            total_episodes_used=len(all_episodes),
+            global_steps=global_step,
+            grad_steps=grad_step,
         )
 
     @staticmethod
