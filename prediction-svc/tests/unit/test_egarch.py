@@ -92,7 +92,7 @@ class TestEGARCHPredictor:
     def test_ema_fallback_returns_valid_result(self):
         prices = make_prices(100)
         current = prices[-1]
-        result = EGARCHPredictor._ema_fallback(prices, current)
+        result = EGARCHPredictor()._ema_fallback(prices, current)
         assert result.algorithm_name == "egarch"
         assert 0.0 <= result.confidence <= 1.0
         assert result.predicted_price >= current * 0.93 - 1e-9
@@ -101,5 +101,5 @@ class TestEGARCHPredictor:
     def test_fallback_confidence_fixed_at_036(self):
         prices = make_prices(100)
         current = prices[-1]
-        result = EGARCHPredictor._ema_fallback(prices, current)
+        result = EGARCHPredictor()._ema_fallback(prices, current)
         assert result.confidence == pytest.approx(0.36, abs=0.01)

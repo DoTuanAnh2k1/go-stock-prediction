@@ -1,4 +1,4 @@
-"""Seed sim_bots table with all trading bots (4 markets × 11 algorithms × 10 variants)."""
+"""Seed sim_bots table with all trading bots (4 markets × 11 algorithms × 10 variants + 4 RL DQN bots)."""
 from __future__ import annotations
 
 from decimal import Decimal
@@ -51,6 +51,9 @@ def seed_bots() -> int:
     inserted = 0
 
     with session_scope() as session:
+        # -----------------------------------------------------------------------
+        # Standard bots: 4 markets × 11 algorithms × 10 variants
+        # -----------------------------------------------------------------------
         for market_key, market_display, initial_capital, currency in MARKETS:
             for algo_key, algo_display in ALGORITHMS:
                 for suffix, variant_label, buy, sell, conf, sl, tp in VARIANTS:
@@ -80,6 +83,35 @@ def seed_bots() -> int:
                         )
                         session.add(bot)
                         inserted += 1
+
+        # -----------------------------------------------------------------------
+        # RL DQN bots: 1 per market (4 total, no variants — policy decides all)
+        # buy/sell threshold are irrelevant for RL native branch but stored for
+        # schema compatibility.  SL/TP still acts as a hard safety guard.
+        # -----------------------------------------------------------------------
+        for market_key, market_display, initial_capital, currency in MARKETS:
+            bot_id = f"{market_key.lower()}_rl_dqn"
+            display_name = f"{market_display} — RL DQN"
+            existing = session.query(SimBot).filter(SimBot.id == bot_id).first()
+            if existing is None:
+                bot = SimBot(
+                    id=bot_id,
+                    market=market_key,
+                    algorithm="rl_dqn",
+                    display_name=display_name,
+                    initial_capital=initial_capital,
+                    currency=currency,
+                    buy_threshold=Decimal("0.50"),   # unused by RL native branch
+                    sell_threshold=Decimal("0.30"),  # unused by RL native branch
+                    min_confidence=Decimal("0.40"),  # unused by RL native branch
+                    stop_loss=Decimal("5.00"),        # SL guard still active
+                    take_profit=Decimal("8.00"),      # TP guard still active
+                    max_position_pct=Decimal("15.00"),
+                    max_positions=5,
+                    is_active=True,
+                )
+                session.add(bot)
+                inserted += 1
 
         session.commit()
 

@@ -43,24 +43,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC, tea.KeyCtrlD:
 			return m, tea.Quit
 
-		case tea.KeyTab:
-			m.acceptSuggest()
+		case tea.KeyTab, tea.KeyDown, tea.KeyCtrlN:
+			m.cycle(+1)
 			return m, nil
 
-		case tea.KeyDown, tea.KeyCtrlN:
-			if n := len(m.suggest); n > 0 {
-				m.sugIdx = (m.sugIdx + 1) % n
-			}
-			return m, nil
-
-		case tea.KeyUp, tea.KeyCtrlP:
-			if n := len(m.suggest); n > 0 {
-				m.sugIdx = (m.sugIdx - 1 + n) % n
-			}
+		case tea.KeyShiftTab, tea.KeyUp, tea.KeyCtrlP:
+			m.cycle(-1)
 			return m, nil
 
 		case tea.KeyEsc:
 			m.suggest = nil
+			m.completing = false
 			return m, nil
 
 		case tea.KeyEnter:
@@ -91,15 +84,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Default: forward to the text input, then refresh the live dropdown.
+	// Default: forward to the text input. Only refresh the dropdown when the
+	// input VALUE actually changed — otherwise spurious messages (notably the
+	// cursor-blink tick) would reset an in-progress Tab completion cycle.
+	old := m.input.Value()
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
-	m.recomputeSuggest()
+	if m.input.Value() != old {
+		m.recomputeSuggest()
+	}
 	return m, cmd
 }
 
-// recomputeSuggest refreshes the live dropdown for the current input value.
+// recomputeSuggest refreshes the live dropdown for the current input value. It
+// ends any in-progress completion cycle (the user typed/edited the line).
 func (m *Model) recomputeSuggest() {
+	m.completing = false
 	if m.comp == nil {
 		m.suggest = nil
 		return
@@ -112,33 +112,44 @@ func (m *Model) recomputeSuggest() {
 	m.sugCol = utf8.RuneCountInString(m.input.Prompt) + tokenStartCol(line)
 }
 
-// acceptSuggest inserts the highlighted suggestion, replacing the current token.
-// Whole tokens (verb/resource/name=value) get a trailing space to advance to the
-// next stage; a bare "name=" does not (the user types the value next).
-func (m *Model) acceptSuggest() {
-	if len(m.suggest) == 0 {
-		return
-	}
-	s := m.suggest[m.sugIdx]
-	line := m.input.Value()
-
-	var base string
-	switch {
-	case line == "" || strings.HasSuffix(line, " "):
-		base = line
-	default:
-		if idx := strings.LastIndex(line, " "); idx >= 0 {
-			base = line[:idx+1]
+// cycle moves through the suggestion list (dir +1 down, -1 up), inserting the
+// highlighted candidate into the input — kube-prompt style. The candidate list
+// is frozen for the duration of the cycle so repeated Tab keeps walking the
+// full list instead of collapsing to the just-inserted value. The user types a
+// space (or any character) to end the cycle and advance to the next token.
+func (m *Model) cycle(dir int) {
+	if !m.completing {
+		if len(m.suggest) == 0 {
+			return
 		}
+		m.completing = true
+		m.compBase = tokenBase(m.input.Value())
+		m.compList = m.suggest
+		if dir >= 0 {
+			m.sugIdx = 0
+		} else {
+			m.sugIdx = len(m.compList) - 1
+		}
+	} else {
+		if len(m.compList) == 0 {
+			return
+		}
+		m.sugIdx = (m.sugIdx + dir + len(m.compList)) % len(m.compList)
 	}
-	newLine := base + s.Text
-	if !strings.HasSuffix(s.Text, "=") {
-		newLine += " "
-	}
-	m.input.SetValue(newLine)
+	m.suggest = m.compList
+	m.input.SetValue(m.compBase + m.compList[m.sugIdx].Text)
 	m.input.CursorEnd()
-	m.sugIdx = 0
-	m.recomputeSuggest()
+}
+
+// tokenBase returns the input text up to (not including) the current token.
+func tokenBase(line string) string {
+	if line == "" || strings.HasSuffix(line, " ") {
+		return line
+	}
+	if idx := strings.LastIndex(line, " "); idx >= 0 {
+		return line[:idx+1]
+	}
+	return ""
 }
 
 // tokenStartCol returns the rune column at which the current (last) token begins.

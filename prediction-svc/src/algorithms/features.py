@@ -45,14 +45,18 @@ def build_basic_features(
     log_returns = np.diff(np.log(arr))
     features, targets = [], []
 
-    for i in range(10, len(log_returns)):
+    # Iterate over price index `i` (the "as-of" day). The row is built using
+    # ONLY prices up to and including arr[i]; the target is the next-day return
+    # log(arr[i+1]/arr[i]) == log_returns[i]. The final iteration (i == len(arr)-1)
+    # is the inference row — as-of the latest price, with no realised target yet.
+    for i in range(10, len(log_returns) + 1):
         row: list[float] = []
 
-        # --- Lag returns: 1..10 ---
+        # --- Lag returns: 1..10 (all strictly past, end at log_returns[i-1]) ---
         for lag in range(1, 11):
             row.append(float(log_returns[i - lag]))
 
-        # --- RSI(14) ---
+        # --- RSI(14) — as-of day i (inclusive of arr[i], no future) ---
         if i >= 14:
             subset = arr[i - 14 : i + 1]
             deltas = np.diff(subset)
@@ -65,23 +69,29 @@ def build_basic_features(
             rsi = 50.0
         row.append(float(rsi))
 
-        # --- MA ratios: price / MA5, price / MA20 ---
-        price_now = float(arr[i + 1])
+        # --- MA ratios: price / MA5, price / MA20 (price_now = arr[i], not arr[i+1]) ---
+        price_now = float(arr[i])
         ma5 = float(np.mean(arr[max(0, i - 4) : i + 1])) if i >= 4 else price_now
         ma20 = float(np.mean(arr[max(0, i - 19) : i + 1])) if i >= 19 else price_now
         row.append(price_now / ma5 if ma5 > 0 else 1.0)
         row.append(price_now / ma20 if ma20 > 0 else 1.0)
 
-        # --- Volume ratio: current vol / avg vol(10) ---
-        if vol_arr is not None and len(vol_arr) > i + 1:
-            vol_now = float(vol_arr[i + 1])
+        # --- Volume ratio: current vol / avg vol(10) — as-of day i ---
+        if vol_arr is not None and len(vol_arr) > i:
+            vol_now = float(vol_arr[i])
             vol_avg = float(np.mean(vol_arr[max(0, i - 9) : i + 1]))
             row.append(vol_now / vol_avg if vol_avg > 0 else 1.0)
         else:
             row.append(1.0)
 
         features.append(row)
-        targets.append(float(log_returns[i]))
+        if i < len(log_returns):
+            targets.append(float(log_returns[i]))
+        else:
+            # Inference row: no next-day return exists yet. Placeholder kept as a
+            # real log return so callers that drop the last pair via [:-1] are
+            # unaffected; features[-1] is used for prediction only.
+            targets.append(float(log_returns[-1]))
 
     return features, targets
 
@@ -211,8 +221,11 @@ def _build_enhanced_with_pandas_ta(
     features: list = []
     targets: list = []
 
-    for i in range(20, len(log_returns)):  # start at 20 to allow MA20 and multiframe returns
-        price_idx = i + 1   # index into arr (arr has one more element than log_returns)
+    # Iterate over price index via `i`; price_idx == i is the "as-of" day so every
+    # feature uses only arr[:i+1]. Target is log_returns[i] (return i -> i+1). The
+    # last iteration (i == len(log_returns)) is the inference row (no target yet).
+    for i in range(20, len(log_returns) + 1):  # start at 20 to allow MA20 and multiframe returns
+        price_idx = i   # index into arr — as-of day (NO look-ahead to arr[i+1])
         price_now = float(arr[price_idx])
 
         row: list[float] = []
@@ -280,7 +293,10 @@ def _build_enhanced_with_pandas_ta(
             row.append(1.0)
 
         features.append(row)
-        targets.append(float(log_returns[i]))
+        if i < len(log_returns):
+            targets.append(float(log_returns[i]))
+        else:
+            targets.append(float(log_returns[-1]))  # inference-row placeholder (dropped by callers)
 
     return features, targets
 
@@ -320,8 +336,10 @@ def _build_enhanced_numpy_fallback(
     features: list = []
     targets: list = []
 
-    for i in range(20, len(log_returns)):
-        price_idx = i + 1
+    # price_idx == i is the "as-of" day (no look-ahead). Last iteration is the
+    # inference row. Mirrors _build_enhanced_with_pandas_ta exactly.
+    for i in range(20, len(log_returns) + 1):
+        price_idx = i
         price_now = float(arr[price_idx])
         row: list[float] = []
 
@@ -396,7 +414,10 @@ def _build_enhanced_numpy_fallback(
             row.append(1.0)
 
         features.append(row)
-        targets.append(float(log_returns[i]))
+        if i < len(log_returns):
+            targets.append(float(log_returns[i]))
+        else:
+            targets.append(float(log_returns[-1]))  # inference-row placeholder (dropped by callers)
 
     return features, targets
 

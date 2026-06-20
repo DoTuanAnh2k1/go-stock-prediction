@@ -41,6 +41,12 @@ type Model struct {
 	suggest []Suggestion
 	sugIdx  int // highlighted row
 	sugCol  int // screen column where the current token starts
+
+	// completion-cycle state: while cycling with Tab/arrows the candidate list
+	// is frozen so it doesn't collapse to the just-inserted value.
+	completing bool
+	compBase   string       // input text before the token being completed
+	compList   []Suggestion // frozen candidate list for the cycle
 }
 
 // commandsLoadedMsg is emitted once GET /me/commands resolves.

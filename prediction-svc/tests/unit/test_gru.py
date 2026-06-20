@@ -88,7 +88,7 @@ class TestGRUPredictor:
     def test_ema_fallback_returns_result(self):
         """_ema_fallback must always return a valid PredictionResult."""
         prices = make_prices(100)
-        result = GRUPredictor._ema_fallback(prices)
+        result = GRUPredictor()._ema_fallback(prices)
         assert result.algorithm_name == "gru_nn"
         assert 0.0 <= result.confidence <= 1.0
         current = prices[-1]

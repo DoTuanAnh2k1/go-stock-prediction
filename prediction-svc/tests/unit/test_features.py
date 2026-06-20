@@ -470,6 +470,80 @@ class TestEnhancedBollingerRange:
 
 
 # ---------------------------------------------------------------------------
+# Tests: No look-ahead leakage (causality)
+# ---------------------------------------------------------------------------
+
+
+class TestNoLookaheadLeakage:
+    """A feature row must depend ONLY on prices up to its own "as-of" day.
+
+    Regression guard for the price_idx off-by-one bug: previously each row used
+    price_idx = i + 1 (the target day's price) while the target was the return
+    INTO that day, leaking the answer into the features. The corrected builders
+    use price_idx = i (as-of day) and emit a final inference row at the latest
+    price.
+
+    Method: build features on the full series, then on the series truncated right
+    after as-of day `t`. The truncated build's last row (inference row, as-of day
+    `t`) must equal the full build's row for as-of day `t`. If features peeked at
+    arr[t+1], truncating it would change the row → mismatch.
+    """
+
+    @staticmethod
+    def _assert_rows_equal(row_a, row_b, t, kind):
+        assert len(row_a) == len(row_b), f"{kind}: row width mismatch at t={t}"
+        for col, (a, b) in enumerate(zip(row_a, row_b)):
+            assert a == pytest.approx(b, rel=1e-9, abs=1e-9), (
+                f"{kind} look-ahead leak at as-of day t={t}, col {col}: "
+                f"full={a} vs truncated={b} — feature depends on arr[t+1]"
+            )
+
+    def test_enhanced_row_depends_only_on_past(self):
+        arr_full = np.array(_PRICES_200, dtype=float)
+        feats_full, _ = build_enhanced_features(arr_full, None)
+        # rows list index p -> as-of day = 20 + p  (loop starts at i=20)
+        for t in (60, 120, 180):
+            arr_trunc = arr_full[: t + 1]
+            feats_trunc, _ = build_enhanced_features(arr_trunc, None)
+            # truncated inference row (last) is as-of day t
+            self._assert_rows_equal(feats_full[t - 20], feats_trunc[-1], t, "enhanced")
+
+    def test_basic_row_depends_only_on_past(self):
+        arr_full = np.array(_PRICES_200, dtype=float)
+        feats_full, _ = build_basic_features(arr_full, None)
+        # rows list index p -> as-of day = 10 + p  (loop starts at i=10)
+        for t in (60, 120, 180):
+            arr_trunc = arr_full[: t + 1]
+            feats_trunc, _ = build_basic_features(arr_trunc, None)
+            self._assert_rows_equal(feats_full[t - 10], feats_trunc[-1], t, "basic")
+
+    def test_inference_row_is_as_of_latest_price(self):
+        """The last feature row must be built from the latest price (used for prediction)."""
+        arr = np.array(_PRICES_200, dtype=float)
+        log_returns = np.diff(np.log(arr))
+
+        for build in (build_basic_features, build_enhanced_features):
+            features, _ = build(arr, None)
+            # Lag-1 of the last row must be the most recent realised return.
+            assert features[-1][0] == pytest.approx(
+                float(log_returns[-1]), rel=1e-9, abs=1e-12
+            ), f"{build.__name__}: inference row lag_1 must equal the latest return"
+
+    def test_training_targets_are_real_log_returns(self):
+        """Every training target (all but the dropped inference placeholder) is a log return."""
+        arr = np.array(_PRICES_200, dtype=float)
+        log_returns = np.diff(np.log(arr))
+        log_return_set = set(round(float(v), 10) for v in log_returns)
+
+        for build in (build_basic_features, build_enhanced_features):
+            _, targets = build(arr, None)
+            for t in targets[:-1]:  # callers train on targets[:-1]
+                assert round(float(t), 10) in log_return_set, (
+                    f"{build.__name__}: training target {t} is not a real log return"
+                )
+
+
+# ---------------------------------------------------------------------------
 # Tests: API contract (function signatures exist and are callable)
 # ---------------------------------------------------------------------------
 

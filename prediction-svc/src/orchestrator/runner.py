@@ -35,6 +35,15 @@ def _noop(level: str, msg: str, progress: float = 0.0) -> None:
     pass
 
 
+def _apply_ensemble_weights(algos: dict, dir_acc: dict) -> None:
+    """Feed per-algorithm direction accuracy into the ensemble so it weights
+    its bases by skill instead of averaging everyone equally. No-op if the
+    ensemble or accuracy data is missing (it falls back to equal weighting)."""
+    ens = algos.get("ensemble")
+    if ens is not None and hasattr(ens, "set_weights"):
+        ens.set_weights(dir_acc)
+
+
 def run_all_markets() -> int:
     """Run predictions for ALL markets. Returns total prediction count."""
     total = 0
@@ -94,6 +103,7 @@ def _predict_gold(algos: dict, emit: EmitFn) -> int:
     emit("info", f"Gold: {len(instruments)} công cụ × {len(algos)} thuật toán", 0.0)
 
     dir_acc = repo.get_direction_accuracy("GOLD")
+    _apply_ensemble_weights(algos, dir_acc)
     count = 0
     now = datetime.now()
     target = now + timedelta(hours=1)
@@ -150,6 +160,7 @@ def _predict_nasdaq(algos: dict, emit: EmitFn) -> int:
     emit("info", f"NASDAQ: {len(symbols)} cổ phiếu × {len(algos)} thuật toán", 0.0)
 
     dir_acc = repo.get_direction_accuracy("NASDAQ100")
+    _apply_ensemble_weights(algos, dir_acc)
     count = 0
     now = datetime.now()
 
@@ -209,6 +220,7 @@ def _predict_crypto(algos: dict, emit: EmitFn) -> int:
     emit("info", f"Crypto: {len(coins)} coin × {len(algos)} thuật toán", 0.0)
 
     dir_acc = repo.get_direction_accuracy("CRYPTO")
+    _apply_ensemble_weights(algos, dir_acc)
     count = 0
     now = datetime.now()
 
@@ -228,11 +240,12 @@ def _predict_crypto(algos: dict, emit: EmitFn) -> int:
         target = datetime.combine(last_d + timedelta(days=1), datetime.min.time())
 
         price_list = [float(p.close_price) for p in prices_asc]
+        vol_list = [float(p.volume24h or 0) for p in prices_asc]
         current = price_list[-1]
 
         for key, algo in algos.items():
             try:
-                result = algo.predict(price_list)
+                result = algo.predict(price_list, vol_list)
                 algo_acc_pct = dir_acc.get(key, None)
                 algo_acc = Decimal(str(round(algo_acc_pct / 100, 4))) if algo_acc_pct is not None else None
                 repo.create_crypto_prediction(
@@ -269,6 +282,7 @@ def _predict_sp500(algos: dict, emit: EmitFn) -> int:
     emit("info", f"S&P 500: {len(symbols)} cổ phiếu × {len(algos)} thuật toán", 0.0)
 
     dir_acc = repo.get_direction_accuracy("SP500")
+    _apply_ensemble_weights(algos, dir_acc)
     count = 0
     now = datetime.now()
 

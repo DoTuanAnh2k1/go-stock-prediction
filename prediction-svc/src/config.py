@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     # Backup
     backup_dir: str = "/backups"
 
+    # RL DQN model checkpoints
+    rl_model_dir: str = "/models"
+
     class Config:
         env_file = ".env"
         case_sensitive = False

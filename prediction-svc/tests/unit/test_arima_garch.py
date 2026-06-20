@@ -91,7 +91,7 @@ class TestARIMAGARCHPredictor:
         """_ema_fallback must always return a valid PredictionResult."""
         prices = make_prices(100)
         current = prices[-1]
-        result = ARIMAGARCHPredictor._ema_fallback(prices, current)
+        result = ARIMAGARCHPredictor()._ema_fallback(prices, current)
         assert result.algorithm_name == "arima_garch"
         assert 0.0 <= result.confidence <= 1.0
         assert result.predicted_price >= current * 0.93 - 1e-9
@@ -101,5 +101,5 @@ class TestARIMAGARCHPredictor:
         """EMA fallback confidence should be 0.38."""
         prices = make_prices(100)
         current = prices[-1]
-        result = ARIMAGARCHPredictor._ema_fallback(prices, current)
+        result = ARIMAGARCHPredictor()._ema_fallback(prices, current)
         assert result.confidence == pytest.approx(0.38, abs=0.01)

@@ -73,6 +73,23 @@ func init() {
 		},
 	})
 	Register(AlgorithmDef{
+		Key:         "rl_dqn",
+		DisplayName: "RL DQN",
+		Config: map[string]interface{}{
+			"description":     "Deep Q-Network reinforcement learning agent",
+			"actions":         "hold/buy/sell",
+			"reward":          "dense per-step",
+			"hidden_layers":   2,
+			"hidden_size":     128,
+			"learning_rate":   0.0005,
+			"gamma":           0.99,
+			"epsilon_start":   1.0,
+			"epsilon_end":     0.01,
+			"replay_buffer":   10000,
+			"batch_size":      64,
+		},
+	})
+	Register(AlgorithmDef{
 		Key:         "ensemble",
 		DisplayName: "Ensemble",
 		Config:      map[string]interface{}{},

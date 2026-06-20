@@ -57,6 +57,9 @@ services:
       POSTGRES_DEBUG: "true"
       LOG_LEVEL: DEBUG
       ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-https://localhost}"
+      RL_MODEL_DIR: "${RL_MODEL_DIR:-/models}"
+    volumes:
+      - rl_models:/models
     networks:
       - app-network
 
@@ -203,3 +206,4 @@ volumes:
   postgres_data:
   backup_data:
   cli_keys:
+  rl_models:

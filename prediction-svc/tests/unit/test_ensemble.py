@@ -199,3 +199,68 @@ class TestEnsembleWithRealAlgorithms:
         current = prices[-1]
         assert result.predicted_price >= current * 0.93 - 1e-9
         assert result.predicted_price <= current * 1.07 + 1e-9
+
+
+# ---------------------------------------------------------------------------
+# Tests — accuracy-weighted ensemble (set_weights)
+# ---------------------------------------------------------------------------
+
+class TestEnsembleWeighting:
+    """weight(base) = max(0, direction_accuracy_pct/100 - 0.5); equal-weight fallback."""
+
+    def test_weighted_average_tilts_to_accurate_base(self):
+        a1 = _mock_algo("a1", 100.0, 0.5)  # 70% -> w=0.20
+        a2 = _mock_algo("a2", 200.0, 0.5)  # 60% -> w=0.10
+        ens = EnsemblePredictor([a1, a2])
+        ens.set_weights({"a1": 70.0, "a2": 60.0})
+        result = ens.predict([150.0])
+        assert result.predicted_price == pytest.approx((0.2 * 100 + 0.1 * 200) / 0.3, rel=1e-9)
+
+    def test_sub_coinflip_base_gets_zero_weight(self):
+        a1 = _mock_algo("a1", 100.0, 0.5)  # 80% -> w=0.30
+        a2 = _mock_algo("a2", 200.0, 0.5)  # 45% -> w=0 (worse than coin flip)
+        ens = EnsemblePredictor([a1, a2])
+        ens.set_weights({"a1": 80.0, "a2": 45.0})
+        result = ens.predict([150.0])
+        assert result.predicted_price == pytest.approx(100.0, rel=1e-9)  # only a1 contributes
+
+    def test_all_below_threshold_falls_back_to_equal(self):
+        a1 = _mock_algo("a1", 100.0, 0.5)  # 40% -> 0
+        a2 = _mock_algo("a2", 200.0, 0.5)  # 30% -> 0
+        ens = EnsemblePredictor([a1, a2])
+        ens.set_weights({"a1": 40.0, "a2": 30.0})
+        result = ens.predict([150.0])
+        assert result.predicted_price == pytest.approx(150.0, rel=1e-9)  # equal-weight mean
+
+    def test_empty_weights_is_equal_weight(self):
+        a1 = _mock_algo("a1", 100.0, 0.5)
+        a2 = _mock_algo("a2", 200.0, 0.5)
+        ens = EnsemblePredictor([a1, a2])
+        ens.set_weights({})
+        result = ens.predict([150.0])
+        assert result.predicted_price == pytest.approx(150.0, rel=1e-9)
+
+    def test_set_weights_none_resets_to_equal(self):
+        a1 = _mock_algo("a1", 100.0, 0.5)
+        a2 = _mock_algo("a2", 200.0, 0.5)
+        ens = EnsemblePredictor([a1, a2])
+        ens.set_weights({"a1": 90.0, "a2": 50.0})
+        ens.set_weights(None)
+        result = ens.predict([150.0])
+        assert result.predicted_price == pytest.approx(150.0, rel=1e-9)
+
+    def test_none_accuracy_value_ignored(self):
+        a1 = _mock_algo("a1", 100.0, 0.5)  # 70% -> w=0.20
+        a2 = _mock_algo("a2", 200.0, 0.5)  # None -> w=0
+        ens = EnsemblePredictor([a1, a2])
+        ens.set_weights({"a1": 70.0, "a2": None})
+        result = ens.predict([150.0])
+        assert result.predicted_price == pytest.approx(100.0, rel=1e-9)
+
+    def test_confidence_is_weighted_too(self):
+        a1 = _mock_algo("a1", 100.0, 0.9)  # 70% -> w=0.20
+        a2 = _mock_algo("a2", 200.0, 0.3)  # 60% -> w=0.10
+        ens = EnsemblePredictor([a1, a2])
+        ens.set_weights({"a1": 70.0, "a2": 60.0})
+        result = ens.predict([150.0])
+        assert result.confidence == pytest.approx((0.2 * 0.9 + 0.1 * 0.3) / 0.3, rel=1e-9)

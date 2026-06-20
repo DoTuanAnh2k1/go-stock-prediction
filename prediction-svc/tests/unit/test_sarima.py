@@ -79,7 +79,7 @@ class TestSARIMAPredictor:
     def test_ema_fallback_returns_valid_result(self):
         prices = make_prices(100)
         current = prices[-1]
-        result = SARIMAPredictor._ema_fallback(prices, current)
+        result = SARIMAPredictor()._ema_fallback(prices, current)
         assert result.algorithm_name == "sarima"
         assert 0.0 <= result.confidence <= 1.0
         assert result.predicted_price >= current * 0.93 - 1e-9
@@ -88,5 +88,5 @@ class TestSARIMAPredictor:
     def test_fallback_confidence_fixed_at_037(self):
         prices = make_prices(100)
         current = prices[-1]
-        result = SARIMAPredictor._ema_fallback(prices, current)
+        result = SARIMAPredictor()._ema_fallback(prices, current)
         assert result.confidence == pytest.approx(0.37, abs=0.01)

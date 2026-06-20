@@ -111,23 +111,75 @@ func TestEnterBehaviour(t *testing.T) {
 	})
 }
 
-// Tab completes the highlighted suggestion and advances to the next token.
-func TestTabCompletion(t *testing.T) {
+// Tab cycles DOWN through the candidate list, inserting each value (kube-prompt
+// style). Regression: Tab once filled the first value then jumped past the menu,
+// so you could never reach the other choices.
+func TestTabCyclesThroughChoices(t *testing.T) {
 	m := newTestModel(t, "super_admin", true)
-
-	// Partial verb → Tab completes to "get " (verb + trailing space).
-	m.input.SetValue("ge")
+	m.input.SetValue("get market.latest market=")
 	m.recomputeSuggest()
-	m, _ = step(t, m, key(tea.KeyTab))
-	if m.input.Value() != "get " {
-		t.Fatalf("verb tab-complete: got %q, want %q", m.input.Value(), "get ")
+	if len(m.suggest) != 4 {
+		t.Fatalf("expected 4 market choices, got %d: %v", len(m.suggest), m.suggest)
 	}
 
-	// After the verb, Tab fills a resource (then a space).
+	want := []string{
+		"get market.latest market=gold",
+		"get market.latest market=nasdaq",
+		"get market.latest market=crypto",
+		"get market.latest market=sp500",
+	}
+	for i, w := range want {
+		m, _ = step(t, m, key(tea.KeyTab))
+		if m.input.Value() != w {
+			t.Fatalf("Tab #%d → %q, want %q", i+1, m.input.Value(), w)
+		}
+	}
+	// Wraps back to the first.
 	m, _ = step(t, m, key(tea.KeyTab))
-	got := m.input.Value()
-	if !strings.HasPrefix(got, "get ") || !strings.HasSuffix(got, " ") || strings.TrimSpace(got) == "get" {
-		t.Fatalf("resource tab-complete produced %q", got)
+	if m.input.Value() != want[0] {
+		t.Fatalf("Tab wraparound → %q, want %q", m.input.Value(), want[0])
+	}
+	// Shift+Tab cycles backwards.
+	m, _ = step(t, m, key(tea.KeyShiftTab))
+	if m.input.Value() != want[len(want)-1] {
+		t.Fatalf("Shift+Tab → %q, want %q", m.input.Value(), want[len(want)-1])
+	}
+}
+
+// Regression: an unrelated message (e.g. the cursor-blink tick) arriving
+// mid-cycle must NOT reset the completion cycle. Previously the default branch
+// recomputed on every message, collapsing the frozen candidate list so Tab
+// stayed stuck on the first choice.
+type noopMsg struct{}
+
+func TestCycleSurvivesSpuriousMessages(t *testing.T) {
+	m := newTestModel(t, "super_admin", true)
+	m.input.SetValue("get market.latest market=")
+	m.recomputeSuggest()
+
+	m, _ = step(t, m, key(tea.KeyTab)) // → gold
+	m, _ = step(t, m, noopMsg{})       // blink-like tick
+	m, _ = step(t, m, key(tea.KeyTab)) // must advance → nasdaq, not stay on gold
+	if m.input.Value() != "get market.latest market=nasdaq" {
+		t.Fatalf("cycle reset by spurious message: got %q", m.input.Value())
+	}
+	if !m.completing {
+		t.Fatal("completion cycle should survive a no-op message")
+	}
+}
+
+// Typing after a Tab cycle ends the cycle and resumes live filtering.
+func TestTabThenTypeResumesLiveSuggest(t *testing.T) {
+	m := newTestModel(t, "super_admin", true)
+	m.input.SetValue("")
+	m.recomputeSuggest()
+	m, _ = step(t, m, key(tea.KeyTab)) // fills first verb
+	if !m.completing {
+		t.Fatal("should be in completion cycle after Tab")
+	}
+	m, _ = step(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	if m.completing {
+		t.Fatal("typing should end the completion cycle")
 	}
 }
 
@@ -140,9 +192,11 @@ func TestDropdownNavigation(t *testing.T) {
 	if n < 2 {
 		t.Fatalf("expected several verb suggestions, got %d", n)
 	}
+	// First Down selects index 0 (begins the cycle), the next advances to 1.
+	m, _ = step(t, m, key(tea.KeyDown))
 	m, _ = step(t, m, key(tea.KeyDown))
 	if m.sugIdx != 1 {
-		t.Fatalf("Down → sugIdx %d, want 1", m.sugIdx)
+		t.Fatalf("two Downs → sugIdx %d, want 1", m.sugIdx)
 	}
 	m, _ = step(t, m, key(tea.KeyUp))
 	m, _ = step(t, m, key(tea.KeyUp))

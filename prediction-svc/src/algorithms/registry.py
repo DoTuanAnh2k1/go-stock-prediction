@@ -17,6 +17,7 @@ from src.algorithms.lightgbm_model import LightGBMPredictor
 from src.algorithms.lstm import LSTMPredictor
 from src.algorithms.moving_average import MovingAveragePredictor
 from src.algorithms.random_forest import RandomForestPredictor
+from src.algorithms.rl_dqn import RLDQNPredictor
 from src.algorithms.sarima import SARIMAPredictor
 from src.algorithms.xgboost_model import XGBoostPredictor
 
@@ -41,6 +42,8 @@ def build_algorithms(market_key: str | None = None) -> dict[str, PredictionAlgor
     gru = GRUPredictor()
     rf = RandomForestPredictor()
     xgb = XGBoostPredictor()
+    # RL DQN: algorithm #12 — NOT added to Ensemble (v1 exclusion per spec)
+    rl = RLDQNPredictor()
     ensemble = EnsemblePredictor([ma, ema, lstm, arima, lgbm, sarima, egarch, gru, rf, xgb])
 
     instances = {
@@ -55,6 +58,7 @@ def build_algorithms(market_key: str | None = None) -> dict[str, PredictionAlgor
         rf.get_key(): rf,
         xgb.get_key(): xgb,
         ensemble.get_key(): ensemble,
+        rl.get_key(): rl,
     }
 
     if market_key:

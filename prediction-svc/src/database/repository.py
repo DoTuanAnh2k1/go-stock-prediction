@@ -122,6 +122,28 @@ def get_gold_prices_asc(source: str, product_type: str, limit: int = 270) -> lis
         session.close()
 
 
+def get_gold_prices_asc_as_of(
+    source: str, product_type: str, as_of: "datetime", limit: int = 270
+) -> "list[GoldPrice]":
+    """Return up to `limit` gold prices with trading_date <= as_of, in ASC order."""
+    session = get_session()
+    try:
+        rows = (
+            session.query(GoldPrice)
+            .filter(
+                GoldPrice.source == source,
+                GoldPrice.product_type == product_type,
+                GoldPrice.trading_date <= as_of,
+            )
+            .order_by(GoldPrice.trading_date.desc())
+            .limit(limit)
+            .all()
+        )
+        return list(reversed(rows))
+    finally:
+        session.close()
+
+
 def create_gold_prediction(
     source: str,
     product_type: str,
@@ -261,6 +283,28 @@ def get_nasdaq_prices_asc(symbol: str, limit: int = 270) -> list[NasdaqPrice]:
         rows = (
             session.query(NasdaqPrice)
             .filter(NasdaqPrice.symbol == symbol, NasdaqPrice.deleted_at.is_(None))
+            .order_by(NasdaqPrice.trading_date.desc())
+            .limit(limit)
+            .all()
+        )
+        return list(reversed(rows))
+    finally:
+        session.close()
+
+
+def get_nasdaq_prices_asc_as_of(
+    symbol: str, as_of: "datetime", limit: int = 270
+) -> "list[NasdaqPrice]":
+    """Return up to `limit` NASDAQ prices with trading_date <= as_of, in ASC order."""
+    session = get_session()
+    try:
+        rows = (
+            session.query(NasdaqPrice)
+            .filter(
+                NasdaqPrice.symbol == symbol,
+                NasdaqPrice.deleted_at.is_(None),
+                NasdaqPrice.trading_date <= as_of,
+            )
             .order_by(NasdaqPrice.trading_date.desc())
             .limit(limit)
             .all()
@@ -426,6 +470,28 @@ def get_crypto_prices_asc(coin_id: str, limit: int = 270) -> list[CryptoPrice]:
         session.close()
 
 
+def get_crypto_prices_asc_as_of(
+    coin_id: str, as_of: "datetime", limit: int = 270
+) -> "list[CryptoPrice]":
+    """Return up to `limit` Crypto prices with trading_date <= as_of, in ASC order."""
+    session = get_session()
+    try:
+        rows = (
+            session.query(CryptoPrice)
+            .filter(
+                CryptoPrice.coin_id == coin_id,
+                CryptoPrice.deleted_at.is_(None),
+                CryptoPrice.trading_date <= as_of,
+            )
+            .order_by(CryptoPrice.trading_date.desc())
+            .limit(limit)
+            .all()
+        )
+        return list(reversed(rows))
+    finally:
+        session.close()
+
+
 def create_crypto_prediction(
     coin_id: str,
     symbol: str,
@@ -565,6 +631,28 @@ def get_sp500_prices_asc(symbol: str, limit: int = 270) -> list[SP500Price]:
         rows = (
             session.query(SP500Price)
             .filter(SP500Price.symbol == symbol, SP500Price.deleted_at.is_(None))
+            .order_by(SP500Price.trading_date.desc())
+            .limit(limit)
+            .all()
+        )
+        return list(reversed(rows))
+    finally:
+        session.close()
+
+
+def get_sp500_prices_asc_as_of(
+    symbol: str, as_of: "datetime", limit: int = 270
+) -> "list[SP500Price]":
+    """Return up to `limit` S&P 500 prices with trading_date <= as_of, in ASC order."""
+    session = get_session()
+    try:
+        rows = (
+            session.query(SP500Price)
+            .filter(
+                SP500Price.symbol == symbol,
+                SP500Price.deleted_at.is_(None),
+                SP500Price.trading_date <= as_of,
+            )
             .order_by(SP500Price.trading_date.desc())
             .limit(limit)
             .all()
