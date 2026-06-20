@@ -8,15 +8,16 @@ import (
 )
 
 // Update handles all messages for the session model.
+//
+// The shell runs INLINE (no alt-screen): the live View (prompt + dropdown) is
+// pinned at the bottom, and output is pushed into the scrollback above via
+// tea.Println — the familiar shell / kube-prompt feel.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.resizeViewport()
-		m.refreshViewport()
+		m.input.Width = m.width - 4
 		return m, nil
 
 	case commandsLoadedMsg:
@@ -26,20 +27,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.allowed = NewAllowedSet(m.sess.Role, msg.cmds)
 		}
+		m.loaded = true
 		m.runner = NewRunner(m.reg, m.client, m.allowed, m.sess.JWT)
 		m.comp = NewCompleter(m.reg, m.allowed)
-		m.history = append(m.history, m.welcome())
-		m.refreshViewport()
 		m.recomputeSuggest()
-		return m, nil
+		return m, tea.Println(m.banner())
 
 	case resultMsg:
-		m.history = append(m.history, msg.output)
-		m.input.SetValue("")
-		m.err = ""
-		m.refreshViewport()
-		m.recomputeSuggest()
-		return m, nil
+		// Output already scrolled above via Println below; nothing to do but
+		// keep the prompt responsive.
+		return m, tea.Println(msg.output)
 
 	case tea.KeyMsg:
 		switch msg.Type {
@@ -69,47 +66,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			line := strings.TrimSpace(m.input.Value())
 			m.suggest = nil
+			m.input.SetValue("")
+			m.err = ""
 			if line == "" {
 				return m, nil
 			}
 			if line == "exit" || line == "quit" {
 				return m, tea.Quit
 			}
-			if line == "help" || line == "?" {
-				m.history = append(m.history, m.helpText())
-				m.input.SetValue("")
-				m.err = ""
-				m.refreshViewport()
-				m.recomputeSuggest()
-				return m, nil
-			}
 			if line == "clear" {
-				m.history = nil
-				m.input.SetValue("")
-				m.err = ""
-				m.refreshViewport()
+				return m, tea.ClearScreen
+			}
+			// Everything below needs the loaded permission set.
+			if !m.loaded || m.runner == nil {
 				m.recomputeSuggest()
-				return m, nil
+				return m, tea.Println(m.th.Dim.Render("still loading your permissions, please wait…"))
 			}
-			if m.runner == nil {
-				m.history = append(m.history, m.th.Dim.Render("still loading your permissions, please wait..."))
-				m.refreshViewport()
-				return m, nil
+			echo := tea.Println(m.th.Prompt.Render("> ") + line)
+			m.recomputeSuggest()
+			if line == "help" || line == "?" {
+				return m, tea.Sequence(echo, tea.Println(m.helpText()))
 			}
-			m.history = append(m.history, m.th.Prompt.Render("> ")+line)
-			return m, m.runCommand(line)
+			return m, tea.Sequence(echo, m.runCommand(line))
 		}
 	}
 
-	// Default: forward to the text input (and viewport for scroll keys), then
-	// recompute the live dropdown against the new input value.
+	// Default: forward to the text input, then refresh the live dropdown.
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
-	cmds = append(cmds, cmd)
-	m.viewport, cmd = m.viewport.Update(msg)
-	cmds = append(cmds, cmd)
 	m.recomputeSuggest()
-	return m, tea.Batch(cmds...)
+	return m, cmd
 }
 
 // recomputeSuggest refreshes the live dropdown for the current input value.

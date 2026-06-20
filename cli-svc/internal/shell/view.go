@@ -5,89 +5,48 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 )
 
 const maxSuggestRows = 8
 
-func (m *Model) resizeViewport() {
-	w := m.width
-	h := m.height
-	if w <= 0 {
-		w = 80
-	}
-	if h <= 0 {
-		h = 24
-	}
-	vpHeight := h - 4
-	if vpHeight < 3 {
-		vpHeight = 3
-	}
-	if !m.ready {
-		m.viewport = viewport.New(w, vpHeight)
-		m.ready = true
-	} else {
-		m.viewport.Width = w
-		m.viewport.Height = vpHeight
-	}
-	m.input.Width = w - 4
-}
-
-func (m *Model) refreshViewport() {
-	if !m.ready {
-		m.resizeViewport()
-	}
-	m.viewport.SetContent(strings.Join(m.history, "\n\n"))
-	m.viewport.GotoBottom()
-}
-
-// View renders the full screen, kube-prompt style: header, the input line, the
-// live completion dropdown directly under it, then the scrolling output, then a
-// hint/error line at the very bottom.
+// View renders the live, bottom-pinned block: the prompt input, the completion
+// dropdown directly beneath the cursor token, and a hint/error line. Command
+// output is NOT rendered here — it is pushed to the scrollback above via
+// tea.Println (see update.go).
 func (m Model) View() string {
-	if !m.ready {
-		return "initializing...\n"
-	}
-
-	drop := m.renderSuggest()
-	dropLines := 0
-	if drop != "" {
-		dropLines = strings.Count(drop, "\n") + 1
-	}
-
-	vpH := m.height - 3 - dropLines
-	if vpH < 1 {
-		vpH = 1
-	}
-	vp := m.viewport
-	vp.Height = vpH
-	vp.GotoBottom()
-
 	var b strings.Builder
-	b.WriteString(m.headerBar())
-	b.WriteString("\n")
 	b.WriteString(m.input.View())
-	b.WriteString("\n")
-	if drop != "" {
-		b.WriteString(drop)
+	if d := m.renderSuggest(); d != "" {
 		b.WriteString("\n")
+		b.WriteString(d)
 	}
-	b.WriteString(vp.View())
 	b.WriteString("\n")
-	if m.err != "" {
+	switch {
+	case m.err != "":
 		b.WriteString(m.th.Err.Render("✗ " + m.err))
-	} else {
+	case !m.loaded:
+		b.WriteString(m.th.Dim.Render("connecting to API…"))
+	default:
 		b.WriteString(m.th.Dim.Render(m.hintLine()))
 	}
 	return b.String()
 }
 
-// headerBar is the top status bar spanning the terminal width.
+// banner is printed once (above the prompt) when the session is ready.
+func (m Model) banner() string {
+	return m.headerBar() + "\n" + m.welcome()
+}
+
+// headerBar is a full-width status bar.
 func (m Model) headerBar() string {
+	w := m.width
+	if w <= 0 {
+		w = 80
+	}
 	left := m.th.Header.Render("stock-prediction CLI")
 	badge := m.th.Badge.Render(m.sess.Username + " · " + roleLabel(m.sess.Role))
-	gap := m.width - lipgloss.Width(left) - lipgloss.Width(badge)
+	gap := w - lipgloss.Width(left) - lipgloss.Width(badge)
 	if gap < 1 {
 		gap = 1
 	}
@@ -99,7 +58,7 @@ func (m Model) hintLine() string {
 }
 
 // renderSuggest draws the floating completion dropdown. Returns "" when there is
-// nothing to suggest (so the layout collapses cleanly).
+// nothing to suggest.
 func (m Model) renderSuggest() string {
 	if len(m.suggest) == 0 {
 		return ""
@@ -114,9 +73,13 @@ func (m Model) renderSuggest() string {
 			maxDesc = n
 		}
 	}
-	avail := m.width - m.sugCol - 1
-	if avail < 12 {
-		avail = 12
+	w := m.width
+	if w <= 0 {
+		w = 80
+	}
+	avail := w - m.sugCol - 1
+	if avail < 16 {
+		avail = 16
 	}
 	if maxText+maxDesc+4 > avail {
 		maxDesc = avail - maxText - 4
@@ -186,7 +149,7 @@ func (m Model) welcome() string {
 		n := len(m.allowed.Commands())
 		b.WriteString(m.th.Dim.Render(fmt.Sprintf("%s — %d command(s) granted.", roleLabel(m.sess.Role), n)) + "\n")
 	}
-	b.WriteString(m.th.Dim.Render("Start typing a verb (get/set/update/delete); suggestions appear below the prompt."))
+	b.WriteString(m.th.Dim.Render("Type a verb (get/set/update/delete); suggestions appear below. Tab completes, Enter runs."))
 	return b.String()
 }
 
@@ -194,7 +157,7 @@ func (m Model) helpText() string {
 	var b strings.Builder
 	b.WriteString(m.th.Title.Render("Command reference") + "\n")
 	b.WriteString(m.th.Dim.Render("Syntax: <verb> <resource> [key=value ...]") + "\n")
-	b.WriteString(m.th.Dim.Render("Verbs: get (GET) · set (POST) · update (PUT) · delete (DELETE)") + "\n\n")
+	b.WriteString(m.th.Dim.Render("Verbs: get (GET) · set (POST) · update (PUT) · delete (DELETE)") + "\n")
 	for _, h := range m.reg.All() {
 		if !m.allowed.Allows(h.Key) {
 			continue
@@ -217,5 +180,5 @@ func (m Model) helpText() string {
 			m.th.Title.Render(fmt.Sprintf("%-22s", h.Resource)),
 			m.th.Dim.Render(strings.Join(args, " "))))
 	}
-	return b.String()
+	return strings.TrimRight(b.String(), "\n")
 }

@@ -86,7 +86,9 @@ func (s *Server) teaHandler(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
 		JWT:      jwt,
 	}, s.client, s.reg, renderer)
 
-	return m, []tea.ProgramOption{tea.WithAltScreen()}
+	// Inline (no alt-screen): output scrolls into the scrollback above a
+	// bottom-pinned prompt — the familiar shell / kube-prompt feel.
+	return m, nil
 }
 
 // upsertCatalog pushes the handler catalog to the API on boot. The gateway/API

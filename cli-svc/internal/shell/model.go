@@ -6,7 +6,6 @@ import (
 	"context"
 
 	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -32,13 +31,11 @@ type Model struct {
 	comp    *Completer
 	th      *Theme
 
-	input    textinput.Model
-	viewport viewport.Model
-	history  []string // rendered output blocks
-	ready    bool
-	width    int
-	height   int
-	err      string
+	input  textinput.Model
+	loaded bool
+	width  int
+	height int
+	err    string
 
 	// live completion dropdown state (kube-prompt style)
 	suggest []Suggestion
