@@ -12,7 +12,7 @@ Covers the complete daily workflow:
 Run:
     make test-phase5
     # or
-    docker exec prediction_service python -m pytest tests/integration/test_phase5_full_regression.py -v
+    docker exec prediction-svc python -m pytest tests/integration/test_phase5_full_regression.py -v
 """
 from __future__ import annotations
 

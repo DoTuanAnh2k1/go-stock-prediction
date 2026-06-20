@@ -11,7 +11,7 @@ Tests verify:
 Run:
     make test-simulation
     # or
-    docker exec prediction_service python -m pytest tests/integration/test_phase5_simulation.py -v
+    docker exec prediction-svc python -m pytest tests/integration/test_phase5_simulation.py -v
 """
 from __future__ import annotations
 

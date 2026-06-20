@@ -1,49 +1,53 @@
-.PHONY: test test-unit test-integration test-coverage build test-db-up test-db-down vet swagger test-phase5
+.PHONY: test test-unit test-integration test-coverage build test-db-up test-db-down vet swagger test-phase5 up reset
+
+# docker compose wrapper — compose file lives in deploy/, .env stays at repo root
+COMPOSE = docker compose --env-file .env -f deploy/docker-compose.yaml
+COMPOSE_TEST = docker compose -f deploy/docker-compose.test.yml
 
 build:
-	cd api && go build -o api-server ./cmd
+	cd api-svc && go build -o api-server ./cmd
 
 vet:
-	cd api && go vet ./...
+	cd api-svc && go vet ./...
 
 test:
-	cd api && go test ./... -v -count=1
+	cd api-svc && go test ./... -v -count=1
 
 test-unit:
-	cd api && go test ./... -v -count=1 -short
+	cd api-svc && go test ./... -v -count=1 -short
 
 test-integration:
-	cd api && go test ./... -v -count=1 -run Integration
+	cd api-svc && go test ./... -v -count=1 -run Integration
 
 test-coverage:
-	cd api && go test ./... -coverprofile=coverage.out -count=1
-	cd api && go tool cover -html=coverage.out -o coverage.html
-	cd api && go tool cover -func=coverage.out | grep total
+	cd api-svc && go test ./... -coverprofile=coverage.out -count=1
+	cd api-svc && go tool cover -html=coverage.out -o coverage.html
+	cd api-svc && go tool cover -func=coverage.out | grep total
 
 test-db-up:
-	docker compose -f docker-compose.test.yml up -d
+	$(COMPOSE_TEST) up -d
 	@echo "Waiting for test MySQL to be ready..."
 	@for i in $$(seq 1 30); do \
-		docker compose -f docker-compose.test.yml exec -T test-mysql mysqladmin ping -h localhost -u root -ptest123 --silent 2>/dev/null && break; \
+		$(COMPOSE_TEST) exec -T test-mysql mysqladmin ping -h localhost -u root -ptest123 --silent 2>/dev/null && break; \
 		sleep 1; \
 	done
 	@echo "Test DB is ready on port 3307"
 
 test-db-down:
-	docker compose -f docker-compose.test.yml down -v
+	$(COMPOSE_TEST) down -v
 
 # Phase 5 full regression — Python prediction service + API Backend end-to-end
 test-phase5:
-	cd prediction && make test-phase5
+	cd prediction-svc && make test-phase5
 
 reset:
-	docker compose down
-	docker compose up -d --build
+	$(COMPOSE) down
+	$(COMPOSE) up -d --build
 
 up:
-	docker compose up -d
+	$(COMPOSE) up -d
 
 swagger:
-	cd api && swag init -g cmd/main.go -o docs/
-	@echo "Swagger docs generated at api/docs/"
+	cd api-svc && swag init -g cmd/main.go -o docs/
+	@echo "Swagger docs generated at api-svc/docs/"
 	@echo "UI available at http://localhost:8118/swagger/"

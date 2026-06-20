@@ -6,7 +6,7 @@ Requires: API Backend running at http://api:8118 (Docker network).
 Run:
     make test-phase3
     # or
-    docker exec prediction_service python -m pytest tests/integration/test_phase3_api_backend.py -v
+    docker exec prediction-svc python -m pytest tests/integration/test_phase3_api_backend.py -v
 """
 from __future__ import annotations
 

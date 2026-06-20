@@ -6,7 +6,7 @@ TriggerGoldPredict, TriggerNasdaqPredict, TriggerCryptoPredict.
 Run:
     make test-phase3
     # or
-    docker exec prediction_service python -m pytest tests/integration/test_phase3_predictions.py -v
+    docker exec prediction-svc python -m pytest tests/integration/test_phase3_predictions.py -v
 """
 from __future__ import annotations
 

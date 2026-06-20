@@ -6,7 +6,7 @@ Python prediction service via gRPC.
 Run:
     make test-phase4
     # or
-    docker exec prediction_service python -m pytest tests/integration/test_phase4_api_backend.py -v
+    docker exec prediction-svc python -m pytest tests/integration/test_phase4_api_backend.py -v
 """
 from __future__ import annotations
 

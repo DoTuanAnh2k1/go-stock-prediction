@@ -21,23 +21,23 @@ http:
 
 # Path-prefix routing — longest prefix wins.
 # /swagger → 404 blocked
-# /api     → Go API Backend at api:8118
-# /health  → Go API Backend at api:8118 (existing nginx behaviour)
-# /        → React SPA at frontend:3000
+# /api     → Go API Backend at api-svc:8118
+# /health  → Go API Backend at api-svc:8118 (existing nginx behaviour)
+# /        → React SPA at web-svc:3000
 routes:
   - prefix: "/swagger"
     action: "block"
   - prefix: "/api"
     action: "proxy"
-    backend: "http://api:8118"
+    backend: "http://api-svc:8118"
     security_headers: true
   - prefix: "/health"
     action: "proxy"
-    backend: "http://api:8118"
+    backend: "http://api-svc:8118"
     security_headers: false
   - prefix: "/"
     action: "proxy"
-    backend: "http://frontend:3000"
+    backend: "http://web-svc:3000"
     security_headers: false
 
 middleware:

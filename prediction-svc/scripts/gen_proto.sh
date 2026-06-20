@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_DIR="$(dirname "$SCRIPT_DIR")"
 REPO_ROOT="$(dirname "$SERVICE_DIR")"
 
-PROTO_SRC="${REPO_ROOT}/proto"
+PROTO_SRC="${REPO_ROOT}/api-svc/proto"
 PROTO_FILE="prediction/prediction.proto"
 OUT_DIR="${SERVICE_DIR}/src/proto"
 

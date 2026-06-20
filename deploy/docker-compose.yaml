@@ -1,3 +1,14 @@
+# Compose file lives in deploy/. Relative paths below are resolved against this
+# directory, so repo-root paths are referenced with ../ (e.g. ../database.sql).
+# Run from the repo root with:
+#   docker compose --env-file .env -f deploy/docker-compose.yaml up -d
+# (the Makefile wraps this — see `make up` / `make reset`).
+#
+# Project name is pinned to go-stock-prediction so that moving this compose file
+# into deploy/ does NOT change the Compose project (which defaults to the file's
+# parent dir). This keeps reusing the existing named volumes
+# (go-stock-prediction_postgres_data / _backup_data) instead of creating empty ones.
+name: go-stock-prediction
 services:
   # Database — TimescaleDB (PostgreSQL 16 with time-series extensions)
   db:
@@ -5,7 +16,7 @@ services:
     container_name: timescaledb
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ../database.sql:/docker-entrypoint-initdb.d/01-schema.sql
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -23,12 +34,14 @@ services:
     networks:
       - app-network
 
-  # Prediction Service (gRPC) — Python implementation
-  prediction:
+  # Prediction Service (gRPC) — Python implementation.
+  # Build context is the repo root because the Dockerfile pulls the shared proto
+  # from api-svc/proto in addition to prediction-svc/ sources.
+  prediction-svc:
     build:
-      context: .
-      dockerfile: prediction/Dockerfile
-    container_name: prediction_service
+      context: ..
+      dockerfile: deploy/prediction-svc.Dockerfile
+    container_name: prediction-svc
     depends_on:
       db:
         condition: service_healthy
@@ -48,11 +61,11 @@ services:
       - app-network
 
   # Auth Service (Java gRPC)
-  auth:
+  auth-svc:
     build:
-      context: ./auth-service
-      dockerfile: Dockerfile
-    container_name: auth_service
+      context: ../auth-svc
+      dockerfile: ../deploy/auth-svc.Dockerfile
+    container_name: auth-svc
     depends_on:
       db:
         condition: service_healthy
@@ -71,22 +84,22 @@ services:
       - app-network
 
   # API Backend (HTTP)
-  api:
+  api-svc:
     build:
-      context: ./api
-      dockerfile: Dockerfile
-    container_name: api_backend
+      context: ../api-svc
+      dockerfile: ../deploy/api-svc.Dockerfile
+    container_name: api-svc
     depends_on:
       db:
         condition: service_healthy
-      prediction:
+      prediction-svc:
         condition: service_started
-      auth:
+      auth-svc:
         condition: service_started
     restart: unless-stopped
     environment:
       SERVER_PORT: "8118"
-      GRPC_TARGET: "prediction:8119"
+      GRPC_TARGET: "prediction-svc:8119"
       DB_DRIVER: postgresql
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
@@ -102,38 +115,38 @@ services:
       JWT_SECRET: "${JWT_SECRET}"
       BACKUP_DIR: "/backups"
       ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-https://localhost}"
-      AUTH_GRPC_TARGET: "auth:8120"
+      AUTH_GRPC_TARGET: "auth-svc:8120"
     volumes:
       - backup_data:/backups
     networks:
       - app-network
 
-  # Rust HTTP/HTTPS Gateway — handles ports 80/443, routes to api and frontend
-  gateway:
+  # Rust HTTP/HTTPS Gateway — handles ports 80/443, routes to api-svc and web-svc
+  gateway-svc:
     build:
-      context: ./gateway-svc
-      dockerfile: Dockerfile
-    container_name: vnstock_gateway
+      context: ../gateway-svc
+      dockerfile: ../deploy/gateway-svc.Dockerfile
+    container_name: gateway-svc
     depends_on:
-      - api
-      - frontend
+      - api-svc
+      - web-svc
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./gateway-svc/certs:/etc/gateway/certs
+      - ../gateway-svc/certs:/etc/gateway/certs
     networks:
       - app-network
 
   # Frontend (React + Vite + Nginx) — serves static files on internal port 3000
-  frontend:
+  web-svc:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: vnstock_frontend
+      context: ../web-svc
+      dockerfile: ../deploy/web-svc.Dockerfile
+    container_name: web-svc
     depends_on:
-      - api
+      - api-svc
     restart: unless-stopped
     expose:
       - "3000"

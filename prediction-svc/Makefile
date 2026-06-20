@@ -57,23 +57,23 @@ test-integration:
 	pytest tests/integration/ -v
 
 test-phase1:
-	docker exec prediction_service python -m pytest tests/integration/test_phase1_grpc.py tests/integration/test_phase1_api_backend.py -v
+	docker exec prediction-svc python -m pytest tests/integration/test_phase1_grpc.py tests/integration/test_phase1_api_backend.py -v
 
 test-phase2:
-	docker exec prediction_service python -m pytest tests/integration/test_phase2_crawlers.py tests/integration/test_phase2_api_backend.py -v
+	docker exec prediction-svc python -m pytest tests/integration/test_phase2_crawlers.py tests/integration/test_phase2_api_backend.py -v
 
 test-phase3:
-	docker exec prediction_service python -m pytest tests/unit/ tests/integration/test_phase3_predictions.py tests/integration/test_phase3_api_backend.py -v
+	docker exec prediction-svc python -m pytest tests/unit/ tests/integration/test_phase3_predictions.py tests/integration/test_phase3_api_backend.py -v
 
 test-phase4:
-	docker exec prediction_service python -m pytest tests/unit/ tests/integration/test_phase4_training.py tests/integration/test_phase4_api_backend.py -v
+	docker exec prediction-svc python -m pytest tests/unit/ tests/integration/test_phase4_training.py tests/integration/test_phase4_api_backend.py -v
 
 test-phase5:
-	docker cp tests/integration/test_phase5_full_regression.py prediction_service:/app/tests/integration/
-	docker exec prediction_service python -m pytest tests/integration/test_phase5_full_regression.py -v
+	docker cp tests/integration/test_phase5_full_regression.py prediction-svc:/app/tests/integration/
+	docker exec prediction-svc python -m pytest tests/integration/test_phase5_full_regression.py -v
 
 test-simulation:
-	docker exec prediction_service python -m pytest tests/unit/test_simulation_portfolio.py tests/unit/test_simulation_metrics.py tests/unit/test_simulation_signal.py tests/integration/test_phase5_simulation.py -v
+	docker exec prediction-svc python -m pytest tests/unit/test_simulation_portfolio.py tests/unit/test_simulation_metrics.py tests/unit/test_simulation_signal.py tests/integration/test_phase5_simulation.py -v
 
 # ---------------------------------------------------------------------------
 # Clean

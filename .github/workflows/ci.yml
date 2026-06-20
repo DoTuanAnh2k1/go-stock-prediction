@@ -16,7 +16,7 @@ concurrency:
 jobs:
 
   # ╔═══════════════════════════════════════════════════════════════════════════
-  # ║  Go API Backend  (api/)
+  # ║  Go API Backend  (api-svc/)
   # ╚═══════════════════════════════════════════════════════════════════════════
 
   go-build:
@@ -24,15 +24,15 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: api
+        working-directory: api-svc
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: api/go.mod
+          go-version-file: api-svc/go.mod
           cache: true
-          cache-dependency-path: api/go.sum
+          cache-dependency-path: api-svc/go.sum
 
       - name: Download modules
         run: go mod download
@@ -46,15 +46,15 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: api
+        working-directory: api-svc
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: api/go.mod
+          go-version-file: api-svc/go.mod
           cache: true
-          cache-dependency-path: api/go.sum
+          cache-dependency-path: api-svc/go.sum
 
       - name: Download modules
         run: go mod download
@@ -64,22 +64,22 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────────────
   # Handler tests use the recover/mock pattern (no live DB), so no database
-  # service is needed here — see api/pkg/server/*_test.go.
+  # service is needed here — see api-svc/pkg/server/*_test.go.
   go-test:
     name: "[API] Unit Tests"
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: api
+        working-directory: api-svc
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: api/go.mod
+          go-version-file: api-svc/go.mod
           cache: true
-          cache-dependency-path: api/go.sum
+          cache-dependency-path: api-svc/go.sum
 
       - name: Download modules
         run: go mod download
@@ -133,12 +133,12 @@ jobs:
           name: go-results
           retention-days: 7
           path: |
-            api/coverage.out
-            api/coverage-total.txt
-            api/package-results.txt
+            api-svc/coverage.out
+            api-svc/coverage-total.txt
+            api-svc/package-results.txt
 
   # ╔═══════════════════════════════════════════════════════════════════════════
-  # ║  Java Auth Service  (auth-service/)
+  # ║  Java Auth Service  (auth-svc/)
   # ╚═══════════════════════════════════════════════════════════════════════════
 
   java-test:
@@ -146,7 +146,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: auth-service
+        working-directory: auth-svc
 
     steps:
       - uses: actions/checkout@v4
@@ -188,10 +188,10 @@ jobs:
         with:
           name: java-results
           retention-days: 7
-          path: auth-service/target/surefire-reports/
+          path: auth-svc/target/surefire-reports/
 
   # ╔═══════════════════════════════════════════════════════════════════════════
-  # ║  Python Prediction Service  (prediction/)
+  # ║  Python Prediction Service  (prediction-svc/)
   # ╚═══════════════════════════════════════════════════════════════════════════
 
   python-lint:
@@ -199,7 +199,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: prediction
+        working-directory: prediction-svc
 
     steps:
       - uses: actions/checkout@v4
@@ -208,7 +208,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: prediction/pyproject.toml
+          cache-dependency-path: prediction-svc/pyproject.toml
 
       - name: Install ruff
         run: pip install "ruff>=0.8.0"
@@ -222,7 +222,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: prediction
+        working-directory: prediction-svc
 
     steps:
       - uses: actions/checkout@v4
@@ -231,7 +231,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: prediction/pyproject.toml
+          cache-dependency-path: prediction-svc/pyproject.toml
 
       - name: Install base + dev deps
         run: pip install -e ".[dev]"
@@ -279,7 +279,7 @@ jobs:
         with:
           name: python-results
           retention-days: 7
-          path: prediction/junit.xml
+          path: prediction-svc/junit.xml
 
   # ╔═══════════════════════════════════════════════════════════════════════════
   # ║  Rust Gateway Service  (gateway-svc/)
@@ -319,7 +319,7 @@ jobs:
         run: cargo test --locked
 
   # ╔═══════════════════════════════════════════════════════════════════════════
-  # ║  Frontend  (frontend/)
+  # ║  Frontend  (web-svc/)
   # ╚═══════════════════════════════════════════════════════════════════════════
 
   frontend-build:
@@ -327,7 +327,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: web-svc
 
     steps:
       - uses: actions/checkout@v4
@@ -336,7 +336,7 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: web-svc/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -366,8 +366,8 @@ jobs:
       - name: Build
         uses: docker/build-push-action@v5
         with:
-          context: ./api
-          file: api/Dockerfile
+          context: ./api-svc
+          file: deploy/api-svc.Dockerfile
           push: false
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
@@ -386,8 +386,8 @@ jobs:
       - name: Build
         uses: docker/build-push-action@v5
         with:
-          context: ./auth-service
-          file: auth-service/Dockerfile
+          context: ./auth-svc
+          file: deploy/auth-svc.Dockerfile
           push: false
           cache-from: type=gha,scope=auth
           cache-to: type=gha,mode=max,scope=auth
@@ -407,7 +407,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: prediction/Dockerfile
+          file: deploy/prediction-svc.Dockerfile
           push: false
           cache-from: type=gha,scope=prediction
           cache-to: type=gha,mode=max,scope=prediction
@@ -427,7 +427,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./gateway-svc
-          file: gateway-svc/Dockerfile
+          file: deploy/gateway-svc.Dockerfile
           push: false
           cache-from: type=gha,scope=gateway
           cache-to: type=gha,mode=max,scope=gateway
@@ -446,8 +446,8 @@ jobs:
       - name: Build
         uses: docker/build-push-action@v5
         with:
-          context: frontend
-          file: frontend/Dockerfile
+          context: web-svc
+          file: deploy/web-svc.Dockerfile
           push: false
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
