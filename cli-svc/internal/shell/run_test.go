@@ -36,7 +36,7 @@ func TestRunner(t *testing.T) {
 	t.Run("permission denied for non-allowed", func(t *testing.T) {
 		allowed := NewAllowedSet("user", nil)
 		r := NewRunner(reg, &stubClient{}, allowed, "jwt")
-		out, ok := r.Run(context.Background(), "get market.latest market=gold")
+		out, ok := r.Run(context.Background(), "get market latest market gold")
 		if ok {
 			t.Fatal("expected denial")
 		}
@@ -50,7 +50,7 @@ func TestRunner(t *testing.T) {
 			map[string]any{"algorithm": "lstm_nn", "total": 10.0, "correct": 7.0},
 		}}
 		r := NewRunner(reg, &stubClient{resp: resp}, NewAllowedSet("super_admin", nil), "jwt")
-		out, ok := r.Run(context.Background(), "get direction.accuracy market=GOLD")
+		out, ok := r.Run(context.Background(), "get direction accuracy market GOLD")
 		if !ok {
 			t.Fatalf("expected success, got %q", out)
 		}
@@ -63,7 +63,7 @@ func TestRunner(t *testing.T) {
 		allowed := NewAllowedSet("user", []client.AllowedCommand{{HandlerKey: "market.latest"}})
 		resp := map[string]any{"data": map[string]any{"price": 2500.0, "source": "SJC"}}
 		r := NewRunner(reg, &stubClient{resp: resp}, allowed, "jwt")
-		out, ok := r.Run(context.Background(), "get market.latest market=gold")
+		out, ok := r.Run(context.Background(), "get market latest market gold")
 		if !ok {
 			t.Fatalf("expected success: %q", out)
 		}
@@ -74,7 +74,7 @@ func TestRunner(t *testing.T) {
 
 	t.Run("unknown command", func(t *testing.T) {
 		r := NewRunner(reg, &stubClient{}, NewAllowedSet("super_admin", nil), "jwt")
-		out, ok := r.Run(context.Background(), "get bogus.thing")
+		out, ok := r.Run(context.Background(), "get bogus thing")
 		if ok || !strings.Contains(out, "unknown command") {
 			t.Errorf("got ok=%v out=%q", ok, out)
 		}
@@ -82,7 +82,7 @@ func TestRunner(t *testing.T) {
 
 	t.Run("validation error surfaces", func(t *testing.T) {
 		r := NewRunner(reg, &stubClient{}, NewAllowedSet("super_admin", nil), "jwt")
-		out, ok := r.Run(context.Background(), "get market.latest")
+		out, ok := r.Run(context.Background(), "get market latest")
 		if ok || !strings.Contains(out, "required") {
 			t.Errorf("got ok=%v out=%q", ok, out)
 		}
@@ -90,7 +90,7 @@ func TestRunner(t *testing.T) {
 
 	t.Run("API error status", func(t *testing.T) {
 		r := NewRunner(reg, &stubClient{status: 403, resp: map[string]any{"error": "forbidden"}}, NewAllowedSet("super_admin", nil), "jwt")
-		out, ok := r.Run(context.Background(), "get users.list")
+		out, ok := r.Run(context.Background(), "get users list")
 		if ok || !strings.Contains(out, "403") || !strings.Contains(out, "forbidden") {
 			t.Errorf("got ok=%v out=%q", ok, out)
 		}

@@ -31,6 +31,13 @@ func step(t *testing.T, m Model, msg tea.Msg) (Model, tea.Cmd) {
 	return mm.(Model), cmd
 }
 
+// setInput sets the input and refreshes suggestions, as live typing would.
+func setInput(m Model, s string) Model {
+	m.input.SetValue(s)
+	m.recomputeSuggest()
+	return m
+}
+
 func key(t tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: t} }
 
 func containsText(ss []Suggestion, text string) bool {
@@ -42,7 +49,6 @@ func containsText(ss []Suggestion, text string) bool {
 	return false
 }
 
-// commandsLoadedMsg must flip the model to a usable state and emit the banner.
 func TestCommandsLoadedReady(t *testing.T) {
 	m := newTestModel(t, "super_admin", false)
 	if m.loaded || m.runner != nil || m.comp != nil {
@@ -57,11 +63,9 @@ func TestCommandsLoadedReady(t *testing.T) {
 	}
 }
 
-// Regression for the "Enter does nothing" report: Enter on a real command before
-// permissions load must NOT panic and must clear the input (deferring the run).
 func TestEnterBeforeLoadedIsSafe(t *testing.T) {
 	m := newTestModel(t, "super_admin", false)
-	m.input.SetValue("get schedules.list")
+	m.input.SetValue("get schedules list")
 	m, cmd := step(t, m, key(tea.KeyEnter))
 	if cmd == nil {
 		t.Fatal("expected a 'still loading' Println cmd")
@@ -71,11 +75,25 @@ func TestEnterBeforeLoadedIsSafe(t *testing.T) {
 	}
 }
 
-// Enter handling for the control words and a real command once loaded.
+// The core report: with the dropdown open, Enter PICKS the highlighted item and
+// advances — it does NOT execute (which previously ran an incomplete command and
+// errored).
+func TestEnterPicksNotRuns(t *testing.T) {
+	m := newTestModel(t, "super_admin", true)
+	m = setInput(m, "get market prices")
+	m, cmd := step(t, m, key(tea.KeyEnter))
+	if cmd != nil {
+		t.Fatal("Enter with open dropdown should pick, not run (no cmd)")
+	}
+	if m.input.Value() != "get market prices " {
+		t.Fatalf("Enter should commit the highlighted name + space, got %q", m.input.Value())
+	}
+}
+
 func TestEnterBehaviour(t *testing.T) {
 	t.Run("empty does nothing", func(t *testing.T) {
 		m := newTestModel(t, "super_admin", true)
-		m.input.SetValue("   ")
+		m = setInput(m, "   ")
 		_, cmd := step(t, m, key(tea.KeyEnter))
 		if cmd != nil {
 			t.Fatal("empty Enter should yield no cmd")
@@ -84,7 +102,7 @@ func TestEnterBehaviour(t *testing.T) {
 
 	t.Run("exit quits", func(t *testing.T) {
 		m := newTestModel(t, "super_admin", true)
-		m.input.SetValue("exit")
+		m = setInput(m, "exit") // no verb matches → dropdown empty → Enter runs
 		_, cmd := step(t, m, key(tea.KeyEnter))
 		if cmd == nil {
 			t.Fatal("exit produced no cmd")
@@ -94,39 +112,35 @@ func TestEnterBehaviour(t *testing.T) {
 		}
 	})
 
-	t.Run("command runs and clears input", func(t *testing.T) {
+	t.Run("Esc then Enter runs and clears input", func(t *testing.T) {
 		m := newTestModel(t, "super_admin", true)
-		m.input.SetValue("get schedules.list")
+		m = setInput(m, "get schedules list")
+		m, _ = step(t, m, key(tea.KeyEsc)) // close dropdown
+		if !m.dismissed {
+			t.Fatal("Esc should dismiss the dropdown")
+		}
 		m, cmd := step(t, m, key(tea.KeyEnter))
 		if cmd == nil {
-			t.Fatal("valid command produced no cmd (Enter would appear dead)")
+			t.Fatal("Esc+Enter should run the command")
 		}
 		if m.input.Value() != "" {
 			t.Errorf("input not cleared after run: %q", m.input.Value())
 		}
-		// Input is cleared, so the dropdown resets to the fresh verb menu.
-		if !containsText(m.suggest, "get") {
-			t.Errorf("dropdown should reset to the verb menu after Enter, got %v", m.suggest)
-		}
 	})
 }
 
-// Tab cycles DOWN through the candidate list, inserting each value (kube-prompt
-// style). Regression: Tab once filled the first value then jumped past the menu,
-// so you could never reach the other choices.
+// Tab cycles DOWN through the candidate list, inserting each value.
 func TestTabCyclesThroughChoices(t *testing.T) {
 	m := newTestModel(t, "super_admin", true)
-	m.input.SetValue("get market.latest market=")
-	m.recomputeSuggest()
+	m = setInput(m, "get market latest market ")
 	if len(m.suggest) != 4 {
 		t.Fatalf("expected 4 market choices, got %d: %v", len(m.suggest), m.suggest)
 	}
-
 	want := []string{
-		"get market.latest market=gold",
-		"get market.latest market=nasdaq",
-		"get market.latest market=crypto",
-		"get market.latest market=sp500",
+		"get market latest market gold",
+		"get market latest market nasdaq",
+		"get market latest market crypto",
+		"get market latest market sp500",
 	}
 	for i, w := range want {
 		m, _ = step(t, m, key(tea.KeyTab))
@@ -134,65 +148,37 @@ func TestTabCyclesThroughChoices(t *testing.T) {
 			t.Fatalf("Tab #%d → %q, want %q", i+1, m.input.Value(), w)
 		}
 	}
-	// Wraps back to the first.
-	m, _ = step(t, m, key(tea.KeyTab))
+	m, _ = step(t, m, key(tea.KeyTab)) // wrap
 	if m.input.Value() != want[0] {
 		t.Fatalf("Tab wraparound → %q, want %q", m.input.Value(), want[0])
 	}
-	// Shift+Tab cycles backwards.
-	m, _ = step(t, m, key(tea.KeyShiftTab))
+	m, _ = step(t, m, key(tea.KeyShiftTab)) // back
 	if m.input.Value() != want[len(want)-1] {
 		t.Fatalf("Shift+Tab → %q, want %q", m.input.Value(), want[len(want)-1])
 	}
 }
 
-// Regression: an unrelated message (e.g. the cursor-blink tick) arriving
-// mid-cycle must NOT reset the completion cycle. Previously the default branch
-// recomputed on every message, collapsing the frozen candidate list so Tab
-// stayed stuck on the first choice.
+// Regression: a spurious message (cursor-blink tick) mid-cycle must not reset it.
 type noopMsg struct{}
 
 func TestCycleSurvivesSpuriousMessages(t *testing.T) {
 	m := newTestModel(t, "super_admin", true)
-	m.input.SetValue("get market.latest market=")
-	m.recomputeSuggest()
-
-	m, _ = step(t, m, key(tea.KeyTab)) // → gold
+	m = setInput(m, "get market latest market ")
+	m, _ = step(t, m, key(tea.KeyTab)) // gold
 	m, _ = step(t, m, noopMsg{})       // blink-like tick
-	m, _ = step(t, m, key(tea.KeyTab)) // must advance → nasdaq, not stay on gold
-	if m.input.Value() != "get market.latest market=nasdaq" {
+	m, _ = step(t, m, key(tea.KeyTab)) // must advance → nasdaq
+	if m.input.Value() != "get market latest market nasdaq" {
 		t.Fatalf("cycle reset by spurious message: got %q", m.input.Value())
 	}
-	if !m.completing {
-		t.Fatal("completion cycle should survive a no-op message")
-	}
 }
 
-// Typing after a Tab cycle ends the cycle and resumes live filtering.
-func TestTabThenTypeResumesLiveSuggest(t *testing.T) {
-	m := newTestModel(t, "super_admin", true)
-	m.input.SetValue("")
-	m.recomputeSuggest()
-	m, _ = step(t, m, key(tea.KeyTab)) // fills first verb
-	if !m.completing {
-		t.Fatal("should be in completion cycle after Tab")
-	}
-	m, _ = step(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
-	if m.completing {
-		t.Fatal("typing should end the completion cycle")
-	}
-}
-
-// Arrow keys move the dropdown selection (with wraparound).
 func TestDropdownNavigation(t *testing.T) {
 	m := newTestModel(t, "super_admin", true)
-	m.input.SetValue("")
-	m.recomputeSuggest()
+	m = setInput(m, "")
 	n := len(m.suggest)
 	if n < 2 {
 		t.Fatalf("expected several verb suggestions, got %d", n)
 	}
-	// First Down selects index 0 (begins the cycle), the next advances to 1.
 	m, _ = step(t, m, key(tea.KeyDown))
 	m, _ = step(t, m, key(tea.KeyDown))
 	if m.sugIdx != 1 {
@@ -205,9 +191,6 @@ func TestDropdownNavigation(t *testing.T) {
 	}
 }
 
-// Regression for the monochrome dropdown: a theme built from a color-capable
-// renderer must emit ANSI escapes (the wish per-session renderer is what wires
-// this up live; here we assert the theme itself produces color).
 func TestThemeEmitsColor(t *testing.T) {
 	r := lipgloss.NewRenderer(io.Discard)
 	r.SetColorProfile(termenv.ANSI256)

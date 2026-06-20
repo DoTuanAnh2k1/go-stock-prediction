@@ -47,6 +47,10 @@ type Model struct {
 	completing bool
 	compBase   string       // input text before the token being completed
 	compList   []Suggestion // frozen candidate list for the cycle
+
+	// dismissed: the user pressed Esc to hide the dropdown; Enter then runs the
+	// command instead of picking a suggestion. Cleared as soon as they type.
+	dismissed bool
 }
 
 // commandsLoadedMsg is emitted once GET /me/commands resolves.
@@ -66,7 +70,7 @@ func New(sess Session, c client.HTTPClient, reg *handlers.Registry, r *lipgloss.
 	th := NewTheme(r)
 
 	ti := textinput.New()
-	ti.Placeholder = "get market.latest market=gold"
+	ti.Placeholder = "get market latest market gold"
 	ti.Prompt = "> "
 	ti.PromptStyle = th.Prompt
 	ti.Focus()

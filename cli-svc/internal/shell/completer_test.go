@@ -18,66 +18,64 @@ func contains(items []string, want string) bool {
 }
 
 func TestCompleterVerbs(t *testing.T) {
-	reg := handlers.NewRegistry()
-	c := NewCompleter(reg, NewAllowedSet("super_admin", nil))
-
+	c := NewCompleter(handlers.NewRegistry(), NewAllowedSet("super_admin", nil))
 	got := c.Suggest("")
 	for _, v := range []string{"get", "set", "update", "delete"} {
 		if !contains(got, v) {
 			t.Errorf("expected verb %q in %v", v, got)
 		}
 	}
-	// Prefix filter.
 	got = c.Suggest("ge")
 	if !contains(got, "get") || contains(got, "set") {
 		t.Errorf("prefix filter failed: %v", got)
 	}
 }
 
-func TestCompleterResources(t *testing.T) {
-	reg := handlers.NewRegistry()
-	c := NewCompleter(reg, NewAllowedSet("super_admin", nil))
+func TestCompleterCategoriesAndNames(t *testing.T) {
+	c := NewCompleter(handlers.NewRegistry(), NewAllowedSet("super_admin", nil))
 
-	got := c.Suggest("get ")
-	if !contains(got, "market.latest") || !contains(got, "monitoring.overview") {
-		t.Errorf("missing resources: %v", got)
+	cats := c.Suggest("get ")
+	if !contains(cats, "market") || !contains(cats, "monitoring") {
+		t.Errorf("missing categories: %v", cats)
 	}
-	// Should not include set-verb resources.
-	if contains(got, "trigger.train") {
-		t.Errorf("get suggestions leaked set resource: %v", got)
+	if contains(cats, "trigger") { // trigger is a set category, not get
+		t.Errorf("get categories leaked trigger: %v", cats)
+	}
+
+	names := c.Suggest("get market ")
+	for _, n := range []string{"latest", "prices", "predictions"} {
+		if !contains(names, n) {
+			t.Errorf("missing name %q under 'get market': %v", n, names)
+		}
 	}
 }
 
 func TestCompleterFiltersByPermission(t *testing.T) {
-	reg := handlers.NewRegistry()
 	allowed := NewAllowedSet("user", []client.AllowedCommand{{HandlerKey: "market.latest"}})
-	c := NewCompleter(reg, allowed)
+	c := NewCompleter(handlers.NewRegistry(), allowed)
 
-	got := c.Suggest("get ")
-	if !contains(got, "market.latest") {
-		t.Errorf("allowed resource missing: %v", got)
+	if cats := c.Suggest("get "); !contains(cats, "market") {
+		t.Errorf("allowed category missing: %v", cats)
 	}
-	if contains(got, "users.list") {
-		t.Errorf("disallowed resource leaked: %v", got)
+	if names := c.Suggest("get market "); !contains(names, "latest") || contains(names, "prices") {
+		t.Errorf("permission leak in names: %v", names)
+	}
+	if got := c.Suggest("get users "); len(got) != 0 {
+		t.Errorf("disallowed category should yield no names: %v", got)
 	}
 }
 
-func TestCompleterArgChoices(t *testing.T) {
-	reg := handlers.NewRegistry()
-	c := NewCompleter(reg, NewAllowedSet("super_admin", nil))
+func TestCompleterArgNamesAndValues(t *testing.T) {
+	c := NewCompleter(handlers.NewRegistry(), NewAllowedSet("super_admin", nil))
 
-	// Arg name suggestions.
-	got := c.Suggest("get market.latest ")
-	if !contains(got, "market=") {
-		t.Errorf("expected market= suggestion: %v", got)
+	if got := c.Suggest("get market latest "); !contains(got, "market") {
+		t.Errorf("expected 'market' arg name: %v", got)
 	}
-	// Value choices.
-	got = c.Suggest("get market.latest market=")
-	if !contains(got, "market=gold") || !contains(got, "market=sp500") {
+	got := c.Suggest("get market latest market ")
+	if !contains(got, "gold") || !contains(got, "sp500") {
 		t.Errorf("expected market value choices: %v", got)
 	}
-	// Value prefix filter.
-	got = c.Suggest("get market.latest market=cr")
+	got = c.Suggest("get market latest market cr")
 	if len(got) != 1 || !strings.HasSuffix(got[0], "crypto") {
 		t.Errorf("expected only crypto: %v", got)
 	}

@@ -19,7 +19,7 @@ ssh user@host -p 2345
 cli-svc shell (bubbletea)
    │  on init → GET {API_BASE_URL}/me/commands → allowed-set
    ▼
-type "<verb> <resource> [key=value ...]"
+type "<verb> <category> <name> [arg value ...]"
    │  resolve → handler, enforce permission, call API, render table
 ```
 
@@ -44,67 +44,70 @@ Inside the shell:
 | Input | Effect |
 |-------|--------|
 | `help` or `?` | Show the command reference (only commands you may run) |
-| `<Tab>` | Complete the verb → resource → arg name → arg value (filtered to allowed) |
+| `Tab` / `↓` / `↑` | Browse the suggestion dropdown (cycles, fills the current token) |
+| `Enter` (dropdown open) | **Pick** the highlighted suggestion and advance to the next token |
+| `Esc` then `Enter` | Close the dropdown, then run the command |
 | `clear` | Clear the screen |
 | `exit` / `quit` / `Ctrl-C` / `Ctrl-D` | Disconnect |
 
 ## Command reference
 
-Syntax: `<verb> <resource> [key=value ...]`
-
+Everything is **space-separated**: `<verb> <category> <name> [arg value ...]`.
 Verbs map to HTTP methods: `get`→GET, `set`→POST, `update`→PUT, `delete`→DELETE.
-`market` ∈ `{gold, nasdaq, crypto, sp500}`.
+`market` ∈ `{gold, nasdaq, crypto, sp500}`. Quote values that contain spaces
+(e.g. cron expressions): `"0 0 2 * * *"`.
 
 ### get (GET)
 
-| Resource | Args | Example |
-|----------|------|---------|
-| `market.latest` | `market` (required) | `get market.latest market=gold` |
-| `market.prices` | `market` (required), `limit` | `get market.prices market=nasdaq limit=20` |
-| `market.predictions` | `market` (required) | `get market.predictions market=crypto` |
-| `direction.accuracy` | `market` ∈ `{GOLD,NASDAQ,CRYPTO,SP500}` (required) | `get direction.accuracy market=GOLD` |
-| `monitoring.overview` | — | `get monitoring.overview` |
-| `schedules.list` | — | `get schedules.list` |
-| `pipeline.reports` | `pipeline`, `limit` | `get pipeline.reports pipeline=crawler_gold limit=10` |
-| `training.status` | — | `get training.status` |
-| `users.list` | — | `get users.list` |
-| `backups.list` | — | `get backups.list` |
+| Category / name | Args | Example |
+|-----------------|------|---------|
+| `market latest` | `market` (required) | `get market latest market gold` |
+| `market prices` | `market` (required), `limit` | `get market prices market nasdaq limit 20` |
+| `market predictions` | `market` (required) | `get market predictions market crypto` |
+| `direction accuracy` | `market` ∈ `{GOLD,NASDAQ,CRYPTO,SP500}` (required) | `get direction accuracy market GOLD` |
+| `monitoring overview` | — | `get monitoring overview` |
+| `schedules list` | — | `get schedules list` |
+| `pipeline reports` | `pipeline`, `limit` | `get pipeline reports pipeline crawler_gold limit 10` |
+| `training status` | — | `get training status` |
+| `users list` | — | `get users list` |
+| `backups list` | — | `get backups list` |
 
 ### set (POST)
 
-| Resource | Args | Example |
-|----------|------|---------|
-| `trigger.train` | `algorithm` (optional) | `set trigger.train algorithm=lstm_nn` |
-| `trigger.crawler` | `market` (required) | `set trigger.crawler market=gold` |
-| `trigger.predict` | `market` (required) | `set trigger.predict market=sp500` |
-| `trigger.reconcile` | — | `set trigger.reconcile` |
-| `trigger.backup` | — | `set trigger.backup` |
+| Category / name | Args | Example |
+|-----------------|------|---------|
+| `trigger train` | `algorithm` (optional) | `set trigger train algorithm lstm_nn` |
+| `trigger crawler` | `market` (required) | `set trigger crawler market gold` |
+| `trigger predict` | `market` (required) | `set trigger predict market sp500` |
+| `trigger reconcile` | — | `set trigger reconcile` |
+| `trigger backup` | — | `set trigger backup` |
 
 ### update (PUT)
 
-| Resource | Args | Example |
-|----------|------|---------|
-| `schedule.update` | `key` (required), `cron_expression` (required), `enabled` ∈ `{true,false}` | `update schedule.update key=crawler_gold cron_expression="0 0 2 * * *" enabled=true` |
-| `user.update` | `id` (required), `role` ∈ `{user,admin,super_admin}`, `full_name`, `email`, `phone` | `update user.update id=5 role=admin email=a@b.com` |
+| Category / name | Args | Example |
+|-----------------|------|---------|
+| `schedule update` | `key` (required), `cron_expression` (required), `enabled` ∈ `{true,false}` | `update schedule update key crawler_gold cron_expression "0 0 2 * * *" enabled true` |
+| `user update` | `id` (required), `role` ∈ `{user,admin,super_admin}`, `full_name`, `email`, `phone` | `update user update id 5 role admin email a@b.com` |
 
 ### delete (DELETE)
 
-| Resource | Args | Example |
-|----------|------|---------|
-| `backup.delete` | `filename` (required) | `delete backup.delete filename=backup-2026.sql.gz` |
-| `user.delete` | `id` (required) | `delete user.delete id=7` |
+| Category / name | Args | Example |
+|-----------------|------|---------|
+| `backup delete` | `filename` (required) | `delete backup delete filename backup-2026.sql.gz` |
+| `user delete` | `id` (required) | `delete user delete id 7` |
 
 ## Tab completion
 
-`<Tab>` is context-aware and **filtered to what you are allowed to run**:
+The dropdown is context-aware and **filtered to what you are allowed to run**:
 
-1. Empty / typing the verb → suggests allowed verbs (`get`, `set`, `update`, `delete`).
-2. After a verb → suggests allowed resources under that verb.
-3. After a resource → suggests remaining arg names as `name=`.
-4. After `name=` → suggests the arg's value choices (e.g. `market=gold`).
+1. Empty / typing the verb → allowed verbs (`get`, `set`, `update`, `delete`).
+2. After a verb → allowed categories under that verb (`market`, `schedules`, …).
+3. After a category → names under it (`latest`, `prices`, …).
+4. After the name → remaining argument names, then each argument's value choices.
 
-A single candidate is applied directly; multiple candidates complete the longest
-common prefix and list the options.
+`Tab`/`↓`/`↑` cycle through the candidates (filling the current token); `Enter`
+**picks** the highlighted candidate and moves to the next token. When the command
+is ready, press `Esc` to close the dropdown and `Enter` to run it.
 
 ## Configuration
 

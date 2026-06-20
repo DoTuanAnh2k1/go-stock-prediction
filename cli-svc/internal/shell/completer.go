@@ -14,7 +14,6 @@ type Suggestion struct {
 	Desc string
 }
 
-// verbDesc gives a human label for each verb shown in the dropdown.
 var verbDesc = map[string]string{
 	"get":    "read",
 	"set":    "create / trigger",
@@ -23,36 +22,56 @@ var verbDesc = map[string]string{
 }
 
 // Completer produces tab-completion suggestions for the current input, filtered
-// to what the user is allowed to run.
+// to what the user is allowed to run. Grammar: verb category name [arg val ...].
 type Completer struct {
 	reg     *handlers.Registry
 	allowed *AllowedSet
 }
 
-// NewCompleter builds a completer over the catalog and the user's allowed-set.
 func NewCompleter(reg *handlers.Registry, allowed *AllowedSet) *Completer {
 	return &Completer{reg: reg, allowed: allowed}
 }
 
-func (c *Completer) allowedHandler(h *handlers.Handler) bool {
-	return c.allowed.Allows(h.Key)
+func (c *Completer) allows(h *handlers.Handler) bool { return c.allowed.Allows(h.Key) }
+
+// split returns (category, name) for a handler key "category.name".
+func split(key string) (string, string) {
+	if i := strings.IndexByte(key, '.'); i >= 0 {
+		return key[:i], key[i+1:]
+	}
+	return key, ""
 }
 
-func (c *Completer) allowedVerbs() []string {
+func (c *Completer) verbs() []string {
 	set := map[string]bool{}
 	for _, h := range c.reg.All() {
-		if c.allowedHandler(h) {
+		if c.allows(h) {
 			set[h.Verb] = true
 		}
 	}
 	return sortedSet(set)
 }
 
-func (c *Completer) allowedResources(verb string) []string {
+func (c *Completer) categories(verb string) []string {
 	set := map[string]bool{}
 	for _, h := range c.reg.All() {
-		if h.Verb == verb && c.allowedHandler(h) {
-			set[h.Resource] = true
+		if h.Verb == verb && c.allows(h) {
+			cat, _ := split(h.Key)
+			set[cat] = true
+		}
+	}
+	return sortedSet(set)
+}
+
+func (c *Completer) names(verb, category string) []string {
+	set := map[string]bool{}
+	for _, h := range c.reg.All() {
+		if h.Verb != verb || !c.allows(h) {
+			continue
+		}
+		cat, name := split(h.Key)
+		if cat == category {
+			set[name] = true
 		}
 	}
 	return sortedSet(set)
@@ -68,111 +87,101 @@ func (c *Completer) Suggest(line string) []string {
 	return out
 }
 
-// SuggestRich returns completion candidates (with descriptions) for the raw line.
-//
-// Stages:
-//   - typing the verb     → allowed verbs
-//   - typing the resource → allowed resources under the verb
-//   - typing an arg       → "name=" per arg, or value choices
+// SuggestRich returns completion candidates for the current token of the line.
 func (c *Completer) SuggestRich(line string) []Suggestion {
 	endsWithSpace := strings.HasSuffix(line, " ")
-	fields := strings.Fields(line)
+	toks := strings.Fields(line)
+	n := len(toks)
 
-	// Stage 1: verb.
-	if len(fields) == 0 || (len(fields) == 1 && !endsWithSpace) {
-		prefix := ""
-		if len(fields) == 1 {
-			prefix = fields[0]
-		}
+	// Which token are we completing, and its current prefix?
+	idx := 0
+	prefix := ""
+	if endsWithSpace {
+		idx = n
+	} else if n > 0 {
+		idx = n - 1
+		prefix = toks[idx]
+	}
+
+	switch {
+	case idx == 0: // verb
 		out := []Suggestion{}
-		for _, v := range c.allowedVerbs() {
+		for _, v := range c.verbs() {
 			if strings.HasPrefix(v, prefix) {
 				out = append(out, Suggestion{Text: v, Desc: verbDesc[v]})
 			}
 		}
 		return out
-	}
 
-	verb := fields[0]
-
-	// Stage 2: resource.
-	if len(fields) == 1 || (len(fields) == 2 && !endsWithSpace && !strings.Contains(fields[1], "=")) {
-		prefix := ""
-		if len(fields) == 2 {
-			prefix = fields[1]
-		}
+	case idx == 1: // category
+		verb := toks[0]
 		out := []Suggestion{}
-		for _, res := range c.allowedResources(verb) {
-			if !strings.HasPrefix(res, prefix) {
+		for _, cat := range c.categories(verb) {
+			if strings.HasPrefix(cat, prefix) {
+				out = append(out, Suggestion{Text: cat, Desc: ""})
+			}
+		}
+		return out
+
+	case idx == 2: // name
+		verb, cat := toks[0], toks[1]
+		out := []Suggestion{}
+		for _, name := range c.names(verb, cat) {
+			if !strings.HasPrefix(name, prefix) {
 				continue
 			}
 			desc := ""
-			if h, ok := c.reg.Resolve(verb, res); ok {
+			if h, ok := c.reg.Resolve(verb, cat+"."+name); ok {
 				desc = h.DisplayName
 			}
-			out = append(out, Suggestion{Text: res, Desc: desc})
+			out = append(out, Suggestion{Text: name, Desc: desc})
 		}
 		return out
 	}
 
-	// Stage 3: args. Need a resolved handler.
-	resource := fields[1]
-	h, ok := c.reg.Resolve(verb, resource)
-	if !ok || !c.allowedHandler(h) {
+	// idx >= 3 → arguments. Resolve the handler from category.name.
+	h, ok := c.reg.Resolve(toks[0], toks[1]+"."+toks[2])
+	if !ok || !c.allows(h) {
 		return nil
 	}
 
-	curTok := ""
-	if !endsWithSpace {
-		curTok = fields[len(fields)-1]
-	}
-
-	// Already-provided arg names.
-	provided := map[string]bool{}
-	for i := 2; i < len(fields); i++ {
-		if i == len(fields)-1 && !endsWithSpace {
-			break
-		}
-		if eq := strings.Index(fields[i], "="); eq > 0 {
-			provided[fields[i][:eq]] = true
-		}
-	}
-
-	// Current token has '=' → suggest value choices.
-	if eq := strings.Index(curTok, "="); eq >= 0 {
-		name := curTok[:eq]
-		valPrefix := curTok[eq+1:]
-		for _, spec := range h.ArgSchema {
-			if spec.Name == name && len(spec.Choices) > 0 {
-				out := []Suggestion{}
-				for _, ch := range spec.Choices {
-					if strings.HasPrefix(ch, valPrefix) {
-						out = append(out, Suggestion{Text: name + "=" + ch, Desc: "value"})
-					}
-				}
-				return out
+	// Argument tokens start at index 3 and alternate name, value, name, value …
+	argPos := idx - 3
+	if argPos%2 == 0 {
+		// Editing an argument NAME — suggest not-yet-provided names.
+		provided := map[string]bool{}
+		for i := 3; i < idx; i += 2 {
+			if i < len(toks) {
+				provided[toks[i]] = true
 			}
 		}
-		return nil
+		out := []Suggestion{}
+		for _, spec := range h.ArgSchema {
+			if provided[spec.Name] || !strings.HasPrefix(spec.Name, prefix) {
+				continue
+			}
+			out = append(out, Suggestion{Text: spec.Name, Desc: argDesc(spec)})
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].Text < out[j].Text })
+		return out
 	}
 
-	// Otherwise suggest remaining arg names as "name=".
-	out := []Suggestion{}
+	// Editing an argument VALUE for the preceding name.
+	name := toks[idx-1]
 	for _, spec := range h.ArgSchema {
-		if provided[spec.Name] {
-			continue
+		if spec.Name == name && len(spec.Choices) > 0 {
+			out := []Suggestion{}
+			for _, ch := range spec.Choices {
+				if strings.HasPrefix(ch, prefix) {
+					out = append(out, Suggestion{Text: ch, Desc: "value"})
+				}
+			}
+			return out
 		}
-		cand := spec.Name + "="
-		if !strings.HasPrefix(cand, curTok) {
-			continue
-		}
-		out = append(out, Suggestion{Text: cand, Desc: argDesc(spec)})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Text < out[j].Text })
-	return out
+	return nil
 }
 
-// argDesc describes an arg spec for the dropdown (type/choices + optionality).
 func argDesc(spec handlers.ArgSpec) string {
 	var d string
 	if len(spec.Choices) > 0 {

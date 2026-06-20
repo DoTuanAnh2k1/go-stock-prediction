@@ -52,8 +52,10 @@ COPY prediction-svc/src/proto src/proto/
 COPY prediction-svc/src/ src/
 COPY prediction-svc/tests/ tests/
 
-# Run as non-root user
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+# Create models directory with correct permissions before switching to non-root user
+RUN useradd -m -u 1000 appuser && \
+    mkdir -p /models && \
+    chown -R appuser:appuser /app /models
 USER appuser
 
 EXPOSE 8119

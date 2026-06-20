@@ -104,6 +104,9 @@ function algoLabel(algo: string): string {
     xgboost: 'XGB',
     sarima: 'SARIMA',
     gru: 'GRU',
+    gru_nn: 'GRU',
+    egarch: 'EGARCH',
+    rl_dqn: 'RL DQN',
   };
   return map[(algo || '').toLowerCase()] || algo.slice(0, 5).toUpperCase();
 }
@@ -117,6 +120,9 @@ function algoClass(algo: string): string {
     ema_macd: 'ema',
     ensemble: 'ens',
     lightgbm: 'lgb',
+    gru_nn: 'lstm',
+    egarch: 'arima',
+    rl_dqn: 'rl',
   };
   return map[(algo || '').toLowerCase()] || 'unknown';
 }

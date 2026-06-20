@@ -52,25 +52,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case tea.KeyEsc:
+			// Hide the dropdown so the next Enter runs the command.
 			m.suggest = nil
 			m.completing = false
+			m.dismissed = true
 			return m, nil
 
 		case tea.KeyEnter:
 			line := strings.TrimSpace(m.input.Value())
-			m.suggest = nil
-			m.input.SetValue("")
-			m.err = ""
 			if line == "" {
 				return m, nil
 			}
+			// If the dropdown is open, Enter PICKS the highlighted suggestion and
+			// advances to the next token — it does not run the command. The user
+			// presses Esc (or completes the line) and Enter again to run.
+			if !m.dismissed && len(m.suggest) > 0 {
+				m.commitSuggest()
+				return m, nil
+			}
+
+			m.suggest = nil
+			m.input.SetValue("")
+			m.err = ""
+			m.dismissed = false
 			if line == "exit" || line == "quit" {
 				return m, tea.Quit
 			}
 			if line == "clear" {
 				return m, tea.ClearScreen
 			}
-			// Everything below needs the loaded permission set.
 			if !m.loaded || m.runner == nil {
 				m.recomputeSuggest()
 				return m, tea.Println(m.th.Dim.Render("still loading your permissions, please wait…"))
@@ -96,10 +106,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// commitSuggest inserts the highlighted suggestion, adds a trailing space and
+// advances to the next token's dropdown — this is what Enter does while the
+// dropdown is open (pick, don't run).
+func (m *Model) commitSuggest() {
+	if len(m.suggest) == 0 {
+		return
+	}
+	s := m.suggest[m.sugIdx]
+	m.input.SetValue(tokenBase(m.input.Value()) + s.Text + " ")
+	m.input.CursorEnd()
+	m.completing = false
+	m.recomputeSuggest()
+}
+
 // recomputeSuggest refreshes the live dropdown for the current input value. It
 // ends any in-progress completion cycle (the user typed/edited the line).
 func (m *Model) recomputeSuggest() {
 	m.completing = false
+	m.dismissed = false
 	if m.comp == nil {
 		m.suggest = nil
 		return

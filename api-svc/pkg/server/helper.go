@@ -209,6 +209,7 @@ var validAlgorithms = map[string]bool{
 	"lightgbm":       true,
 	"xgboost":        true,
 	"random_forest":  true,
+	"rl_dqn":         true,
 	"ensemble":       true,
 }
 

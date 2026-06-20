@@ -11,13 +11,14 @@ func TestParse(t *testing.T) {
 		wantArgs map[string]string
 		wantErr  bool
 	}{
-		{"full", "get market.latest market=gold", "get", "market.latest", map[string]string{"market": "gold"}, false},
-		{"no args", "get monitoring.overview", "get", "monitoring.overview", map[string]string{}, false},
-		{"multi args", "update schedule.update key=crawler_gold cron_expression=0 enabled=true", "update", "schedule.update", map[string]string{"key": "crawler_gold", "cron_expression": "0", "enabled": "true"}, false},
-		{"verb only with args (no resource)", "get market=gold", "get", "", map[string]string{"market": "gold"}, false},
+		{"full", "get market latest market gold", "get", "market.latest", map[string]string{"market": "gold"}, false},
+		{"no args", "get monitoring overview", "get", "monitoring.overview", map[string]string{}, false},
+		{"quoted value with spaces", `update schedule update key crawler_gold cron_expression "0 0 2 * * *" enabled true`,
+			"update", "schedule.update",
+			map[string]string{"key": "crawler_gold", "cron_expression": "0 0 2 * * *", "enabled": "true"}, false},
+		{"category only (incomplete)", "get market", "get", "market", map[string]string{}, false},
 		{"empty", "", "", "", nil, true},
-		{"bad arg", "get market.latest gold", "", "", nil, true},
-		{"empty key", "get market.latest =gold", "", "", nil, true},
+		{"missing arg value", "get market latest market", "", "", nil, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

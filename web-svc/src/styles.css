@@ -354,6 +354,7 @@ body {
 .algo--ma    { color: var(--up); background: var(--up-bg); }
 .algo--ens   { color: oklch(0.72 0.14 300); background: oklch(0.72 0.14 300 / 0.13); }
 .algo--ema   { color: oklch(0.72 0.18 150); background: oklch(0.72 0.18 150 / 0.13); }
+.algo--rl    { color: oklch(0.72 0.17 300); background: oklch(0.72 0.17 300 / 0.13); }
 
 /* tables */
 .tbl { width: 100%; border-collapse: collapse; }

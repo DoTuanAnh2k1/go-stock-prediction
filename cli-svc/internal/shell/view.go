@@ -54,7 +54,7 @@ func (m Model) headerBar() string {
 }
 
 func (m Model) hintLine() string {
-	return "↑/↓ navigate · Tab complete · Enter run · help · clear · exit"
+	return "Tab/↑↓ browse · Enter pick · Esc then Enter to run · help · clear · exit"
 }
 
 // renderSuggest draws the floating completion dropdown. Returns "" when there is
@@ -149,22 +149,23 @@ func (m Model) welcome() string {
 		n := len(m.allowed.Commands())
 		b.WriteString(m.th.Dim.Render(fmt.Sprintf("%s — %d command(s) granted.", roleLabel(m.sess.Role), n)) + "\n")
 	}
-	b.WriteString(m.th.Dim.Render("Type a verb (get/set/update/delete); suggestions appear below. Tab completes, Enter runs."))
+	b.WriteString(m.th.Dim.Render("Type a verb (get/set/update/delete); suggestions appear below. Tab browses, Enter picks."))
 	return b.String()
 }
 
 func (m Model) helpText() string {
 	var b strings.Builder
 	b.WriteString(m.th.Title.Render("Command reference") + "\n")
-	b.WriteString(m.th.Dim.Render("Syntax: <verb> <resource> [key=value ...]") + "\n")
-	b.WriteString(m.th.Dim.Render("Verbs: get (GET) · set (POST) · update (PUT) · delete (DELETE)") + "\n")
+	b.WriteString(m.th.Dim.Render("Syntax: <verb> <category> <name> [arg value ...]   e.g.  get market latest market gold") + "\n")
+	b.WriteString(m.th.Dim.Render("Verbs: get (GET) · set (POST) · update (PUT) · delete (DELETE). Quote values with spaces.") + "\n")
 	for _, h := range m.reg.All() {
 		if !m.allowed.Allows(h.Key) {
 			continue
 		}
+		cat, name := split(h.Key)
 		args := make([]string, 0, len(h.ArgSchema))
 		for _, a := range h.ArgSchema {
-			tok := a.Name + "="
+			tok := a.Name + " "
 			if len(a.Choices) > 0 {
 				tok += "{" + strings.Join(a.Choices, "|") + "}"
 			} else {
@@ -177,7 +178,7 @@ func (m Model) helpText() string {
 		}
 		b.WriteString(fmt.Sprintf("  %s %s %s\n",
 			m.th.Prompt.Render(fmt.Sprintf("%-7s", h.Verb)),
-			m.th.Title.Render(fmt.Sprintf("%-22s", h.Resource)),
+			m.th.Title.Render(fmt.Sprintf("%-9s %-12s", cat, name)),
 			m.th.Dim.Render(strings.Join(args, " "))))
 	}
 	return strings.TrimRight(b.String(), "\n")
