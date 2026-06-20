@@ -37,6 +37,11 @@ type Model struct {
 	width    int
 	height   int
 	err      string
+
+	// live completion dropdown state (kube-prompt style)
+	suggest []Suggestion
+	sugIdx  int // highlighted row
+	sugCol  int // screen column where the current token starts
 }
 
 // commandsLoadedMsg is emitted once GET /me/commands resolves.
@@ -55,6 +60,7 @@ func New(sess Session, c client.HTTPClient, reg *handlers.Registry) Model {
 	ti := textinput.New()
 	ti.Placeholder = "get market.latest market=gold"
 	ti.Prompt = "> "
+	ti.PromptStyle = promptStyle
 	ti.Focus()
 	ti.CharLimit = 512
 
