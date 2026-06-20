@@ -14,6 +14,8 @@ export const translations: Record<Lang, Translations> = {
       leaderboard: 'Leaderboard',
       monitoring: 'Giám sát dữ liệu',
       marketGroups: 'Nhóm thị trường',
+      commands: 'Lệnh',
+      commandGroups: 'Nhóm lệnh',
     },
     // Market sub-items
     marketSubs: {
@@ -64,6 +66,8 @@ export const translations: Record<Lang, Translations> = {
       '/crypto': ['Cryptocurrency', 'CRYPTO'],
       '/nasdaq': ['NASDAQ 100', 'NASDAQ 100 · US EQUITIES'],
       '/monitoring': ['Giám sát dữ liệu', 'DATA PIPELINE · MONITORING'],
+      '/admin/commands': ['Lệnh CLI', 'ADMIN · COMMANDS'],
+      '/admin/command-groups': ['Nhóm lệnh CLI', 'ADMIN · COMMAND GROUPS'],
     },
     // Sidebar footer
     footer: {
@@ -630,6 +634,79 @@ export const translations: Record<Lang, Translations> = {
       groupCount: 'nhóm',
       optional: 'tùy chọn',
     },
+    // Commands page
+    commands: {
+      pageTitle: 'Lệnh CLI',
+      createCommand: 'Tạo lệnh',
+      editCommand: 'Sửa lệnh',
+      commandName: 'Tên lệnh',
+      description: 'Mô tả',
+      descriptionPlaceholder: 'Mô tả ngắn về lệnh này',
+      optional: 'tùy chọn',
+      handler: 'Handler',
+      selectHandler: 'Chọn handler',
+      argsSection: 'Tham số',
+      noArgs: 'Handler này không có tham số',
+      selectRequired: 'Bắt buộc',
+      selectOptional: 'Tùy chọn',
+      enabled: 'Đang bật',
+      disabled: 'Đã tắt',
+      save: 'Lưu',
+      saving: 'Đang lưu...',
+      cancel: 'Hủy',
+      edit: 'Sửa',
+      delete: 'Xóa',
+      deleteConfirm: 'Xóa lệnh',
+      deleteFail: 'Xóa lệnh thất bại',
+      saveFail: 'Lưu lệnh thất bại',
+      loading: 'Đang tải...',
+      cannotLoad: 'Không thể tải danh sách lệnh',
+      noCommands: 'Chưa có lệnh nào.',
+      commandCount: 'lệnh',
+      colName: 'Tên',
+      colHandler: 'Handler',
+      colArgs: 'Tham số',
+      colStatus: 'Trạng thái',
+      nameRequired: 'Vui lòng nhập tên lệnh',
+      handlerRequired: 'Vui lòng chọn handler',
+      argRequired: 'Tham số bắt buộc thiếu giá trị',
+    },
+    // CommandGroups page
+    commandGroups: {
+      createGroup: 'Tạo nhóm lệnh mới',
+      groupName: 'Tên nhóm',
+      groupDesc: 'Mô tả',
+      groupDescPlaceholder: 'Mô tả (tùy chọn)',
+      createBtn: 'Tạo',
+      createFail: 'Tạo nhóm thất bại',
+      noGroups: 'Chưa có nhóm lệnh nào.',
+      manage: 'Quản lý',
+      collapse: 'Thu gọn',
+      edit: 'Sửa',
+      delete: 'Xóa',
+      save: 'Lưu',
+      cancel: 'Hủy',
+      saveFail: 'Lưu nhóm thất bại',
+      deleteFail: 'Xóa nhóm thất bại',
+      deleteConfirm: 'Xóa nhóm lệnh này?',
+      commandsSection: 'Lệnh trong nhóm',
+      commandsLabel: 'lệnh',
+      saveCommands: 'Lưu danh sách lệnh',
+      saveCommandsFail: 'Lưu danh sách lệnh thất bại',
+      noCommandsAvailable: 'Chưa có lệnh nào. Hãy tạo lệnh trước.',
+      disabledLabel: 'Tắt',
+      addUser: 'Thêm người dùng',
+      selectUser: '-- Chọn người dùng --',
+      addBtn: 'Thêm',
+      addUserFail: 'Thêm người dùng thất bại',
+      usersInGroup: 'Người dùng trong nhóm',
+      removeUser: 'Xóa',
+      noUsers: 'Chưa có người dùng.',
+      loading: 'Đang tải...',
+      cannotLoad: 'Không thể tải danh sách nhóm lệnh',
+      groupCount: 'nhóm',
+      optional: 'tùy chọn',
+    },
     // Monitoring page
     monitoring: {
       pageTitle: 'Giám sát dữ liệu',
@@ -697,6 +774,8 @@ export const translations: Record<Lang, Translations> = {
       leaderboard: 'Leaderboard',
       monitoring: 'Data Pipeline',
       marketGroups: 'Market Groups',
+      commands: 'Commands',
+      commandGroups: 'Command Groups',
     },
     marketSubs: {
       overview: 'Overview',
@@ -742,6 +821,8 @@ export const translations: Record<Lang, Translations> = {
       '/crypto': ['Cryptocurrency', 'CRYPTO'],
       '/nasdaq': ['NASDAQ 100', 'NASDAQ 100 · US EQUITIES'],
       '/monitoring': ['Data Pipeline', 'DATA PIPELINE · MONITORING'],
+      '/admin/commands': ['CLI Commands', 'ADMIN · COMMANDS'],
+      '/admin/command-groups': ['CLI Command Groups', 'ADMIN · COMMAND GROUPS'],
     },
     footer: {
       liveData: 'Live data',
@@ -1286,6 +1367,79 @@ export const translations: Record<Lang, Translations> = {
       groupCount: 'groups',
       optional: 'optional',
     },
+    // Commands page
+    commands: {
+      pageTitle: 'CLI Commands',
+      createCommand: 'Create Command',
+      editCommand: 'Edit Command',
+      commandName: 'Command name',
+      description: 'Description',
+      descriptionPlaceholder: 'Short description of this command',
+      optional: 'optional',
+      handler: 'Handler',
+      selectHandler: 'Select handler',
+      argsSection: 'Arguments',
+      noArgs: 'This handler has no arguments',
+      selectRequired: 'Required',
+      selectOptional: 'Optional',
+      enabled: 'Enabled',
+      disabled: 'Disabled',
+      save: 'Save',
+      saving: 'Saving...',
+      cancel: 'Cancel',
+      edit: 'Edit',
+      delete: 'Delete',
+      deleteConfirm: 'Delete command',
+      deleteFail: 'Failed to delete command',
+      saveFail: 'Failed to save command',
+      loading: 'Loading...',
+      cannotLoad: 'Cannot load command list',
+      noCommands: 'No commands yet.',
+      commandCount: 'commands',
+      colName: 'Name',
+      colHandler: 'Handler',
+      colArgs: 'Args',
+      colStatus: 'Status',
+      nameRequired: 'Command name is required',
+      handlerRequired: 'Please select a handler',
+      argRequired: 'Required argument missing value',
+    },
+    // CommandGroups page
+    commandGroups: {
+      createGroup: 'Create New Command Group',
+      groupName: 'Group name',
+      groupDesc: 'Description',
+      groupDescPlaceholder: 'Description (optional)',
+      createBtn: 'Create',
+      createFail: 'Failed to create group',
+      noGroups: 'No command groups yet.',
+      manage: 'Manage',
+      collapse: 'Collapse',
+      edit: 'Edit',
+      delete: 'Delete',
+      save: 'Save',
+      cancel: 'Cancel',
+      saveFail: 'Failed to save group',
+      deleteFail: 'Failed to delete group',
+      deleteConfirm: 'Delete this command group?',
+      commandsSection: 'Commands in group',
+      commandsLabel: 'commands',
+      saveCommands: 'Save commands',
+      saveCommandsFail: 'Failed to save command list',
+      noCommandsAvailable: 'No commands yet. Create commands first.',
+      disabledLabel: 'Disabled',
+      addUser: 'Add user',
+      selectUser: '-- Select user --',
+      addBtn: 'Add',
+      addUserFail: 'Failed to add user',
+      usersInGroup: 'Users in group',
+      removeUser: 'Remove',
+      noUsers: 'No users.',
+      loading: 'Loading...',
+      cannotLoad: 'Cannot load command groups',
+      groupCount: 'groups',
+      optional: 'optional',
+    },
     // Monitoring page
     monitoring: {
       pageTitle: 'Data Pipeline',
@@ -1355,6 +1509,8 @@ export interface Translations {
     leaderboard: string;
     monitoring: string;
     marketGroups: string;
+    commands: string;
+    commandGroups: string;
   };
   marketSubs: {
     overview: string;
@@ -1917,6 +2073,77 @@ export interface Translations {
     removeUser: string;
     noUsers: string;
     loading: string;
+    groupCount: string;
+    optional: string;
+  };
+  commands: {
+    pageTitle: string;
+    createCommand: string;
+    editCommand: string;
+    commandName: string;
+    description: string;
+    descriptionPlaceholder: string;
+    optional: string;
+    handler: string;
+    selectHandler: string;
+    argsSection: string;
+    noArgs: string;
+    selectRequired: string;
+    selectOptional: string;
+    enabled: string;
+    disabled: string;
+    save: string;
+    saving: string;
+    cancel: string;
+    edit: string;
+    delete: string;
+    deleteConfirm: string;
+    deleteFail: string;
+    saveFail: string;
+    loading: string;
+    cannotLoad: string;
+    noCommands: string;
+    commandCount: string;
+    colName: string;
+    colHandler: string;
+    colArgs: string;
+    colStatus: string;
+    nameRequired: string;
+    handlerRequired: string;
+    argRequired: string;
+  };
+  commandGroups: {
+    createGroup: string;
+    groupName: string;
+    groupDesc: string;
+    groupDescPlaceholder: string;
+    createBtn: string;
+    createFail: string;
+    noGroups: string;
+    manage: string;
+    collapse: string;
+    edit: string;
+    delete: string;
+    save: string;
+    cancel: string;
+    saveFail: string;
+    deleteFail: string;
+    deleteConfirm: string;
+    commandsSection: string;
+    commandsLabel: string;
+    saveCommands: string;
+    saveCommandsFail: string;
+    noCommandsAvailable: string;
+    disabledLabel: string;
+    addUser: string;
+    selectUser: string;
+    addBtn: string;
+    addUserFail: string;
+    usersInGroup: string;
+    removeUser: string;
+    noUsers: string;
+    loading: string;
+    cannotLoad: string;
     groupCount: string;
     optional: string;
   };

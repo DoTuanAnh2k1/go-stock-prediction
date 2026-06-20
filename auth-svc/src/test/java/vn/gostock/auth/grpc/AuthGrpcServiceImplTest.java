@@ -10,6 +10,7 @@ import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import vn.gostock.auth.entity.User;
 import vn.gostock.auth.proto.*;
+import vn.gostock.auth.service.CommandRbacService;
 import vn.gostock.auth.service.JwtService;
 import vn.gostock.auth.service.MarketGroupService;
 import vn.gostock.auth.service.UserService;
@@ -23,6 +24,7 @@ class AuthGrpcServiceImplTest {
 
     @Mock UserService userService;
     @Mock MarketGroupService marketGroupService;
+    @Mock CommandRbacService commandRbacService;
     @Mock JwtService jwtService;
 
     @InjectMocks AuthGrpcServiceImpl grpcService;
@@ -91,5 +93,51 @@ class AuthGrpcServiceImplTest {
             .setTargetId(99L).build(), obs);
 
         verify(obs).onError(any(StatusRuntimeException.class));
+    }
+
+    // ── Command RBAC delegation ───────────────────────────────────────────
+
+    @Test
+    void createCommand_adminCaller_returnsCommand() {
+        when(commandRbacService.createCommand("admin", "c1", "d", "market.latest", "{}", true))
+            .thenReturn(vn.gostock.auth.entity.Command.builder()
+                .id(7L).name("c1").handlerKey("market.latest").args("{}").enabled(true).build());
+
+        StreamObserver<CommandResponse> obs = mock(StreamObserver.class);
+        grpcService.createCommand(CreateCommandRequest.newBuilder()
+            .setCaller(CallerMeta.newBuilder().setCallerRole("admin").build())
+            .setName("c1").setDescription("d").setHandlerKey("market.latest")
+            .setArgs("{}").setEnabled(true).build(), obs);
+
+        ArgumentCaptor<CommandResponse> captor = ArgumentCaptor.forClass(CommandResponse.class);
+        verify(obs).onNext(captor.capture());
+        verify(obs).onCompleted();
+        assert captor.getValue().getCommand().getName().equals("c1");
+    }
+
+    @Test
+    void getUserCommands_delegatesAndMaps() {
+        when(commandRbacService.getUserCommands(4L)).thenReturn(List.of(
+            vn.gostock.auth.entity.Command.builder().id(1L).name("a").handlerKey("h").build()));
+
+        StreamObserver<ListCommandsResponse> obs = mock(StreamObserver.class);
+        grpcService.getUserCommands(UserRequest.newBuilder().setUserId(4L).build(), obs);
+
+        ArgumentCaptor<ListCommandsResponse> captor = ArgumentCaptor.forClass(ListCommandsResponse.class);
+        verify(obs).onNext(captor.capture());
+        assert captor.getValue().getCommandsCount() == 1;
+    }
+
+    @Test
+    void upsertHandlers_invalidSecret_propagatesError() {
+        doThrow(new StatusRuntimeException(Status.PERMISSION_DENIED))
+            .when(commandRbacService).upsertHandlers(anyString(), anyList());
+
+        StreamObserver<Empty> obs = mock(StreamObserver.class);
+        grpcService.upsertHandlers(UpsertHandlersRequest.newBuilder()
+            .setSecret("wrong").build(), obs);
+
+        verify(obs).onError(any(StatusRuntimeException.class));
+        verify(obs, never()).onCompleted();
     }
 }

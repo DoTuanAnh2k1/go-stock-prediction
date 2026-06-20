@@ -345,6 +345,12 @@ export function Sidebar({ status, collapsed = false, onToggle }: {
           <NavLink to="/admin/market-groups" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
             <Icon name="layers" size={17} /><span>{t.nav.marketGroups}</span>
           </NavLink>
+          <NavLink to="/admin/commands" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
+            <Icon name="pulse" size={17} /><span>{t.nav.commands}</span>
+          </NavLink>
+          <NavLink to="/admin/command-groups" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
+            <Icon name="cpu" size={17} /><span>{t.nav.commandGroups}</span>
+          </NavLink>
         </div>
       )}
 

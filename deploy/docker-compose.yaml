@@ -78,6 +78,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-123}
       JWT_SECRET: ${JWT_SECRET}
       GRPC_PORT: "8120"
+      INTERNAL_SECRET: "${INTERNAL_SECRET}"
     expose:
       - "8120"
     networks:
@@ -116,6 +117,7 @@ services:
       BACKUP_DIR: "/backups"
       ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-https://localhost}"
       AUTH_GRPC_TARGET: "auth-svc:8120"
+      INTERNAL_SECRET: "${INTERNAL_SECRET}"
     volumes:
       - backup_data:/backups
     networks:
@@ -168,6 +170,31 @@ services:
     networks:
       - app-network
 
+  # CLI Service — interactive SSH shell (wish + Bubble Tea) for headless servers.
+  # Renders API data as tables; enforces per-command RBAC. SSH exposed directly on
+  # 2345 (gateway speaks HTTP only); all API calls go through the gateway.
+  cli-svc:
+    build:
+      context: ../cli-svc
+      dockerfile: ../deploy/cli-svc.Dockerfile
+    container_name: cli-svc
+    depends_on:
+      - gateway-svc
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: "http://gateway-svc/api"
+      SSH_LISTEN_ADDR: ":2345"
+      SSH_HOST_KEY_PATH: "/etc/cli-svc/keys/host_key"
+      INTERNAL_SECRET: "${INTERNAL_SECRET}"
+    ports:
+      - "2345:2345"
+    volumes:
+      # Named volume (not a bind mount): docker seeds it with the image's
+      # cli:cli ownership so wish can chmod/persist the generated SSH host key.
+      - cli_keys:/etc/cli-svc/keys
+    networks:
+      - app-network
+
 networks:
   app-network:
     driver: bridge
@@ -175,3 +202,4 @@ networks:
 volumes:
   postgres_data:
   backup_data:
+  cli_keys:

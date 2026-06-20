@@ -1297,6 +1297,1082 @@ func (x *UserRequest) GetUserId() int64 {
 	return 0
 }
 
+type CliHandler struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	HandlerKey    string                 `protobuf:"bytes,1,opt,name=handler_key,json=handlerKey,proto3" json:"handler_key,omitempty"`
+	DisplayName   string                 `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	Verb          string                 `protobuf:"bytes,3,opt,name=verb,proto3" json:"verb,omitempty"` // get/set/update/delete
+	Resource      string                 `protobuf:"bytes,4,opt,name=resource,proto3" json:"resource,omitempty"`
+	ArgSchema     string                 `protobuf:"bytes,5,opt,name=arg_schema,json=argSchema,proto3" json:"arg_schema,omitempty"` // JSON array string
+	Enabled       bool                   `protobuf:"varint,6,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CliHandler) Reset() {
+	*x = CliHandler{}
+	mi := &file_proto_auth_auth_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CliHandler) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CliHandler) ProtoMessage() {}
+
+func (x *CliHandler) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CliHandler.ProtoReflect.Descriptor instead.
+func (*CliHandler) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *CliHandler) GetHandlerKey() string {
+	if x != nil {
+		return x.HandlerKey
+	}
+	return ""
+}
+
+func (x *CliHandler) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *CliHandler) GetVerb() string {
+	if x != nil {
+		return x.Verb
+	}
+	return ""
+}
+
+func (x *CliHandler) GetResource() string {
+	if x != nil {
+		return x.Resource
+	}
+	return ""
+}
+
+func (x *CliHandler) GetArgSchema() string {
+	if x != nil {
+		return x.ArgSchema
+	}
+	return ""
+}
+
+func (x *CliHandler) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+type UpsertHandlersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Secret        string                 `protobuf:"bytes,1,opt,name=secret,proto3" json:"secret,omitempty"` // internal shared secret (cli-svc -> auth)
+	Handlers      []*CliHandler          `protobuf:"bytes,2,rep,name=handlers,proto3" json:"handlers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpsertHandlersRequest) Reset() {
+	*x = UpsertHandlersRequest{}
+	mi := &file_proto_auth_auth_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpsertHandlersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpsertHandlersRequest) ProtoMessage() {}
+
+func (x *UpsertHandlersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpsertHandlersRequest.ProtoReflect.Descriptor instead.
+func (*UpsertHandlersRequest) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *UpsertHandlersRequest) GetSecret() string {
+	if x != nil {
+		return x.Secret
+	}
+	return ""
+}
+
+func (x *UpsertHandlersRequest) GetHandlers() []*CliHandler {
+	if x != nil {
+		return x.Handlers
+	}
+	return nil
+}
+
+type ListHandlersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Handlers      []*CliHandler          `protobuf:"bytes,1,rep,name=handlers,proto3" json:"handlers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListHandlersResponse) Reset() {
+	*x = ListHandlersResponse{}
+	mi := &file_proto_auth_auth_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListHandlersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListHandlersResponse) ProtoMessage() {}
+
+func (x *ListHandlersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListHandlersResponse.ProtoReflect.Descriptor instead.
+func (*ListHandlersResponse) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ListHandlersResponse) GetHandlers() []*CliHandler {
+	if x != nil {
+		return x.Handlers
+	}
+	return nil
+}
+
+type Command struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	HandlerKey    string                 `protobuf:"bytes,4,opt,name=handler_key,json=handlerKey,proto3" json:"handler_key,omitempty"`
+	Args          string                 `protobuf:"bytes,5,opt,name=args,proto3" json:"args,omitempty"` // JSON object string
+	Enabled       bool                   `protobuf:"varint,6,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	CreatedAt     string                 `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     string                 `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Command) Reset() {
+	*x = Command{}
+	mi := &file_proto_auth_auth_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Command) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Command) ProtoMessage() {}
+
+func (x *Command) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Command.ProtoReflect.Descriptor instead.
+func (*Command) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *Command) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *Command) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Command) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *Command) GetHandlerKey() string {
+	if x != nil {
+		return x.HandlerKey
+	}
+	return ""
+}
+
+func (x *Command) GetArgs() string {
+	if x != nil {
+		return x.Args
+	}
+	return ""
+}
+
+func (x *Command) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *Command) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *Command) GetUpdatedAt() string {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return ""
+}
+
+type ListCommandsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Commands      []*Command             `protobuf:"bytes,1,rep,name=commands,proto3" json:"commands,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListCommandsResponse) Reset() {
+	*x = ListCommandsResponse{}
+	mi := &file_proto_auth_auth_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListCommandsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListCommandsResponse) ProtoMessage() {}
+
+func (x *ListCommandsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListCommandsResponse.ProtoReflect.Descriptor instead.
+func (*ListCommandsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *ListCommandsResponse) GetCommands() []*Command {
+	if x != nil {
+		return x.Commands
+	}
+	return nil
+}
+
+type CommandResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Command       *Command               `protobuf:"bytes,1,opt,name=command,proto3" json:"command,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CommandResponse) Reset() {
+	*x = CommandResponse{}
+	mi := &file_proto_auth_auth_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommandResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommandResponse) ProtoMessage() {}
+
+func (x *CommandResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommandResponse.ProtoReflect.Descriptor instead.
+func (*CommandResponse) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *CommandResponse) GetCommand() *Command {
+	if x != nil {
+		return x.Command
+	}
+	return nil
+}
+
+type CreateCommandRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Caller        *CallerMeta            `protobuf:"bytes,1,opt,name=caller,proto3" json:"caller,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	HandlerKey    string                 `protobuf:"bytes,4,opt,name=handler_key,json=handlerKey,proto3" json:"handler_key,omitempty"`
+	Args          string                 `protobuf:"bytes,5,opt,name=args,proto3" json:"args,omitempty"`
+	Enabled       bool                   `protobuf:"varint,6,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateCommandRequest) Reset() {
+	*x = CreateCommandRequest{}
+	mi := &file_proto_auth_auth_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateCommandRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateCommandRequest) ProtoMessage() {}
+
+func (x *CreateCommandRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateCommandRequest.ProtoReflect.Descriptor instead.
+func (*CreateCommandRequest) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *CreateCommandRequest) GetCaller() *CallerMeta {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *CreateCommandRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateCommandRequest) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *CreateCommandRequest) GetHandlerKey() string {
+	if x != nil {
+		return x.HandlerKey
+	}
+	return ""
+}
+
+func (x *CreateCommandRequest) GetArgs() string {
+	if x != nil {
+		return x.Args
+	}
+	return ""
+}
+
+func (x *CreateCommandRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+type UpdateCommandRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Caller        *CallerMeta            `protobuf:"bytes,1,opt,name=caller,proto3" json:"caller,omitempty"`
+	CommandId     int64                  `protobuf:"varint,2,opt,name=command_id,json=commandId,proto3" json:"command_id,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	HandlerKey    string                 `protobuf:"bytes,5,opt,name=handler_key,json=handlerKey,proto3" json:"handler_key,omitempty"`
+	Args          string                 `protobuf:"bytes,6,opt,name=args,proto3" json:"args,omitempty"`
+	Enabled       bool                   `protobuf:"varint,7,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateCommandRequest) Reset() {
+	*x = UpdateCommandRequest{}
+	mi := &file_proto_auth_auth_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateCommandRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateCommandRequest) ProtoMessage() {}
+
+func (x *UpdateCommandRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateCommandRequest.ProtoReflect.Descriptor instead.
+func (*UpdateCommandRequest) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *UpdateCommandRequest) GetCaller() *CallerMeta {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *UpdateCommandRequest) GetCommandId() int64 {
+	if x != nil {
+		return x.CommandId
+	}
+	return 0
+}
+
+func (x *UpdateCommandRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdateCommandRequest) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *UpdateCommandRequest) GetHandlerKey() string {
+	if x != nil {
+		return x.HandlerKey
+	}
+	return ""
+}
+
+func (x *UpdateCommandRequest) GetArgs() string {
+	if x != nil {
+		return x.Args
+	}
+	return ""
+}
+
+func (x *UpdateCommandRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+type DeleteCommandRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Caller        *CallerMeta            `protobuf:"bytes,1,opt,name=caller,proto3" json:"caller,omitempty"`
+	CommandId     int64                  `protobuf:"varint,2,opt,name=command_id,json=commandId,proto3" json:"command_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteCommandRequest) Reset() {
+	*x = DeleteCommandRequest{}
+	mi := &file_proto_auth_auth_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteCommandRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteCommandRequest) ProtoMessage() {}
+
+func (x *DeleteCommandRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteCommandRequest.ProtoReflect.Descriptor instead.
+func (*DeleteCommandRequest) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *DeleteCommandRequest) GetCaller() *CallerMeta {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *DeleteCommandRequest) GetCommandId() int64 {
+	if x != nil {
+		return x.CommandId
+	}
+	return 0
+}
+
+type CommandGroupResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	CommandIds    []int64                `protobuf:"varint,4,rep,packed,name=command_ids,json=commandIds,proto3" json:"command_ids,omitempty"`
+	CreatedAt     string                 `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     string                 `protobuf:"bytes,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CommandGroupResponse) Reset() {
+	*x = CommandGroupResponse{}
+	mi := &file_proto_auth_auth_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommandGroupResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommandGroupResponse) ProtoMessage() {}
+
+func (x *CommandGroupResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommandGroupResponse.ProtoReflect.Descriptor instead.
+func (*CommandGroupResponse) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *CommandGroupResponse) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *CommandGroupResponse) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CommandGroupResponse) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *CommandGroupResponse) GetCommandIds() []int64 {
+	if x != nil {
+		return x.CommandIds
+	}
+	return nil
+}
+
+func (x *CommandGroupResponse) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *CommandGroupResponse) GetUpdatedAt() string {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return ""
+}
+
+type ListCommandGroupsResponse struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Groups        []*CommandGroupResponse `protobuf:"bytes,1,rep,name=groups,proto3" json:"groups,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListCommandGroupsResponse) Reset() {
+	*x = ListCommandGroupsResponse{}
+	mi := &file_proto_auth_auth_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListCommandGroupsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListCommandGroupsResponse) ProtoMessage() {}
+
+func (x *ListCommandGroupsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListCommandGroupsResponse.ProtoReflect.Descriptor instead.
+func (*ListCommandGroupsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *ListCommandGroupsResponse) GetGroups() []*CommandGroupResponse {
+	if x != nil {
+		return x.Groups
+	}
+	return nil
+}
+
+type CreateCmdGroupRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Caller        *CallerMeta            `protobuf:"bytes,1,opt,name=caller,proto3" json:"caller,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateCmdGroupRequest) Reset() {
+	*x = CreateCmdGroupRequest{}
+	mi := &file_proto_auth_auth_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateCmdGroupRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateCmdGroupRequest) ProtoMessage() {}
+
+func (x *CreateCmdGroupRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateCmdGroupRequest.ProtoReflect.Descriptor instead.
+func (*CreateCmdGroupRequest) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *CreateCmdGroupRequest) GetCaller() *CallerMeta {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *CreateCmdGroupRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateCmdGroupRequest) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+type UpdateCmdGroupRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Caller        *CallerMeta            `protobuf:"bytes,1,opt,name=caller,proto3" json:"caller,omitempty"`
+	GroupId       int64                  `protobuf:"varint,2,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateCmdGroupRequest) Reset() {
+	*x = UpdateCmdGroupRequest{}
+	mi := &file_proto_auth_auth_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateCmdGroupRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateCmdGroupRequest) ProtoMessage() {}
+
+func (x *UpdateCmdGroupRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateCmdGroupRequest.ProtoReflect.Descriptor instead.
+func (*UpdateCmdGroupRequest) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *UpdateCmdGroupRequest) GetCaller() *CallerMeta {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *UpdateCmdGroupRequest) GetGroupId() int64 {
+	if x != nil {
+		return x.GroupId
+	}
+	return 0
+}
+
+func (x *UpdateCmdGroupRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdateCmdGroupRequest) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+type DeleteCmdGroupRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Caller        *CallerMeta            `protobuf:"bytes,1,opt,name=caller,proto3" json:"caller,omitempty"`
+	GroupId       int64                  `protobuf:"varint,2,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteCmdGroupRequest) Reset() {
+	*x = DeleteCmdGroupRequest{}
+	mi := &file_proto_auth_auth_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteCmdGroupRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteCmdGroupRequest) ProtoMessage() {}
+
+func (x *DeleteCmdGroupRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteCmdGroupRequest.ProtoReflect.Descriptor instead.
+func (*DeleteCmdGroupRequest) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *DeleteCmdGroupRequest) GetCaller() *CallerMeta {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *DeleteCmdGroupRequest) GetGroupId() int64 {
+	if x != nil {
+		return x.GroupId
+	}
+	return 0
+}
+
+type SetGroupCommandsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Caller        *CallerMeta            `protobuf:"bytes,1,opt,name=caller,proto3" json:"caller,omitempty"`
+	GroupId       int64                  `protobuf:"varint,2,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	CommandIds    []int64                `protobuf:"varint,3,rep,packed,name=command_ids,json=commandIds,proto3" json:"command_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetGroupCommandsRequest) Reset() {
+	*x = SetGroupCommandsRequest{}
+	mi := &file_proto_auth_auth_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetGroupCommandsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetGroupCommandsRequest) ProtoMessage() {}
+
+func (x *SetGroupCommandsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetGroupCommandsRequest.ProtoReflect.Descriptor instead.
+func (*SetGroupCommandsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *SetGroupCommandsRequest) GetCaller() *CallerMeta {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *SetGroupCommandsRequest) GetGroupId() int64 {
+	if x != nil {
+		return x.GroupId
+	}
+	return 0
+}
+
+func (x *SetGroupCommandsRequest) GetCommandIds() []int64 {
+	if x != nil {
+		return x.CommandIds
+	}
+	return nil
+}
+
+type CmdGroupRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Caller        *CallerMeta            `protobuf:"bytes,1,opt,name=caller,proto3" json:"caller,omitempty"`
+	GroupId       int64                  `protobuf:"varint,2,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CmdGroupRequest) Reset() {
+	*x = CmdGroupRequest{}
+	mi := &file_proto_auth_auth_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CmdGroupRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CmdGroupRequest) ProtoMessage() {}
+
+func (x *CmdGroupRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CmdGroupRequest.ProtoReflect.Descriptor instead.
+func (*CmdGroupRequest) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *CmdGroupRequest) GetCaller() *CallerMeta {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *CmdGroupRequest) GetGroupId() int64 {
+	if x != nil {
+		return x.GroupId
+	}
+	return 0
+}
+
+type UserCmdGroupRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Caller        *CallerMeta            `protobuf:"bytes,1,opt,name=caller,proto3" json:"caller,omitempty"`
+	UserId        int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	GroupId       int64                  `protobuf:"varint,3,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UserCmdGroupRequest) Reset() {
+	*x = UserCmdGroupRequest{}
+	mi := &file_proto_auth_auth_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserCmdGroupRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserCmdGroupRequest) ProtoMessage() {}
+
+func (x *UserCmdGroupRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserCmdGroupRequest.ProtoReflect.Descriptor instead.
+func (*UserCmdGroupRequest) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *UserCmdGroupRequest) GetCaller() *CallerMeta {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *UserCmdGroupRequest) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *UserCmdGroupRequest) GetGroupId() int64 {
+	if x != nil {
+		return x.GroupId
+	}
+	return 0
+}
+
 var File_proto_auth_auth_proto protoreflect.FileDescriptor
 
 const file_proto_auth_auth_proto_rawDesc = "" +
@@ -1394,7 +2470,96 @@ const file_proto_auth_auth_proto_rawDesc = "" +
 	"\bgroup_id\x18\x03 \x01(\x03R\agroupId\"P\n" +
 	"\vUserRequest\x12(\n" +
 	"\x06caller\x18\x01 \x01(\v2\x10.auth.CallerMetaR\x06caller\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x03R\x06userId2\xc5\b\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\"\xb9\x01\n" +
+	"\n" +
+	"CliHandler\x12\x1f\n" +
+	"\vhandler_key\x18\x01 \x01(\tR\n" +
+	"handlerKey\x12!\n" +
+	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x12\n" +
+	"\x04verb\x18\x03 \x01(\tR\x04verb\x12\x1a\n" +
+	"\bresource\x18\x04 \x01(\tR\bresource\x12\x1d\n" +
+	"\n" +
+	"arg_schema\x18\x05 \x01(\tR\targSchema\x12\x18\n" +
+	"\aenabled\x18\x06 \x01(\bR\aenabled\"]\n" +
+	"\x15UpsertHandlersRequest\x12\x16\n" +
+	"\x06secret\x18\x01 \x01(\tR\x06secret\x12,\n" +
+	"\bhandlers\x18\x02 \x03(\v2\x10.auth.CliHandlerR\bhandlers\"D\n" +
+	"\x14ListHandlersResponse\x12,\n" +
+	"\bhandlers\x18\x01 \x03(\v2\x10.auth.CliHandlerR\bhandlers\"\xdc\x01\n" +
+	"\aCommand\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x1f\n" +
+	"\vhandler_key\x18\x04 \x01(\tR\n" +
+	"handlerKey\x12\x12\n" +
+	"\x04args\x18\x05 \x01(\tR\x04args\x12\x18\n" +
+	"\aenabled\x18\x06 \x01(\bR\aenabled\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\a \x01(\tR\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\b \x01(\tR\tupdatedAt\"A\n" +
+	"\x14ListCommandsResponse\x12)\n" +
+	"\bcommands\x18\x01 \x03(\v2\r.auth.CommandR\bcommands\":\n" +
+	"\x0fCommandResponse\x12'\n" +
+	"\acommand\x18\x01 \x01(\v2\r.auth.CommandR\acommand\"\xc5\x01\n" +
+	"\x14CreateCommandRequest\x12(\n" +
+	"\x06caller\x18\x01 \x01(\v2\x10.auth.CallerMetaR\x06caller\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x1f\n" +
+	"\vhandler_key\x18\x04 \x01(\tR\n" +
+	"handlerKey\x12\x12\n" +
+	"\x04args\x18\x05 \x01(\tR\x04args\x12\x18\n" +
+	"\aenabled\x18\x06 \x01(\bR\aenabled\"\xe4\x01\n" +
+	"\x14UpdateCommandRequest\x12(\n" +
+	"\x06caller\x18\x01 \x01(\v2\x10.auth.CallerMetaR\x06caller\x12\x1d\n" +
+	"\n" +
+	"command_id\x18\x02 \x01(\x03R\tcommandId\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x04 \x01(\tR\vdescription\x12\x1f\n" +
+	"\vhandler_key\x18\x05 \x01(\tR\n" +
+	"handlerKey\x12\x12\n" +
+	"\x04args\x18\x06 \x01(\tR\x04args\x12\x18\n" +
+	"\aenabled\x18\a \x01(\bR\aenabled\"_\n" +
+	"\x14DeleteCommandRequest\x12(\n" +
+	"\x06caller\x18\x01 \x01(\v2\x10.auth.CallerMetaR\x06caller\x12\x1d\n" +
+	"\n" +
+	"command_id\x18\x02 \x01(\x03R\tcommandId\"\xbb\x01\n" +
+	"\x14CommandGroupResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x1f\n" +
+	"\vcommand_ids\x18\x04 \x03(\x03R\n" +
+	"commandIds\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x05 \x01(\tR\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x06 \x01(\tR\tupdatedAt\"O\n" +
+	"\x19ListCommandGroupsResponse\x122\n" +
+	"\x06groups\x18\x01 \x03(\v2\x1a.auth.CommandGroupResponseR\x06groups\"w\n" +
+	"\x15CreateCmdGroupRequest\x12(\n" +
+	"\x06caller\x18\x01 \x01(\v2\x10.auth.CallerMetaR\x06caller\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\"\x92\x01\n" +
+	"\x15UpdateCmdGroupRequest\x12(\n" +
+	"\x06caller\x18\x01 \x01(\v2\x10.auth.CallerMetaR\x06caller\x12\x19\n" +
+	"\bgroup_id\x18\x02 \x01(\x03R\agroupId\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x04 \x01(\tR\vdescription\"\\\n" +
+	"\x15DeleteCmdGroupRequest\x12(\n" +
+	"\x06caller\x18\x01 \x01(\v2\x10.auth.CallerMetaR\x06caller\x12\x19\n" +
+	"\bgroup_id\x18\x02 \x01(\x03R\agroupId\"\x7f\n" +
+	"\x17SetGroupCommandsRequest\x12(\n" +
+	"\x06caller\x18\x01 \x01(\v2\x10.auth.CallerMetaR\x06caller\x12\x19\n" +
+	"\bgroup_id\x18\x02 \x01(\x03R\agroupId\x12\x1f\n" +
+	"\vcommand_ids\x18\x03 \x03(\x03R\n" +
+	"commandIds\"V\n" +
+	"\x0fCmdGroupRequest\x12(\n" +
+	"\x06caller\x18\x01 \x01(\v2\x10.auth.CallerMetaR\x06caller\x12\x19\n" +
+	"\bgroup_id\x18\x02 \x01(\x03R\agroupId\"s\n" +
+	"\x13UserCmdGroupRequest\x12(\n" +
+	"\x06caller\x18\x01 \x01(\v2\x10.auth.CallerMetaR\x06caller\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x19\n" +
+	"\bgroup_id\x18\x03 \x01(\x03R\agroupId2\xab\x10\n" +
 	"\vAuthService\x120\n" +
 	"\x05Login\x12\x12.auth.LoginRequest\x1a\x13.auth.LoginResponse\x12-\n" +
 	"\x05GetMe\x12\x10.auth.CallerMeta\x1a\x12.auth.UserResponse\x126\n" +
@@ -1416,7 +2581,22 @@ const file_proto_auth_auth_proto_rawDesc = "" +
 	"\x0eListGroupUsers\x12\x12.auth.GroupRequest\x1a\x17.auth.ListUsersResponse\x125\n" +
 	"\x0eAddUserToGroup\x12\x16.auth.UserGroupRequest\x1a\v.auth.Empty\x12:\n" +
 	"\x13RemoveUserFromGroup\x12\x16.auth.UserGroupRequest\x1a\v.auth.Empty\x12B\n" +
-	"\x13GetUserMarketGroups\x12\x11.auth.UserRequest\x1a\x18.auth.ListGroupsResponseB9\n" +
+	"\x13GetUserMarketGroups\x12\x11.auth.UserRequest\x1a\x18.auth.ListGroupsResponse\x12:\n" +
+	"\x0eUpsertHandlers\x12\x1b.auth.UpsertHandlersRequest\x1a\v.auth.Empty\x12<\n" +
+	"\fListHandlers\x12\x10.auth.CallerMeta\x1a\x1a.auth.ListHandlersResponse\x12<\n" +
+	"\fListCommands\x12\x10.auth.CallerMeta\x1a\x1a.auth.ListCommandsResponse\x12B\n" +
+	"\rCreateCommand\x12\x1a.auth.CreateCommandRequest\x1a\x15.auth.CommandResponse\x12B\n" +
+	"\rUpdateCommand\x12\x1a.auth.UpdateCommandRequest\x1a\x15.auth.CommandResponse\x128\n" +
+	"\rDeleteCommand\x12\x1a.auth.DeleteCommandRequest\x1a\v.auth.Empty\x12F\n" +
+	"\x11ListCommandGroups\x12\x10.auth.CallerMeta\x1a\x1f.auth.ListCommandGroupsResponse\x12M\n" +
+	"\x12CreateCommandGroup\x12\x1b.auth.CreateCmdGroupRequest\x1a\x1a.auth.CommandGroupResponse\x12M\n" +
+	"\x12UpdateCommandGroup\x12\x1b.auth.UpdateCmdGroupRequest\x1a\x1a.auth.CommandGroupResponse\x12>\n" +
+	"\x12DeleteCommandGroup\x12\x1b.auth.DeleteCmdGroupRequest\x1a\v.auth.Empty\x12>\n" +
+	"\x10SetGroupCommands\x12\x1d.auth.SetGroupCommandsRequest\x1a\v.auth.Empty\x12C\n" +
+	"\x11ListCmdGroupUsers\x12\x15.auth.CmdGroupRequest\x1a\x17.auth.ListUsersResponse\x12;\n" +
+	"\x11AddUserToCmdGroup\x12\x19.auth.UserCmdGroupRequest\x1a\v.auth.Empty\x12@\n" +
+	"\x16RemoveUserFromCmdGroup\x12\x19.auth.UserCmdGroupRequest\x1a\v.auth.Empty\x12@\n" +
+	"\x0fGetUserCommands\x12\x11.auth.UserRequest\x1a\x1a.auth.ListCommandsResponseB9\n" +
 	"\x15vn.gostock.auth.protoP\x01Z\x1ego-stock-prediction/proto/authb\x06proto3"
 
 var (
@@ -1431,29 +2611,46 @@ func file_proto_auth_auth_proto_rawDescGZIP() []byte {
 	return file_proto_auth_auth_proto_rawDescData
 }
 
-var file_proto_auth_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_proto_auth_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
 var file_proto_auth_auth_proto_goTypes = []any{
-	(*CallerMeta)(nil),             // 0: auth.CallerMeta
-	(*Empty)(nil),                  // 1: auth.Empty
-	(*LoginRequest)(nil),           // 2: auth.LoginRequest
-	(*LoginResponse)(nil),          // 3: auth.LoginResponse
-	(*UserResponse)(nil),           // 4: auth.UserResponse
-	(*ListUsersResponse)(nil),      // 5: auth.ListUsersResponse
-	(*CreateUserRequest)(nil),      // 6: auth.CreateUserRequest
-	(*ResetPasswordRequest)(nil),   // 7: auth.ResetPasswordRequest
-	(*UpdateUserRequest)(nil),      // 8: auth.UpdateUserRequest
-	(*DeleteUserRequest)(nil),      // 9: auth.DeleteUserRequest
-	(*UpdateRoleRequest)(nil),      // 10: auth.UpdateRoleRequest
-	(*ChangePassRequest)(nil),      // 11: auth.ChangePassRequest
-	(*MarketGroupResponse)(nil),    // 12: auth.MarketGroupResponse
-	(*ListGroupsResponse)(nil),     // 13: auth.ListGroupsResponse
-	(*CreateGroupRequest)(nil),     // 14: auth.CreateGroupRequest
-	(*UpdateGroupRequest)(nil),     // 15: auth.UpdateGroupRequest
-	(*DeleteGroupRequest)(nil),     // 16: auth.DeleteGroupRequest
-	(*SetGroupMarketsRequest)(nil), // 17: auth.SetGroupMarketsRequest
-	(*GroupRequest)(nil),           // 18: auth.GroupRequest
-	(*UserGroupRequest)(nil),       // 19: auth.UserGroupRequest
-	(*UserRequest)(nil),            // 20: auth.UserRequest
+	(*CallerMeta)(nil),                // 0: auth.CallerMeta
+	(*Empty)(nil),                     // 1: auth.Empty
+	(*LoginRequest)(nil),              // 2: auth.LoginRequest
+	(*LoginResponse)(nil),             // 3: auth.LoginResponse
+	(*UserResponse)(nil),              // 4: auth.UserResponse
+	(*ListUsersResponse)(nil),         // 5: auth.ListUsersResponse
+	(*CreateUserRequest)(nil),         // 6: auth.CreateUserRequest
+	(*ResetPasswordRequest)(nil),      // 7: auth.ResetPasswordRequest
+	(*UpdateUserRequest)(nil),         // 8: auth.UpdateUserRequest
+	(*DeleteUserRequest)(nil),         // 9: auth.DeleteUserRequest
+	(*UpdateRoleRequest)(nil),         // 10: auth.UpdateRoleRequest
+	(*ChangePassRequest)(nil),         // 11: auth.ChangePassRequest
+	(*MarketGroupResponse)(nil),       // 12: auth.MarketGroupResponse
+	(*ListGroupsResponse)(nil),        // 13: auth.ListGroupsResponse
+	(*CreateGroupRequest)(nil),        // 14: auth.CreateGroupRequest
+	(*UpdateGroupRequest)(nil),        // 15: auth.UpdateGroupRequest
+	(*DeleteGroupRequest)(nil),        // 16: auth.DeleteGroupRequest
+	(*SetGroupMarketsRequest)(nil),    // 17: auth.SetGroupMarketsRequest
+	(*GroupRequest)(nil),              // 18: auth.GroupRequest
+	(*UserGroupRequest)(nil),          // 19: auth.UserGroupRequest
+	(*UserRequest)(nil),               // 20: auth.UserRequest
+	(*CliHandler)(nil),                // 21: auth.CliHandler
+	(*UpsertHandlersRequest)(nil),     // 22: auth.UpsertHandlersRequest
+	(*ListHandlersResponse)(nil),      // 23: auth.ListHandlersResponse
+	(*Command)(nil),                   // 24: auth.Command
+	(*ListCommandsResponse)(nil),      // 25: auth.ListCommandsResponse
+	(*CommandResponse)(nil),           // 26: auth.CommandResponse
+	(*CreateCommandRequest)(nil),      // 27: auth.CreateCommandRequest
+	(*UpdateCommandRequest)(nil),      // 28: auth.UpdateCommandRequest
+	(*DeleteCommandRequest)(nil),      // 29: auth.DeleteCommandRequest
+	(*CommandGroupResponse)(nil),      // 30: auth.CommandGroupResponse
+	(*ListCommandGroupsResponse)(nil), // 31: auth.ListCommandGroupsResponse
+	(*CreateCmdGroupRequest)(nil),     // 32: auth.CreateCmdGroupRequest
+	(*UpdateCmdGroupRequest)(nil),     // 33: auth.UpdateCmdGroupRequest
+	(*DeleteCmdGroupRequest)(nil),     // 34: auth.DeleteCmdGroupRequest
+	(*SetGroupCommandsRequest)(nil),   // 35: auth.SetGroupCommandsRequest
+	(*CmdGroupRequest)(nil),           // 36: auth.CmdGroupRequest
+	(*UserCmdGroupRequest)(nil),       // 37: auth.UserCmdGroupRequest
 }
 var file_proto_auth_auth_proto_depIdxs = []int32{
 	4,  // 0: auth.ListUsersResponse.users:type_name -> auth.UserResponse
@@ -1471,47 +2668,91 @@ var file_proto_auth_auth_proto_depIdxs = []int32{
 	0,  // 12: auth.GroupRequest.caller:type_name -> auth.CallerMeta
 	0,  // 13: auth.UserGroupRequest.caller:type_name -> auth.CallerMeta
 	0,  // 14: auth.UserRequest.caller:type_name -> auth.CallerMeta
-	2,  // 15: auth.AuthService.Login:input_type -> auth.LoginRequest
-	0,  // 16: auth.AuthService.GetMe:input_type -> auth.CallerMeta
-	11, // 17: auth.AuthService.ChangePassword:input_type -> auth.ChangePassRequest
-	0,  // 18: auth.AuthService.ListUsers:input_type -> auth.CallerMeta
-	6,  // 19: auth.AuthService.CreateUser:input_type -> auth.CreateUserRequest
-	9,  // 20: auth.AuthService.DeleteUser:input_type -> auth.DeleteUserRequest
-	10, // 21: auth.AuthService.UpdateUserRole:input_type -> auth.UpdateRoleRequest
-	8,  // 22: auth.AuthService.UpdateUser:input_type -> auth.UpdateUserRequest
-	7,  // 23: auth.AuthService.ResetPassword:input_type -> auth.ResetPasswordRequest
-	0,  // 24: auth.AuthService.ListMarketGroups:input_type -> auth.CallerMeta
-	14, // 25: auth.AuthService.CreateMarketGroup:input_type -> auth.CreateGroupRequest
-	15, // 26: auth.AuthService.UpdateMarketGroup:input_type -> auth.UpdateGroupRequest
-	16, // 27: auth.AuthService.DeleteMarketGroup:input_type -> auth.DeleteGroupRequest
-	17, // 28: auth.AuthService.SetGroupMarkets:input_type -> auth.SetGroupMarketsRequest
-	18, // 29: auth.AuthService.ListGroupUsers:input_type -> auth.GroupRequest
-	19, // 30: auth.AuthService.AddUserToGroup:input_type -> auth.UserGroupRequest
-	19, // 31: auth.AuthService.RemoveUserFromGroup:input_type -> auth.UserGroupRequest
-	20, // 32: auth.AuthService.GetUserMarketGroups:input_type -> auth.UserRequest
-	3,  // 33: auth.AuthService.Login:output_type -> auth.LoginResponse
-	4,  // 34: auth.AuthService.GetMe:output_type -> auth.UserResponse
-	1,  // 35: auth.AuthService.ChangePassword:output_type -> auth.Empty
-	5,  // 36: auth.AuthService.ListUsers:output_type -> auth.ListUsersResponse
-	4,  // 37: auth.AuthService.CreateUser:output_type -> auth.UserResponse
-	1,  // 38: auth.AuthService.DeleteUser:output_type -> auth.Empty
-	4,  // 39: auth.AuthService.UpdateUserRole:output_type -> auth.UserResponse
-	4,  // 40: auth.AuthService.UpdateUser:output_type -> auth.UserResponse
-	1,  // 41: auth.AuthService.ResetPassword:output_type -> auth.Empty
-	13, // 42: auth.AuthService.ListMarketGroups:output_type -> auth.ListGroupsResponse
-	12, // 43: auth.AuthService.CreateMarketGroup:output_type -> auth.MarketGroupResponse
-	12, // 44: auth.AuthService.UpdateMarketGroup:output_type -> auth.MarketGroupResponse
-	1,  // 45: auth.AuthService.DeleteMarketGroup:output_type -> auth.Empty
-	1,  // 46: auth.AuthService.SetGroupMarkets:output_type -> auth.Empty
-	5,  // 47: auth.AuthService.ListGroupUsers:output_type -> auth.ListUsersResponse
-	1,  // 48: auth.AuthService.AddUserToGroup:output_type -> auth.Empty
-	1,  // 49: auth.AuthService.RemoveUserFromGroup:output_type -> auth.Empty
-	13, // 50: auth.AuthService.GetUserMarketGroups:output_type -> auth.ListGroupsResponse
-	33, // [33:51] is the sub-list for method output_type
-	15, // [15:33] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	21, // 15: auth.UpsertHandlersRequest.handlers:type_name -> auth.CliHandler
+	21, // 16: auth.ListHandlersResponse.handlers:type_name -> auth.CliHandler
+	24, // 17: auth.ListCommandsResponse.commands:type_name -> auth.Command
+	24, // 18: auth.CommandResponse.command:type_name -> auth.Command
+	0,  // 19: auth.CreateCommandRequest.caller:type_name -> auth.CallerMeta
+	0,  // 20: auth.UpdateCommandRequest.caller:type_name -> auth.CallerMeta
+	0,  // 21: auth.DeleteCommandRequest.caller:type_name -> auth.CallerMeta
+	30, // 22: auth.ListCommandGroupsResponse.groups:type_name -> auth.CommandGroupResponse
+	0,  // 23: auth.CreateCmdGroupRequest.caller:type_name -> auth.CallerMeta
+	0,  // 24: auth.UpdateCmdGroupRequest.caller:type_name -> auth.CallerMeta
+	0,  // 25: auth.DeleteCmdGroupRequest.caller:type_name -> auth.CallerMeta
+	0,  // 26: auth.SetGroupCommandsRequest.caller:type_name -> auth.CallerMeta
+	0,  // 27: auth.CmdGroupRequest.caller:type_name -> auth.CallerMeta
+	0,  // 28: auth.UserCmdGroupRequest.caller:type_name -> auth.CallerMeta
+	2,  // 29: auth.AuthService.Login:input_type -> auth.LoginRequest
+	0,  // 30: auth.AuthService.GetMe:input_type -> auth.CallerMeta
+	11, // 31: auth.AuthService.ChangePassword:input_type -> auth.ChangePassRequest
+	0,  // 32: auth.AuthService.ListUsers:input_type -> auth.CallerMeta
+	6,  // 33: auth.AuthService.CreateUser:input_type -> auth.CreateUserRequest
+	9,  // 34: auth.AuthService.DeleteUser:input_type -> auth.DeleteUserRequest
+	10, // 35: auth.AuthService.UpdateUserRole:input_type -> auth.UpdateRoleRequest
+	8,  // 36: auth.AuthService.UpdateUser:input_type -> auth.UpdateUserRequest
+	7,  // 37: auth.AuthService.ResetPassword:input_type -> auth.ResetPasswordRequest
+	0,  // 38: auth.AuthService.ListMarketGroups:input_type -> auth.CallerMeta
+	14, // 39: auth.AuthService.CreateMarketGroup:input_type -> auth.CreateGroupRequest
+	15, // 40: auth.AuthService.UpdateMarketGroup:input_type -> auth.UpdateGroupRequest
+	16, // 41: auth.AuthService.DeleteMarketGroup:input_type -> auth.DeleteGroupRequest
+	17, // 42: auth.AuthService.SetGroupMarkets:input_type -> auth.SetGroupMarketsRequest
+	18, // 43: auth.AuthService.ListGroupUsers:input_type -> auth.GroupRequest
+	19, // 44: auth.AuthService.AddUserToGroup:input_type -> auth.UserGroupRequest
+	19, // 45: auth.AuthService.RemoveUserFromGroup:input_type -> auth.UserGroupRequest
+	20, // 46: auth.AuthService.GetUserMarketGroups:input_type -> auth.UserRequest
+	22, // 47: auth.AuthService.UpsertHandlers:input_type -> auth.UpsertHandlersRequest
+	0,  // 48: auth.AuthService.ListHandlers:input_type -> auth.CallerMeta
+	0,  // 49: auth.AuthService.ListCommands:input_type -> auth.CallerMeta
+	27, // 50: auth.AuthService.CreateCommand:input_type -> auth.CreateCommandRequest
+	28, // 51: auth.AuthService.UpdateCommand:input_type -> auth.UpdateCommandRequest
+	29, // 52: auth.AuthService.DeleteCommand:input_type -> auth.DeleteCommandRequest
+	0,  // 53: auth.AuthService.ListCommandGroups:input_type -> auth.CallerMeta
+	32, // 54: auth.AuthService.CreateCommandGroup:input_type -> auth.CreateCmdGroupRequest
+	33, // 55: auth.AuthService.UpdateCommandGroup:input_type -> auth.UpdateCmdGroupRequest
+	34, // 56: auth.AuthService.DeleteCommandGroup:input_type -> auth.DeleteCmdGroupRequest
+	35, // 57: auth.AuthService.SetGroupCommands:input_type -> auth.SetGroupCommandsRequest
+	36, // 58: auth.AuthService.ListCmdGroupUsers:input_type -> auth.CmdGroupRequest
+	37, // 59: auth.AuthService.AddUserToCmdGroup:input_type -> auth.UserCmdGroupRequest
+	37, // 60: auth.AuthService.RemoveUserFromCmdGroup:input_type -> auth.UserCmdGroupRequest
+	20, // 61: auth.AuthService.GetUserCommands:input_type -> auth.UserRequest
+	3,  // 62: auth.AuthService.Login:output_type -> auth.LoginResponse
+	4,  // 63: auth.AuthService.GetMe:output_type -> auth.UserResponse
+	1,  // 64: auth.AuthService.ChangePassword:output_type -> auth.Empty
+	5,  // 65: auth.AuthService.ListUsers:output_type -> auth.ListUsersResponse
+	4,  // 66: auth.AuthService.CreateUser:output_type -> auth.UserResponse
+	1,  // 67: auth.AuthService.DeleteUser:output_type -> auth.Empty
+	4,  // 68: auth.AuthService.UpdateUserRole:output_type -> auth.UserResponse
+	4,  // 69: auth.AuthService.UpdateUser:output_type -> auth.UserResponse
+	1,  // 70: auth.AuthService.ResetPassword:output_type -> auth.Empty
+	13, // 71: auth.AuthService.ListMarketGroups:output_type -> auth.ListGroupsResponse
+	12, // 72: auth.AuthService.CreateMarketGroup:output_type -> auth.MarketGroupResponse
+	12, // 73: auth.AuthService.UpdateMarketGroup:output_type -> auth.MarketGroupResponse
+	1,  // 74: auth.AuthService.DeleteMarketGroup:output_type -> auth.Empty
+	1,  // 75: auth.AuthService.SetGroupMarkets:output_type -> auth.Empty
+	5,  // 76: auth.AuthService.ListGroupUsers:output_type -> auth.ListUsersResponse
+	1,  // 77: auth.AuthService.AddUserToGroup:output_type -> auth.Empty
+	1,  // 78: auth.AuthService.RemoveUserFromGroup:output_type -> auth.Empty
+	13, // 79: auth.AuthService.GetUserMarketGroups:output_type -> auth.ListGroupsResponse
+	1,  // 80: auth.AuthService.UpsertHandlers:output_type -> auth.Empty
+	23, // 81: auth.AuthService.ListHandlers:output_type -> auth.ListHandlersResponse
+	25, // 82: auth.AuthService.ListCommands:output_type -> auth.ListCommandsResponse
+	26, // 83: auth.AuthService.CreateCommand:output_type -> auth.CommandResponse
+	26, // 84: auth.AuthService.UpdateCommand:output_type -> auth.CommandResponse
+	1,  // 85: auth.AuthService.DeleteCommand:output_type -> auth.Empty
+	31, // 86: auth.AuthService.ListCommandGroups:output_type -> auth.ListCommandGroupsResponse
+	30, // 87: auth.AuthService.CreateCommandGroup:output_type -> auth.CommandGroupResponse
+	30, // 88: auth.AuthService.UpdateCommandGroup:output_type -> auth.CommandGroupResponse
+	1,  // 89: auth.AuthService.DeleteCommandGroup:output_type -> auth.Empty
+	1,  // 90: auth.AuthService.SetGroupCommands:output_type -> auth.Empty
+	5,  // 91: auth.AuthService.ListCmdGroupUsers:output_type -> auth.ListUsersResponse
+	1,  // 92: auth.AuthService.AddUserToCmdGroup:output_type -> auth.Empty
+	1,  // 93: auth.AuthService.RemoveUserFromCmdGroup:output_type -> auth.Empty
+	25, // 94: auth.AuthService.GetUserCommands:output_type -> auth.ListCommandsResponse
+	62, // [62:95] is the sub-list for method output_type
+	29, // [29:62] is the sub-list for method input_type
+	29, // [29:29] is the sub-list for extension type_name
+	29, // [29:29] is the sub-list for extension extendee
+	0,  // [0:29] is the sub-list for field type_name
 }
 
 func init() { file_proto_auth_auth_proto_init() }
@@ -1525,7 +2766,7 @@ func file_proto_auth_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_auth_auth_proto_rawDesc), len(file_proto_auth_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   21,
+			NumMessages:   38,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

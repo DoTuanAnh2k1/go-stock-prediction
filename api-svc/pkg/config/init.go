@@ -20,6 +20,7 @@ func InitConfig(filenames ...string) {
 			AdminUsername: env.GetEnv("ADMIN_USERNAME", "admin"),
 			AdminPassword: env.GetEnv("ADMIN_PASSWORD", "admin123"),
 			JWTSecret:     env.GetEnv("JWT_SECRET", "change-me-in-production"),
+			InternalSecret: env.GetEnv("INTERNAL_SECRET", ""),
 		},
 		GRPC: models_config.GRPCConfig{
 			ServerPort:       env.GetEnv("GRPC_SERVER_PORT", "8119"),

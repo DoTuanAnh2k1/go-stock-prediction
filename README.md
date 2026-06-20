@@ -22,6 +22,7 @@ Financial asset price prediction system with RBAC — crawls Gold SJC/XAU, NASDA
 │              TimescaleDB :5432 ◄───────────────────────────────────┘    │
 │              (PostgreSQL 16)                                             │
 │                                                                          │
+│  SSH ──► cli-svc :2345 (Go, wish+bubbletea) ──HTTP──► gateway-svc :80    │
 │  pgAdmin 127.0.0.1:8081                                                  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -35,10 +36,11 @@ Financial asset price prediction system with RBAC — crawls Gold SJC/XAU, NASDA
 | `auth-svc/` | Java 21, Spring Boot 3, gRPC, Flyway, bcrypt | `:8120` (internal) | Owns all RBAC: login, JWT generation (HMAC256, 24 h), user CRUD, market groups; Flyway V1: auth + RBAC tables; V2: `full_name`/`email`/`phone` profile fields; seeds `chon/super_admin` on startup |
 | `prediction-svc/` | Python 3.12, PyTorch, statsmodels, LightGBM, XGBoost, scikit-learn, APScheduler, SQLAlchemy | `:8119` (internal) | gRPC service: crawling, 11 ML algorithms, training, cron scheduler |
 | `web-svc/` | React, TypeScript, Vite, nginx | `:3000` (internal) | Static SPA served by nginx; accessed only through `gateway-svc` |
+| `cli-svc/` | Go 1.26, charmbracelet/wish + bubbletea, go-pretty | `:2345` (public, SSH) | Interactive SSH shell for headless servers; renders API data as tables; `get`/`set`/`update`/`delete` verbs; per-command RBAC enforced client-side; calls the API through `gateway-svc` |
 | `db` | TimescaleDB (PostgreSQL 16) | `:5432` (internal) | Shared DB for all services; hypertables for price/prediction time-series; schema auto-init from `database.sql` |
 | `pgadmin` | pgAdmin 4 | `127.0.0.1:8081` | PostgreSQL web administration UI |
 
-Internal DNS (between containers): `api-svc:8118`, `prediction-svc:8119`, `auth-svc:8120`, `web-svc:3000`, `db:5432`.
+Internal DNS (between containers): `api-svc:8118`, `prediction-svc:8119`, `auth-svc:8120`, `web-svc:3000`, `db:5432`. The `cli-svc` SSH port `2345` is exposed directly (the gateway speaks HTTP only); `cli-svc` reaches the API at `http://gateway-svc/api`.
 
 ## Features
 
@@ -53,6 +55,8 @@ Internal DNS (between containers): `api-svc:8118`, `prediction-svc:8119`, `auth-
 - **Trading simulation:** Bot leaderboard, per-bot trades and portfolio snapshots, live-step and backtest modes.
 - **Pipeline reports:** Per-pipeline run records with step-level status, stored 7 days (`GET /api/pipeline-reports`).
 - **Auto backup:** Daily `pg_dump` at 3 AM into `BACKUP_DIR`; owned by `api-svc` (`backup_scheduler.go`).
+- **Interactive CLI over SSH (`cli-svc`):** `ssh <user>@<host> -p 2345` (dashboard credentials) opens a shell that renders API data as tables. Four verbs `get`/`set`/`update`/`delete`, tab-completion, multi-session.
+- **Command RBAC:** Admins declare commands (a cli handler + fixed args), group them, and assign users to groups — a user may execute only the commands in their groups (`super_admin` runs all). Managed from the web dashboard (`/admin/commands`, `/admin/command-groups`) or the CLI. RBAC lives in `auth-svc` (Flyway V3); `cli-svc` enforces it client-side.
 
 ## Repository Layout
 
@@ -71,6 +75,9 @@ go-stock-prediction/
 │   └── src/               # pages/, components/, context/, i18n
 ├── gateway-svc/           # Rust Axum HTTP/HTTPS gateway
 │   └── src/               # router/, routes/, proxy/, middleware/
+├── cli-svc/               # Go SSH shell service (module: go-stock-prediction/cli-svc)
+│   ├── internal/          # server/ (wish), shell/ (bubbletea), handlers/, client/, render/
+│   └── keys/              # SSH host key (generated on first boot; gitignored)
 ├── deploy/                # All Dockerfiles and Compose files (flat layout)
 │   ├── docker-compose.yaml
 │   ├── docker-compose.test.yml
@@ -78,7 +85,8 @@ go-stock-prediction/
 │   ├── auth-svc.Dockerfile
 │   ├── prediction-svc.Dockerfile
 │   ├── web-svc.Dockerfile
-│   └── gateway-svc.Dockerfile
+│   ├── gateway-svc.Dockerfile
+│   └── cli-svc.Dockerfile
 ├── database.sql           # Full PostgreSQL/TimescaleDB schema (authoritative)
 ├── Makefile               # Root convenience targets (see below)
 └── .env                   # Environment variables — stays at repo root

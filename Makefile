@@ -1,4 +1,4 @@
-.PHONY: test test-unit test-integration test-coverage build test-db-up test-db-down vet swagger test-phase5 up reset
+.PHONY: test test-unit test-integration test-coverage build cli-build cli-test test-db-up test-db-down vet swagger test-phase5 up reset
 
 # docker compose wrapper — compose file lives in deploy/, .env stays at repo root
 COMPOSE = docker compose --env-file .env -f deploy/docker-compose.yaml
@@ -6,6 +6,12 @@ COMPOSE_TEST = docker compose -f deploy/docker-compose.test.yml
 
 build:
 	cd api-svc && go build -o api-server ./cmd
+
+cli-build:
+	cd cli-svc && go build -o cli-server .
+
+cli-test:
+	cd cli-svc && go test ./... -count=1
 
 vet:
 	cd api-svc && go vet ./...

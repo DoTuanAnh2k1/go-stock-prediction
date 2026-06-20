@@ -6,6 +6,7 @@ import net.devh.boot.grpc.server.service.GrpcService;
 import vn.gostock.auth.entity.MarketGroup;
 import vn.gostock.auth.entity.User;
 import vn.gostock.auth.proto.*;
+import vn.gostock.auth.service.CommandRbacService;
 import vn.gostock.auth.service.JwtService;
 import vn.gostock.auth.service.MarketGroupService;
 import vn.gostock.auth.service.UserService;
@@ -17,6 +18,7 @@ public class AuthGrpcServiceImpl extends AuthServiceGrpc.AuthServiceImplBase {
 
     private final UserService userService;
     private final MarketGroupService marketGroupService;
+    private final CommandRbacService commandRbacService;
     private final JwtService jwtService;
 
     // ── Auth ──────────────────────────────────────────────────────────────
@@ -213,6 +215,167 @@ public class AuthGrpcServiceImpl extends AuthServiceGrpc.AuthServiceImplBase {
         } catch (Exception e) { obs.onError(e); }
     }
 
+    // ── Command RBAC: handler catalog ─────────────────────────────────────
+
+    @Override
+    public void upsertHandlers(UpsertHandlersRequest req, StreamObserver<Empty> obs) {
+        try {
+            List<vn.gostock.auth.entity.CliHandler> handlers = req.getHandlersList().stream()
+                .map(this::toHandlerEntity).toList();
+            commandRbacService.upsertHandlers(req.getSecret(), handlers);
+            obs.onNext(Empty.getDefaultInstance());
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    @Override
+    public void listHandlers(CallerMeta req, StreamObserver<ListHandlersResponse> obs) {
+        try {
+            List<CliHandler> handlers = commandRbacService.listHandlers().stream()
+                .map(this::toHandlerResponse).toList();
+            obs.onNext(ListHandlersResponse.newBuilder().addAllHandlers(handlers).build());
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    // ── Command RBAC: commands ────────────────────────────────────────────
+
+    @Override
+    public void listCommands(CallerMeta req, StreamObserver<ListCommandsResponse> obs) {
+        try {
+            List<Command> commands = commandRbacService.listCommands().stream()
+                .map(this::toCommandProto).toList();
+            obs.onNext(ListCommandsResponse.newBuilder().addAllCommands(commands).build());
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    @Override
+    public void createCommand(CreateCommandRequest req, StreamObserver<CommandResponse> obs) {
+        try {
+            vn.gostock.auth.entity.Command c = commandRbacService.createCommand(
+                req.getCaller().getCallerRole(), req.getName(), req.getDescription(),
+                req.getHandlerKey(), req.getArgs(), req.getEnabled());
+            obs.onNext(CommandResponse.newBuilder().setCommand(toCommandProto(c)).build());
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    @Override
+    public void updateCommand(UpdateCommandRequest req, StreamObserver<CommandResponse> obs) {
+        try {
+            vn.gostock.auth.entity.Command c = commandRbacService.updateCommand(
+                req.getCaller().getCallerRole(), req.getCommandId(), req.getName(),
+                req.getDescription(), req.getHandlerKey(), req.getArgs(), req.getEnabled());
+            obs.onNext(CommandResponse.newBuilder().setCommand(toCommandProto(c)).build());
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    @Override
+    public void deleteCommand(DeleteCommandRequest req, StreamObserver<Empty> obs) {
+        try {
+            commandRbacService.deleteCommand(req.getCaller().getCallerRole(), req.getCommandId());
+            obs.onNext(Empty.getDefaultInstance());
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    // ── Command RBAC: command groups ──────────────────────────────────────
+
+    @Override
+    public void listCommandGroups(CallerMeta req, StreamObserver<ListCommandGroupsResponse> obs) {
+        try {
+            List<CommandGroupResponse> groups = commandRbacService.listGroups().stream()
+                .map(this::toCommandGroupResponse).toList();
+            obs.onNext(ListCommandGroupsResponse.newBuilder().addAllGroups(groups).build());
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    @Override
+    public void createCommandGroup(CreateCmdGroupRequest req, StreamObserver<CommandGroupResponse> obs) {
+        try {
+            vn.gostock.auth.entity.CommandGroup g = commandRbacService.createGroup(
+                req.getCaller().getCallerRole(), req.getName(), req.getDescription());
+            obs.onNext(toCommandGroupResponse(g));
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    @Override
+    public void updateCommandGroup(UpdateCmdGroupRequest req, StreamObserver<CommandGroupResponse> obs) {
+        try {
+            vn.gostock.auth.entity.CommandGroup g = commandRbacService.updateGroup(
+                req.getCaller().getCallerRole(), req.getGroupId(),
+                req.getName(), req.getDescription());
+            obs.onNext(toCommandGroupResponse(g));
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    @Override
+    public void deleteCommandGroup(DeleteCmdGroupRequest req, StreamObserver<Empty> obs) {
+        try {
+            commandRbacService.deleteGroup(req.getCaller().getCallerRole(), req.getGroupId());
+            obs.onNext(Empty.getDefaultInstance());
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    @Override
+    public void setGroupCommands(SetGroupCommandsRequest req, StreamObserver<Empty> obs) {
+        try {
+            commandRbacService.setGroupCommands(req.getCaller().getCallerRole(),
+                req.getGroupId(), req.getCommandIdsList());
+            obs.onNext(Empty.getDefaultInstance());
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    @Override
+    public void listCmdGroupUsers(CmdGroupRequest req, StreamObserver<ListUsersResponse> obs) {
+        try {
+            List<UserResponse> users = commandRbacService
+                .listGroupUsers(req.getCaller().getCallerRole(), req.getGroupId())
+                .stream().map(this::toUserResponse).toList();
+            obs.onNext(ListUsersResponse.newBuilder().addAllUsers(users).build());
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    @Override
+    public void addUserToCmdGroup(UserCmdGroupRequest req, StreamObserver<Empty> obs) {
+        try {
+            commandRbacService.addUserToGroup(req.getCaller().getCallerRole(),
+                req.getUserId(), req.getGroupId());
+            obs.onNext(Empty.getDefaultInstance());
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    @Override
+    public void removeUserFromCmdGroup(UserCmdGroupRequest req, StreamObserver<Empty> obs) {
+        try {
+            commandRbacService.removeUserFromGroup(req.getCaller().getCallerRole(),
+                req.getUserId(), req.getGroupId());
+            obs.onNext(Empty.getDefaultInstance());
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
+    // ── Command RBAC: enforcement ─────────────────────────────────────────
+
+    @Override
+    public void getUserCommands(UserRequest req, StreamObserver<ListCommandsResponse> obs) {
+        try {
+            List<Command> commands = commandRbacService.getUserCommands(req.getUserId())
+                .stream().map(this::toCommandProto).toList();
+            obs.onNext(ListCommandsResponse.newBuilder().addAllCommands(commands).build());
+            obs.onCompleted();
+        } catch (Exception e) { obs.onError(e); }
+    }
+
     // ── Converters ────────────────────────────────────────────────────────
 
     private UserResponse toUserResponse(User u) {
@@ -233,6 +396,53 @@ public class AuthGrpcServiceImpl extends AuthServiceGrpc.AuthServiceImplBase {
             .setName(g.getName())
             .setDescription(g.getDescription() != null ? g.getDescription() : "")
             .addAllMarketKeys(g.getMarketKeys())
+            .setCreatedAt(g.getCreatedAt() != null ? g.getCreatedAt().toString() : "")
+            .setUpdatedAt(g.getUpdatedAt() != null ? g.getUpdatedAt().toString() : "")
+            .build();
+    }
+
+    // proto CliHandler -> entity CliHandler
+    private vn.gostock.auth.entity.CliHandler toHandlerEntity(CliHandler h) {
+        return vn.gostock.auth.entity.CliHandler.builder()
+            .handlerKey(h.getHandlerKey())
+            .displayName(h.getDisplayName())
+            .verb(h.getVerb())
+            .resource(h.getResource())
+            .argSchema(h.getArgSchema() != null && !h.getArgSchema().isEmpty() ? h.getArgSchema() : "[]")
+            .enabled(h.getEnabled())
+            .build();
+    }
+
+    private CliHandler toHandlerResponse(vn.gostock.auth.entity.CliHandler h) {
+        return CliHandler.newBuilder()
+            .setHandlerKey(h.getHandlerKey())
+            .setDisplayName(h.getDisplayName() != null ? h.getDisplayName() : "")
+            .setVerb(h.getVerb() != null ? h.getVerb() : "")
+            .setResource(h.getResource() != null ? h.getResource() : "")
+            .setArgSchema(h.getArgSchema() != null ? h.getArgSchema() : "[]")
+            .setEnabled(h.getEnabled() != null ? h.getEnabled() : false)
+            .build();
+    }
+
+    private Command toCommandProto(vn.gostock.auth.entity.Command c) {
+        return Command.newBuilder()
+            .setId(c.getId())
+            .setName(c.getName())
+            .setDescription(c.getDescription() != null ? c.getDescription() : "")
+            .setHandlerKey(c.getHandlerKey() != null ? c.getHandlerKey() : "")
+            .setArgs(c.getArgs() != null ? c.getArgs() : "{}")
+            .setEnabled(c.getEnabled() != null ? c.getEnabled() : false)
+            .setCreatedAt(c.getCreatedAt() != null ? c.getCreatedAt().toString() : "")
+            .setUpdatedAt(c.getUpdatedAt() != null ? c.getUpdatedAt().toString() : "")
+            .build();
+    }
+
+    private CommandGroupResponse toCommandGroupResponse(vn.gostock.auth.entity.CommandGroup g) {
+        return CommandGroupResponse.newBuilder()
+            .setId(g.getId())
+            .setName(g.getName())
+            .setDescription(g.getDescription() != null ? g.getDescription() : "")
+            .addAllCommandIds(g.getCommandIds())
             .setCreatedAt(g.getCreatedAt() != null ? g.getCreatedAt().toString() : "")
             .setUpdatedAt(g.getUpdatedAt() != null ? g.getUpdatedAt().toString() : "")
             .build();

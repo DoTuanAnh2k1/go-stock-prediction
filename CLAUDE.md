@@ -4,11 +4,12 @@
 
 Hệ thống dự đoán giá tài sản tài chính. Thu thập dữ liệu từ 4 nguồn (Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, S&P 500), chạy 11 thuật toán ML (Moving Average, EMA/MACD, LSTM PyTorch, GRU PyTorch, ARIMA-GARCH, EGARCH, SARIMA, LightGBM, XGBoost, Random Forest, Ensemble), và hiển thị kết quả qua web dashboard.
 
-**Kiến trúc hiện tại: microservice (3 service + supporting)**
-- **API Backend** (`api-svc/cmd`) — Go HTTP trên `:8118`, phục vụ toàn bộ `/api/*`. Là thin proxy cho auth: validate JWT locally (shared JWT_SECRET), forward tất cả auth/user/market-group calls sang Java Auth Service qua gRPC. Gọi Prediction Service qua gRPC để trigger crawler/training; đọc DB trực tiếp cho các query dữ liệu. Market endpoints yêu cầu `AuthRequired + MarketRequired("KEY")`; trigger endpoints yêu cầu `AdminRequired`.
-- **Auth Service** (`auth-svc/`) — **Java** Spring Boot 3, gRPC trên `:8120` (internal). Xử lý toàn bộ auth/RBAC: login, JWT generation (HMAC256), user CRUD, market groups, bcrypt, Flyway migrations (V1: tạo bảng auth + RBAC; V2: thêm profile fields `full_name`/`email`/`phone` vào bảng `users`). Seeds `chon/super_admin` on startup. Ba roles: `super_admin` (toàn quyền), `admin` (quản lý user và groups), `user` (chỉ access markets được gán).
+**Kiến trúc hiện tại: microservice (4 service + supporting)**
+- **API Backend** (`api-svc/cmd`) — Go HTTP trên `:8118`, phục vụ toàn bộ `/api/*`. Là thin proxy cho auth: validate JWT locally (shared JWT_SECRET), forward tất cả auth/user/market-group/command-rbac calls sang Java Auth Service qua gRPC. Gọi Prediction Service qua gRPC để trigger crawler/training; đọc DB trực tiếp cho các query dữ liệu. Market endpoints yêu cầu `AuthRequired + MarketRequired("KEY")`; trigger endpoints yêu cầu `AdminRequired`.
+- **Auth Service** (`auth-svc/`) — **Java** Spring Boot 3, gRPC trên `:8120` (internal). Xử lý toàn bộ auth/RBAC: login, JWT generation (HMAC256), user CRUD, market groups, command RBAC, bcrypt, Flyway migrations (V1: tạo bảng auth + RBAC; V2: thêm profile fields `full_name`/`email`/`phone` vào bảng `users`; V3: tạo bảng command RBAC). Seeds `chon/super_admin` on startup. Ba roles: `super_admin` (toàn quyền), `admin` (quản lý user và groups), `user` (chỉ access markets và commands được gán).
 - **Prediction Service** (`prediction-svc/`) — **Python** gRPC trên `:8119`. Xử lý crawling (Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, S&P 500), 11 thuật toán ML, training, APScheduler cron jobs.
-- **Gateway Service** (`gateway-svc/`) — **Rust** Axum gateway trên `:80` (HTTP) và `:443` (HTTPS/TLS). Longest-prefix routing: `/swagger` → block (404), `/api` → proxy `http://api-svc:8118`, `/health` → proxy `http://api-svc:8118`, `/` → proxy `http://web-svc:3000`. TLS termination với self-signed cert (tạo tự động qua `docker-entrypoint.sh` nếu chưa có). Nginx không còn là Docker service.
+- **Gateway Service** (`gateway-svc/`) — **Rust** Axum gateway trên `:80` (HTTP) và `:443` (HTTPS/TLS). Longest-prefix routing: `/swagger` → block (404), `/api` → proxy `http://api-svc:8118`, `/health` → proxy `http://api-svc:8118`, `/` → proxy `http://web-svc:3000`. TLS termination với self-signed cert (tạo tự động qua `docker-entrypoint.sh` nếu chưa có). Nginx không còn là Docker service. **Gateway chỉ xử lý HTTP/HTTPS** — cli-svc (SSH) expose trực tiếp, không đi qua gateway.
+- **CLI Service** (`cli-svc/`) — **Go** SSH server trên `:2345` (expose trực tiếp, không qua gateway). Dùng `charmbracelet/wish` (SSH server, đa phiên) + `bubbletea`/`bubbles`/`lipgloss` (TUI shell) + `go-pretty` (table render). SSH auth = tài khoản dashboard: password-callback → `POST /api/auth/login` qua gateway; thành công thì giữ JWT trong phiên. Gọi toàn bộ API qua gateway (`API_BASE_URL=http://gateway-svc/api`). Enforce Command RBAC client-side: sau login gọi `GET /api/me/commands` để build allowed-set; `super_admin`/`admin` bypass. Handler catalog (nguồn sự thật = cli-svc code) được upsert vào auth-svc khi boot qua `POST /api/command-handlers/upsert`.
 
 
 ## Lệnh thường dùng
@@ -199,11 +200,11 @@ prediction-svc/
 auth-svc/                               # Spring Boot 3 Java Auth Service — gRPC :8120 (internal)
 ├── deploy/auth-svc.Dockerfile          # Docker build cho Auth Service (Java 21)
 ├── src/main/java/
-│   └── ...                             # gRPC server (AuthGrpcServiceImpl), entities (User, MarketGroup, ...),
-│                                       # Flyway migrations (V1: tạo auth + RBAC tables; V2: thêm full_name/email/phone vào users),
-│                                       # SuperAdminSeeder (tạo chon/super_admin khi startup), MarketGroupService, AuthGrpcServiceImpl (17 RPCs)
+│   └── ...                             # gRPC server (AuthGrpcServiceImpl), entities (User, MarketGroup, CliHandler, Command, CommandGroup, ...),
+│                                       # Flyway migrations (V1: tạo auth + RBAC tables; V2: thêm full_name/email/phone vào users; V3: tạo command RBAC tables),
+│                                       # SuperAdminSeeder (tạo chon/super_admin khi startup), MarketGroupService, CommandService, AuthGrpcServiceImpl (17+ RPCs)
 └── src/main/resources/
-    └── db/migration/                   # Flyway SQL migrations: V1__create_auth_tables.sql, V2__add_user_profile_fields.sql
+    └── db/migration/                   # Flyway SQL migrations: V1__create_auth_tables.sql, V2__add_user_profile_fields.sql, V3__create_command_rbac.sql
 ```
 
 **Lưu ý:** Maven artifactId và Spring app name vẫn là `auth-service` (jar: `auth-service-*.jar`) — chỉ đường dẫn thư mục thay đổi thành `auth-svc/`.
@@ -239,6 +240,50 @@ gateway-svc/                            # Rust Axum HTTP/HTTPS Gateway — expos
         └── mod.rs                      # Shared types
 ```
 
+### CLI Service
+
+```
+cli-svc/
+├── README.md                    # Chức năng, command reference (get/set/update/delete), hướng dẫn SSH
+├── go.mod
+├── main.go                      # Khởi tạo wish.Server :2345 + middleware; gọi upsert handler catalog khi boot
+├── keys/                        # SSH host keys (bind-mount vào container)
+└── internal/
+    ├── server/                  # wish setup: password-auth callback (→ POST /api/auth/login), host key, boot handler-upsert
+    ├── shell/                   # bubbletea Model/phiên: model.go, update.go, view.go, completer.go; 1 Model/SSH session
+    ├── handlers/                # Handler catalog: registry + mỗi handler biết (gọi API nào + render bảng ra sao)
+    ├── client/                  # HTTP client → gateway (/api), gắn JWT từ ssh.Context
+    └── render/                  # go-pretty/lipgloss table helpers
+```
+
+**Handler catalog ban đầu** (mở rộng sau; verb: `get`→GET, `set`→POST, `update`→PUT, `delete`→DELETE):
+
+| handler_key | verb | API call | args |
+|---|---|---|---|
+| `market.latest` | get | GET /api/{market}/latest | market |
+| `market.prices` | get | GET /api/{market}/prices | market, limit |
+| `market.predictions` | get | GET /api/{market}/predictions/latest | market |
+| `direction.accuracy` | get | GET /api/predictions/direction-accuracy | market |
+| `monitoring.overview` | get | GET /api/monitoring/overview | — |
+| `schedules.list` | get | GET /api/schedules | — |
+| `pipeline.reports` | get | GET /api/pipeline-reports | pipeline, limit |
+| `training.status` | get | GET /api/training/status | — |
+| `users.list` | get | GET /api/users | — |
+| `backups.list` | get | GET /api/backups | — |
+| `trigger.train` | set | POST /api/trigger/train | algorithm? |
+| `trigger.crawler` | set | POST /api/trigger/{market}-crawler | market |
+| `trigger.predict` | set | POST /api/trigger/{market}-predict | market |
+| `trigger.reconcile` | set | POST /api/trigger/reconcile | — |
+| `trigger.backup` | set | POST /api/trigger/backup | — |
+| `schedule.update` | update | PUT /api/schedules/{key} | key, cron_expression, enabled |
+| `user.update` | update | PUT /api/users/{id} | id, role?, full_name?, email?, phone? |
+| `backup.delete` | delete | DELETE /api/backups/{filename} | filename |
+| `user.delete` | delete | DELETE /api/users/{id} | id |
+
+market ∈ {gold, nasdaq, crypto, sp500}.
+
+**Flow phiên SSH:** connect → password-auth gọi `POST /api/auth/login` → lưu `{jwt, role, user_id}` vào `ssh.Context` → bubbletea shell khởi tạo → gọi `GET /api/me/commands` → build allowed-set + tab-completer → user gõ command → resolve về (handler_key + args) → kiểm tra trong allowed-set (super_admin bypass) → chạy handler → render table → in vào viewport.
+
 ### Deploy folder
 
 ```
@@ -249,7 +294,8 @@ deploy/
 ├── auth-svc.Dockerfile          # Dockerfile cho Java Auth Service
 ├── prediction-svc.Dockerfile    # Dockerfile cho Python Prediction Service (build context = repo root)
 ├── web-svc.Dockerfile           # Dockerfile cho React Frontend
-└── gateway-svc.Dockerfile       # Dockerfile cho Rust Gateway
+├── gateway-svc.Dockerfile       # Dockerfile cho Rust Gateway
+└── cli-svc.Dockerfile           # Dockerfile cho Go CLI Service (multi-stage Go build)
 ```
 
 **Build context:** `prediction-svc.Dockerfile` dùng build context là thư mục gốc repo (cần copy cả `api-svc/proto` lẫn `prediction-svc/src`). Bốn Dockerfile còn lại dùng context của thư mục service tương ứng với `dockerfile=../deploy/<svc>.Dockerfile`.
@@ -327,6 +373,11 @@ DB_LOG_LEVEL=DEBUG
 
 # Backup
 BACKUP_DIR=/backups              # Thư mục lưu file backup pg_dump (chỉ mount vào container api-svc — prediction-svc không còn dùng)
+
+# CLI Service
+INTERNAL_SECRET=change-me-in-production  # Shared secret giữa cli-svc và api-svc cho endpoint /api/command-handlers/upsert; bắt buộc đổi trong production
+API_BASE_URL=http://gateway-svc/api      # URL gateway mà cli-svc dùng để gọi API (Docker: http://gateway-svc/api)
+SSH_LISTEN_ADDR=0.0.0.0:2345            # Địa chỉ cli-svc lắng nghe SSH
 ```
 
 ## Công cụ khám phá code (cho AI assistant)
@@ -348,10 +399,13 @@ BACKUP_DIR=/backups              # Thư mục lưu file backup pg_dump (chỉ mo
 - **Logging:** Go API Backend dùng `api-svc/pkg/logger` (zerolog). Python service dùng `structlog`.
 - **gRPC triggers:** Tất cả trigger handler trong `api-svc/pkg/server/api_trigger_*.go` đều gọi `requireGRPCClient(w)` trước. Hàm này trả về 503 nếu gRPC client chưa init. Tất cả trigger endpoints được wrap bằng `AdminRequired()` trong router — yêu cầu JWT với role `admin` hoặc `super_admin`.
 - **Dynamic cron schedules:** Lịch cron được lưu trong bảng `cron_schedules`. Python Prediction Service poll DB mỗi 60 giây để phát hiện thay đổi và tự reschedule qua APScheduler — không cần restart. Nguồn sự thật là `DEFAULT_SCHEDULES` trong `prediction-svc/src/scheduler/manager.py`; mỗi lần Python service khởi động, `upsert_cron_schedule()` chạy true upsert — ghi đè DB nếu giá trị code khác. Go `seedCronSchedules()` chỉ insert-if-not-exists (không update). Job `daily_backup` được seed và poll riêng bởi Go `backup_scheduler.go` (CronManager, insert-if-not-exists) — không có trong Python scheduler. Dùng `CronScheduleStore` interface (Go) để truy cập từ API Backend.
-- **Proto regeneration:** Khi thay đổi `api-svc/proto/prediction/prediction.proto`, cần tái sinh cả Go stubs (`protoc` chạy từ `api-svc/`) lẫn Python stubs (lệnh `grpc_tools.protoc` trong `deploy/prediction-svc.Dockerfile` stage 1). Không sửa tay các file generated.
+- **Proto regeneration:** Khi thay đổi `api-svc/proto/prediction/prediction.proto`, cần tái sinh cả Go stubs (`protoc` chạy từ `api-svc/`) lẫn Python stubs (lệnh `grpc_tools.protoc` trong `deploy/prediction-svc.Dockerfile` stage 1). Không sửa tay các file generated. Khi thay đổi `auth.proto`, phải cập nhật CẢ HAI bản (`api-svc/proto/auth/` và `auth-svc/src/main/proto/`) — xem convention `auth.proto hai bản` ở trên.
 - **Data ordering — QUAN TRỌNG:** DB trả `stock_prices` với `ORDER BY trading_date DESC` (mới nhất trước). Python algorithms cần đảo ngược về ASC trước khi build feature sequences. Repository (Python) trả DESC — tầng algorithm tự xử lý (tương tự pattern Go cũ với `reverseStockPrices()`).
 - **JWT middleware — non-blocking:** `JWTMiddleware` trong `api-svc/pkg/server/middleware_jwt.go` nằm trong middleware chain `CORS → RateLimit → JWT → mux`. Middleware này chỉ inject claims vào context nếu token hợp lệ — request không có token vẫn tiếp tục (unauthenticated). Các handler bảo vệ dùng `requireAuth(w, r)` hoặc `requireAdmin(w, r)` để enforce.
-- **Java Auth Service — nguồn sự thật RBAC:** Java Auth Service (`auth-svc/`) sở hữu toàn bộ auth logic và user table. Flyway quản lý schema qua 2 migrations: V1 tạo bảng `users`, `market_groups`, `market_group_markets`, `user_market_groups`; V2 thêm cột `full_name VARCHAR(100)`, `email VARCHAR(255)`, `phone VARCHAR(30)` (nullable) vào bảng `users`. Go API Backend chỉ là thin proxy — forward auth/user/market-group requests sang Java qua gRPC, validate JWT locally bằng shared `JWT_SECRET`.
+- **Java Auth Service — nguồn sự thật RBAC:** Java Auth Service (`auth-svc/`) sở hữu toàn bộ auth logic và user table. Flyway quản lý schema qua 3 migrations: V1 tạo bảng `users`, `market_groups`, `market_group_markets`, `user_market_groups`; V2 thêm cột `full_name VARCHAR(100)`, `email VARCHAR(255)`, `phone VARCHAR(30)` (nullable) vào bảng `users`; V3 tạo 5 bảng command RBAC (`cli_handlers`, `commands`, `command_groups`, `command_group_commands`, `user_command_groups`). Go API Backend chỉ là thin proxy — forward auth/user/market-group/command-rbac requests sang Java qua gRPC, validate JWT locally bằng shared `JWT_SECRET`.
+- **Command RBAC — mirrors market-group RBAC:** Hệ thống phân quyền command dùng cùng pattern với market groups: admin tạo commands (từ handler catalog), gom vào command_groups, gán users vào groups. `allowed-commands(user)` = UNION qua mọi command_group user thuộc, lọc `enabled=true` (cả command lẫn handler). `super_admin` và `admin` bypass — có toàn bộ commands. User không group → catalog rỗng khi SSH vào cli-svc.
+- **Handler catalog — nguồn sự thật = cli-svc code:** Danh sách handlers được định nghĩa trong `cli-svc/internal/handlers/` (registry). Mỗi lần cli-svc khởi động, gọi `POST /api/command-handlers/upsert` (bảo vệ bằng header `X-Internal-Secret`) để upsert catalog vào auth-svc — tương tự pattern `DEFAULT_SCHEDULES` của Python scheduler. Admin chỉ tạo commands từ các handler có sẵn trong catalog; không tạo handler mới qua UI.
+- **`auth.proto` hai bản:** File proto auth tồn tại ở `api-svc/proto/auth/auth.proto` (Go) và `auth-svc/src/main/proto/auth.proto` (Java). Khi thêm RPC mới, phải cập nhật CẢ HAI và tái sinh stubs tương ứng. Go: `cd api-svc && protoc ... proto/auth/auth.proto`. Java: Maven protobuf plugin tự sinh khi build.
 - **Super Admin seeder:** Java Auth Service seeds `chon/super_admin` khi startup (SuperAdminSeeder) nếu chưa tồn tại. Go API Backend không còn seed admin user.
 - **Ba roles RBAC:** `super_admin` — toàn quyền, access tất cả 4 markets, không bị admin quản lý; `admin` — quản lý users và market groups, access markets theo groups của họ; `user` — chỉ access markets được gán qua market groups.
 - **JWT claims `accessible_markets`:** JWT do Java Auth Service cấp chứa claim `accessible_markets: string[]` (ví dụ: `["GOLD","NASDAQ"]`). Go API Backend đọc claim này trong `MarketRequired("KEY")` middleware để enforce market-level access control. `super_admin` luôn có access tất cả markets.
@@ -421,7 +475,8 @@ Các bước bắt buộc:
 - **Tables chính:** `sync_logs`, `gold_prices`, `gold_predictions`, `nasdaq_prices`, `nasdaq_predictions`, `sp500_prices`, `sp500_predictions`, `crypto_prices`, `crypto_predictions`, `training_logs`, `training_metrics`, `users`, `cron_schedules`, `market_groups`, `market_group_markets`, `user_market_groups`, `pipeline_reports`
 - **`pipeline_reports` (KHÔNG phải hypertable):** Lưu báo cáo mỗi lần pipeline chạy. Cột: `id` BIGSERIAL PK, `pipeline_key` (crawler_gold/crawler_nasdaq/crawler_sp500/crawler_crypto), `market`, `status` (success/partial/failed/skipped), `started_at`, `finished_at`, `duration_ms` BIGINT, `crawled_count` INT, `predictions_count` INT, `trained` BOOLEAN, `steps` JSONB array `[{label, status, detail}]`, `error` TEXT nullable, `created_at` TIMESTAMP. Retention: sau mỗi lần ghi, pipeline gọi `delete_old_pipeline_reports(7)` trong `repository.py` để xóa row cũ hơn 7 ngày. Schema khai báo trong `database.sql`.
 - **Hypertables (TimescaleDB):** `gold_prices`, `nasdaq_prices`, `sp500_prices`, `crypto_prices`, `*_intraday_prices` (theo time column), `gold_predictions`, `nasdaq_predictions`, `sp500_predictions`, `crypto_predictions` (theo `prediction_date`), `sim_trades` (theo `trade_date`), `sim_portfolio_snapshots` (theo `snapshot_date`), `sync_logs`, `training_logs` (theo `created_at`). Tất cả hypertable có **composite PK** (id + time column).
-- **RBAC tables:** `market_groups`, `market_group_markets`, `user_market_groups` — quản lý bởi Java Auth Service qua Flyway (không trong GORM auto-migrate). Bảng `users` có thêm cột nullable `full_name`, `email`, `phone` (thêm qua Flyway V2). Auth Service dùng dependency `flyway-database-postgresql` (Flyway 10.x) để nhận diện PG16.
+- **RBAC tables (market):** `market_groups`, `market_group_markets`, `user_market_groups` — quản lý bởi Java Auth Service qua Flyway (không trong GORM auto-migrate). Bảng `users` có thêm cột nullable `full_name`, `email`, `phone` (thêm qua Flyway V2). Auth Service dùng dependency `flyway-database-postgresql` (Flyway 10.x) để nhận diện PG16.
+- **RBAC tables (command) — Flyway V3:** `cli_handlers` (handler_key PK, display_name, verb, resource, arg_schema JSONB, enabled), `commands` (id BIGSERIAL PK, name UNIQUE, description, handler_key FK, args JSONB, enabled, created_at, updated_at), `command_groups` (id BIGSERIAL PK, name UNIQUE, description), `command_group_commands` (group_id + command_id composite PK), `user_command_groups` (user_id + group_id composite PK). Tất cả quản lý bởi Java Auth Service qua Flyway V3 — không trong GORM. Semantics: `allowed-commands(user)` = UNION qua mọi command_group user thuộc + `enabled=true` (command + handler). `super_admin` và `admin` có toàn bộ commands; `user` không group → catalog rỗng.
 - **Schema đầy đủ:** `database.sql` ở root (PostgreSQL syntax: BIGSERIAL, NUMERIC, TIMESTAMP, NOW())
 - **ORM column convention:** Cột volume của `crypto_prices` là `volume24h` (Go GORM field `Volume24h`, Python ORM `volume24h`).
 - **direction_correct (nullable boolean):** Có mặt trong tất cả 4 prediction tables. Được set bởi `reconcile_predictions()` trong Python; `NULL` = chưa reconcile, `1` = hướng đúng, `0` = hướng sai. Dùng cho endpoint `/api/predictions/direction-accuracy`.
@@ -479,6 +534,7 @@ Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`
 | TimescaleDB (PostgreSQL) | 5432 | TCP | Docker internal (container `timescaledb`) |
 | pgAdmin | 8081 | HTTP | Docker (bind 127.0.0.1) |
 | Frontend | 3000 | HTTP | Internal only — static nginx serving React SPA (qua gateway) |
+| CLI Service | 2345 | SSH | Expose trực tiếp (không qua gateway) — interactive shell, render table, RBAC theo command |
 
 ## Docker Compose Services
 
@@ -492,6 +548,7 @@ Compose file: `deploy/docker-compose.yaml` — chạy từ root repo với `dock
 | `api-svc` | `deploy/api-svc.Dockerfile` | `db` (healthy), `prediction-svc`, `auth-svc` | Go API Backend — HTTP :8118 (internal); mount volume `backup_data:/backups`; chạy scheduled backup pg_dump (`backup_scheduler.go`); image cài `postgresql-client` |
 | `gateway-svc` | `deploy/gateway-svc.Dockerfile` | `api-svc`, `web-svc` | **Rust** Axum gateway — expose :80/:443; TLS termination; route `/api` → api-svc:8118, `/` → web-svc:3000; bind-mount `./gateway-svc/certs:/etc/gateway/certs` |
 | `web-svc` | `deploy/web-svc.Dockerfile` | `api-svc` | React SPA — static nginx internal port 3000 (không expose trực tiếp — qua gateway) |
+| `cli-svc` | `deploy/cli-svc.Dockerfile` | `gateway-svc` | **Go** SSH CLI Service — expose :2345 (trực tiếp, không qua gateway); env `API_BASE_URL`, `SSH_LISTEN_ADDR`, `INTERNAL_SECRET`; bind-mount `../cli-svc/keys` (SSH host keys) |
 | `pgadmin` | `dpage/pgadmin4:latest` | `db` | Admin UI — expose 127.0.0.1:8081 (thay phpMyAdmin) |
 
 ## API Endpoints
@@ -527,6 +584,28 @@ Compose file: `deploy/docker-compose.yaml` — chạy từ root repo với `dock
 | `GET` | `/api/market-groups/{id}/users` | Danh sách users trong group — yêu cầu admin JWT |
 | `POST` | `/api/market-groups/{id}/users` | Thêm user vào group — yêu cầu admin JWT; body: `{"user_id":123}` |
 | `DELETE` | `/api/market-groups/{id}/users/{uid}` | Xóa user khỏi group — yêu cầu admin JWT |
+
+### Command RBAC
+
+Tất cả endpoints proxy sang Java Auth Service qua gRPC (mirror pattern `api_market_groups.go`). Endpoints ghi yêu cầu admin JWT; endpoints đọc yêu cầu JWT thông thường.
+
+| Method | Path | Ghi chú |
+|--------|------|---------|
+| `GET` | `/api/command-handlers` | Danh sách handler catalog — yêu cầu admin JWT; trả danh sách `cli_handlers` (handler_key, display_name, verb, resource, arg_schema) |
+| `POST` | `/api/command-handlers/upsert` | Upsert handler catalog từ cli-svc khi boot — **internal**, không cần JWT, bảo vệ bằng header `X-Internal-Secret: <INTERNAL_SECRET>`; cli-svc gọi endpoint này ngay khi khởi động |
+| `GET` | `/api/commands` | Danh sách tất cả commands — yêu cầu admin JWT |
+| `POST` | `/api/commands` | Tạo command mới — yêu cầu admin JWT; body: `{"name":"...","description":"...","handler_key":"...","args":{...},"enabled":true}` |
+| `PUT` | `/api/commands/{id}` | Cập nhật command — yêu cầu admin JWT |
+| `DELETE` | `/api/commands/{id}` | Xóa command — yêu cầu admin JWT |
+| `GET` | `/api/command-groups` | Danh sách tất cả command groups — yêu cầu admin JWT |
+| `POST` | `/api/command-groups` | Tạo command group mới — yêu cầu admin JWT; body: `{"name":"...","description":"..."}` |
+| `PUT` | `/api/command-groups/{id}` | Cập nhật command group — yêu cầu admin JWT |
+| `DELETE` | `/api/command-groups/{id}` | Xóa command group — yêu cầu admin JWT |
+| `PUT` | `/api/command-groups/{id}/commands` | Set danh sách commands trong group — yêu cầu admin JWT; body: `{"command_ids":[1,2,3]}` |
+| `GET` | `/api/command-groups/{id}/users` | Danh sách users trong command group — yêu cầu admin JWT |
+| `POST` | `/api/command-groups/{id}/users` | Thêm user vào command group — yêu cầu admin JWT; body: `{"user_id":123}` |
+| `DELETE` | `/api/command-groups/{id}/users/{uid}` | Xóa user khỏi command group — yêu cầu admin JWT |
+| `GET` | `/api/me/commands` | Danh sách commands user hiện tại được phép chạy — yêu cầu JWT (AuthRequired); cli-svc gọi sau login để build allowed-set |
 
 ### Predictions
 
@@ -714,6 +793,8 @@ curl -X PUT http://localhost:8118/api/schedules/crawler_gold \
 
 ## gRPC Service Contract
 
+### Prediction Service (prediction.proto)
+
 Định nghĩa trong `api-svc/proto/prediction/prediction.proto`. Prediction Service implement tất cả RPC; API Backend gọi chúng qua gRPC client.
 
 | RPC | Request | Response | Ghi chú |
@@ -734,6 +815,32 @@ curl -X PUT http://localhost:8118/api/schedules/crawler_gold \
 | `TriggerSimulationLiveStep` | `Empty` | `TriggerResponse` | Chạy một bước live simulation |
 | `ResetSimBots` | `Empty` | `TriggerResponse` | Đóng live sessions cũ, tạo fresh live session cho tất cả active bots |
 | `GetTrainingStatus` | `Empty` | `TrainingStatusResponse` | Trạng thái training: `is_training`, `progress`, `phase`, `total/done algorithms` |
+
+### Auth Service — Command RBAC RPCs (auth.proto)
+
+**Lưu ý quan trọng:** `auth.proto` tồn tại ở HAI nơi và phải luôn giữ đồng bộ:
+- `api-svc/proto/auth/auth.proto` — Go stubs (tái sinh bằng `protoc` chạy từ `api-svc/`)
+- `auth-svc/src/main/proto/auth.proto` — Java stubs (tái sinh bằng Maven protobuf plugin)
+
+Các RPCs sau được thêm vào `service AuthService` trong auth.proto cho Command RBAC:
+
+| RPC | Ghi chú |
+|-----|---------|
+| `UpsertHandlers(UpsertHandlersRequest)` | Upsert handler catalog từ cli-svc khi boot; api-svc nhận HTTP `POST /api/command-handlers/upsert` → forward gRPC |
+| `ListHandlers(CallerMeta)` | Danh sách handler catalog; dùng khi admin tạo command |
+| `ListCommands(CallerMeta)` | Danh sách tất cả commands |
+| `CreateCommand(CreateCommandRequest)` | Tạo command mới |
+| `UpdateCommand(UpdateCommandRequest)` | Cập nhật command |
+| `DeleteCommand(DeleteCommandRequest)` | Xóa command |
+| `ListCommandGroups(CallerMeta)` | Danh sách command groups |
+| `CreateCommandGroup(CreateCmdGroupRequest)` | Tạo command group |
+| `UpdateCommandGroup(UpdateCmdGroupRequest)` | Cập nhật command group |
+| `DeleteCommandGroup(DeleteCmdGroupRequest)` | Xóa command group |
+| `SetGroupCommands(SetGroupCommandsRequest)` | Set danh sách commands trong group |
+| `ListCmdGroupUsers(CmdGroupRequest)` | Danh sách users trong command group |
+| `AddUserToCmdGroup(UserCmdGroupRequest)` | Thêm user vào command group |
+| `RemoveUserFromCmdGroup(UserCmdGroupRequest)` | Xóa user khỏi command group |
+| `GetUserCommands(UserRequest)` | Commands user được phép chạy (union qua groups, lọc enabled) — cli-svc gọi sau login |
 
 ## Test
 

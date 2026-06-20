@@ -17,13 +17,14 @@ type GRPCConfig struct {
 }
 
 type ServerConfig struct {
-	ServerName    string
-	Host          string
-	Port          string
-	APIKey        string
-	AdminUsername string
-	AdminPassword string
-	JWTSecret     string
+	ServerName     string
+	Host           string
+	Port           string
+	APIKey         string
+	AdminUsername  string
+	AdminPassword  string
+	JWTSecret      string
+	InternalSecret string
 }
 
 type LogConfig struct {

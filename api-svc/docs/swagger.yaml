@@ -79,6 +79,10 @@ definitions:
     type: object
   go-stock-prediction_pkg_models_models_api.SessionStatsResponse:
     properties:
+      available:
+        items:
+          $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.SessionWindow'
+        type: array
       bot_trades:
         items:
           $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.SessionBotDetail'
@@ -89,6 +93,8 @@ definitions:
         type: array
       market:
         type: string
+      period:
+        type: string
       session:
         $ref: '#/definitions/go-stock-prediction_pkg_models_models_api.SessionWindow'
     type: object
@@ -98,6 +104,8 @@ definitions:
         type: string
       is_open:
         type: boolean
+      offset:
+        type: integer
       start:
         type: string
     type: object
@@ -337,6 +345,59 @@ definitions:
       current_password:
         type: string
       new_password:
+        type: string
+    type: object
+  pkg_server.commandDTO:
+    properties:
+      args:
+        items:
+          type: integer
+        type: array
+      created_at:
+        type: string
+      description:
+        type: string
+      enabled:
+        type: boolean
+      handler_key:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  pkg_server.commandGroupDTO:
+    properties:
+      command_ids:
+        items:
+          type: integer
+        type: array
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  pkg_server.createCommandRequest:
+    properties:
+      args:
+        items:
+          type: integer
+        type: array
+      description:
+        type: string
+      enabled:
+        type: boolean
+      handler_key:
+        type: string
+      name:
         type: string
     type: object
   pkg_server.createGroupRequest:
@@ -632,6 +693,23 @@ definitions:
       source:
         type: string
     type: object
+  pkg_server.handlerDTO:
+    properties:
+      arg_schema:
+        items:
+          type: integer
+        type: array
+      display_name:
+        type: string
+      enabled:
+        type: boolean
+      handler_key:
+        type: string
+      resource:
+        type: string
+      verb:
+        type: string
+    type: object
   pkg_server.leaderboardEntry:
     properties:
       algorithm:
@@ -640,6 +718,8 @@ definitions:
         type: number
       bot_id:
         type: string
+      buy_threshold:
+        type: number
       currency:
         type: string
       display_name:
@@ -654,14 +734,22 @@ definitions:
         type: string
       max_drawdown_pct:
         type: number
+      min_confidence:
+        type: number
       profit_factor:
         type: number
       rank:
         type: integer
+      sell_threshold:
+        type: number
       sharpe_ratio:
         type: number
       simulation_period:
         $ref: '#/definitions/pkg_server.simPeriod'
+      stop_loss:
+        type: number
+      take_profit:
+        type: number
       total_return_pct:
         type: number
       total_trades:
@@ -996,6 +1084,46 @@ definitions:
       symbol:
         type: string
     type: object
+  pkg_server.pipelineReportItem:
+    properties:
+      crawled_count:
+        type: integer
+      duration_ms:
+        type: integer
+      error:
+        type: string
+      finished_at:
+        type: string
+      id:
+        type: integer
+      market:
+        type: string
+      pipeline_key:
+        type: string
+      predictions_count:
+        type: integer
+      started_at:
+        type: string
+      status:
+        type: string
+      steps:
+        items:
+          type: integer
+        type: array
+      trained:
+        type: boolean
+    type: object
+  pkg_server.pipelineReportsResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/pkg_server.pipelineReportItem'
+        type: array
+      pipelines:
+        items:
+          type: string
+        type: array
+    type: object
   pkg_server.resetPasswordRequest:
     properties:
       new_password:
@@ -1013,6 +1141,13 @@ definitions:
         type: string
       updated_at:
         type: string
+    type: object
+  pkg_server.setGroupCommandsRequest:
+    properties:
+      command_ids:
+        items:
+          type: integer
+        type: array
     type: object
   pkg_server.setGroupMarketsRequest:
     properties:
@@ -1398,6 +1533,30 @@ definitions:
       role:
         type: string
     type: object
+  pkg_server.upsertHandlersRequest:
+    properties:
+      handlers:
+        items:
+          properties:
+            arg_schema:
+              items:
+                type: integer
+              type: array
+            display_name:
+              type: string
+            enabled:
+              type: boolean
+            handler_key:
+              type: string
+            resource:
+              type: string
+            verb:
+              type: string
+          type: object
+        type: array
+      secret:
+        type: string
+    type: object
   pkg_server.userInfo:
     properties:
       role:
@@ -1597,6 +1756,333 @@ paths:
       summary: Download a backup file
       tags:
       - Backup
+  /api/command-groups:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/pkg_server.commandGroupDTO'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List command groups
+      tags:
+      - CommandGroups
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Group details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/pkg_server.createGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/pkg_server.commandGroupDTO'
+      security:
+      - BearerAuth: []
+      summary: Create command group
+      tags:
+      - CommandGroups
+  /api/command-groups/{id}:
+    delete:
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete command group
+      tags:
+      - CommandGroups
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: New name/description
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/pkg_server.createGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/pkg_server.commandGroupDTO'
+      security:
+      - BearerAuth: []
+      summary: Update command group
+      tags:
+      - CommandGroups
+  /api/command-groups/{id}/commands:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Command IDs
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/pkg_server.setGroupCommandsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Set commands for a group (replaces existing)
+      tags:
+      - CommandGroups
+  /api/command-groups/{id}/users:
+    get:
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/go-stock-prediction_proto_auth.UserResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List users in a command group
+      tags:
+      - CommandGroups
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: User ID
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/pkg_server.addUserToGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add user to command group
+      tags:
+      - CommandGroups
+  /api/command-groups/{id}/users/{uid}:
+    delete:
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: User ID
+        in: path
+        name: uid
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Remove user from command group
+      tags:
+      - CommandGroups
+  /api/command-handlers:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/pkg_server.handlerDTO'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List CLI handler catalog
+      tags:
+      - Commands
+  /api/command-handlers/upsert:
+    post:
+      consumes:
+      - application/json
+      description: Internal endpoint used by cli-svc to push its handler catalog.
+        No JWT — protected by a shared secret in the request body (config INTERNAL_SECRET).
+      parameters:
+      - description: Handler catalog + shared secret
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/pkg_server.upsertHandlersRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+      summary: Upsert CLI handler catalog (internal)
+      tags:
+      - Commands
+  /api/commands:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/pkg_server.commandDTO'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List commands
+      tags:
+      - Commands
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Command details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/pkg_server.createCommandRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/pkg_server.commandDTO'
+      security:
+      - BearerAuth: []
+      summary: Create command
+      tags:
+      - Commands
+  /api/commands/{id}:
+    delete:
+      parameters:
+      - description: Command ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete command
+      tags:
+      - Commands
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Command ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Command details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/pkg_server.createCommandRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/pkg_server.commandDTO'
+      security:
+      - BearerAuth: []
+      summary: Update command
+      tags:
+      - Commands
   /api/crypto/chart:
     get:
       description: Returns chronologically ordered date labels and closing prices
@@ -2252,6 +2738,14 @@ paths:
         name: key
         required: true
         type: string
+      - description: session (mặc định) hoặc week
+        in: query
+        name: period
+        type: string
+      - description: 0 = phiên/tuần hiện tại, 1 = liền trước, ... (max 52)
+        in: query
+        name: offset
+        type: integer
       produces:
       - application/json
       responses:
@@ -2319,6 +2813,24 @@ paths:
       summary: List training sessions for a market
       tags:
       - Markets
+  /api/me/commands:
+    get:
+      description: Returns the commands allowed for the authenticated caller (union
+        over their command groups; super_admin/admin get all enabled commands).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/pkg_server.commandDTO'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List commands the current user may run
+      tags:
+      - Commands
   /api/monitoring/overview:
     get:
       description: Returns a single aggregated view of crawl freshness, prediction
@@ -2530,6 +3042,40 @@ paths:
       summary: Get historical NASDAQ prices
       tags:
       - NASDAQ
+  /api/pipeline-reports:
+    get:
+      description: Returns a list of pipeline execution reports, optionally filtered
+        by pipeline key. Each report includes per-step detail, status, counts, and
+        duration. Requires JWT authentication.
+      parameters:
+      - description: Filter by pipeline key (e.g. crawler_gold)
+        in: query
+        name: pipeline
+        type: string
+      - description: Max rows to return (default 50, max 200)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/pkg_server.pipelineReportsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Get pipeline reports
+      tags:
+      - Settings
   /api/pipeline/stream:
     get:
       description: Opens a Server-Sent Events connection and streams per-symbol/algo
@@ -2905,6 +3451,10 @@ paths:
         in: query
         name: limit
         type: integer
+      - description: Exclude HOLD rows (only BUY/SELL) — affects total & pagination
+        in: query
+        name: exclude_hold
+        type: boolean
       produces:
       - application/json
       responses:
@@ -3335,7 +3885,7 @@ paths:
       - Training
   /api/trigger/backup:
     post:
-      description: Runs mysqldump, compresses the output with gzip, and saves it to
+      description: Runs pg_dump, compresses the output with gzip, and saves it to
         the backup directory. Keeps only the 10 most recent backups. Requires admin
         role.
       produces:

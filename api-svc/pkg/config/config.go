@@ -13,6 +13,9 @@ func Get() *models_config.Config {
 }
 
 func GetServerConfig() models_config.ServerConfig {
+	if config == nil {
+		return models_config.ServerConfig{}
+	}
 	return config.Svr
 }
 

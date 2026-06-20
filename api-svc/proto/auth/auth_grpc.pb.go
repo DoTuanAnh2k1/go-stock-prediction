@@ -19,24 +19,39 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AuthService_Login_FullMethodName               = "/auth.AuthService/Login"
-	AuthService_GetMe_FullMethodName               = "/auth.AuthService/GetMe"
-	AuthService_ChangePassword_FullMethodName      = "/auth.AuthService/ChangePassword"
-	AuthService_ListUsers_FullMethodName           = "/auth.AuthService/ListUsers"
-	AuthService_CreateUser_FullMethodName          = "/auth.AuthService/CreateUser"
-	AuthService_DeleteUser_FullMethodName          = "/auth.AuthService/DeleteUser"
-	AuthService_UpdateUserRole_FullMethodName      = "/auth.AuthService/UpdateUserRole"
-	AuthService_UpdateUser_FullMethodName          = "/auth.AuthService/UpdateUser"
-	AuthService_ResetPassword_FullMethodName       = "/auth.AuthService/ResetPassword"
-	AuthService_ListMarketGroups_FullMethodName    = "/auth.AuthService/ListMarketGroups"
-	AuthService_CreateMarketGroup_FullMethodName   = "/auth.AuthService/CreateMarketGroup"
-	AuthService_UpdateMarketGroup_FullMethodName   = "/auth.AuthService/UpdateMarketGroup"
-	AuthService_DeleteMarketGroup_FullMethodName   = "/auth.AuthService/DeleteMarketGroup"
-	AuthService_SetGroupMarkets_FullMethodName     = "/auth.AuthService/SetGroupMarkets"
-	AuthService_ListGroupUsers_FullMethodName      = "/auth.AuthService/ListGroupUsers"
-	AuthService_AddUserToGroup_FullMethodName      = "/auth.AuthService/AddUserToGroup"
-	AuthService_RemoveUserFromGroup_FullMethodName = "/auth.AuthService/RemoveUserFromGroup"
-	AuthService_GetUserMarketGroups_FullMethodName = "/auth.AuthService/GetUserMarketGroups"
+	AuthService_Login_FullMethodName                  = "/auth.AuthService/Login"
+	AuthService_GetMe_FullMethodName                  = "/auth.AuthService/GetMe"
+	AuthService_ChangePassword_FullMethodName         = "/auth.AuthService/ChangePassword"
+	AuthService_ListUsers_FullMethodName              = "/auth.AuthService/ListUsers"
+	AuthService_CreateUser_FullMethodName             = "/auth.AuthService/CreateUser"
+	AuthService_DeleteUser_FullMethodName             = "/auth.AuthService/DeleteUser"
+	AuthService_UpdateUserRole_FullMethodName         = "/auth.AuthService/UpdateUserRole"
+	AuthService_UpdateUser_FullMethodName             = "/auth.AuthService/UpdateUser"
+	AuthService_ResetPassword_FullMethodName          = "/auth.AuthService/ResetPassword"
+	AuthService_ListMarketGroups_FullMethodName       = "/auth.AuthService/ListMarketGroups"
+	AuthService_CreateMarketGroup_FullMethodName      = "/auth.AuthService/CreateMarketGroup"
+	AuthService_UpdateMarketGroup_FullMethodName      = "/auth.AuthService/UpdateMarketGroup"
+	AuthService_DeleteMarketGroup_FullMethodName      = "/auth.AuthService/DeleteMarketGroup"
+	AuthService_SetGroupMarkets_FullMethodName        = "/auth.AuthService/SetGroupMarkets"
+	AuthService_ListGroupUsers_FullMethodName         = "/auth.AuthService/ListGroupUsers"
+	AuthService_AddUserToGroup_FullMethodName         = "/auth.AuthService/AddUserToGroup"
+	AuthService_RemoveUserFromGroup_FullMethodName    = "/auth.AuthService/RemoveUserFromGroup"
+	AuthService_GetUserMarketGroups_FullMethodName    = "/auth.AuthService/GetUserMarketGroups"
+	AuthService_UpsertHandlers_FullMethodName         = "/auth.AuthService/UpsertHandlers"
+	AuthService_ListHandlers_FullMethodName           = "/auth.AuthService/ListHandlers"
+	AuthService_ListCommands_FullMethodName           = "/auth.AuthService/ListCommands"
+	AuthService_CreateCommand_FullMethodName          = "/auth.AuthService/CreateCommand"
+	AuthService_UpdateCommand_FullMethodName          = "/auth.AuthService/UpdateCommand"
+	AuthService_DeleteCommand_FullMethodName          = "/auth.AuthService/DeleteCommand"
+	AuthService_ListCommandGroups_FullMethodName      = "/auth.AuthService/ListCommandGroups"
+	AuthService_CreateCommandGroup_FullMethodName     = "/auth.AuthService/CreateCommandGroup"
+	AuthService_UpdateCommandGroup_FullMethodName     = "/auth.AuthService/UpdateCommandGroup"
+	AuthService_DeleteCommandGroup_FullMethodName     = "/auth.AuthService/DeleteCommandGroup"
+	AuthService_SetGroupCommands_FullMethodName       = "/auth.AuthService/SetGroupCommands"
+	AuthService_ListCmdGroupUsers_FullMethodName      = "/auth.AuthService/ListCmdGroupUsers"
+	AuthService_AddUserToCmdGroup_FullMethodName      = "/auth.AuthService/AddUserToCmdGroup"
+	AuthService_RemoveUserFromCmdGroup_FullMethodName = "/auth.AuthService/RemoveUserFromCmdGroup"
+	AuthService_GetUserCommands_FullMethodName        = "/auth.AuthService/GetUserCommands"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -64,6 +79,25 @@ type AuthServiceClient interface {
 	AddUserToGroup(ctx context.Context, in *UserGroupRequest, opts ...grpc.CallOption) (*Empty, error)
 	RemoveUserFromGroup(ctx context.Context, in *UserGroupRequest, opts ...grpc.CallOption) (*Empty, error)
 	GetUserMarketGroups(ctx context.Context, in *UserRequest, opts ...grpc.CallOption) (*ListGroupsResponse, error)
+	// Command RBAC — handler catalog (source of truth = cli-svc, upserted on boot)
+	UpsertHandlers(ctx context.Context, in *UpsertHandlersRequest, opts ...grpc.CallOption) (*Empty, error)
+	ListHandlers(ctx context.Context, in *CallerMeta, opts ...grpc.CallOption) (*ListHandlersResponse, error)
+	// Command RBAC — commands
+	ListCommands(ctx context.Context, in *CallerMeta, opts ...grpc.CallOption) (*ListCommandsResponse, error)
+	CreateCommand(ctx context.Context, in *CreateCommandRequest, opts ...grpc.CallOption) (*CommandResponse, error)
+	UpdateCommand(ctx context.Context, in *UpdateCommandRequest, opts ...grpc.CallOption) (*CommandResponse, error)
+	DeleteCommand(ctx context.Context, in *DeleteCommandRequest, opts ...grpc.CallOption) (*Empty, error)
+	// Command RBAC — command groups (mirror market groups)
+	ListCommandGroups(ctx context.Context, in *CallerMeta, opts ...grpc.CallOption) (*ListCommandGroupsResponse, error)
+	CreateCommandGroup(ctx context.Context, in *CreateCmdGroupRequest, opts ...grpc.CallOption) (*CommandGroupResponse, error)
+	UpdateCommandGroup(ctx context.Context, in *UpdateCmdGroupRequest, opts ...grpc.CallOption) (*CommandGroupResponse, error)
+	DeleteCommandGroup(ctx context.Context, in *DeleteCmdGroupRequest, opts ...grpc.CallOption) (*Empty, error)
+	SetGroupCommands(ctx context.Context, in *SetGroupCommandsRequest, opts ...grpc.CallOption) (*Empty, error)
+	ListCmdGroupUsers(ctx context.Context, in *CmdGroupRequest, opts ...grpc.CallOption) (*ListUsersResponse, error)
+	AddUserToCmdGroup(ctx context.Context, in *UserCmdGroupRequest, opts ...grpc.CallOption) (*Empty, error)
+	RemoveUserFromCmdGroup(ctx context.Context, in *UserCmdGroupRequest, opts ...grpc.CallOption) (*Empty, error)
+	// Command RBAC — enforcement: commands a user is allowed to execute
+	GetUserCommands(ctx context.Context, in *UserRequest, opts ...grpc.CallOption) (*ListCommandsResponse, error)
 }
 
 type authServiceClient struct {
@@ -254,6 +288,156 @@ func (c *authServiceClient) GetUserMarketGroups(ctx context.Context, in *UserReq
 	return out, nil
 }
 
+func (c *authServiceClient) UpsertHandlers(ctx context.Context, in *UpsertHandlersRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, AuthService_UpsertHandlers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) ListHandlers(ctx context.Context, in *CallerMeta, opts ...grpc.CallOption) (*ListHandlersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListHandlersResponse)
+	err := c.cc.Invoke(ctx, AuthService_ListHandlers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) ListCommands(ctx context.Context, in *CallerMeta, opts ...grpc.CallOption) (*ListCommandsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListCommandsResponse)
+	err := c.cc.Invoke(ctx, AuthService_ListCommands_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) CreateCommand(ctx context.Context, in *CreateCommandRequest, opts ...grpc.CallOption) (*CommandResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommandResponse)
+	err := c.cc.Invoke(ctx, AuthService_CreateCommand_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) UpdateCommand(ctx context.Context, in *UpdateCommandRequest, opts ...grpc.CallOption) (*CommandResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommandResponse)
+	err := c.cc.Invoke(ctx, AuthService_UpdateCommand_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) DeleteCommand(ctx context.Context, in *DeleteCommandRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, AuthService_DeleteCommand_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) ListCommandGroups(ctx context.Context, in *CallerMeta, opts ...grpc.CallOption) (*ListCommandGroupsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListCommandGroupsResponse)
+	err := c.cc.Invoke(ctx, AuthService_ListCommandGroups_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) CreateCommandGroup(ctx context.Context, in *CreateCmdGroupRequest, opts ...grpc.CallOption) (*CommandGroupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommandGroupResponse)
+	err := c.cc.Invoke(ctx, AuthService_CreateCommandGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) UpdateCommandGroup(ctx context.Context, in *UpdateCmdGroupRequest, opts ...grpc.CallOption) (*CommandGroupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommandGroupResponse)
+	err := c.cc.Invoke(ctx, AuthService_UpdateCommandGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) DeleteCommandGroup(ctx context.Context, in *DeleteCmdGroupRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, AuthService_DeleteCommandGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) SetGroupCommands(ctx context.Context, in *SetGroupCommandsRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, AuthService_SetGroupCommands_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) ListCmdGroupUsers(ctx context.Context, in *CmdGroupRequest, opts ...grpc.CallOption) (*ListUsersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListUsersResponse)
+	err := c.cc.Invoke(ctx, AuthService_ListCmdGroupUsers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) AddUserToCmdGroup(ctx context.Context, in *UserCmdGroupRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, AuthService_AddUserToCmdGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) RemoveUserFromCmdGroup(ctx context.Context, in *UserCmdGroupRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, AuthService_RemoveUserFromCmdGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) GetUserCommands(ctx context.Context, in *UserRequest, opts ...grpc.CallOption) (*ListCommandsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListCommandsResponse)
+	err := c.cc.Invoke(ctx, AuthService_GetUserCommands_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -279,6 +463,25 @@ type AuthServiceServer interface {
 	AddUserToGroup(context.Context, *UserGroupRequest) (*Empty, error)
 	RemoveUserFromGroup(context.Context, *UserGroupRequest) (*Empty, error)
 	GetUserMarketGroups(context.Context, *UserRequest) (*ListGroupsResponse, error)
+	// Command RBAC — handler catalog (source of truth = cli-svc, upserted on boot)
+	UpsertHandlers(context.Context, *UpsertHandlersRequest) (*Empty, error)
+	ListHandlers(context.Context, *CallerMeta) (*ListHandlersResponse, error)
+	// Command RBAC — commands
+	ListCommands(context.Context, *CallerMeta) (*ListCommandsResponse, error)
+	CreateCommand(context.Context, *CreateCommandRequest) (*CommandResponse, error)
+	UpdateCommand(context.Context, *UpdateCommandRequest) (*CommandResponse, error)
+	DeleteCommand(context.Context, *DeleteCommandRequest) (*Empty, error)
+	// Command RBAC — command groups (mirror market groups)
+	ListCommandGroups(context.Context, *CallerMeta) (*ListCommandGroupsResponse, error)
+	CreateCommandGroup(context.Context, *CreateCmdGroupRequest) (*CommandGroupResponse, error)
+	UpdateCommandGroup(context.Context, *UpdateCmdGroupRequest) (*CommandGroupResponse, error)
+	DeleteCommandGroup(context.Context, *DeleteCmdGroupRequest) (*Empty, error)
+	SetGroupCommands(context.Context, *SetGroupCommandsRequest) (*Empty, error)
+	ListCmdGroupUsers(context.Context, *CmdGroupRequest) (*ListUsersResponse, error)
+	AddUserToCmdGroup(context.Context, *UserCmdGroupRequest) (*Empty, error)
+	RemoveUserFromCmdGroup(context.Context, *UserCmdGroupRequest) (*Empty, error)
+	// Command RBAC — enforcement: commands a user is allowed to execute
+	GetUserCommands(context.Context, *UserRequest) (*ListCommandsResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
 }
 
@@ -342,6 +545,51 @@ func (UnimplementedAuthServiceServer) RemoveUserFromGroup(context.Context, *User
 }
 func (UnimplementedAuthServiceServer) GetUserMarketGroups(context.Context, *UserRequest) (*ListGroupsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUserMarketGroups not implemented")
+}
+func (UnimplementedAuthServiceServer) UpsertHandlers(context.Context, *UpsertHandlersRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpsertHandlers not implemented")
+}
+func (UnimplementedAuthServiceServer) ListHandlers(context.Context, *CallerMeta) (*ListHandlersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListHandlers not implemented")
+}
+func (UnimplementedAuthServiceServer) ListCommands(context.Context, *CallerMeta) (*ListCommandsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListCommands not implemented")
+}
+func (UnimplementedAuthServiceServer) CreateCommand(context.Context, *CreateCommandRequest) (*CommandResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateCommand not implemented")
+}
+func (UnimplementedAuthServiceServer) UpdateCommand(context.Context, *UpdateCommandRequest) (*CommandResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateCommand not implemented")
+}
+func (UnimplementedAuthServiceServer) DeleteCommand(context.Context, *DeleteCommandRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteCommand not implemented")
+}
+func (UnimplementedAuthServiceServer) ListCommandGroups(context.Context, *CallerMeta) (*ListCommandGroupsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListCommandGroups not implemented")
+}
+func (UnimplementedAuthServiceServer) CreateCommandGroup(context.Context, *CreateCmdGroupRequest) (*CommandGroupResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateCommandGroup not implemented")
+}
+func (UnimplementedAuthServiceServer) UpdateCommandGroup(context.Context, *UpdateCmdGroupRequest) (*CommandGroupResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateCommandGroup not implemented")
+}
+func (UnimplementedAuthServiceServer) DeleteCommandGroup(context.Context, *DeleteCmdGroupRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteCommandGroup not implemented")
+}
+func (UnimplementedAuthServiceServer) SetGroupCommands(context.Context, *SetGroupCommandsRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetGroupCommands not implemented")
+}
+func (UnimplementedAuthServiceServer) ListCmdGroupUsers(context.Context, *CmdGroupRequest) (*ListUsersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListCmdGroupUsers not implemented")
+}
+func (UnimplementedAuthServiceServer) AddUserToCmdGroup(context.Context, *UserCmdGroupRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddUserToCmdGroup not implemented")
+}
+func (UnimplementedAuthServiceServer) RemoveUserFromCmdGroup(context.Context, *UserCmdGroupRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveUserFromCmdGroup not implemented")
+}
+func (UnimplementedAuthServiceServer) GetUserCommands(context.Context, *UserRequest) (*ListCommandsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetUserCommands not implemented")
 }
 func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
 func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
@@ -688,6 +936,276 @@ func _AuthService_GetUserMarketGroups_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_UpsertHandlers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertHandlersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).UpsertHandlers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_UpsertHandlers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).UpsertHandlers(ctx, req.(*UpsertHandlersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_ListHandlers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CallerMeta)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ListHandlers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_ListHandlers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).ListHandlers(ctx, req.(*CallerMeta))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_ListCommands_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CallerMeta)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ListCommands(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_ListCommands_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).ListCommands(ctx, req.(*CallerMeta))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_CreateCommand_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateCommandRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).CreateCommand(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_CreateCommand_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).CreateCommand(ctx, req.(*CreateCommandRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_UpdateCommand_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateCommandRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).UpdateCommand(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_UpdateCommand_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).UpdateCommand(ctx, req.(*UpdateCommandRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_DeleteCommand_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteCommandRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).DeleteCommand(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_DeleteCommand_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).DeleteCommand(ctx, req.(*DeleteCommandRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_ListCommandGroups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CallerMeta)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ListCommandGroups(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_ListCommandGroups_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).ListCommandGroups(ctx, req.(*CallerMeta))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_CreateCommandGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateCmdGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).CreateCommandGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_CreateCommandGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).CreateCommandGroup(ctx, req.(*CreateCmdGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_UpdateCommandGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateCmdGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).UpdateCommandGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_UpdateCommandGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).UpdateCommandGroup(ctx, req.(*UpdateCmdGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_DeleteCommandGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteCmdGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).DeleteCommandGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_DeleteCommandGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).DeleteCommandGroup(ctx, req.(*DeleteCmdGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_SetGroupCommands_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetGroupCommandsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).SetGroupCommands(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_SetGroupCommands_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).SetGroupCommands(ctx, req.(*SetGroupCommandsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_ListCmdGroupUsers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CmdGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ListCmdGroupUsers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_ListCmdGroupUsers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).ListCmdGroupUsers(ctx, req.(*CmdGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_AddUserToCmdGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UserCmdGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).AddUserToCmdGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_AddUserToCmdGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).AddUserToCmdGroup(ctx, req.(*UserCmdGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_RemoveUserFromCmdGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UserCmdGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).RemoveUserFromCmdGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_RemoveUserFromCmdGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).RemoveUserFromCmdGroup(ctx, req.(*UserCmdGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_GetUserCommands_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).GetUserCommands(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_GetUserCommands_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).GetUserCommands(ctx, req.(*UserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -766,6 +1284,66 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUserMarketGroups",
 			Handler:    _AuthService_GetUserMarketGroups_Handler,
+		},
+		{
+			MethodName: "UpsertHandlers",
+			Handler:    _AuthService_UpsertHandlers_Handler,
+		},
+		{
+			MethodName: "ListHandlers",
+			Handler:    _AuthService_ListHandlers_Handler,
+		},
+		{
+			MethodName: "ListCommands",
+			Handler:    _AuthService_ListCommands_Handler,
+		},
+		{
+			MethodName: "CreateCommand",
+			Handler:    _AuthService_CreateCommand_Handler,
+		},
+		{
+			MethodName: "UpdateCommand",
+			Handler:    _AuthService_UpdateCommand_Handler,
+		},
+		{
+			MethodName: "DeleteCommand",
+			Handler:    _AuthService_DeleteCommand_Handler,
+		},
+		{
+			MethodName: "ListCommandGroups",
+			Handler:    _AuthService_ListCommandGroups_Handler,
+		},
+		{
+			MethodName: "CreateCommandGroup",
+			Handler:    _AuthService_CreateCommandGroup_Handler,
+		},
+		{
+			MethodName: "UpdateCommandGroup",
+			Handler:    _AuthService_UpdateCommandGroup_Handler,
+		},
+		{
+			MethodName: "DeleteCommandGroup",
+			Handler:    _AuthService_DeleteCommandGroup_Handler,
+		},
+		{
+			MethodName: "SetGroupCommands",
+			Handler:    _AuthService_SetGroupCommands_Handler,
+		},
+		{
+			MethodName: "ListCmdGroupUsers",
+			Handler:    _AuthService_ListCmdGroupUsers_Handler,
+		},
+		{
+			MethodName: "AddUserToCmdGroup",
+			Handler:    _AuthService_AddUserToCmdGroup_Handler,
+		},
+		{
+			MethodName: "RemoveUserFromCmdGroup",
+			Handler:    _AuthService_RemoveUserFromCmdGroup_Handler,
+		},
+		{
+			MethodName: "GetUserCommands",
+			Handler:    _AuthService_GetUserCommands_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
