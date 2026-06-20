@@ -92,11 +92,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if m.runner == nil {
-				m.history = append(m.history, dimStyle.Render("still loading your permissions, please wait..."))
+				m.history = append(m.history, m.th.Dim.Render("still loading your permissions, please wait..."))
 				m.refreshViewport()
 				return m, nil
 			}
-			m.history = append(m.history, promptStyle.Render("> ")+line)
+			m.history = append(m.history, m.th.Prompt.Render("> ")+line)
 			return m, m.runCommand(line)
 		}
 	}

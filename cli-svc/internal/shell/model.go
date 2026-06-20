@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"go-stock-prediction/cli-svc/internal/client"
 	"go-stock-prediction/cli-svc/internal/handlers"
@@ -29,6 +30,7 @@ type Model struct {
 	allowed *AllowedSet
 	runner  *Runner
 	comp    *Completer
+	th      *Theme
 
 	input    textinput.Model
 	viewport viewport.Model
@@ -55,12 +57,15 @@ type resultMsg struct {
 	output string
 }
 
-// New builds a Model for an SSH session.
-func New(sess Session, c client.HTTPClient, reg *handlers.Registry) Model {
+// New builds a Model for an SSH session. The renderer (from the SSH session) is
+// required for color to survive the wish/PTY boundary; pass nil in tests.
+func New(sess Session, c client.HTTPClient, reg *handlers.Registry, r *lipgloss.Renderer) Model {
+	th := NewTheme(r)
+
 	ti := textinput.New()
 	ti.Placeholder = "get market.latest market=gold"
 	ti.Prompt = "> "
-	ti.PromptStyle = promptStyle
+	ti.PromptStyle = th.Prompt
 	ti.Focus()
 	ti.CharLimit = 512
 
@@ -68,6 +73,7 @@ func New(sess Session, c client.HTTPClient, reg *handlers.Registry) Model {
 		sess:   sess,
 		client: c,
 		reg:    reg,
+		th:     th,
 		input:  ti,
 	}
 }

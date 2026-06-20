@@ -9,32 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const maxSuggestRows = 7
-
-var (
-	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
-	promptStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
-	dimStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	errStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("203"))
-
-	headerStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("231")).
-			Background(lipgloss.Color("24")).
-			Padding(0, 1)
-	roleBadge = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("232")).
-			Background(lipgloss.Color("114")).
-			Padding(0, 1)
-
-	// Dropdown (kube-prompt style): solid blocks, highlighted selection.
-	sugTextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Background(lipgloss.Color("238"))
-	sugDescStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Background(lipgloss.Color("238"))
-	sugSelText   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("232")).Background(lipgloss.Color("212"))
-	sugSelDesc   = lipgloss.NewStyle().Foreground(lipgloss.Color("236")).Background(lipgloss.Color("212"))
-	sugScrollSty = lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Background(lipgloss.Color("238"))
-)
+const maxSuggestRows = 8
 
 func (m *Model) resizeViewport() {
 	w := m.width
@@ -45,8 +20,7 @@ func (m *Model) resizeViewport() {
 	if h <= 0 {
 		h = 24
 	}
-	// header(1) + err(1) + input(1) + dropdown(maxSuggestRows)
-	vpHeight := h - 3 - maxSuggestRows
+	vpHeight := h - 4
 	if vpHeight < 3 {
 		vpHeight = 3
 	}
@@ -68,53 +42,69 @@ func (m *Model) refreshViewport() {
 	m.viewport.GotoBottom()
 }
 
-// View renders the full screen.
+// View renders the full screen, kube-prompt style: header, the input line, the
+// live completion dropdown directly under it, then the scrolling output, then a
+// hint/error line at the very bottom.
 func (m Model) View() string {
 	if !m.ready {
 		return "initializing...\n"
 	}
 
+	drop := m.renderSuggest()
+	dropLines := 0
+	if drop != "" {
+		dropLines = strings.Count(drop, "\n") + 1
+	}
+
+	vpH := m.height - 3 - dropLines
+	if vpH < 1 {
+		vpH = 1
+	}
+	vp := m.viewport
+	vp.Height = vpH
+	vp.GotoBottom()
+
 	var b strings.Builder
 	b.WriteString(m.headerBar())
 	b.WriteString("\n")
-	b.WriteString(m.viewport.View())
-	b.WriteString("\n")
-	if m.err != "" {
-		b.WriteString(errStyle.Render("✗ " + m.err))
-	} else {
-		b.WriteString(dimStyle.Render(m.hintLine()))
-	}
-	b.WriteString("\n")
 	b.WriteString(m.input.View())
 	b.WriteString("\n")
-	b.WriteString(m.renderSuggest())
+	if drop != "" {
+		b.WriteString(drop)
+		b.WriteString("\n")
+	}
+	b.WriteString(vp.View())
+	b.WriteString("\n")
+	if m.err != "" {
+		b.WriteString(m.th.Err.Render("✗ " + m.err))
+	} else {
+		b.WriteString(m.th.Dim.Render(m.hintLine()))
+	}
 	return b.String()
 }
 
 // headerBar is the top status bar spanning the terminal width.
 func (m Model) headerBar() string {
-	left := headerStyle.Render("stock-prediction CLI")
-	badge := roleBadge.Render(m.sess.Username + " · " + roleLabel(m.sess.Role))
+	left := m.th.Header.Render("stock-prediction CLI")
+	badge := m.th.Badge.Render(m.sess.Username + " · " + roleLabel(m.sess.Role))
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(badge)
 	if gap < 1 {
 		gap = 1
 	}
-	bg := lipgloss.NewStyle().Background(lipgloss.Color("24"))
-	return left + bg.Render(strings.Repeat(" ", gap)) + badge
+	return left + m.th.HeaderBG.Render(strings.Repeat(" ", gap)) + badge
 }
 
 func (m Model) hintLine() string {
 	return "↑/↓ navigate · Tab complete · Enter run · help · clear · exit"
 }
 
-// renderSuggest draws the floating completion dropdown below the prompt. It
-// always emits exactly maxSuggestRows lines so the layout never jumps.
+// renderSuggest draws the floating completion dropdown. Returns "" when there is
+// nothing to suggest (so the layout collapses cleanly).
 func (m Model) renderSuggest() string {
 	if len(m.suggest) == 0 {
-		return strings.Repeat("\n", maxSuggestRows-1)
+		return ""
 	}
 
-	// Column widths across ALL suggestions (stable while typing).
 	maxText, maxDesc := 0, 0
 	for _, s := range m.suggest {
 		if n := utf8.RuneCountInString(s.Text); n > maxText {
@@ -124,10 +114,9 @@ func (m Model) renderSuggest() string {
 			maxDesc = n
 		}
 	}
-	// Clamp the box to the terminal width.
 	avail := m.width - m.sugCol - 1
-	if avail < 10 {
-		avail = 10
+	if avail < 12 {
+		avail = 12
 	}
 	if maxText+maxDesc+4 > avail {
 		maxDesc = avail - maxText - 4
@@ -136,12 +125,9 @@ func (m Model) renderSuggest() string {
 		}
 	}
 
-	// Sliding window so the highlighted row stays visible.
 	start := 0
-	if len(m.suggest) > maxSuggestRows {
-		if m.sugIdx >= maxSuggestRows {
-			start = m.sugIdx - maxSuggestRows + 1
-		}
+	if len(m.suggest) > maxSuggestRows && m.sugIdx >= maxSuggestRows {
+		start = m.sugIdx - maxSuggestRows + 1
 	}
 	end := start + maxSuggestRows
 	if end > len(m.suggest) {
@@ -152,29 +138,28 @@ func (m Model) renderSuggest() string {
 	var lines []string
 	for i := start; i < end; i++ {
 		s := m.suggest[i]
-		more := ""
+		marker := " "
 		if i == start && start > 0 {
-			more = "▲"
+			marker = "▲"
 		} else if i == end-1 && end < len(m.suggest) {
-			more = "▼"
+			marker = "▼"
 		}
-		textStyle, descStyle := sugTextStyle, sugDescStyle
+		textStyle, descStyle := m.th.SugText, m.th.SugDesc
 		if i == m.sugIdx {
-			textStyle, descStyle = sugSelText, sugSelDesc
+			textStyle, descStyle = m.th.SugSelText, m.th.SugSelDesc
 		}
-		textCell := textStyle.Render(" " + ljust(s.Text, maxText) + "  ")
-		descCell := descStyle.Render(ljust(s.Desc, maxDesc) + " ")
-		scroll := sugScrollSty.Render(rjust(more, 1) + " ")
-		lines = append(lines, indent+textCell+descCell+scroll)
-	}
-	// Pad to a fixed height for a stable layout.
-	for len(lines) < maxSuggestRows-1 {
-		lines = append(lines, "")
+		text := textStyle.Render(" " + ljust(s.Text, maxText) + "  ")
+		desc := descStyle.Render(ljust(s.Desc, maxDesc) + " ")
+		scroll := m.th.SugScroll.Render(marker + " ")
+		lines = append(lines, indent+text+desc+scroll)
 	}
 	return strings.Join(lines, "\n")
 }
 
 func ljust(s string, n int) string {
+	if n < 0 {
+		n = 0
+	}
 	r := []rune(s)
 	if len(r) > n {
 		if n <= 1 {
@@ -183,14 +168,6 @@ func ljust(s string, n int) string {
 		return string(r[:n-1]) + "…"
 	}
 	return s + strings.Repeat(" ", n-len(r))
-}
-
-func rjust(s string, n int) string {
-	r := []rune(s)
-	if len(r) >= n {
-		return s
-	}
-	return strings.Repeat(" ", n-len(r)) + s
 }
 
 func roleLabel(role string) string {
@@ -202,22 +179,22 @@ func roleLabel(role string) string {
 
 func (m Model) welcome() string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Welcome, "+m.sess.Username) + "\n")
+	b.WriteString(m.th.Title.Render("Welcome, "+m.sess.Username) + "\n")
 	if m.allowed.IsSuperAdmin() {
-		b.WriteString(dimStyle.Render("super_admin — you may run any command.") + "\n")
+		b.WriteString(m.th.Dim.Render("super_admin — you may run any command.") + "\n")
 	} else {
 		n := len(m.allowed.Commands())
-		b.WriteString(dimStyle.Render(fmt.Sprintf("%s — %d command(s) granted.", roleLabel(m.sess.Role), n)) + "\n")
+		b.WriteString(m.th.Dim.Render(fmt.Sprintf("%s — %d command(s) granted.", roleLabel(m.sess.Role), n)) + "\n")
 	}
-	b.WriteString(dimStyle.Render("Start typing a verb (get/set/update/delete); suggestions appear below."))
+	b.WriteString(m.th.Dim.Render("Start typing a verb (get/set/update/delete); suggestions appear below the prompt."))
 	return b.String()
 }
 
 func (m Model) helpText() string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Command reference") + "\n")
-	b.WriteString(dimStyle.Render("Syntax: <verb> <resource> [key=value ...]") + "\n")
-	b.WriteString(dimStyle.Render("Verbs: get (GET) · set (POST) · update (PUT) · delete (DELETE)") + "\n\n")
+	b.WriteString(m.th.Title.Render("Command reference") + "\n")
+	b.WriteString(m.th.Dim.Render("Syntax: <verb> <resource> [key=value ...]") + "\n")
+	b.WriteString(m.th.Dim.Render("Verbs: get (GET) · set (POST) · update (PUT) · delete (DELETE)") + "\n\n")
 	for _, h := range m.reg.All() {
 		if !m.allowed.Allows(h.Key) {
 			continue
@@ -236,9 +213,9 @@ func (m Model) helpText() string {
 			args = append(args, tok)
 		}
 		b.WriteString(fmt.Sprintf("  %s %s %s\n",
-			promptStyle.Render(fmt.Sprintf("%-7s", h.Verb)),
-			titleStyle.Render(fmt.Sprintf("%-22s", h.Resource)),
-			dimStyle.Render(strings.Join(args, " "))))
+			m.th.Prompt.Render(fmt.Sprintf("%-7s", h.Verb)),
+			m.th.Title.Render(fmt.Sprintf("%-22s", h.Resource)),
+			m.th.Dim.Render(strings.Join(args, " "))))
 	}
 	return b.String()
 }

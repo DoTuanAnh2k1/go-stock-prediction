@@ -74,12 +74,17 @@ func (s *Server) teaHandler(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
 	role, _ := sess.Context().Value(ctxKeyRole).(string)
 	uid, _ := sess.Context().Value(ctxKeyUserID).(int64)
 
+	// Per-session renderer: detects the client's color profile from the PTY so
+	// lipgloss emits ANSI. Using the default renderer would key off the server's
+	// stdout (not a TTY) and strip all color.
+	renderer := bm.MakeRenderer(sess)
+
 	m := shell.New(shell.Session{
 		Username: sess.User(),
 		Role:     role,
 		UserID:   uid,
 		JWT:      jwt,
-	}, s.client, s.reg)
+	}, s.client, s.reg, renderer)
 
 	return m, []tea.ProgramOption{tea.WithAltScreen()}
 }
