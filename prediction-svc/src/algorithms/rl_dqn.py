@@ -622,6 +622,13 @@ class RLDQNPredictor(PredictionAlgorithm):
         # in_dim: enhanced feature count + position features
         in_dim = all_episodes[0][0].shape[1] + N_POS_FEATURES
 
+        # Adaptive exploration horizon: anneal epsilon over ~60% of the ACTUAL
+        # env-steps this market will collect, so low-data markets (e.g. GOLD with
+        # few series) still reach the exploitation phase (ε→floor) instead of
+        # staying near-random. A fixed-constant horizon under-anneals small markets.
+        steps_per_epoch = sum(max(0, m.shape[0] - 1) for m, _ in all_episodes)
+        explore_steps = max(1, int(0.6 * steps_per_epoch * TRAIN_EPOCHS))
+
         # ------------------------------------------------------------------
         # Build networks
         # ------------------------------------------------------------------
@@ -654,7 +661,7 @@ class RLDQNPredictor(PredictionAlgorithm):
                     buffer=buffer,
                     epsilon=0.0,            # epsilon is computed inside per-step
                     global_step=global_step,
-                    target_explore_steps=TARGET_EXPLORE_STEPS,
+                    target_explore_steps=explore_steps,
                 )
                 total_reward += ep_reward
 
@@ -671,7 +678,7 @@ class RLDQNPredictor(PredictionAlgorithm):
             # Compute current epsilon for logging (post-epoch)
             current_eps = max(
                 EPSILON_END,
-                EPSILON_START - (EPSILON_START - EPSILON_END) * global_step / max(TARGET_EXPLORE_STEPS, 1),
+                EPSILON_START - (EPSILON_START - EPSILON_END) * global_step / max(explore_steps, 1),
             )
             avg_loss = float(np.mean(epoch_losses)) if epoch_losses else float("nan")
 

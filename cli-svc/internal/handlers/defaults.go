@@ -58,7 +58,7 @@ func defaultHandlers() []Handler {
 			execute: func(ctx context.Context, c client.HTTPClient, jwt string, a map[string]string) (any, int, error) {
 				return getJSON(ctx, c, jwt, "/monitoring/overview", nil)
 			},
-			render: autoRender("Monitoring"),
+			render: renderMonitoring,
 		},
 		{
 			Key: "schedules.list", DisplayName: "Cron schedules", Verb: "get", Resource: "schedules.list",

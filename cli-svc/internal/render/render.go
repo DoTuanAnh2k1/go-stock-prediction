@@ -2,6 +2,7 @@
 package render
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -183,6 +184,10 @@ func cell(v any) string {
 		}
 		return "[" + strings.Join(parts, ", ") + "]"
 	case map[string]any:
+		// Compact JSON beats Go's map[...] dump for nested objects.
+		if b, err := json.Marshal(x); err == nil {
+			return string(b)
+		}
 		return fmt.Sprintf("%v", x)
 	default:
 		return fmt.Sprintf("%v", x)
