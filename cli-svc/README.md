@@ -44,6 +44,7 @@ Inside the shell:
 | Input | Effect |
 |-------|--------|
 | `help` or `?` | Show the command reference (only commands you may run) |
+| `help <verb> <category> <name>` | Detailed help for one command (syntax, args, example), e.g. `help get market latest` |
 | `Tab` | Open the suggestion dropdown (hidden by default); press again to cycle |
 | `↓` / `↑` (dropdown open) | Navigate the suggestions; `Shift+Tab` goes back |
 | `Enter` (dropdown open) | **Pick** the highlighted suggestion and advance to the next token |

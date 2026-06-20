@@ -6,6 +6,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"go-stock-prediction/cli-svc/internal/handlers"
 )
 
 const maxSuggestRows = 8
@@ -54,7 +56,7 @@ func (m Model) headerBar() string {
 }
 
 func (m Model) hintLine() string {
-	return "Tab suggest · ↑↓ history · Enter run · cmd | grep -A 2 X · help · clear · exit"
+	return "Tab suggest · ↑↓ history · Enter run · help <cmd> · cmd | grep X · clear · exit"
 }
 
 // renderSuggest draws the floating completion dropdown. Returns "" when there is
@@ -150,6 +152,94 @@ func (m Model) welcome() string {
 		b.WriteString(m.th.Dim.Render(fmt.Sprintf("%s — %d command(s) granted.", roleLabel(m.sess.Role), n)) + "\n")
 	}
 	b.WriteString(m.th.Dim.Render("Type a command (get/set/update/delete). Press Tab for suggestions, ↑/↓ for history, Enter to run."))
+	return b.String()
+}
+
+// helpFor dispatches "help [verb [category [name]]]": no args → full reference;
+// a fully-qualified command → its detailed help; otherwise a filtered list.
+func (m Model) helpFor(args []string) string {
+	if len(args) == 0 {
+		return m.helpText()
+	}
+	if len(args) >= 3 {
+		if h, ok := m.reg.Resolve(args[0], args[1]+"."+args[2]); ok && m.allowed.Allows(h.Key) {
+			return m.helpDetail(h)
+		}
+	}
+	var lines []string
+	for _, h := range m.reg.All() {
+		if !m.allowed.Allows(h.Key) || h.Verb != args[0] {
+			continue
+		}
+		cat, name := split(h.Key)
+		if len(args) >= 2 && !strings.HasPrefix(cat, args[1]) {
+			continue
+		}
+		if len(args) >= 3 && !strings.HasPrefix(name, args[2]) {
+			continue
+		}
+		lines = append(lines, "  "+m.th.Prompt.Render(h.Verb+" "+cat+" "+name)+"  "+m.th.Dim.Render(h.DisplayName))
+	}
+	if len(lines) == 0 {
+		return m.th.Err.Render("no command matches: " + strings.Join(args, " "))
+	}
+	return m.th.Title.Render("Matching commands") + "\n" + strings.Join(lines, "\n") +
+		"\n" + m.th.Dim.Render("Tip: help <verb> <category> <name> for details, e.g. help get market latest")
+}
+
+// helpDetail prints full help for a single command.
+func (m Model) helpDetail(h *handlers.Handler) string {
+	cat, name := split(h.Key)
+	var b strings.Builder
+	b.WriteString(m.th.Title.Render(h.Verb+" "+cat+" "+name) + m.th.Dim.Render("  — "+h.DisplayName) + "\n")
+
+	// Syntax line with arg placeholders.
+	syntax := h.Verb + " " + cat + " " + name
+	for _, a := range h.ArgSchema {
+		tok := a.Name + " "
+		if len(a.Choices) > 0 {
+			tok += "{" + strings.Join(a.Choices, "|") + "}"
+		} else {
+			tok += "<" + a.Type + ">"
+		}
+		if !a.Required {
+			tok = "[" + tok + "]"
+		}
+		syntax += " " + tok
+	}
+	b.WriteString(m.th.Dim.Render("Syntax: ") + syntax + "\n")
+
+	if len(h.ArgSchema) == 0 {
+		b.WriteString(m.th.Dim.Render("Arguments: (none)") + "\n")
+	} else {
+		b.WriteString(m.th.Title.Render("Arguments") + "\n")
+		for _, a := range h.ArgSchema {
+			typ := "<" + a.Type + ">"
+			if len(a.Choices) > 0 {
+				typ = "{" + strings.Join(a.Choices, "|") + "}"
+			}
+			req := "optional"
+			if a.Required {
+				req = "required"
+			}
+			b.WriteString(fmt.Sprintf("  %-16s %-28s %s\n",
+				m.th.Prompt.Render(a.Name), typ, m.th.Dim.Render(req)))
+		}
+	}
+
+	// Example with the first choice / a placeholder per arg.
+	ex := h.Verb + " " + cat + " " + name
+	for _, a := range h.ArgSchema {
+		if !a.Required && len(a.Choices) == 0 {
+			continue
+		}
+		v := "<" + a.Name + ">"
+		if len(a.Choices) > 0 {
+			v = a.Choices[0]
+		}
+		ex += " " + a.Name + " " + v
+	}
+	b.WriteString(m.th.Dim.Render("Example: ") + ex)
 	return b.String()
 }
 

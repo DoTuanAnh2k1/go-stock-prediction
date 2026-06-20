@@ -113,8 +113,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Println(m.th.Dim.Render("still loading your permissions, please wait…"))
 			}
 			echo := tea.Println(m.th.Prompt.Render("> ") + line)
-			if line == "help" || line == "?" {
-				return m, tea.Sequence(echo, tea.Println(m.helpText()))
+			if fields := strings.Fields(line); fields[0] == "help" || fields[0] == "?" {
+				return m, tea.Sequence(echo, tea.Println(m.helpFor(fields[1:])))
 			}
 			return m, tea.Sequence(echo, m.runCommand(line))
 		}

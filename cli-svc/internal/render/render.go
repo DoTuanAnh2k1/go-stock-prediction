@@ -48,6 +48,12 @@ func Table(title string, headers []string, rows []map[string]any) string {
 		t.AppendRow(row)
 	}
 	applyStyle(t)
+	// Cap each column so a wide/nested value wraps instead of exploding the table.
+	cfgs := make([]table.ColumnConfig, len(headers))
+	for i, h := range headers {
+		cfgs[i] = table.ColumnConfig{Name: h, WidthMax: 48, WidthMaxEnforcer: text.WrapSoft}
+	}
+	t.SetColumnConfigs(cfgs)
 	return t.Render()
 }
 

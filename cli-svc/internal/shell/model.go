@@ -77,6 +77,12 @@ func New(sess Session, c client.HTTPClient, reg *handlers.Registry, r *lipgloss.
 	ti.Placeholder = "get market latest market gold"
 	ti.Prompt = "> "
 	ti.PromptStyle = th.Prompt
+	ti.TextStyle = th.Text
+	ti.PlaceholderStyle = th.Dim
+	// Bind the cursor styles to the session renderer, otherwise its reverse-video
+	// block is stripped by the default (non-TTY) renderer and no cursor shows.
+	ti.Cursor.Style = th.Cursor
+	ti.Cursor.TextStyle = th.Text
 	ti.Focus()
 	ti.CharLimit = 512
 
@@ -89,9 +95,9 @@ func New(sess Session, c client.HTTPClient, reg *handlers.Registry, r *lipgloss.
 	}
 }
 
-// Init kicks off loading the user's allowed commands.
+// Init starts the cursor blink and loads the user's allowed commands.
 func (m Model) Init() tea.Cmd {
-	return m.loadCommands()
+	return tea.Batch(textinput.Blink, m.loadCommands())
 }
 
 func (m Model) loadCommands() tea.Cmd {

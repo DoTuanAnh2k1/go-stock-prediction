@@ -67,9 +67,10 @@ GAMMA = 0.99
 LR_DQN = 1e-3
 EPSILON_START = 1.0
 EPSILON_END = 0.05
-# Number of env-steps over which epsilon decays from START to END (linear).
-# With sliding windows + augmentation, a typical market produces ~2 000–8 000
-# steps per epoch; 10 epochs × 4 000 = 40 000 steps → decay_per_step calibrated.
+# Legacy fixed exploration horizon (fallback only). The actual epsilon-decay
+# horizon is computed PER MARKET in train_batch() as ~60% of that market's real
+# env-step budget, so low-data markets (e.g. GOLD) still anneal ε to the floor
+# instead of staying near-random. Kept for backward compatibility / reference.
 TARGET_EXPLORE_STEPS = 15_000
 TARGET_UPDATE_EVERY = 50    # hard-copy target net every N gradient steps
 TRAIN_EPOCHS = 12           # passes over the full (windowed + augmented) episode set

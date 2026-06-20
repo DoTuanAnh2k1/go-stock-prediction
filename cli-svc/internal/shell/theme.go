@@ -14,6 +14,8 @@ type Theme struct {
 	Prompt lipgloss.Style
 	Dim    lipgloss.Style
 	Err    lipgloss.Style
+	Text   lipgloss.Style // input text (renderer-bound)
+	Cursor lipgloss.Style // block cursor (renderer-bound so reverse isn't stripped)
 
 	Header   lipgloss.Style
 	HeaderBG lipgloss.Style
@@ -44,6 +46,8 @@ func NewTheme(r *lipgloss.Renderer) *Theme {
 		Prompt: r.NewStyle().Bold(true).Foreground(c("212")),
 		Dim:    r.NewStyle().Foreground(c("245")),
 		Err:    r.NewStyle().Bold(true).Foreground(c("203")),
+		Text:   r.NewStyle().Foreground(c("252")),
+		Cursor: r.NewStyle().Foreground(c("212")), // Reverse(true) → bright block
 
 		Header:   r.NewStyle().Bold(true).Foreground(c("231")).Background(c("25")).Padding(0, 1),
 		HeaderBG: r.NewStyle().Background(c("25")),

@@ -233,6 +233,25 @@ func TestDropdownNavigation(t *testing.T) {
 	}
 }
 
+func TestHelpFor(t *testing.T) {
+	m := newTestModel(t, "super_admin", true)
+
+	detail := m.helpFor([]string{"get", "market", "latest"})
+	if !strings.Contains(detail, "Syntax") || !strings.Contains(detail, "market") || !strings.Contains(detail, "Example") {
+		t.Errorf("per-command help missing sections: %q", detail)
+	}
+	list := m.helpFor([]string{"get", "market"})
+	if !strings.Contains(list, "latest") || !strings.Contains(list, "prices") {
+		t.Errorf("category help should list names: %q", list)
+	}
+	if g := m.helpFor(nil); !strings.Contains(g, "Command reference") {
+		t.Errorf("global help missing: %q", g)
+	}
+	if none := m.helpFor([]string{"get", "bogus", "x"}); !strings.Contains(none, "no command matches") {
+		t.Errorf("expected no-match message: %q", none)
+	}
+}
+
 func TestThemeEmitsColor(t *testing.T) {
 	r := lipgloss.NewRenderer(io.Discard)
 	r.SetColorProfile(termenv.ANSI256)
