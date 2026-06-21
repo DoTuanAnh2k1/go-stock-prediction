@@ -1,6 +1,9 @@
 spring:
   application:
     name: auth-service
+  output:
+    ansi:
+      enabled: always           # force ANSI colors in Docker (stdout is not a TTY)
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:go_stock_prediction}?currentSchema=public
     username: ${DB_USER:postgres}
@@ -29,6 +32,10 @@ grpc:
 jwt:
   secret: ${JWT_SECRET:change-me-in-production}
   expiration-ms: 86400000      # 24h
+
+service-mgt:
+  enabled: ${SERVICE_MGT_ENABLED:false}
+  target: ${REGISTRY_GRPC_TARGET:service-mgt:8121}
 
 logging:
   level:
