@@ -1,7 +1,9 @@
 """SimulationEngine — orchestrates backtest and live simulation."""
 from __future__ import annotations
 
+import os
 import threading
+import concurrent.futures
 from datetime import date, timedelta, datetime
 from decimal import Decimal
 from typing import Optional
@@ -12,11 +14,65 @@ from src.database.connection import session_scope
 from src.database.models import SimBot, SimSession, SimTrade, SimPortfolioSnapshot
 from src.database.repository import update_session_kpis
 from src.simulation.bot import TradingBot, BotConfig
+from src.simulation.signal import SignalGenerator
 from src.utils.logger import get_logger
 
 log = get_logger("simulation.engine")
 
 _backtest_lock = threading.Lock()
+
+
+class StepDataCache:
+    """Read-only cache of prediction rows and current prices built ONCE per
+    market live-step and shared across all bots of that market.
+
+    Building this cache before dispatching bot tasks eliminates N duplicate DB
+    queries (one per bot) for the same data.  The cache is immutable after
+    construction — safe to share across threads.
+
+    Attributes
+    ----------
+    predictions : dict[str, list[dict]]
+        Keyed by ``algorithm_name``; each value is the list of row dicts
+        ``{symbol, predicted_price, current_price, confidence}`` for today.
+    current_prices : dict[str, float]
+        Keyed by symbol; most-recent close/sell price as-of today.
+    """
+
+    def __init__(
+        self,
+        market: str,
+        algorithms: list[str],
+        for_date: date,
+    ) -> None:
+        self._sg = SignalGenerator()
+        self.predictions: dict[str, list[dict]] = {}
+        self.current_prices: dict[str, float] = {}
+
+        # Fetch predictions for each distinct algorithm used by this market's bots.
+        for algo in algorithms:
+            try:
+                rows = self._sg.fetch_predictions(market, algo, for_date)
+                self.predictions[algo] = rows
+            except Exception as exc:
+                log.warning("sim.cache.pred_fetch_failed", market=market, algo=algo, error=str(exc))
+                self.predictions[algo] = []
+
+        # Derive the full set of symbols present in prediction rows and fetch
+        # one batched current-price lookup for those symbols.
+        all_symbols: set[str] = set()
+        for rows in self.predictions.values():
+            for row in rows:
+                sym = row.get("symbol")
+                if sym:
+                    all_symbols.add(sym)
+
+        if all_symbols:
+            try:
+                prices = self._sg.get_current_prices(market, list(all_symbols), for_date)
+                self.current_prices.update(prices)
+            except Exception as exc:
+                log.warning("sim.cache.price_fetch_failed", market=market, error=str(exc))
 
 # Normalize orchestrator market keys → bot market field values
 _MARKET_KEY_NORM: dict[str, str] = {
@@ -142,6 +198,7 @@ class SimulationEngine:
                 take_profit=float(db_bot.take_profit),
                 max_position_pct=float(db_bot.max_position_pct),
                 max_positions=int(db_bot.max_positions),
+                symbol=db_bot.symbol,
             )
 
         bot = TradingBot(config)
@@ -330,6 +387,8 @@ class SimulationEngine:
         Called immediately after predictions for that market are written to DB.
         market_key can be orchestrator keys like "NASDAQ100" — will be normalized.
         """
+        from src.config import get_settings
+
         normalized = _MARKET_KEY_NORM.get(market_key.upper(), market_key.upper())
         from datetime import date as date_type
         today = date_type.today()
@@ -353,107 +412,150 @@ class SimulationEngine:
                     take_profit=float(db_bot.take_profit),
                     max_position_pct=float(db_bot.max_position_pct),
                     max_positions=int(db_bot.max_positions),
+                    symbol=db_bot.symbol,
                 )))
 
         if not bot_configs:
             log.debug("sim.live_step.no_bots", market=normalized)
             return
 
-        log.info("sim.live_step.market_start", market=normalized, bots=len(bot_configs))
-        self._run_bot_steps(bot_configs, today)
+        # Build a step-scoped data cache: fetch predictions once per distinct
+        # algorithm and current prices once per market-wide symbol set.
+        # This eliminates O(N_bots) duplicate DB queries for the same data.
+        distinct_algos = list({cfg.algorithm for _, cfg in bot_configs})
+        cache = StepDataCache(market=normalized, algorithms=distinct_algos, for_date=today)
+
+        settings = get_settings()
+        raw_workers = settings.per_symbol_workers or (os.cpu_count() or 4)
+        n_workers = max(1, min(16, raw_workers))
+
+        log.info("sim.live_step.market_start", market=normalized, bots=len(bot_configs), workers=n_workers)
+        self._run_bot_steps(bot_configs, today, cache=cache, n_workers=n_workers)
         log.info("sim.live_step.market_done", market=normalized)
 
-    def _run_bot_steps(self, bot_configs: list, today) -> None:
-        """Execute one simulation step for a list of (bot_id, BotConfig) pairs."""
-        now = datetime.now()  # VN local time (TZ=Asia/Ho_Chi_Minh set at startup)
-        for bot_id, config in bot_configs:
-            try:
-                with session_scope() as session:
-                    live_session = session.query(SimSession).filter(
-                        SimSession.bot_id == bot_id,
-                        SimSession.mode == "live",
-                        SimSession.status == "running",
-                    ).order_by(SimSession.id.desc()).first()
+    def _run_single_bot(self, bot_id: str, config: BotConfig, today, now: datetime, cache=None) -> None:
+        """Execute one live-step for a single bot.  Designed to be called from a
+        thread pool; each invocation opens its OWN session_scope() blocks so
+        SQLAlchemy sessions are never shared across threads.
+        """
+        try:
+            with session_scope() as session:
+                live_session = session.query(SimSession).filter(
+                    SimSession.bot_id == bot_id,
+                    SimSession.mode == "live",
+                    SimSession.status == "running",
+                ).order_by(SimSession.id.desc()).first()
 
-                    if not live_session:
-                        live_session = SimSession(
-                            bot_id=bot_id,
-                            start_date=today,
-                            status="running",
-                            mode="live",
-                        )
-                        session.add(live_session)
-                        session.flush()
-                    session_id = live_session.id
-                    session.commit()
+                if not live_session:
+                    live_session = SimSession(
+                        bot_id=bot_id,
+                        start_date=today,
+                        status="running",
+                        mode="live",
+                    )
+                    session.add(live_session)
+                    session.flush()
+                session_id = live_session.id
+                session.commit()
 
-                bot = TradingBot(config)
+            bot = TradingBot(config)
 
-                # Restore portfolio state from existing live session trades
-                with session_scope() as _sess:
-                    prior_trades = [
-                        {
-                            "id": t.id,
-                            "symbol": t.symbol,
-                            "action": t.action,
-                            "quantity": t.quantity,
-                            "price": t.price,
-                            "trade_value": t.trade_value,
-                            "trade_date": t.trade_date,
-                        }
-                        for t in _sess.query(SimTrade).filter(
-                            SimTrade.session_id == session_id
-                        ).order_by(SimTrade.id.asc()).all()
-                    ]
-                if prior_trades:
-                    _restore_portfolio_state(bot, prior_trades, config.initial_capital)
+            # Restore portfolio state from existing live session trades
+            with session_scope() as _sess:
+                prior_trades = [
+                    {
+                        "id": t.id,
+                        "symbol": t.symbol,
+                        "action": t.action,
+                        "quantity": t.quantity,
+                        "price": t.price,
+                        "trade_value": t.trade_value,
+                        "trade_date": t.trade_date,
+                    }
+                    for t in _sess.query(SimTrade).filter(
+                        SimTrade.session_id == session_id
+                    ).order_by(SimTrade.id.asc()).all()
+                ]
+            if prior_trades:
+                _restore_portfolio_state(bot, prior_trades, config.initial_capital)
 
-                trades = bot.step(today)
+            trades = bot.step(today, cache=cache)
 
-                with session_scope() as session:
-                    for trade in trades:
-                        db_trade = SimTrade(
-                            session_id=session_id,
-                            bot_id=bot_id,
-                            symbol=trade.symbol,
-                            action=trade.action,
-                            quantity=Decimal(str(round(trade.quantity, 6))),
-                            price=Decimal(str(round(trade.price, 4))),
-                            trade_value=Decimal(str(round(trade.trade_value, 2))),
-                            signal_strength=Decimal(str(round(trade.signal_strength, 4))) if trade.signal_strength is not None else None,
-                            confidence=Decimal(str(round(trade.confidence, 3))) if trade.confidence is not None else None,
-                            trade_date=now,
-                            close_reason=trade.close_reason,
-                            pnl=Decimal(str(round(trade.pnl, 2))) if trade.pnl is not None else None,
-                            pnl_pct=Decimal(str(round(trade.pnl_pct, 4))) if trade.pnl_pct is not None else None,
-                        )
-                        session.add(db_trade)
-                    session.commit()
-
-                snap = bot.get_snapshot(today)
-                with session_scope() as session:
-                    db_snap = SimPortfolioSnapshot(
+            with session_scope() as session:
+                for trade in trades:
+                    db_trade = SimTrade(
                         session_id=session_id,
                         bot_id=bot_id,
-                        snapshot_date=snap["snapshot_date"],
-                        cash_balance=Decimal(str(round(snap["cash_balance"], 2))),
-                        positions_value=Decimal(str(round(snap["positions_value"], 2))),
-                        total_value=Decimal(str(round(snap["total_value"], 2))),
-                        total_return_pct=Decimal(str(round(snap["total_return_pct"], 4))),
-                        open_positions=snap["open_positions"],
+                        symbol=trade.symbol,
+                        action=trade.action,
+                        quantity=Decimal(str(round(trade.quantity, 6))),
+                        price=Decimal(str(round(trade.price, 4))),
+                        trade_value=Decimal(str(round(trade.trade_value, 2))),
+                        signal_strength=Decimal(str(round(trade.signal_strength, 4))) if trade.signal_strength is not None else None,
+                        confidence=Decimal(str(round(trade.confidence, 3))) if trade.confidence is not None else None,
+                        trade_date=now,
+                        close_reason=trade.close_reason,
+                        pnl=Decimal(str(round(trade.pnl, 2))) if trade.pnl is not None else None,
+                        pnl_pct=Decimal(str(round(trade.pnl_pct, 4))) if trade.pnl_pct is not None else None,
                     )
-                    session.merge(db_snap)
-                    session.commit()
+                    session.add(db_trade)
+                session.commit()
 
-                # Refresh KPI columns after each live step so leaderboard/monitoring
-                # queries can read directly from sim_sessions without aggregating.
-                try:
-                    update_session_kpis(session_id)
-                except Exception as kpi_exc:
-                    log.warning("sim.kpi.live_step_failed", bot_id=bot_id, session_id=session_id, error=str(kpi_exc))
+            snap = bot.get_snapshot(today)
+            with session_scope() as session:
+                db_snap = SimPortfolioSnapshot(
+                    session_id=session_id,
+                    bot_id=bot_id,
+                    snapshot_date=snap["snapshot_date"],
+                    cash_balance=Decimal(str(round(snap["cash_balance"], 2))),
+                    positions_value=Decimal(str(round(snap["positions_value"], 2))),
+                    total_value=Decimal(str(round(snap["total_value"], 2))),
+                    total_return_pct=Decimal(str(round(snap["total_return_pct"], 4))),
+                    open_positions=snap["open_positions"],
+                )
+                session.merge(db_snap)
+                session.commit()
 
-            except Exception as exc:
-                log.error("sim.live_step.bot_error", bot_id=bot_id, error=str(exc))
+            # Refresh KPI columns after each live step so leaderboard/monitoring
+            # queries can read directly from sim_sessions without aggregating.
+            try:
+                update_session_kpis(session_id)
+            except Exception as kpi_exc:
+                log.warning("sim.kpi.live_step_failed", bot_id=bot_id, session_id=session_id, error=str(kpi_exc))
+
+        except Exception as exc:
+            log.error("sim.live_step.bot_error", bot_id=bot_id, error=str(exc))
+
+    def _run_bot_steps(self, bot_configs: list, today, cache=None, n_workers: int = 1) -> None:
+        """Execute one simulation step for a list of (bot_id, BotConfig) pairs.
+
+        When n_workers > 1 bots are dispatched to a ThreadPoolExecutor so that
+        the (now large) per-symbol fleet can be processed in parallel.  The
+        StepDataCache (if provided) is read-only and safe to share across threads.
+        When n_workers == 1 (or cache is None — backtest path) the loop is
+        sequential for backwards compatibility.
+        """
+        now = datetime.now()  # VN local time (TZ=Asia/Ho_Chi_Minh set at startup)
+
+        if n_workers <= 1:
+            # Sequential path — preserves exact legacy behaviour for backtest /
+            # small fleets / callers that don't pass n_workers.
+            for bot_id, config in bot_configs:
+                self._run_single_bot(bot_id, config, today, now, cache=cache)
+        else:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as executor:
+                futures = {
+                    executor.submit(self._run_single_bot, bot_id, config, today, now, cache): bot_id
+                    for bot_id, config in bot_configs
+                }
+                for future in concurrent.futures.as_completed(futures):
+                    bot_id = futures[future]
+                    try:
+                        future.result()
+                    except Exception as exc:
+                        # _run_single_bot already logs internally; catch here as
+                        # a safety net so one bad future can't prevent others.
+                        log.error("sim.live_step.bot_error", bot_id=bot_id, error=str(exc))
 
     def run_live_step(self):
         """Called by fallback cron — runs one simulation step for ALL active bots."""
@@ -466,7 +568,7 @@ class SimulationEngine:
             bots = session.query(SimBot).filter(SimBot.is_active == True).all()
             bot_configs = []
             for db_bot in bots:
-                # Bỏ qua bot của market đang đóng (NASDAQ/SP500 cuối tuần & lễ US)
+                # Skip bots for closed markets (NASDAQ/SP500 on weekends & US holidays)
                 if not is_market_open(db_bot.market):
                     log.debug("sim.live_step.skip_closed", bot_id=db_bot.id, market=db_bot.market)
                     continue
@@ -482,10 +584,13 @@ class SimulationEngine:
                     take_profit=float(db_bot.take_profit),
                     max_position_pct=float(db_bot.max_position_pct),
                     max_positions=int(db_bot.max_positions),
+                    symbol=db_bot.symbol,
                 )))
 
         log.info("sim.live_step.all_start", bots=len(bot_configs))
-        self._run_bot_steps(bot_configs, today)
+        # Fallback cron path: run sequentially (cache=None) to keep behaviour
+        # identical to the pre-threading implementation.
+        self._run_bot_steps(bot_configs, today, cache=None, n_workers=1)
         log.info("sim.live_step.all_done")
 
     def reset_active_bots(self) -> int:

@@ -12,6 +12,47 @@ from src.utils.logger import get_logger
 log = get_logger("simulation.signal")
 
 
+def _derive_signals(
+    rows: list[dict],
+    buy_threshold: float,
+    sell_threshold: float,
+    min_confidence: float,
+    for_date: date,
+) -> list["TradeSignal"]:
+    """Convert raw prediction rows into TradeSignal objects applying thresholds."""
+    signals: list[TradeSignal] = []
+    for row in rows:
+        try:
+            predicted = float(row["predicted_price"])
+            current = float(row["current_price"])
+            if current == 0:
+                continue
+
+            confidence = float(row["confidence"] or 0)
+            signal_strength = (predicted - current) / current * 100
+
+            if signal_strength > buy_threshold and confidence > min_confidence:
+                action = "BUY"
+            elif signal_strength < -sell_threshold and confidence > min_confidence:
+                action = "SELL"
+            else:
+                action = "HOLD"
+
+            signals.append(TradeSignal(
+                symbol=row["symbol"],
+                action=action,
+                signal_strength=signal_strength,
+                confidence=confidence,
+                predicted_price=predicted,
+                current_price=current,
+                prediction_date=for_date,
+            ))
+        except Exception as exc:
+            log.warning("signal.row_error", error=str(exc))
+            continue
+    return signals
+
+
 @dataclass
 class TradeSignal:
     symbol: str
@@ -34,52 +75,48 @@ class SignalGenerator:
         "CRYPTO": "crypto_predictions",
     }
 
-    def get_signals(self, market: str, algorithm: str, for_date: date,
-                    buy_threshold: float, sell_threshold: float,
-                    min_confidence: float) -> list[TradeSignal]:
+    def get_signals(
+        self,
+        market: str,
+        algorithm: str,
+        for_date: date,
+        buy_threshold: float,
+        sell_threshold: float,
+        min_confidence: float,
+        cached_rows: list[dict] | None = None,
+    ) -> list[TradeSignal]:
         """
         Returns list of TradeSignal for the given market/algorithm/date.
         Uses prediction rows where prediction_date matches for_date.
-        """
-        from datetime import datetime
-        from src.database.connection import session_scope
 
-        signals = []
+        If cached_rows is provided the DB query is skipped and signal derivation
+        runs directly on the supplied rows (same threshold logic applies).  This
+        allows the engine to pre-fetch predictions once per distinct algorithm and
+        share them across many bots without duplicating DB round-trips.
+        """
+        if cached_rows is not None:
+            return _derive_signals(cached_rows, buy_threshold, sell_threshold, min_confidence, for_date)
+
+        from src.database.connection import session_scope
 
         with session_scope() as session:
             rows = self._query_predictions(session, market, algorithm, for_date)
 
-            for row in rows:
-                try:
-                    predicted = float(row["predicted_price"])
-                    current = float(row["current_price"])
-                    if current == 0:
-                        continue
+        return _derive_signals(rows, buy_threshold, sell_threshold, min_confidence, for_date)
 
-                    confidence = float(row["confidence"] or 0)
-                    signal_strength = (predicted - current) / current * 100
+    def fetch_predictions(self, market: str, algorithm: str, for_date: date) -> list[dict]:
+        """Fetch raw prediction rows for (market, algorithm, for_date).
 
-                    if signal_strength > buy_threshold and confidence > min_confidence:
-                        action = "BUY"
-                    elif signal_strength < -sell_threshold and confidence > min_confidence:
-                        action = "SELL"
-                    else:
-                        action = "HOLD"
+        Returns the same dict shape used by get_signals:
+          {symbol, predicted_price, current_price, confidence}
 
-                    signals.append(TradeSignal(
-                        symbol=row["symbol"],
-                        action=action,
-                        signal_strength=signal_strength,
-                        confidence=confidence,
-                        predicted_price=predicted,
-                        current_price=current,
-                        prediction_date=for_date,
-                    ))
-                except Exception as exc:
-                    log.warning("signal.row_error", error=str(exc))
-                    continue
+        Intended for the engine's StepDataCache to call once per distinct
+        algorithm and share the result across bots.
+        """
+        from src.database.connection import session_scope
 
-        return signals
+        with session_scope() as session:
+            return self._query_predictions(session, market, algorithm, for_date)
 
     def _query_predictions(self, session, market: str, algorithm: str, for_date: date) -> list[dict]:
         """Raw SQL query for predictions on a given date."""

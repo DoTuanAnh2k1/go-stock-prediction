@@ -1,12 +1,24 @@
 """Training state management, training pipeline, and reconcile logic."""
 from __future__ import annotations
 
+import os
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from src.algorithms.registry import build_algorithms, get_algos_for_market, set_algos_for_market
+from src.algorithms.base import PredictionAlgorithm
+from src.algorithms.registry import (
+    PER_SYMBOL_ALGO_MIN_POINTS,
+    _DEFAULT_PS_MIN_POINTS,
+    build_algorithms,
+    build_algorithms_for_symbol,
+    get_algos_for_market,
+    set_algos_for_market,
+    set_algos_for_symbol,
+)
+from src.config import get_settings
 from src.crawlers.crypto import COINS as CRYPTO_COINS
 from src.crawlers.nasdaq import NASDAQ_SYMBOLS
 from src.crawlers.sp500 import SP500_SYMBOLS
@@ -16,6 +28,191 @@ from src.utils.logger import get_logger
 log = get_logger("training")
 
 GOLD_INSTRUMENTS = [("XAU", "spot"), ("BTMC", "sjc"), ("BTMC", "nhan_tron")]
+
+
+# ---------------------------------------------------------------------------
+# Per-symbol helpers
+# ---------------------------------------------------------------------------
+
+def _resolve_workers(default_cap: int = 8) -> int:
+    """Resolve the thread-pool worker count from settings.
+
+    Uses ``settings.per_symbol_workers`` when > 0, otherwise ``os.cpu_count()``.
+    Always clamped to [1, default_cap].
+    """
+    settings = get_settings()
+    n = settings.per_symbol_workers or (os.cpu_count() or 4)
+    return max(1, min(default_cap, n))
+
+
+def _collect_symbol_series_for_market(
+    mk: str,
+) -> list[tuple[str, list[float], list[float] | None]]:
+    """Return (symbol_label, prices_asc, vols_or_None) per symbol for *mk*.
+
+    symbol_label conventions (must match runner + seeder):
+      - GOLD:     f"{source}_{product_type}"   e.g. "XAU_spot", "BTMC_sjc", "BTMC_nhan_tron"
+      - NASDAQ100: the ticker symbol            e.g. "AAPL", "MSFT"
+      - SP500:     the ticker symbol            e.g. "SPY", "JPM"
+      - CRYPTO:    the coin symbol              e.g. "BTC", "ETH", "SOL"
+
+    Only symbols with >= settings.per_symbol_min_points data points are included;
+    data-starved symbols are silently dropped here so we never even build instances
+    for them.
+    """
+    settings = get_settings()
+    min_pts = settings.per_symbol_min_points
+    result: list[tuple[str, list[float], list[float] | None]] = []
+
+    if mk == "GOLD":
+        for source, product_type in GOLD_INSTRUMENTS:
+            prices = repo.get_gold_prices_asc(source, product_type, limit=500)
+            if len(prices) < min_pts:
+                continue
+            price_list = [float(p.buy_price) for p in prices]
+            symbol_label = f"{source}_{product_type}"
+            result.append((symbol_label, price_list, None))
+
+    elif mk == "NASDAQ100":
+        symbols = repo.get_nasdaq_symbols() or NASDAQ_SYMBOLS
+        for symbol in symbols:
+            prices = repo.get_nasdaq_prices_asc(symbol, limit=500)
+            if len(prices) < min_pts:
+                continue
+            price_list = [float(p.close_price) for p in prices]
+            vol_list = [float(p.volume or 0) for p in prices]
+            result.append((symbol, price_list, vol_list))
+
+    elif mk == "CRYPTO":
+        for coin_id, symbol in CRYPTO_COINS:
+            prices = repo.get_crypto_prices_asc(coin_id, limit=500)
+            if len(prices) < min_pts:
+                continue
+            price_list = [float(p.close_price) for p in prices]
+            vol_list = [float(p.volume24h or 0) for p in prices]
+            result.append((symbol, price_list, vol_list))
+
+    elif mk == "SP500":
+        sp_symbols = repo.get_sp500_symbols() or SP500_SYMBOLS
+        for symbol in sp_symbols:
+            prices = repo.get_sp500_prices_asc(symbol, limit=500)
+            if len(prices) < min_pts:
+                continue
+            price_list = [float(p.close_price) for p in prices]
+            vol_list = [float(p.volume or 0) for p in prices]
+            result.append((symbol, price_list, vol_list))
+
+    else:
+        log.warning("training.per_symbol.market.unknown", market=mk)
+
+    return result
+
+
+def _train_symbol_worker(
+    mk: str,
+    symbol: str,
+    prices: list[float],
+    vols: list[float] | None,
+    global_min_pts: int,
+) -> tuple[str, int, int]:
+    """Worker function: train per-symbol instances for a single (market, symbol).
+
+    Builds fresh instances, trains each algo only if data meets both the global
+    min-points requirement AND the per-algo minimum.  Drops algos that are
+    data-starved.  Persists surviving (trained or analytically-ready) instances
+    via ``set_algos_for_symbol``.
+
+    Returns (symbol, trained_count, skipped_count) for the caller to log.
+    """
+    # Stateless algos that predict analytically (no persistent model) — keep
+    # them if data meets their per-algo min-point threshold, even though
+    # is_trained() returns False.
+    STATELESS_ALGO_KEYS = frozenset({
+        "moving_average", "ema", "arima_garch", "sarima", "egarch",
+    })
+
+    instances = build_algorithms_for_symbol(mk, symbol)
+    n_pts = len(prices)
+    surviving: dict[str, PredictionAlgorithm] = {}
+    trained_count = 0
+    skipped_count = 0
+
+    for key, algo in instances.items():
+        algo_min = max(
+            PER_SYMBOL_ALGO_MIN_POINTS.get(key, _DEFAULT_PS_MIN_POINTS),
+            global_min_pts,
+        )
+        if n_pts < algo_min:
+            skipped_count += 1
+            continue  # data-starved: drop from per-symbol cache
+
+        try:
+            algo.train_batch([(prices, vols)])
+        except Exception as exc:
+            log.warning(
+                "training.per_symbol.algo.failed",
+                market=mk, symbol=symbol, algo=key, error=str(exc),
+            )
+            # For stateless algos keep them anyway (they don't rely on train_batch)
+            if key not in STATELESS_ALGO_KEYS:
+                skipped_count += 1
+                continue
+
+        # Keep if trained successfully OR is a stateless/analytical algo
+        if algo.is_trained() or key in STATELESS_ALGO_KEYS:
+            surviving[key] = algo
+            trained_count += 1
+        else:
+            skipped_count += 1
+
+    set_algos_for_symbol(mk, symbol, surviving)
+    return symbol, trained_count, skipped_count
+
+
+def train_per_symbol_for_market(mk: str) -> None:
+    """Train per-symbol algorithm instances for all symbols of *mk*.
+
+    Runs in a thread pool (capped by _resolve_workers).  Each worker builds
+    fresh instances so there are no shared-state races between threads.
+    DB access in each worker is session-per-call (repository pattern) so it
+    is thread-safe with the pool size configured in connection.py.
+
+    This function is called automatically from ``train_for_market`` when
+    ``settings.per_symbol_enabled`` is True.  It can also be invoked directly
+    for targeted refreshes.
+    """
+    settings = get_settings()
+    global_min_pts = settings.per_symbol_min_points
+
+    symbol_series = _collect_symbol_series_for_market(mk)
+    if not symbol_series:
+        log.info("training.per_symbol.no_symbols", market=mk)
+        return
+
+    log.info("training.per_symbol.start", market=mk, symbols=len(symbol_series))
+    workers = _resolve_workers(8)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(_train_symbol_worker, mk, sym, prices, vols, global_min_pts): sym
+            for sym, prices, vols in symbol_series
+        }
+        for future in as_completed(futures):
+            sym = futures[future]
+            try:
+                _sym, trained, skipped = future.result()
+                log.info(
+                    "training.per_symbol.symbol.done",
+                    market=mk, symbol=_sym,
+                    trained=trained, skipped=skipped,
+                )
+            except Exception as exc:
+                log.warning(
+                    "training.per_symbol.symbol.error",
+                    market=mk, symbol=sym, error=str(exc),
+                )
+
+    log.info("training.per_symbol.done", market=mk, symbols=len(symbol_series))
 
 
 def _collect_all_training_series() -> list[tuple[list[float], list[float], str]]:
@@ -226,6 +423,13 @@ def train_for_market(market_key: str) -> tuple[bool, str]:
 
     # Persist trained instances in the registry
     set_algos_for_market(mk, algos)
+
+    # Per-symbol training (additive — runs only when enabled)
+    if get_settings().per_symbol_enabled:
+        try:
+            train_per_symbol_for_market(mk)
+        except Exception as exc:
+            log.warning("training.per_symbol.hook.failed", market=mk, error=str(exc))
 
     try:
         repo.create_sync_log(

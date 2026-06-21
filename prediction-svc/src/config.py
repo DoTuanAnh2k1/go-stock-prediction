@@ -33,6 +33,18 @@ class Settings(BaseSettings):
     service_mgt_enabled: bool = False
     registry_grpc_target: str = "service-mgt:8121"
 
+    # Per-symbol models (additive, coexists with pooled per-market models)
+    # When enabled: each (symbol × algorithm) gets its own trained model, its
+    # predictions are written with the "__ps" algorithm_name suffix, and a
+    # per-symbol bot fleet is seeded. Disabled = legacy pooled behaviour only.
+    per_symbol_enabled: bool = False
+    # Minimum price points a symbol must have for a given algorithm family to be
+    # trained per-symbol. Data-starved (symbol, algo) pairs are skipped.
+    per_symbol_min_points: int = 80
+    # Thread-pool worker count for per-symbol training and bot live-steps.
+    # 0 → auto (os.cpu_count()). Bounded internally to a sane max.
+    per_symbol_workers: int = 0
+
     class Config:
         env_file = ".env"
         case_sensitive = False

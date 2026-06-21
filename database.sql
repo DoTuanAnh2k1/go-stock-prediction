@@ -387,6 +387,7 @@ CREATE TABLE IF NOT EXISTS sim_bots (
     id               VARCHAR(50)   PRIMARY KEY,
     market           VARCHAR(20)   NOT NULL,
     algorithm        VARCHAR(50)   NOT NULL,
+    symbol           VARCHAR(30),  -- NULL = pooled per-market bot; set = per-symbol bot scoped to this symbol
     display_name     VARCHAR(100)  NOT NULL,
     initial_capital  NUMERIC(20,2) NOT NULL,
     currency         VARCHAR(5)    NOT NULL,
@@ -402,6 +403,9 @@ CREATE TABLE IF NOT EXISTS sim_bots (
     updated_at       TIMESTAMP     NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_sim_bots_market ON sim_bots(market);
+CREATE INDEX IF NOT EXISTS idx_sim_bots_market_symbol ON sim_bots(market, symbol);
+-- Idempotent add for existing databases (schema is mounted only on first init)
+ALTER TABLE sim_bots ADD COLUMN IF NOT EXISTS symbol VARCHAR(30);
 
 -- sim_sessions: backtest and live simulation runs per bot
 CREATE TABLE IF NOT EXISTS sim_sessions (
@@ -885,6 +889,18 @@ CREATE INDEX IF NOT EXISTS idx_pipeline_reports_key
 
 CREATE INDEX IF NOT EXISTS idx_pipeline_reports_created
     ON pipeline_reports(created_at);
+
+-- ============================================================
+-- Pipeline crawl counters — persist per-market crawl count across restarts.
+-- Source of truth for "train every 10th crawl" logic in the prediction-svc
+-- pipeline (replaces the old in-memory _crawl_counts dict so the count
+-- survives prediction-svc restarts). Not a hypertable.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS pipeline_crawl_counters (
+    market_key   VARCHAR(32)  PRIMARY KEY,
+    crawl_count  BIGINT       NOT NULL DEFAULT 0,
+    updated_at   TIMESTAMP    NOT NULL DEFAULT NOW()
+);
 
 -- ============================================================
 -- Service Management — registry / discovery (service-mgt)

@@ -63,6 +63,9 @@ services:
       LOG_FORMAT: "${LOG_FORMAT:-console}"
       ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-https://localhost}"
       RL_MODEL_DIR: "${RL_MODEL_DIR:-/models}"
+      PER_SYMBOL_ENABLED: "${PER_SYMBOL_ENABLED:-false}"
+      PER_SYMBOL_MIN_POINTS: "${PER_SYMBOL_MIN_POINTS:-80}"
+      PER_SYMBOL_WORKERS: "${PER_SYMBOL_WORKERS:-0}"
     volumes:
       - rl_models:/models
     networks:

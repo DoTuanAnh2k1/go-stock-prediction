@@ -11,6 +11,7 @@ type SimBot struct {
 	ID             string          `gorm:"primaryKey;size:50" json:"id"`
 	Market         string          `gorm:"size:20;not null;index" json:"market"`
 	Algorithm      string          `gorm:"size:50;not null" json:"algorithm"`
+	Symbol         *string         `gorm:"size:30" json:"symbol,omitempty"` // NULL = pooled per-market bot; set = per-symbol bot
 	DisplayName    string          `gorm:"size:100;not null" json:"display_name"`
 	InitialCapital decimal.Decimal `gorm:"type:decimal(20,2);not null" json:"initial_capital"`
 	Currency       string          `gorm:"size:5;not null" json:"currency"`

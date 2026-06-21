@@ -46,6 +46,10 @@ class PredictionAlgorithm(ABC):
     # Algorithms use this to apply market-aware clamp limits.
     _market_key: str = ""
 
+    # Symbol key set by the registry when algorithms are instantiated per-symbol.
+    # None for pooled (per-market) instances; non-empty string for per-symbol instances.
+    _symbol_key: str | None = None
+
     @abstractmethod
     def predict(self, prices: list[float], volumes: list[float] | None = None) -> PredictionResult:
         """Generate a prediction.

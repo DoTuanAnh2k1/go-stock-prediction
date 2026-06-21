@@ -1,7 +1,7 @@
 """TradingBot — state machine for one market×algorithm bot."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Optional
 
@@ -22,6 +22,10 @@ class BotConfig:
     take_profit: float
     max_position_pct: float
     max_positions: int
+    # Per-symbol scoping: None = pooled per-market bot (legacy behaviour).
+    # Non-None = per-symbol bot; only this symbol's signals and positions are
+    # processed.  The algorithm value will carry the "__ps" suffix in this case.
+    symbol: str | None = None
 
 
 # Map simulation market key → registry market key used by RL DQN
@@ -47,24 +51,46 @@ class TradingBot:
         )
         self.signal_gen = SignalGenerator()
 
-    def step(self, sim_date: date) -> list[Trade]:
-        """Run one simulation day: SL/TP check then process new signals."""
+    def step(self, sim_date: date, cache=None) -> list[Trade]:
+        """Run one simulation day: SL/TP check then process new signals.
+
+        cache (optional StepDataCache from engine): when provided, DB queries
+        for predictions and current prices are served from the pre-fetched cache
+        instead of issuing new round-trips.  When None (default / backtest path)
+        every call issues its own DB queries — behaviour is unchanged.
+        """
         trades = []
 
-        # Get current prices for SL/TP check (all bots, including RL)
+        # Get current prices for SL/TP check (all bots, including RL).
+        # For per-symbol bots only check the one tracked symbol to save a DB
+        # round-trip (correctness: positions only ever contain that symbol anyway).
         closed_this_step: set[str] = set()
         if self.portfolio.positions:
-            current_prices = self.signal_gen.get_current_prices(
-                self.config.market,
-                list(self.portfolio.positions.keys()),
-                sim_date,
-            )
-            sl_tp_trades = self.portfolio.check_stop_loss_take_profit(current_prices, sim_date)
-            trades.extend(sl_tp_trades)
-            # Block same-step re-entry
-            closed_this_step = {t.symbol for t in sl_tp_trades}
+            sl_symbols = list(self.portfolio.positions.keys())
+            if self.config.symbol is not None:
+                # Restrict to our symbol; other symbols can't be in positions
+                sl_symbols = [s for s in sl_symbols if s == self.config.symbol]
 
-        if self.config.algorithm == "rl_dqn":
+            if sl_symbols:
+                if cache is not None and hasattr(cache, "current_prices"):
+                    current_prices = {s: cache.current_prices[s] for s in sl_symbols if s in cache.current_prices}
+                else:
+                    current_prices = self.signal_gen.get_current_prices(
+                        self.config.market,
+                        sl_symbols,
+                        sim_date,
+                    )
+                sl_tp_trades = self.portfolio.check_stop_loss_take_profit(current_prices, sim_date)
+                trades.extend(sl_tp_trades)
+                # Block same-step re-entry
+                closed_this_step = {t.symbol for t in sl_tp_trades}
+
+        # Detect RL branch: includes both the pooled ("rl_dqn") and per-symbol
+        # ("rl_dqn__ps") variants so that the policy path is used in both cases.
+        base_key = self.config.algorithm.split("__")[0]
+        is_rl = base_key == "rl_dqn"
+
+        if is_rl:
             # ------------------------------------------------------------------
             # RL native branch: policy directly decides BUY/SELL/HOLD per symbol
             # ------------------------------------------------------------------
@@ -72,8 +98,12 @@ class TradingBot:
             trades.extend(rl_trades)
         else:
             # ------------------------------------------------------------------
-            # Standard threshold branch (unchanged)
+            # Standard threshold branch
             # ------------------------------------------------------------------
+            cached_rows: list[dict] | None = None
+            if cache is not None and hasattr(cache, "predictions"):
+                cached_rows = cache.predictions.get(self.config.algorithm)
+
             signals = self.signal_gen.get_signals(
                 market=self.config.market,
                 algorithm=self.config.algorithm,
@@ -81,7 +111,12 @@ class TradingBot:
                 buy_threshold=self.config.buy_threshold,
                 sell_threshold=self.config.sell_threshold,
                 min_confidence=self.config.min_confidence,
+                cached_rows=cached_rows,
             )
+
+            # Per-symbol scoping: discard signals not for our target symbol.
+            if self.config.symbol is not None:
+                signals = [s for s in signals if s.symbol == self.config.symbol]
 
             for signal in signals:
                 if signal.action == "BUY":
@@ -113,6 +148,7 @@ class TradingBot:
                         action="HOLD",
                         quantity=0,
                         price=signal.current_price,
+                        trade_value=0.0,
                         trade_date=sim_date,
                         signal_strength=signal.signal_strength,
                         confidence=signal.confidence,
@@ -122,7 +158,7 @@ class TradingBot:
 
     def _step_rl(self, sim_date: date, closed_this_step: set[str]) -> list[Trade]:
         """RL native step: for each tradable symbol, build observation and call policy.act()."""
-        from src.algorithms.registry import get_algos_for_market
+        from src.algorithms.registry import get_algos_for_market, get_algos_for_symbol, PS_SUFFIX
         from src.database import repository as repo
         import numpy as np
         from src.algorithms.features import build_enhanced_features, MIN_DATA_POINTS
@@ -132,17 +168,26 @@ class TradingBot:
         # Resolve registry market key (NASDAQ100 vs NASDAQ)
         registry_market = _SIM_TO_REGISTRY_MARKET.get(self.config.market, self.config.market)
 
-        # Get the RL DQN instance for this market (with loaded checkpoint)
+        # Get the RL DQN policy:
+        # - Per-symbol bot ("rl_dqn__ps"): load per-symbol checkpoint via
+        #   get_algos_for_symbol so rl_dqn_{market}_{symbol}.pt is used.
+        # - Pooled bot ("rl_dqn"): keep existing get_algos_for_market behaviour.
         try:
-            algos = get_algos_for_market(registry_market)
+            if self.config.symbol is not None:
+                algos = get_algos_for_symbol(registry_market, self.config.symbol)
+            else:
+                algos = get_algos_for_market(registry_market)
             policy = algos.get("rl_dqn")
             if policy is None:
                 return trades
         except Exception:
             return trades
 
-        # Enumerate symbols and prices as-of sim_date
+        # Enumerate symbols and prices as-of sim_date.
+        # Per-symbol bot: restrict to the single tracked symbol.
         symbol_prices = self._get_symbols_and_prices_as_of(sim_date, repo)
+        if self.config.symbol is not None:
+            symbol_prices = {k: v for k, v in symbol_prices.items() if k == self.config.symbol}
 
         as_of_dt = datetime.combine(sim_date, datetime.max.time())
 
@@ -222,6 +267,7 @@ class TradingBot:
                     action="HOLD",
                     quantity=0,
                     price=current_price,
+                    trade_value=0.0,
                     trade_date=sim_date,
                     signal_strength=0.0,
                     confidence=confidence,

@@ -245,6 +245,7 @@ class SimBot(Base):
     id = Column(String(50), primary_key=True)
     market = Column(String(20), nullable=False, index=True)
     algorithm = Column(String(50), nullable=False)
+    symbol = Column(String(30), nullable=True)  # NULL = pooled per-market bot; set = per-symbol bot
     display_name = Column(String(100), nullable=False)
     initial_capital = Column(Numeric(20, 2), nullable=False)
     currency = Column(String(5), nullable=False)

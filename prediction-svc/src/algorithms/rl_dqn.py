@@ -106,11 +106,15 @@ def _get_model_dir() -> str:
         return _DEFAULT_MODEL_DIR
 
 
-def _checkpoint_path(market_key: str) -> str:
+def _checkpoint_path(market_key: str, symbol_key: str | None = None) -> str:
     mdir = _get_model_dir()
     # Normalise market key: NASDAQ100 → NASDAQ100, etc.
-    safe_key = (market_key or "UNKNOWN").upper().replace("/", "_")
-    return os.path.join(mdir, f"rl_dqn_{safe_key}.pt")
+    safe_market = (market_key or "UNKNOWN").upper().replace("/", "_")
+    if symbol_key:
+        # Sanitize symbol for safe filesystem use (replace path separators and spaces)
+        safe_symbol = symbol_key.replace(os.sep, "_").replace("/", "_").replace(" ", "_")
+        return os.path.join(mdir, f"rl_dqn_{safe_market}_{safe_symbol}.pt")
+    return os.path.join(mdir, f"rl_dqn_{safe_market}.pt")
 
 
 # ---------------------------------------------------------------------------
@@ -405,8 +409,9 @@ class RLDQNPredictor(PredictionAlgorithm):
     # ------------------------------------------------------------------
 
     def _try_load_checkpoint(self) -> bool:
-        """Try to load checkpoint for self._market_key. Returns True on success."""
-        path = _checkpoint_path(self._market_key)
+        """Try to load checkpoint for self._market_key (and optionally self._symbol_key). Returns True on success."""
+        symbol = getattr(self, "_symbol_key", None)
+        path = _checkpoint_path(self._market_key, symbol)
         if not os.path.exists(path):
             return False
         try:
@@ -419,21 +424,22 @@ class RLDQNPredictor(PredictionAlgorithm):
             self._qnet = net
             self._in_dim = in_dim
             self._trained = True
-            log.info("rl_dqn.checkpoint.loaded", market=self._market_key, path=path)
+            log.info("rl_dqn.checkpoint.loaded", market=self._market_key, symbol=symbol, path=path)
             return True
         except Exception as exc:
-            log.warning("rl_dqn.checkpoint.load_failed", market=self._market_key, path=path, error=str(exc))
+            log.warning("rl_dqn.checkpoint.load_failed", market=self._market_key, symbol=symbol, path=path, error=str(exc))
             return False
 
     def _save_checkpoint(self, net, in_dim: int) -> None:
-        path = _checkpoint_path(self._market_key)
+        symbol = getattr(self, "_symbol_key", None)
+        path = _checkpoint_path(self._market_key, symbol)
         try:
             import torch
             os.makedirs(os.path.dirname(path), exist_ok=True)
             torch.save({"in_dim": in_dim, "state_dict": net.state_dict()}, path)
-            log.info("rl_dqn.checkpoint.saved", market=self._market_key, path=path)
+            log.info("rl_dqn.checkpoint.saved", market=self._market_key, symbol=symbol, path=path)
         except Exception as exc:
-            log.warning("rl_dqn.checkpoint.save_failed", market=self._market_key, path=path, error=str(exc))
+            log.warning("rl_dqn.checkpoint.save_failed", market=self._market_key, symbol=symbol, path=path, error=str(exc))
 
     # ------------------------------------------------------------------
     # act() — shared greedy policy (ε=0)
