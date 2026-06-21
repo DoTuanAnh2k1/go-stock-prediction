@@ -61,6 +61,19 @@ start_grpc_server(cfg.grpc_server_port)
 log.info("grpc.ready", port=cfg.grpc_server_port)
 
 # ---------------------------------------------------------------------------
+# 5b. Service registry (optional — gated by SERVICE_MGT_ENABLED)
+# ---------------------------------------------------------------------------
+from src.registry_client import start as registry_start, stop as registry_stop
+
+registry_start(
+    enabled=cfg.service_mgt_enabled,
+    target=cfg.registry_grpc_target,
+    service_name="prediction-svc",
+    address="prediction-svc",
+    port=cfg.grpc_server_port,
+)
+
+# ---------------------------------------------------------------------------
 # 6. Scheduler
 # ---------------------------------------------------------------------------
 from src.scheduler.jobs import JOB_FUNCTIONS
@@ -118,6 +131,7 @@ log.info("service.ready")
 _stop_event.wait()
 
 log.info("service.shutdown")
+registry_stop()
 stop_grpc_server()
 shutdown_scheduler()
 log.info("service.stopped")

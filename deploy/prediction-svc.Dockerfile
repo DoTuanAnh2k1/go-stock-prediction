@@ -7,11 +7,13 @@ RUN pip install --no-cache-dir "grpcio-tools>=1.71.0" "protobuf>=6.33.5"
 
 WORKDIR /app
 
-# Copy proto file from repo root (build context must be the repo root).
-# Source lives in api-svc/proto; staged at api/proto inside the image for protoc.
+# Copy proto files from repo root (build context must be the repo root).
+# Source lives in api-svc/proto and service-mgt/proto; staged at api/proto inside the image for protoc.
 COPY api-svc/proto/prediction/prediction.proto api/proto/prediction/prediction.proto
+COPY service-mgt/proto/registry/registry.proto api/proto/registry/registry.proto
 
-RUN mkdir -p src/proto/prediction && \
+RUN mkdir -p src/proto/prediction src/proto/registry && \
+    # Generate prediction stubs
     python -m grpc_tools.protoc \
         -Iapi/proto \
         --python_out=src/proto \
@@ -22,7 +24,17 @@ RUN mkdir -p src/proto/prediction && \
     touch src/proto/prediction/__init__.py && \
     # Fix relative imports in generated grpc file to use absolute package path
     sed -i 's/from prediction import prediction_pb2/from src.proto.prediction import prediction_pb2/' \
-        src/proto/prediction/prediction_pb2_grpc.py
+        src/proto/prediction/prediction_pb2_grpc.py && \
+    # Generate registry stubs
+    python -m grpc_tools.protoc \
+        -Iapi/proto \
+        --python_out=src/proto \
+        --grpc_python_out=src/proto \
+        api/proto/registry/registry.proto && \
+    touch src/proto/registry/__init__.py && \
+    # Fix relative imports in generated registry grpc file
+    sed -i 's/from registry import registry_pb2/from src.proto.registry import registry_pb2/' \
+        src/proto/registry/registry_pb2_grpc.py
 
 # ---------------------------------------------------------------------------
 # Stage 2: Runtime

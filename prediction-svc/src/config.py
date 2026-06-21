@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # RL DQN model checkpoints
     rl_model_dir: str = "/models"
 
+    # Service registry (service-mgt)
+    service_mgt_enabled: bool = False
+    registry_grpc_target: str = "service-mgt:8121"
+
     class Config:
         env_file = ".env"
         case_sensitive = False
