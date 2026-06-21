@@ -4,12 +4,13 @@
 
 Hệ thống dự đoán giá tài sản tài chính. Thu thập dữ liệu từ 4 nguồn (Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, S&P 500), chạy 12 thuật toán ML (Moving Average, EMA/MACD, LSTM PyTorch, GRU PyTorch, ARIMA-GARCH, EGARCH, SARIMA, LightGBM, XGBoost, Random Forest, Ensemble, RL DQN), và hiển thị kết quả qua web dashboard.
 
-**Kiến trúc hiện tại: microservice (4 service + supporting)**
-- **API Backend** (`api-svc/cmd`) — Go HTTP trên `:8118`, phục vụ toàn bộ `/api/*`. Là thin proxy cho auth: validate JWT locally (shared JWT_SECRET), forward tất cả auth/user/market-group/command-rbac calls sang Java Auth Service qua gRPC. Gọi Prediction Service qua gRPC để trigger crawler/training; đọc DB trực tiếp cho các query dữ liệu. Market endpoints yêu cầu `AuthRequired + MarketRequired("KEY")`; trigger endpoints yêu cầu `AdminRequired`.
+**Kiến trúc hiện tại: microservice (5 service + supporting)**
+- **API Backend** (`api-svc/cmd`) — Go HTTP trên `:8118`, phục vụ toàn bộ `/api/*`. Là thin proxy cho auth: validate JWT locally (shared JWT_SECRET), forward tất cả auth/user/market-group/command-rbac calls sang Java Auth Service qua gRPC. Gọi Prediction Service qua gRPC để trigger crawler/training; đọc DB trực tiếp cho các query dữ liệu. Market endpoints yêu cầu `AuthRequired + MarketRequired("KEY")`; trigger endpoints yêu cầu `AdminRequired`. Khi `SERVICE_MGT_ENABLED=true`, register vào service-mgt lúc boot và resolve target auth-svc/prediction-svc qua registry (với static fallback).
 - **Auth Service** (`auth-svc/`) — **Java** Spring Boot 3, gRPC trên `:8120` (internal). Xử lý toàn bộ auth/RBAC: login, JWT generation (HMAC256), user CRUD, market groups, command RBAC, bcrypt, Flyway migrations (V1: tạo bảng auth + RBAC; V2: thêm profile fields `full_name`/`email`/`phone` vào bảng `users`; V3: tạo bảng command RBAC). Seeds `chon/super_admin` on startup. Ba roles: `super_admin` (toàn quyền), `admin` (quản lý user và groups), `user` (chỉ access markets và commands được gán).
 - **Prediction Service** (`prediction-svc/`) — **Python** gRPC trên `:8119`. Xử lý crawling (Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, S&P 500), 12 thuật toán ML, training, APScheduler cron jobs.
 - **Gateway Service** (`gateway-svc/`) — **Rust** Axum gateway trên `:80` (HTTP) và `:443` (HTTPS/TLS). Longest-prefix routing: `/swagger` → block (404), `/api` → proxy `http://api-svc:8118`, `/health` → proxy `http://api-svc:8118`, `/` → proxy `http://web-svc:3000`. TLS termination với self-signed cert (tạo tự động qua `docker-entrypoint.sh` nếu chưa có). Nginx không còn là Docker service. **Gateway chỉ xử lý HTTP/HTTPS** — cli-svc (SSH) expose trực tiếp, không đi qua gateway.
 - **CLI Service** (`cli-svc/`) — **Go** SSH server trên `:2345` (expose trực tiếp, không qua gateway). Dùng `charmbracelet/wish` (SSH server, đa phiên) + `bubbletea`/`bubbles`/`lipgloss` (TUI shell) + `go-pretty` (table render). SSH auth = tài khoản dashboard: password-callback → `POST /api/auth/login` qua gateway; thành công thì giữ JWT trong phiên. Gọi toàn bộ API qua gateway (`API_BASE_URL=http://gateway-svc/api`). Enforce Command RBAC client-side: sau login gọi `GET /api/me/commands` để build allowed-set; `super_admin`/`admin` bypass. Handler catalog (nguồn sự thật = cli-svc code) được upsert vào auth-svc khi boot qua `POST /api/command-handlers/upsert`.
+- **Service Management** (`service-mgt/`) — **Go** gRPC server trên `:8121` (internal only, không expose ra ngoài, không qua gateway). Service registry/discovery tập trung — Phase 1 hoàn thành (api-svc tích hợp); Phase 2/3 sẽ tích hợp các service còn lại. Mô hình **client-side discovery**: registry chỉ trả địa chỉ, service tự gọi nhau trực tiếp. Lưu trữ **write-through cache**: Postgres (bảng `service_instances`) là nguồn sự thật; in-memory cache là tầng đọc nhanh. RPCs: Register/Heartbeat/Deregister/Discover/ListServices.
 
 
 ## Lệnh thường dùng
@@ -99,6 +100,7 @@ api-svc/pkg/server/api_simulation.go            # GET /api/simulation/leaderboar
 api-svc/pkg/server/api_monitoring.go            # GET /api/monitoring/overview — monitoring overview: crawl freshness, prediction activity per algo per market, bot win/loss (JWT required, cache 30s)
 api-svc/pkg/server/api_pipeline_reports.go      # GET /api/pipeline-reports — danh sách báo cáo pipeline (AuthRequired); query ?pipeline=<key>&limit=<n>
 api-svc/pkg/server/middleware_jwt.go            # JWTMiddleware (non-blocking, inject claims vào context), getClaims(), requireAuth(), requireAdmin(), AuthRequired(), MarketRequired("KEY"), AdminRequired()
+api-svc/pkg/server/middleware_accesslog.go      # AccessLogMiddleware — log một dòng/request (method, path, status, dur_ms, ip, user từ JWT claims); level Info <400, Warn 4xx, Error 5xx; bỏ qua /health*; chain: CORSMiddleware → JWTMiddleware → AccessLogMiddleware → mux
 api-svc/pkg/server/helper.go                    # requireGRPCClient(), ResponseError(), ResponseSuccess() và các helper
 api-svc/pkg/service/predict/registry/registry.go   # AlgorithmDef struct (metadata only — không có Factory), Register(), All()
 api-svc/pkg/service/predict/registry/algorithms.go # FILE DUY NHẤT cần sửa khi thêm/bỏ thuật toán trong metadata registry
@@ -204,7 +206,10 @@ auth-svc/                               # Spring Boot 3 Java Auth Service — gR
 │   └── ...                             # gRPC server (AuthGrpcServiceImpl), entities (User, MarketGroup, CliHandler, Command, CommandGroup, ...),
 │                                       # Flyway migrations (V1: tạo auth + RBAC tables; V2: thêm full_name/email/phone vào users; V3: tạo command RBAC tables),
 │                                       # SuperAdminSeeder (tạo chon/super_admin khi startup), MarketGroupService, CommandService, AuthGrpcServiceImpl (17+ RPCs)
+│                                       # GrpcLoggingInterceptor (@GrpcGlobalServerInterceptor) — log một dòng/RPC (method, status OK/ERROR, dur_ms)
 └── src/main/resources/
+    ├── application.yml                 # spring.output.ansi.enabled: always — bật màu ANSI kể cả trong Docker
+    ├── logback-spring.xml              # Cấu hình logback: single-line có màu (%clr pattern); INFO+ cho root logger
     └── db/migration/                   # Flyway SQL migrations: V1__create_auth_tables.sql, V2__add_user_profile_fields.sql, V3__create_command_rbac.sql
 ```
 
@@ -285,21 +290,46 @@ market ∈ {gold, nasdaq, crypto, sp500}.
 
 **Flow phiên SSH:** connect → password-auth gọi `POST /api/auth/login` → lưu `{jwt, role, user_id}` vào `ssh.Context` → bubbletea shell khởi tạo → gọi `GET /api/me/commands` → build allowed-set + tab-completer → user gõ command → resolve về (handler_key + args) → kiểm tra trong allowed-set (super_admin bypass) → chạy handler → render table → in vào viewport.
 
+### Service Management
+
+```
+service-mgt/                                # Go Service Registry/Discovery — gRPC :8121 (internal only)
+├── main.go                                 # Entry point — config → logger → DB → gRPC server → signal wait
+├── go.mod                                  # Module: go-stock-prediction/service-mgt (module riêng, mirror cli-svc)
+├── proto/registry/registry.proto          # gRPC service Registry: Register/Heartbeat/Deregister/Discover/ListServices
+├── proto/registry/*.pb.go                  # Generated Go stubs (không sửa tay)
+├── client/                                 # Go client SDK — package import: go-stock-prediction/service-mgt/client
+│   └── client.go                           # RegistryClient: Register/Heartbeat goroutine/Discover/Deregister; static fallback khi registry không reach
+└── internal/
+    ├── config/                             # Load env vars (SERVER_PORT, DB connection, TTL defaults)
+    ├── store/                              # Postgres store — bảng service_instances (CRUD + list)
+    ├── registry/                           # Business logic: lease TTL, reaper (quét mỗi 1s), flusher (flush last_seen mỗi 30s)
+    └── grpcserver/                         # gRPC servicer — implement tất cả RPC trong registry.proto
+```
+
+**Proto gen (service-mgt):**
+```bash
+cd service-mgt && protoc -I. --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/registry/registry.proto
+```
+
+**Lưu ý build context api-svc:** Vì api-svc import sibling module `service-mgt` qua `replace => ../service-mgt` trong `go.mod`, build context của api-svc trong docker-compose đã đổi sang **repo root** (`context: ..`, `dockerfile: deploy/api-svc.Dockerfile`). `api-svc.Dockerfile` copy cả `service-mgt/` lẫn `api-svc/`.
+
 ### Deploy folder
 
 ```
 deploy/
 ├── docker-compose.yaml          # Docker Compose cho toàn bộ stack (chuyển từ root)
 ├── docker-compose.test.yml      # Docker Compose cho test stack (chuyển từ root)
-├── api-svc.Dockerfile           # Dockerfile cho Go API Backend
+├── api-svc.Dockerfile           # Dockerfile cho Go API Backend (build context = repo root, copy service-mgt/)
 ├── auth-svc.Dockerfile          # Dockerfile cho Java Auth Service
 ├── prediction-svc.Dockerfile    # Dockerfile cho Python Prediction Service (build context = repo root)
 ├── web-svc.Dockerfile           # Dockerfile cho React Frontend
 ├── gateway-svc.Dockerfile       # Dockerfile cho Rust Gateway
-└── cli-svc.Dockerfile           # Dockerfile cho Go CLI Service (multi-stage Go build)
+├── cli-svc.Dockerfile           # Dockerfile cho Go CLI Service (multi-stage Go build)
+└── service-mgt.Dockerfile       # Dockerfile cho Go Service Registry (build context = ../service-mgt)
 ```
 
-**Build context:** `prediction-svc.Dockerfile` dùng build context là thư mục gốc repo (cần copy cả `api-svc/proto` lẫn `prediction-svc/src`). Bốn Dockerfile còn lại dùng context của thư mục service tương ứng với `dockerfile=../deploy/<svc>.Dockerfile`.
+**Build context:** `prediction-svc.Dockerfile` và `api-svc.Dockerfile` dùng build context là thư mục gốc repo. Các Dockerfile còn lại dùng context của thư mục service tương ứng với `dockerfile=../deploy/<svc>.Dockerfile`.
 
 **Route table (từ `config.yaml`, longest-prefix wins):**
 
@@ -365,12 +395,13 @@ POSTGRES_PORT=5432
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=123
 POSTGRES_DB=go_stock_prediction
-POSTGRES_DEBUG=false
+POSTGRES_DEBUG=false           # Khi true, SQLAlchemy echo toàn bộ SQL (rất ồn); trong Docker Compose: ${POSTGRES_DEBUG:-false}. Giữ false để log prediction-svc dễ đọc.
 DB_PASSWORD=123                # Dùng bởi Java Auth Service (Flyway/datasource)
 
 # Logging
-LOG_LEVEL=DEBUG
+LOG_LEVEL=INFO                 # Mức log toàn cục (DEBUG/INFO/WARN/ERROR); trong Docker Compose: ${LOG_LEVEL:-INFO} (mặc định INFO)
 DB_LOG_LEVEL=DEBUG
+LOG_FORMAT=console             # Định dạng log: "console" (default) = single-line màu ANSI kể cả trong Docker; "json" = JSON cho log aggregator. Dùng bởi prediction-svc (structlog) và gateway-svc (tracing).
 
 # Backup
 BACKUP_DIR=/backups              # Thư mục lưu file backup pg_dump (chỉ mount vào container api-svc — prediction-svc không còn dùng)
@@ -382,6 +413,10 @@ RL_MODEL_DIR=/models             # Thư mục lưu checkpoint PyTorch cho RL DQN
 INTERNAL_SECRET=change-me-in-production  # Shared secret giữa cli-svc và api-svc cho endpoint /api/command-handlers/upsert; bắt buộc đổi trong production
 API_BASE_URL=http://gateway-svc/api      # URL gateway mà cli-svc dùng để gọi API (Docker: http://gateway-svc/api)
 SSH_LISTEN_ADDR=0.0.0.0:2345            # Địa chỉ cli-svc lắng nghe SSH
+
+# Service Registry (service-mgt)
+SERVICE_MGT_ENABLED=false              # Bật/tắt service registry toàn cục; false = dùng static endpoint như cũ (hành vi không đổi); true = register + discover qua registry với static fallback
+REGISTRY_GRPC_TARGET=service-mgt:8121  # Địa chỉ service-mgt mà các service dùng để kết nối (Docker: service-mgt:8121; local: localhost:8121)
 ```
 
 ## Công cụ khám phá code (cho AI assistant)
@@ -400,7 +435,8 @@ SSH_LISTEN_ADDR=0.0.0.0:2345            # Địa chỉ cli-svc lắng nghe SSH
 - **Algorithms (Python):** Mỗi thuật toán implement abstract class `PredictionAlgorithm` trong `prediction-svc/src/algorithms/base.py` với method `predict(prices, volumes) -> PredictionResult`. Đăng ký metadata tương ứng trong `api-svc/pkg/service/predict/registry/algorithms.go` (Go) để `/api/training/algorithms` trả đúng danh sách. Tổng cộng 12 thuật toán: moving_average, ema, lstm_nn, gru_nn, arima_garch, egarch, sarima, lightgbm, xgboost, random_forest, ensemble, rl_dqn.
 - **Market-aware clamp:** Tất cả algorithms dùng `get_max_change_pct(self._market_key)` từ `base.py` để giới hạn thay đổi giá dự đoán. Giới hạn theo market: GOLD/SP500 ±15%, NASDAQ100 ±20%, CRYPTO ±50%. Registry set `_market_key` trên instance trước khi gọi `predict()`. Market key không xác định dùng `DEFAULT_MAX_CHANGE = 0.15`.
 - **Direction accuracy:** Sau khi reconcile, trường `direction_correct` (nullable boolean) được lưu vào 4 prediction tables (`gold_predictions`, `nasdaq_predictions`, `sp500_predictions`, `crypto_predictions`). Giá trị `True` khi hướng dự đoán (tăng/giảm so với giá hiện tại) khớp với hướng thực tế; `NULL` khi chưa có giá thực tế. Query tổng hợp qua `DirectionAccuracyStore` (Go) hoặc `get_direction_accuracy()` (Python repository). Orchestrator (`runner.py`) còn dùng `dir_acc` này để set weight cho Ensemble mỗi run (`_apply_ensemble_weights` → `EnsemblePredictor.set_weights`): base nào có direction accuracy ≤ 50% bị weight 0; nếu tất cả ≤ 50% (cold start) thì fallback equal-weight.
-- **Logging:** Go API Backend dùng `api-svc/pkg/logger` (zerolog). Python service dùng `structlog`.
+- **Logging:** Tất cả services dùng style nhất quán — một dòng màu, không emoji/icon, message tiếng Anh, màu ANSI forced kể cả khi stdout không phải TTY (Docker). Cụ thể: api-svc dùng zerolog (`api-svc/pkg/logger`); auth-svc dùng logback với `logback-spring.xml` (pattern `%clr`) + `spring.output.ansi.enabled: always` trong `application.yml`, kèm `GrpcLoggingInterceptor` (`@GrpcGlobalServerInterceptor`) log một dòng/RPC (method, status, dur_ms); prediction-svc dùng structlog `ConsoleRenderer(colors=True)`, SQLAlchemy logger capped ở WARNING; gateway-svc dùng tracing compact+ansi. Định dạng chọn qua `LOG_FORMAT` (console/json).
+- **Access log (api-svc):** `middleware_accesslog.go` — `AccessLogMiddleware` log một dòng/HTTP request; skip `/health*`; username lấy từ JWT claims; chain: `CORSMiddleware → JWTMiddleware → AccessLogMiddleware → mux`.
 - **gRPC triggers:** Tất cả trigger handler trong `api-svc/pkg/server/api_trigger_*.go` đều gọi `requireGRPCClient(w)` trước. Hàm này trả về 503 nếu gRPC client chưa init. Tất cả trigger endpoints được wrap bằng `AdminRequired()` trong router — yêu cầu JWT với role `admin` hoặc `super_admin`.
 - **Dynamic cron schedules:** Lịch cron được lưu trong bảng `cron_schedules`. Python Prediction Service poll DB mỗi 60 giây để phát hiện thay đổi và tự reschedule qua APScheduler — không cần restart. Nguồn sự thật là `DEFAULT_SCHEDULES` trong `prediction-svc/src/scheduler/manager.py`; mỗi lần Python service khởi động, `upsert_cron_schedule()` chạy true upsert — ghi đè DB nếu giá trị code khác. Go `seedCronSchedules()` chỉ insert-if-not-exists (không update). Job `daily_backup` được seed và poll riêng bởi Go `backup_scheduler.go` (CronManager, insert-if-not-exists) — không có trong Python scheduler. Dùng `CronScheduleStore` interface (Go) để truy cập từ API Backend.
 - **Proto regeneration:** Khi thay đổi `api-svc/proto/prediction/prediction.proto`, cần tái sinh cả Go stubs (`protoc` chạy từ `api-svc/`) lẫn Python stubs (lệnh `grpc_tools.protoc` trong `deploy/prediction-svc.Dockerfile` stage 1). Không sửa tay các file generated. Khi thay đổi `auth.proto`, phải cập nhật CẢ HAI bản (`api-svc/proto/auth/` và `auth-svc/src/main/proto/`) — xem convention `auth.proto hai bản` ở trên.
@@ -420,6 +456,7 @@ SSH_LISTEN_ADDR=0.0.0.0:2345            # Địa chỉ cli-svc lắng nghe SSH
 - **Shared feature builder (Python):** `prediction-svc/src/algorithms/features.py` cung cấp hai hàm dùng chung cho LightGBM, XGBoost, RandomForest: `build_basic_features()` (14 features: lag returns 1-10, RSI, MA5/20 ratios, vol ratio) và `build_enhanced_features()` (~30 features: lag returns 1-10, MA5/10/20/50 ratios, multi-timeframe returns 5/10/20d, RSI, StochRSI %K/%D, Bollinger %B, MACD line/hist normalized, rolling volatility 5/10/20d, ROC(10), momentum 5/10, volume ratio). Khi `pandas-ta` có sẵn thì dùng pandas-ta; nếu không dùng numpy-only fallback hoàn toàn tương đương. Minimum data: `MIN_DATA_POINTS = 80`.
 - **Optuna hyperparameter tuning:** LightGBM và XGBoost chạy Optuna Bayesian search khi data >= 200 points và optuna được cài (`[ml]` extras). Search tối đa 30 trials, timeout 120s; fallback về `_DEFAULT_PARAMS` nếu optuna không có hoặc data không đủ. Search space — LightGBM: learning_rate, num_leaves, min_data_in_leaf, n_estimators, subsample, colsample_bytree. XGBoost: n_estimators, learning_rate, max_depth, subsample, colsample_bytree, min_child_weight. RandomForest không dùng Optuna (fixed: n_estimators=200, max_depth=8, min_samples_leaf=5).
 - **Market calendar — đóng cửa cuối tuần/lễ NYSE:** NASDAQ và SP500 không chạy crawl/predict/bot-trade vào Thứ 7, Chủ nhật và ngày lễ NYSE (New Year's Day, MLK Day, Presidents' Day, Good Friday, Memorial Day, Juneteenth, Independence Day, Labor Day, Thanksgiving, Christmas). Logic tập trung tại `prediction-svc/src/utils/market_calendar.py` — hàm `is_market_open(market_key, when)`, không phụ thuộc thư viện ngoài, tự tính ngày lễ theo năm. Ba điểm guard trong Python service: (1) `scheduler/jobs.py::_run_pipeline` — skip toàn bộ pipeline nếu market đóng; (2) `orchestrator/runner.py::run_for_market` — return 0 predictions và bỏ qua sim live step; (3) `simulation/engine.py::run_live_step` — lọc bỏ bot thuộc market đóng trong job bot 8PM hàng ngày. GOLD và CRYPTO không bị ảnh hưởng — luôn trả `True`.
+- **Service discovery (service-mgt):** service-mgt là gRPC registry tập trung (`:8121`, internal only). Mô hình client-side discovery: registry trả địa chỉ, service tự gọi nhau trực tiếp. Lưu trữ write-through cache: ghi (Register/Deregister/đổi status) → DB trước → cache; Heartbeat chỉ cập nhật cache (TTL gia hạn); goroutine flusher flush `last_seen` xuống DB mỗi 30s. Reaper quét mỗi 1s: quá TTL (default 30s) → status DOWN; quá TTL+grace (60s) → evict. Client heartbeat interval mặc định 10s; discover cache TTL 5s. Go client SDK tại `service-mgt/client/` — nhúng vào api-svc. Toàn bộ tính năng bị tắt khi `SERVICE_MGT_ENABLED=false` (default); khi bật, có static fallback về `AUTH_GRPC_TARGET`/`GRPC_TARGET` nếu registry không reach — hệ thống không sập. Phase 1 hoàn thành (api-svc); Phase 2/3 chưa triển khai.
 - **Timezone — ICT-at-rest:** Toàn bộ cột `TIMESTAMP` trong DB lưu theo múi giờ `Asia/Ho_Chi_Minh` (ICT, UTC+7) dưới dạng wallclock — **không dùng UTC**. PostgreSQL container chạy UTC nhưng không ảnh hưởng vì kiểu cột là `TIMESTAMP WITHOUT TIME ZONE` (lưu verbatim, không có timezone conversion). Hai quy tắc bắt buộc: (1) **Python** luôn dùng `datetime.now()` — container được set `TZ=Asia/Ho_Chi_Minh` nên trả naive ICT. **Tuyệt đối không dùng `datetime.utcnow()`** — sẽ ghi UTC vào DB, lệch 7 tiếng so với giá trị nghiệp vụ. (2) **Go** set `time.Local = Asia/Ho_Chi_Minh` trong `api-svc/cmd/main.go` — mọi `time.Now()` và so sánh thời gian trong API Backend đều theo ICT. Frontend không cần xử lý đặc biệt: `new Date(s).toLocaleString()` hiển thị đúng giờ local của trình duyệt. Các cột vốn đã ICT và không bị ảnh hưởng: `prediction_date`, `target_date`, `trade_date`, `snapshot_date`, `trading_date`, `indicator_date`, `start_date`, intraday `timestamp`.
 
 ## Hướng dẫn mở rộng (Extension Guide)
@@ -478,6 +515,7 @@ Các bước bắt buộc:
 - **Auto-migrate:** Đã tắt — schema do `database.sql` quản lý (vì hypertable composite PK xung đột với AutoMigrate). Schema init tự động khi container `db` lần đầu lên qua mount `/docker-entrypoint-initdb.d/01-schema.sql`.
 - **Tables chính:** `sync_logs`, `gold_prices`, `gold_predictions`, `nasdaq_prices`, `nasdaq_predictions`, `sp500_prices`, `sp500_predictions`, `crypto_prices`, `crypto_predictions`, `training_logs`, `training_metrics`, `users`, `cron_schedules`, `market_groups`, `market_group_markets`, `user_market_groups`, `pipeline_reports`
 - **`pipeline_reports` (KHÔNG phải hypertable):** Lưu báo cáo mỗi lần pipeline chạy. Cột: `id` BIGSERIAL PK, `pipeline_key` (crawler_gold/crawler_nasdaq/crawler_sp500/crawler_crypto), `market`, `status` (success/partial/failed/skipped), `started_at`, `finished_at`, `duration_ms` BIGINT, `crawled_count` INT, `predictions_count` INT, `trained` BOOLEAN, `steps` JSONB array `[{label, status, detail}]`, `error` TEXT nullable, `created_at` TIMESTAMP. Retention: sau mỗi lần ghi, pipeline gọi `delete_old_pipeline_reports(7)` trong `repository.py` để xóa row cũ hơn 7 ngày. Schema khai báo trong `database.sql`.
+- **`service_instances` (KHÔNG phải hypertable):** Dùng bởi service-mgt. Cột: `id` BIGSERIAL PK, `service_name`, `instance_id` UNIQUE, `address`, `port`, `metadata` JSONB, `status` (UP/DOWN), `ttl_seconds` INT, `last_seen` TIMESTAMP, `registered_at` TIMESTAMP, `updated_at` TIMESTAMP. Schema khai báo trong `database.sql`.
 - **Hypertables (TimescaleDB):** `gold_prices`, `nasdaq_prices`, `sp500_prices`, `crypto_prices`, `*_intraday_prices` (theo time column), `gold_predictions`, `nasdaq_predictions`, `sp500_predictions`, `crypto_predictions` (theo `prediction_date`), `sim_trades` (theo `trade_date`), `sim_portfolio_snapshots` (theo `snapshot_date`), `sync_logs`, `training_logs` (theo `created_at`). Tất cả hypertable có **composite PK** (id + time column).
 - **RBAC tables (market):** `market_groups`, `market_group_markets`, `user_market_groups` — quản lý bởi Java Auth Service qua Flyway (không trong GORM auto-migrate). Bảng `users` có thêm cột nullable `full_name`, `email`, `phone` (thêm qua Flyway V2). Auth Service dùng dependency `flyway-database-postgresql` (Flyway 10.x) để nhận diện PG16.
 - **RBAC tables (command) — Flyway V3:** `cli_handlers` (handler_key PK, display_name, verb, resource, arg_schema JSONB, enabled), `commands` (id BIGSERIAL PK, name UNIQUE, description, handler_key FK, args JSONB, enabled, created_at, updated_at), `command_groups` (id BIGSERIAL PK, name UNIQUE, description), `command_group_commands` (group_id + command_id composite PK), `user_command_groups` (user_id + group_id composite PK). Tất cả quản lý bởi Java Auth Service qua Flyway V3 — không trong GORM. Semantics: `allowed-commands(user)` = UNION qua mọi command_group user thuộc + `enabled=true` (command + handler). `super_admin` và `admin` có toàn bộ commands; `user` không group → catalog rỗng.
@@ -539,6 +577,7 @@ Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`
 | API Backend | 8118 | HTTP | Internal only — toàn bộ `/api/*` endpoints; Swagger UI tại `http://localhost:8118/swagger/` |
 | Prediction Service | 8119 | gRPC | Internal only (không expose ra ngoài) |
 | Auth Service | 8120 | gRPC | Internal only — Java Spring Boot RBAC service |
+| Service Management | 8121 | gRPC | Internal only — Go service registry/discovery; KHÔNG expose ra ngoài, KHÔNG qua gateway |
 | TimescaleDB (PostgreSQL) | 5432 | TCP | Docker internal (container `timescaledb`) |
 | pgAdmin | 8081 | HTTP | Docker (bind 127.0.0.1) |
 | Frontend | 3000 | HTTP | Internal only — static nginx serving React SPA (qua gateway) |
@@ -553,7 +592,8 @@ Compose file: `deploy/docker-compose.yaml` — chạy từ root repo với `dock
 | `db` | `timescale/timescaledb:latest-pg16` | — | Container `timescaledb`; schema tự init từ `database.sql` (mount `/docker-entrypoint-initdb.d/01-schema.sql`); volume `postgres_data:/var/lib/postgresql/data` |
 | `prediction-svc` | `deploy/prediction-svc.Dockerfile` | `db` (healthy) | **Python** Prediction Service — gRPC :8119 (internal); build context = repo root; mount volume `rl_models:/models` (checkpoint RL DQN per-market) |
 | `auth-svc` | `deploy/auth-svc.Dockerfile` | `db` (healthy) | **Java** Spring Boot Auth Service — gRPC :8120 (internal); Flyway migrations (PostgreSQL), seeds super_admin |
-| `api-svc` | `deploy/api-svc.Dockerfile` | `db` (healthy), `prediction-svc`, `auth-svc` | Go API Backend — HTTP :8118 (internal); mount volume `backup_data:/backups`; chạy scheduled backup pg_dump (`backup_scheduler.go`); image cài `postgresql-client` |
+| `service-mgt` | `deploy/service-mgt.Dockerfile` | `db` (healthy) | **Go** Service Registry — gRPC :8121 (internal); build context = `../service-mgt`; bảng `service_instances` trong Postgres |
+| `api-svc` | `deploy/api-svc.Dockerfile` | `db` (healthy), `prediction-svc`, `auth-svc`, `service-mgt` | Go API Backend — HTTP :8118 (internal); build context = repo root (copy service-mgt/); mount volume `backup_data:/backups`; chạy scheduled backup pg_dump (`backup_scheduler.go`); image cài `postgresql-client` |
 | `gateway-svc` | `deploy/gateway-svc.Dockerfile` | `api-svc`, `web-svc` | **Rust** Axum gateway — expose :80/:443; TLS termination; route `/api` → api-svc:8118, `/` → web-svc:3000; bind-mount `./gateway-svc/certs:/etc/gateway/certs` |
 | `web-svc` | `deploy/web-svc.Dockerfile` | `api-svc` | React SPA — static nginx internal port 3000 (không expose trực tiếp — qua gateway) |
 | `cli-svc` | `deploy/cli-svc.Dockerfile` | `gateway-svc` | **Go** SSH CLI Service — expose :2345 (trực tiếp, không qua gateway); env `API_BASE_URL`, `SSH_LISTEN_ADDR`, `INTERNAL_SECRET`; bind-mount `../cli-svc/keys` (SSH host keys) |
