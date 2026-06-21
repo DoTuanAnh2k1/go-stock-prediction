@@ -22,8 +22,12 @@ Financial asset price prediction system with RBAC — crawls Gold SJC/XAU, NASDA
 │              TimescaleDB :5432 ◄───────────────────────────────────┘    │
 │              (PostgreSQL 16)                                             │
 │                                                                          │
-│  SSH ──► cli-svc :2345 (Go, wish+bubbletea) ──HTTP──► gateway-svc :80    │
+│  SSH ──► cli-svc :2345 (Go, wish+bubbletea) ──HTTP──► gateway-svc :80  │
 │  pgAdmin 127.0.0.1:8081                                                  │
+│                                                                          │
+│  service-mgt :8121 (optional, gRPC) — registry/discovery for            │
+│    api-svc, auth-svc, prediction-svc, gateway-svc when                  │
+│    SERVICE_MGT_ENABLED=true (default: false, static endpoints used)      │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -36,11 +40,12 @@ Financial asset price prediction system with RBAC — crawls Gold SJC/XAU, NASDA
 | `auth-svc/` | Java 21, Spring Boot 3, gRPC, Flyway, bcrypt | `:8120` (internal) | Owns all RBAC: login, JWT generation (HMAC256, 24 h), user CRUD, market groups; Flyway V1: auth + RBAC tables; V2: `full_name`/`email`/`phone` profile fields; seeds `chon/super_admin` on startup |
 | `prediction-svc/` | Python 3.12, PyTorch, statsmodels, LightGBM, XGBoost, scikit-learn, APScheduler, SQLAlchemy | `:8119` (internal) | gRPC service: crawling, 11 ML algorithms, training, cron scheduler |
 | `web-svc/` | React, TypeScript, Vite, nginx | `:3000` (internal) | Static SPA served by nginx; accessed only through `gateway-svc` |
-| `cli-svc/` | Go 1.26, charmbracelet/wish + bubbletea, go-pretty | `:2345` (public, SSH) | Interactive SSH shell for headless servers; renders API data as tables; `get`/`set`/`update`/`delete` verbs; per-command RBAC enforced client-side; calls the API through `gateway-svc` |
+| `cli-svc/` | Go 1.26, charmbracelet/wish + bubbletea, go-pretty | `:2345` (public, SSH) | Interactive SSH shell for headless servers; renders API data as tables; `get`/`set`/`update`/`delete` verbs; per-command RBAC enforced client-side; calls the API through `gateway-svc` at a static `API_BASE_URL` (no service discovery) |
+| `service-mgt/` | Go 1.25, gRPC, GORM v2, ZeroLog | `:8121` (internal) | Central service registry/discovery: services register on boot, renew a lease via heartbeat (push/lease-TTL), and resolve peers via Discover; write-through cache (Postgres `service_instances` = source of truth, in-memory cache = read layer). Disabled by default (`SERVICE_MGT_ENABLED=false`). |
 | `db` | TimescaleDB (PostgreSQL 16) | `:5432` (internal) | Shared DB for all services; hypertables for price/prediction time-series; schema auto-init from `database.sql` |
 | `pgadmin` | pgAdmin 4 | `127.0.0.1:8081` | PostgreSQL web administration UI |
 
-Internal DNS (between containers): `api-svc:8118`, `prediction-svc:8119`, `auth-svc:8120`, `web-svc:3000`, `db:5432`. The `cli-svc` SSH port `2345` is exposed directly (the gateway speaks HTTP only); `cli-svc` reaches the API at `http://gateway-svc/api`.
+Internal DNS (between containers): `api-svc:8118`, `prediction-svc:8119`, `auth-svc:8120`, `service-mgt:8121`, `web-svc:3000`, `db:5432`. The `cli-svc` SSH port `2345` is exposed directly (the gateway speaks HTTP only); `cli-svc` reaches the API at `http://gateway-svc/api`.
 
 ## Features
 
@@ -57,6 +62,7 @@ Internal DNS (between containers): `api-svc:8118`, `prediction-svc:8119`, `auth-
 - **Auto backup:** Daily `pg_dump` at 3 AM into `BACKUP_DIR`; owned by `api-svc` (`backup_scheduler.go`).
 - **Interactive CLI over SSH (`cli-svc`):** `ssh <user>@<host> -p 2345` (dashboard credentials) opens a shell that renders API data as tables. Four verbs `get`/`set`/`update`/`delete`, tab-completion, multi-session.
 - **Command RBAC:** Admins declare commands (a cli handler + fixed args), group them, and assign users to groups — a user may execute only the commands in their groups (`super_admin` runs all). Managed from the web dashboard (`/admin/commands`, `/admin/command-groups`) or the CLI. RBAC lives in `auth-svc` (Flyway V3); `cli-svc` enforces it client-side.
+- **Service discovery (optional, `SERVICE_MGT_ENABLED`):** When enabled, `api-svc`, `auth-svc`, `prediction-svc`, and `gateway-svc` register with `service-mgt` and resolve peers dynamically (client-side discovery, push lease-TTL heartbeat). Disabled by default — services use static endpoints. Always falls back to static targets if the registry is unreachable. `cli-svc` (HTTP via gateway) and `web-svc` (static nginx) do not register.
 
 ## Repository Layout
 
@@ -78,15 +84,21 @@ go-stock-prediction/
 ├── cli-svc/               # Go SSH shell service (module: go-stock-prediction/cli-svc)
 │   ├── internal/          # server/ (wish), shell/ (bubbletea), handlers/, client/, render/
 │   └── keys/              # SSH host key (generated on first boot; gitignored)
+├── service-mgt/           # Go gRPC service registry/discovery (module: go-stock-prediction/service-mgt)
+│   ├── main.go            # Entry point — config → logger → DB → gRPC server → signal wait
+│   ├── proto/registry/    # registry.proto + generated Go stubs
+│   ├── client/            # Go client SDK — imported by api-svc (replace sibling module)
+│   └── internal/          # config/, store/ (service_instances table), registry/ (lease/reaper), grpcserver/
 ├── deploy/                # All Dockerfiles and Compose files (flat layout)
 │   ├── docker-compose.yaml
 │   ├── docker-compose.test.yml
-│   ├── api-svc.Dockerfile
+│   ├── api-svc.Dockerfile           # build context = repo root (imports service-mgt/)
 │   ├── auth-svc.Dockerfile
-│   ├── prediction-svc.Dockerfile
+│   ├── prediction-svc.Dockerfile    # build context = repo root (needs api-svc/proto/)
 │   ├── web-svc.Dockerfile
 │   ├── gateway-svc.Dockerfile
-│   └── cli-svc.Dockerfile
+│   ├── cli-svc.Dockerfile           # build context = ../cli-svc (standalone, no service-mgt import)
+│   └── service-mgt.Dockerfile       # build context = ../service-mgt
 ├── database.sql           # Full PostgreSQL/TimescaleDB schema (authoritative)
 ├── Makefile               # Root convenience targets (see below)
 └── .env                   # Environment variables — stays at repo root
@@ -183,6 +195,10 @@ DB_LOG_LEVEL=WARN
 
 # Backup (api-svc writes pg_dump output here)
 BACKUP_DIR=/backups
+
+# Service registry (service-mgt) — optional
+SERVICE_MGT_ENABLED=false             # set true to enable register/discover; false = static endpoints (default)
+REGISTRY_GRPC_TARGET=service-mgt:8121 # address used by services to reach service-mgt (Docker internal DNS)
 ```
 
 `JWT_SECRET` is injected into both `api-svc` (for local JWT validation) and `auth-svc` (for token signing) via the Compose file.

@@ -220,21 +220,17 @@ services:
   # 2345 (gateway speaks HTTP only); all API calls go through the gateway.
   cli-svc:
     build:
-      # Repo-root context so the sibling service-mgt module is available.
-      context: ..
-      dockerfile: deploy/cli-svc.Dockerfile
+      context: ../cli-svc
+      dockerfile: ../deploy/cli-svc.Dockerfile
     container_name: cli-svc
     depends_on:
       - gateway-svc
-      - service-mgt
     restart: unless-stopped
     environment:
       API_BASE_URL: "http://gateway-svc/api"
       SSH_LISTEN_ADDR: ":2345"
       SSH_HOST_KEY_PATH: "/etc/cli-svc/keys/host_key"
       INTERNAL_SECRET: "${INTERNAL_SECRET}"
-      SERVICE_MGT_ENABLED: "${SERVICE_MGT_ENABLED:-false}"
-      REGISTRY_GRPC_TARGET: "service-mgt:8121"
     ports:
       - "2345:2345"
     volumes:

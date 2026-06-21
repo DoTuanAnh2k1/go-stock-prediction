@@ -1,20 +1,18 @@
 # cli-svc — interactive SSH server (wish + bubbletea).
-# Build context is the repo root (set by docker-compose) so the sibling
-# service-mgt module (referenced via `replace ... => ../service-mgt`) is present.
+# Build context is ../cli-svc (set by docker-compose), so paths are relative to
+# the cli-svc/ directory.
 
 # ---- builder ----
 FROM golang:1.26 AS builder
 
 WORKDIR /src
 
-# Sibling module first (needed by the replace directive), then cli-svc.
-COPY service-mgt/ ./service-mgt/
-COPY cli-svc/ ./cli-svc/
-
-WORKDIR /src/cli-svc
+# Cache dependencies first.
+COPY go.mod go.sum ./
 RUN go mod download
 
 # Build the static binary.
+COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/cli-svc .
 
 # ---- runtime ----
