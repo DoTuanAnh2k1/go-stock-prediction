@@ -7,6 +7,7 @@ mod config;
 mod middleware;
 mod models;
 mod proxy;
+mod registry;
 mod router;
 mod routes;
 
@@ -26,13 +27,46 @@ async fn main() {
 
     info!("Starting go-stock-prediction gateway");
 
-    let config = match AppConfig::load() {
-        Ok(c) => Arc::new(c),
+    let mut config = match AppConfig::load() {
+        Ok(c) => c,
         Err(e) => {
             error!("Failed to load config: {}", e);
             std::process::exit(1);
         }
     };
+
+    // Service registry (service-mgt) — gated by SERVICE_MGT_ENABLED. When on,
+    // register gateway-svc and resolve each proxy backend's host via the
+    // registry, falling back to the static config backend on any failure.
+    let sm_enabled = std::env::var("SERVICE_MGT_ENABLED")
+        .map(|v| v == "true")
+        .unwrap_or(false);
+    if sm_enabled {
+        let sm_target = std::env::var("REGISTRY_GRPC_TARGET")
+            .unwrap_or_else(|_| "service-mgt:8121".to_string());
+        info!("service registry enabled, target={}", sm_target);
+        registry::spawn_register(
+            sm_target.clone(),
+            "gateway-svc".to_string(),
+            "gateway-svc".to_string(),
+            80,
+        );
+        for route in config.routes.iter_mut() {
+            if let Some(backend) = route.backend.clone() {
+                if let Some(host) = registry::host_of(&backend) {
+                    if let Some(hp) = registry::discover(&sm_target, &host).await {
+                        let resolved = format!("http://{hp}");
+                        if resolved != backend {
+                            info!("resolved {} -> {} via registry", host, resolved);
+                        }
+                        route.backend = Some(resolved);
+                    }
+                }
+            }
+        }
+    }
+
+    let config = Arc::new(config);
 
     let path_router = Arc::new(PathRouter::from_config(&config.routes));
     info!("Loaded {} route(s)", config.routes.len());
@@ -51,8 +85,8 @@ async fn main() {
         .parse()
         .expect("Invalid HTTP address");
 
-    info!("HTTP  → http://{}", http_addr);
-    info!("Health → http://{}/healthz", http_addr);
+    info!("HTTP listening on http://{}", http_addr);
+    info!("Health check at http://{}/healthz", http_addr);
 
     if config.server.tls.enabled {
         use axum_server::tls_rustls::RustlsConfig;
@@ -78,7 +112,7 @@ async fn main() {
             }
         };
 
-        info!("HTTPS → https://{}", https_addr);
+        info!("HTTPS listening on https://{}", https_addr);
         info!("Gateway ready");
 
         let http_future = axum_server::bind(http_addr)
@@ -111,7 +145,7 @@ async fn main() {
 fn init_tracing() {
     let log_level =
         std::env::var("RUST_LOG").unwrap_or_else(|_| "info,gateway=debug".to_string());
-    let format = std::env::var("LOG_FORMAT").unwrap_or_else(|_| "json".to_string());
+    let format = std::env::var("LOG_FORMAT").unwrap_or_else(|_| "console".to_string());
 
     if format == "json" {
         tracing_subscriber::registry()
@@ -121,7 +155,12 @@ fn init_tracing() {
     } else {
         tracing_subscriber::registry()
             .with(tracing_subscriber::EnvFilter::new(log_level))
-            .with(tracing_subscriber::fmt::layer().pretty())
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_ansi(true) // force colors even without a TTY (Docker)
+                    .with_target(false) // hide the long module target for readability
+                    .compact(),
+            )
             .init();
     }
 }
