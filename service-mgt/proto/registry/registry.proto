@@ -1,0 +1,44 @@
+syntax = "proto3";
+package registry;
+
+option go_package = "go-stock-prediction/service-mgt/proto/registry";
+option java_package = "vn.gostock.registry.proto";
+option java_multiple_files = true;
+
+service Registry {
+  rpc Register(RegisterRequest)     returns (RegisterResponse);
+  rpc Heartbeat(HeartbeatRequest)   returns (HeartbeatResponse);
+  rpc Deregister(DeregisterRequest) returns (Empty);
+  rpc Discover(DiscoverRequest)     returns (DiscoverResponse);
+  rpc ListServices(Empty)           returns (ListServicesResponse);
+}
+
+message Empty {}
+
+message RegisterRequest {
+  string service_name = 1;
+  string instance_id  = 2;   // optional; server generates if empty
+  string address      = 3;
+  int32  port         = 4;
+  map<string, string> metadata = 5;
+  int32  ttl_seconds  = 6;    // optional; server default if 0
+}
+message RegisterResponse {
+  string instance_id       = 1;
+  int32  lease_ttl_seconds = 2;
+}
+message HeartbeatRequest  { string instance_id = 1; }
+message HeartbeatResponse { bool ok = 1; }
+message DeregisterRequest { string instance_id = 1; }
+message DiscoverRequest   { string service_name = 1; }
+
+message Instance {
+  string service_name = 1;
+  string instance_id  = 2;
+  string address      = 3;
+  int32  port         = 4;
+  map<string, string> metadata = 5;
+  string status       = 6;   // "UP" | "DOWN"
+}
+message DiscoverResponse     { repeated Instance instances = 1; }
+message ListServicesResponse { repeated Instance instances = 1; }

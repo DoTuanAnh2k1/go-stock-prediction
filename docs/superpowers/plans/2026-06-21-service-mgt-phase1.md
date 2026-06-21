@@ -93,12 +93,13 @@ message ListServicesResponse { repeated Instance instances = 1; }
 
 Run (from repo root; requires protoc + protoc-gen-go + protoc-gen-go-grpc on PATH):
 ```bash
-cd service-mgt && protoc -Iproto \
+cd service-mgt && protoc -I. \
   --go_out=. --go_opt=paths=source_relative \
   --go-grpc_out=. --go-grpc_opt=paths=source_relative \
   proto/registry/registry.proto
 ```
 Expected: creates `proto/registry/registry.pb.go` and `registry_grpc.pb.go`, exit 0.
+(Use `-I.` not `-Iproto`: with `paths=source_relative` the include root determines output path, and `go_package` is `.../proto/registry`, so the proto must resolve as `proto/registry/registry.proto`.)
 
 - [ ] **Step 4: Verify the module compiles**
 
