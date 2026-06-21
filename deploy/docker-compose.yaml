@@ -54,8 +54,9 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123}
       POSTGRES_DB: go_stock_prediction
-      POSTGRES_DEBUG: "true"
-      LOG_LEVEL: DEBUG
+      POSTGRES_DEBUG: "${POSTGRES_DEBUG:-false}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      LOG_FORMAT: "${LOG_FORMAT:-console}"
       ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-https://localhost}"
       RL_MODEL_DIR: "${RL_MODEL_DIR:-/models}"
     volumes:
@@ -87,11 +88,35 @@ services:
     networks:
       - app-network
 
+  # Service Management (registry / discovery — Go gRPC)
+  service-mgt:
+    build:
+      context: ../service-mgt
+      dockerfile: ../deploy/service-mgt.Dockerfile
+    container_name: service-mgt
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      GRPC_PORT: "8121"
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123}
+      POSTGRES_DB: go_stock_prediction
+      LOG_FORMAT: "${LOG_FORMAT:-console}"
+    expose:
+      - "8121"
+    networks:
+      - app-network
+
   # API Backend (HTTP)
   api-svc:
     build:
-      context: ../api-svc
-      dockerfile: ../deploy/api-svc.Dockerfile
+      # Repo-root context so the sibling service-mgt module is available.
+      context: ..
+      dockerfile: deploy/api-svc.Dockerfile
     container_name: api-svc
     depends_on:
       db:
@@ -100,10 +125,14 @@ services:
         condition: service_started
       auth-svc:
         condition: service_started
+      service-mgt:
+        condition: service_started
     restart: unless-stopped
     environment:
       SERVER_PORT: "8118"
       GRPC_TARGET: "prediction-svc:8119"
+      SERVICE_MGT_ENABLED: "${SERVICE_MGT_ENABLED:-false}"
+      REGISTRY_GRPC_TARGET: "service-mgt:8121"
       DB_DRIVER: postgresql
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
