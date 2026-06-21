@@ -49,3 +49,17 @@ func GetAuthGRPCConfig() string {
 	}
 	return config.GRPC.AuthClientTarget
 }
+
+func GetServiceMgtEnabled() bool {
+	if config == nil {
+		return false
+	}
+	return config.ServiceMgt.Enabled
+}
+
+func GetRegistryTarget() string {
+	if config == nil {
+		return "localhost:8121"
+	}
+	return config.ServiceMgt.RegistryTarget
+}

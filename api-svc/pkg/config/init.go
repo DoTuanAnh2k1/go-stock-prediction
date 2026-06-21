@@ -50,6 +50,10 @@ func InitConfig(filenames ...string) {
 			Level:   env.GetEnv("LOG_LEVEL", "DEBUG"),
 			DbLevel: env.GetEnv("DB_LOG_LEVEL", "DEBUG"),
 		},
+		ServiceMgt: models_config.ServiceMgtConfig{
+			Enabled:        env.GetEnv("SERVICE_MGT_ENABLED", "false") == "true",
+			RegistryTarget: env.GetEnv("REGISTRY_GRPC_TARGET", "localhost:8121"),
+		},
 	}
 
 	Init(cfg)

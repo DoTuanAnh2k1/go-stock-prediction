@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -14,6 +15,8 @@ import (
 	"go-stock-prediction/pkg/logger"
 	"go-stock-prediction/pkg/server"
 	"go-stock-prediction/pkg/store/repository"
+
+	regclient "go-stock-prediction/service-mgt/client"
 
 	_ "go-stock-prediction/docs"
 )
@@ -45,11 +48,28 @@ func main() {
 	// Initialize the database connection (read queries)
 	repository.Init()
 
+	// Service registry client — registers this service and resolves peer
+	// endpoints. No-op when SERVICE_MGT_ENABLED=false (static targets used).
+	reg := regclient.New(regclient.Options{
+		Enabled:        config.GetServiceMgtEnabled(),
+		RegistryTarget: config.GetRegistryTarget(),
+		ServiceName:    "api-svc",
+		Address:        "api-svc",
+		Port:           8118,
+	})
+	if err := reg.Start(context.Background()); err != nil {
+		logger.Logger.Warnf("service registry start failed, using static targets: %v", err)
+	}
+
+	// Resolve gRPC targets via the registry, falling back to static env targets.
+	authTarget := reg.Resolve("auth-svc", config.GetAuthGRPCConfig())
+	predTarget := reg.Resolve("prediction-svc", config.GetGRPCConfig().ClientTarget)
+
 	// Initialize gRPC client for Java Auth Service
-	authclient.Init(config.GetAuthGRPCConfig())
+	authclient.Init(authTarget)
 
 	// Initialize gRPC client pointing at the prediction service
-	grpcclient.Init(config.GetGRPCConfig().ClientTarget)
+	grpcclient.Init(predTarget)
 
 	// Start the scheduled database backup (DB-backed schedule, editable via Settings)
 	server.StartBackupScheduler(repository.GetSingleton())
@@ -63,6 +83,7 @@ func main() {
 	sig := <-signals
 	logger.Logger.Infof("Received signal %v — shutting down API service", sig)
 	server.StopBackupScheduler()
+	reg.Stop()
 	authclient.Close()
 	grpcclient.Close()
 	logger.Logger.Info("API service stopped")
