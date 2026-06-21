@@ -4,17 +4,20 @@ FROM rust:1.86-slim AS builder
 WORKDIR /app
 
 RUN apt-get update && \
-    apt-get install -y pkg-config libssl-dev && \
+    apt-get install -y pkg-config libssl-dev protobuf-compiler && \
     rm -rf /var/lib/apt/lists/*
 
-# Cache dependencies first (layer caching)
+# Cache dependencies first (layer caching). build.rs is absent here, so cargo
+# compiles deps (incl. tonic/prost) without running the proto codegen.
 COPY Cargo.toml ./
 RUN mkdir src && \
     echo "fn main() {}" > src/main.rs && \
     cargo build --release 2>/dev/null || true && \
     rm -rf src
 
-# Build the real binary
+# Build the real binary (build.rs compiles proto/registry.proto via protoc)
+COPY build.rs ./
+COPY proto ./proto
 COPY src ./src
 COPY config.yaml ./
 RUN touch src/main.rs && cargo build --release
