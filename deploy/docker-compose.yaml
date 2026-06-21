@@ -45,9 +45,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      service-mgt:
+        condition: service_started
     restart: unless-stopped
     environment:
       GRPC_SERVER_PORT: "8119"
+      SERVICE_MGT_ENABLED: "${SERVICE_MGT_ENABLED:-false}"
+      REGISTRY_GRPC_TARGET: "service-mgt:8121"
       DB_DRIVER: postgresql
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
@@ -73,6 +77,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      service-mgt:
+        condition: service_started
     restart: unless-stopped
     environment:
       DB_HOST: db
@@ -83,6 +89,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       GRPC_PORT: "8120"
       INTERNAL_SECRET: "${INTERNAL_SECRET}"
+      SERVICE_MGT_ENABLED: "${SERVICE_MGT_ENABLED:-false}"
+      REGISTRY_GRPC_TARGET: "service-mgt:8121"
     expose:
       - "8120"
     networks:
