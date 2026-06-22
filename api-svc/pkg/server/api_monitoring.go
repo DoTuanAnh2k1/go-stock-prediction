@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"go-stock-prediction/pkg/logger"
@@ -80,6 +82,23 @@ type monitoringBotSummary struct {
 type monitoringBots struct {
 	Summary monitoringBotSummary    `json:"summary"`
 	Table   []monitoringBotTableRow `json:"table"`
+}
+
+// monitoringBotsPage is the server-side paginated bots table response.
+type monitoringBotsPage struct {
+	Data       []monitoringBotTableRow `json:"data"`
+	Total      int                     `json:"total"`     // rows after filtering
+	Page       int                     `json:"page"`      // 1-based
+	PageSize   int                     `json:"page_size"`
+	TotalPages int                     `json:"total_pages"`
+	Summary    monitoringBotSummary    `json:"summary"` // global summary (all bots, unfiltered)
+}
+
+// botData bundles the fully-computed bot table with its summary so both can be
+// cached together (the heavy 4-query build runs once per cache window).
+type botData struct {
+	rows    []monitoringBotTableRow
+	summary monitoringBotSummary
 }
 
 type monitoringOverviewResponse struct {
@@ -252,14 +271,30 @@ func buildMarketOverview(
 	}
 }
 
-// buildBotSection builds the bots monitoring section using batch queries (N+1 → 4 queries).
-func buildBotSection(store repository.DatabaseStore) monitoringBots {
+// getBotDataCached returns the fully-computed bot table + summary, cached for 30s
+// under a single key so that paginating the bots table never re-runs the heavy
+// 4-query build. Both the overview handler and the paged bots handler share it.
+func getBotDataCached(store repository.DatabaseStore) botData {
+	const cacheKey = "monitoring:bots:full"
+	if cached, ok := globalCache.Get(cacheKey); ok {
+		if bd, ok := cached.(botData); ok {
+			return bd
+		}
+	}
+	bd := buildBotData(store)
+	globalCache.Set(cacheKey, bd, 30*time.Second)
+	return bd
+}
+
+// buildBotData builds the bots table rows + summary using batch queries (N+1 → 4 queries).
+// Rows are returned sorted by win_rate desc, then total_pnl desc (the default order).
+func buildBotData(store repository.DatabaseStore) botData {
 	bots, err := store.GetAllSimBots()
 	if err != nil {
 		logger.Logger.Errorf("monitoring: GetAllSimBots: %v", err)
-		return monitoringBots{
-			Summary: monitoringBotSummary{ByMarket: []monitoringBotByMarket{}},
-			Table:   []monitoringBotTableRow{},
+		return botData{
+			rows:    []monitoringBotTableRow{},
+			summary: monitoringBotSummary{ByMarket: []monitoringBotByMarket{}},
 		}
 	}
 
@@ -361,14 +396,54 @@ func buildBotSection(store repository.DatabaseStore) monitoringBots {
 		return byMarketSlice[i].Market < byMarketSlice[j].Market
 	})
 
-	return monitoringBots{
-		Summary: monitoringBotSummary{
+	return botData{
+		rows: tableRows,
+		summary: monitoringBotSummary{
 			TotalBots:  totalBots,
 			ActiveBots: activeBots,
 			ByMarket:   byMarketSlice,
 		},
-		Table: tableRows,
 	}
+}
+
+// sortBotRows sorts rows in place by the given column and direction. Unknown
+// sortBy falls back to the default win_rate (then total_pnl) order.
+func sortBotRows(rows []monitoringBotTableRow, sortBy, sortDir string) {
+	asc := sortDir == "asc"
+	less := func(i, j int) bool {
+		a, b := rows[i], rows[j]
+		switch sortBy {
+		case "total_pnl":
+			return a.TotalPnl < b.TotalPnl
+		case "return_pct":
+			return a.ReturnPct < b.ReturnPct
+		case "profit_factor":
+			return a.ProfitFactor < b.ProfitFactor
+		case "trades":
+			return a.Trades < b.Trades
+		case "wins":
+			return a.Wins < b.Wins
+		case "losses":
+			return a.Losses < b.Losses
+		case "bot_id":
+			return a.BotID < b.BotID
+		case "market":
+			return a.Market < b.Market
+		case "algorithm":
+			return a.Algorithm < b.Algorithm
+		default: // "win_rate"
+			if a.WinRate != b.WinRate {
+				return a.WinRate < b.WinRate
+			}
+			return a.TotalPnl < b.TotalPnl
+		}
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		if asc {
+			return less(i, j)
+		}
+		return less(j, i)
+	})
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
@@ -403,14 +478,118 @@ func GetMonitoringOverview(w http.ResponseWriter, r *http.Request) {
 		marketResults = append(marketResults, buildMarketOverview(mkt, store))
 	}
 
-	botsSection := buildBotSection(store)
+	// The bots table is now served via the paginated /api/monitoring/bots
+	// endpoint, so the overview ships only the summary (cheap, small payload).
+	bd := getBotDataCached(store)
 
 	result := &monitoringOverviewResponse{
 		GeneratedAt: time.Now().Format(time.RFC3339),
 		Markets:     marketResults,
-		Bots:        botsSection,
+		Bots: monitoringBots{
+			Summary: bd.summary,
+			Table:   []monitoringBotTableRow{},
+		},
 	}
 
 	globalCache.Set(cacheKey, result, 30*time.Second)
 	ResponseSuccess(w, http.StatusOK, result)
+}
+
+// GetMonitoringBots godoc
+//
+//	@Summary      List bot trading stats (paginated)
+//	@Description  Returns the bot trading win/loss table with server-side filtering, sorting and pagination. Backed by the same 30s-cached dataset as the monitoring overview. Requires JWT authentication.
+//	@Tags         Monitoring
+//	@Produce      json
+//	@Security     BearerAuth
+//	@Param        page       query  int     false  "Page number (1-based, default 1)"
+//	@Param        page_size  query  int     false  "Rows per page (default 50, max 200)"
+//	@Param        market     query  string  false  "Filter by market: GOLD|NASDAQ|CRYPTO|SP500"
+//	@Param        algorithm  query  string  false  "Filter by algorithm (case-insensitive substring)"
+//	@Param        search     query  string  false  "Filter by bot id (case-insensitive substring)"
+//	@Param        sort_by    query  string  false  "Sort column: win_rate|total_pnl|return_pct|profit_factor|trades|wins|losses|bot_id|market|algorithm (default win_rate)"
+//	@Param        sort_dir   query  string  false  "Sort direction: asc|desc (default desc)"
+//	@Success      200  {object}  monitoringBotsPage
+//	@Failure      401  {object}  ResponseFailure
+//	@Failure      500  {object}  ResponseFailure
+//	@Router       /api/monitoring/bots [get]
+func GetMonitoringBots(w http.ResponseWriter, r *http.Request) {
+	if !requireAuth(w, r) {
+		return
+	}
+
+	q := r.URL.Query()
+
+	// ── Pagination params ──────────────────────────────────────────────────
+	page := 1
+	if v, err := strconv.Atoi(q.Get("page")); err == nil && v > 0 {
+		page = v
+	}
+	pageSize := 50
+	if v, err := strconv.Atoi(q.Get("page_size")); err == nil && v > 0 {
+		pageSize = v
+	}
+	if pageSize > 200 {
+		pageSize = 200
+	}
+
+	// ── Filter params ──────────────────────────────────────────────────────
+	marketFilter := strings.ToUpper(strings.TrimSpace(q.Get("market")))
+	algoFilter := strings.ToLower(strings.TrimSpace(q.Get("algorithm")))
+	searchFilter := strings.ToLower(strings.TrimSpace(q.Get("search")))
+
+	// ── Sort params ────────────────────────────────────────────────────────
+	sortBy := q.Get("sort_by")
+	if sortBy == "" {
+		sortBy = "win_rate"
+	}
+	sortDir := q.Get("sort_dir")
+	if sortDir != "asc" {
+		sortDir = "desc"
+	}
+
+	bd := getBotDataCached(repository.GetSingleton())
+
+	// ── Filter (copy so the cached slice is never mutated) ──────────────────
+	filtered := make([]monitoringBotTableRow, 0, len(bd.rows))
+	for _, row := range bd.rows {
+		if marketFilter != "" && strings.ToUpper(row.Market) != marketFilter {
+			continue
+		}
+		if algoFilter != "" && !strings.Contains(strings.ToLower(row.Algorithm), algoFilter) {
+			continue
+		}
+		if searchFilter != "" && !strings.Contains(strings.ToLower(row.BotID), searchFilter) {
+			continue
+		}
+		filtered = append(filtered, row)
+	}
+
+	// ── Sort ───────────────────────────────────────────────────────────────
+	sortBotRows(filtered, sortBy, sortDir)
+
+	// ── Paginate ───────────────────────────────────────────────────────────
+	total := len(filtered)
+	totalPages := (total + pageSize - 1) / pageSize
+	start := (page - 1) * pageSize
+	if start > total {
+		start = total
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	pageRows := filtered[start:end]
+	if pageRows == nil {
+		pageRows = []monitoringBotTableRow{}
+	}
+
+	ResponseSuccess(w, http.StatusOK, &monitoringBotsPage{
+		Data:       pageRows,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+		Summary:    bd.summary,
+	})
 }

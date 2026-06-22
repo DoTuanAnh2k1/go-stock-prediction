@@ -50,6 +50,12 @@ class PredictionServicer:
         threading.Thread(target=_bg_crawl_crypto, daemon=True).start()
         return pb2.TriggerResponse(success=True, message="Crypto crawler started in background")
 
+    def TriggerCryptoHistory(self, request, context):
+        pb2, _ = _get_pb()
+        log.info("grpc.TriggerCryptoHistory")
+        threading.Thread(target=_bg_crypto_history, daemon=True).start()
+        return pb2.TriggerResponse(success=True, message="Crypto history import started in background")
+
     def TriggerStockHistory(self, request, context):
         pb2, _ = _get_pb()
         log.info("grpc.TriggerStockHistory.removed")
@@ -308,6 +314,15 @@ def _bg_crawl_crypto():
         log.error("bg.crypto.error", error=str(exc))
 
 
+def _bg_crypto_history():
+    try:
+        from src.crawlers.crypto import CryptoCrawler
+        saved = CryptoCrawler().crawl_history()
+        log.info("bg.crypto_history.done", saved=saved)
+    except Exception as exc:
+        log.error("bg.crypto_history.error", error=str(exc))
+
+
 def _bg_gold_history():
     try:
         from src.crawlers.gold import GoldCrawler
@@ -431,7 +446,7 @@ def _stream_predict(market_key: str, context):
         try:
             from src.orchestrator.runner import run_for_market
             n = run_for_market(market_key, force=True, emit=emit)
-            q.put(pb2.PipelineLogEvent(level="ok", msg=f"Hoàn thành: {n} dự đoán", progress=1.0, done=True))
+            q.put(pb2.PipelineLogEvent(level="ok", msg=f"Complete: {n} predictions", progress=1.0, done=True))
         except Exception as exc:
             log.error("stream_predict.error", market=market_key, error=str(exc))
             q.put(pb2.PipelineLogEvent(level="error", msg=str(exc), progress=1.0, done=True, error=str(exc)))

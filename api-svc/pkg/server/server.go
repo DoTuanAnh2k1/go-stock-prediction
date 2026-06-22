@@ -14,9 +14,9 @@ func StartHTTPServer() {
 	// Get server config
 	serverAddr := config.GetServerConfig().Host + ":" + config.GetServerConfig().Port
 
-	handler := CORSMiddleware(JWTMiddleware(mux))
+	handler := CORSMiddleware(JWTMiddleware(AccessLogMiddleware(mux)))
 
-	// Create HTTP server với proper configuration
+	// Create HTTP server with proper configuration
 	server := &http.Server{
 		Addr:    serverAddr,
 		Handler: handler,
@@ -27,17 +27,16 @@ func StartHTTPServer() {
 	}
 
 	// Log server startup info
-	logger.Logger.Infof("🚀 Starting VN Stock Prediction Server...")
-	logger.Logger.Infof("📡 Server Address: %s", serverAddr)
-	logger.Logger.Infof("🌐 Dashboard URL: http://%s", serverAddr)
-	logger.Logger.Infof("🔌 API Base URL: http://%s/api", serverAddr)
-	logger.Logger.Infof("❤️ Health Check: http://%s/health", serverAddr)
+	logger.Logger.Infof("starting api-svc HTTP server")
+	logger.Logger.Infof("server address: %s", serverAddr)
+	logger.Logger.Infof("api base url: http://%s/api", serverAddr)
+	logger.Logger.Infof("health check: http://%s/health", serverAddr)
 
 	// Start server
-	logger.Logger.Infof("✅ HTTP Server listening on %s", serverAddr)
+	logger.Logger.Infof("HTTP server listening on %s", serverAddr)
 	err := server.ListenAndServe()
 	if err != nil {
-		logger.Logger.Fatalf("❌ Server failed to start: %v", err)
+		logger.Logger.Fatalf("server failed to start: %v", err)
 		panic(err)
 	}
 }

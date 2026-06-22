@@ -725,6 +725,52 @@ export async function fetchMonitoringOverview(): Promise<MonitoringOverview> {
   return res.json();
 }
 
+// ── Monitoring bots (server-side paginated / filtered / sorted) ───────────────
+
+export type MonitoringBotSortKey =
+  | 'win_rate' | 'total_pnl' | 'return_pct' | 'profit_factor'
+  | 'trades' | 'wins' | 'losses' | 'bot_id' | 'market' | 'algorithm';
+
+export interface MonitoringBotsParams {
+  page?: number;
+  page_size?: number;
+  market?: string;
+  algorithm?: string;
+  search?: string;
+  sort_by?: MonitoringBotSortKey;
+  sort_dir?: 'asc' | 'desc';
+}
+
+export interface MonitoringBotsPage {
+  data: MonitoringBotRow[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  summary: MonitoringBotSummary;
+}
+
+export async function fetchMonitoringBots(
+  params: MonitoringBotsParams = {}
+): Promise<MonitoringBotsPage> {
+  const p = new URLSearchParams();
+  if (params.page)      p.set('page', String(params.page));
+  if (params.page_size) p.set('page_size', String(params.page_size));
+  if (params.market)    p.set('market', params.market);
+  if (params.algorithm) p.set('algorithm', params.algorithm);
+  if (params.search)    p.set('search', params.search);
+  if (params.sort_by)   p.set('sort_by', params.sort_by);
+  if (params.sort_dir)  p.set('sort_dir', params.sort_dir);
+  const res = await fetch('/api/monitoring/bots?' + p.toString(), {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${getToken()}`,
+    },
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
 // ── Market Training (server-side paginated) ───────────────────────────────────
 export interface MarketTrainingParams {
   page?: number;

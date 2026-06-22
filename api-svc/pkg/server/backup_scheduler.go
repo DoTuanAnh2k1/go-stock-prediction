@@ -57,7 +57,7 @@ func StartBackupScheduler(store repository.DatabaseStore) {
 		logger.Logger.Errorf("backup scheduler: failed to start cron: %v", err)
 		return
 	}
-	logger.Logger.Infof("✅ Backup scheduler started (job=%s)", backupJobKey)
+	logger.Logger.Infof("backup scheduler started (job=%s)", backupJobKey)
 
 	go bs.watch()
 }

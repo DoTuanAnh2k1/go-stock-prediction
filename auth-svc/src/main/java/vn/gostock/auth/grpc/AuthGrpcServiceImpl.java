@@ -3,6 +3,8 @@ package vn.gostock.auth.grpc;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import net.devh.boot.grpc.server.service.GrpcService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import vn.gostock.auth.entity.MarketGroup;
 import vn.gostock.auth.entity.User;
 import vn.gostock.auth.proto.*;
@@ -15,6 +17,8 @@ import java.util.List;
 @GrpcService
 @RequiredArgsConstructor
 public class AuthGrpcServiceImpl extends AuthServiceGrpc.AuthServiceImplBase {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthGrpcServiceImpl.class);
 
     private final UserService userService;
     private final MarketGroupService marketGroupService;
@@ -29,11 +33,15 @@ public class AuthGrpcServiceImpl extends AuthServiceGrpc.AuthServiceImplBase {
             User user = userService.authenticate(req.getUsername(), req.getPassword());
             List<String> markets = userService.getAccessibleMarkets(user);
             String token = jwtService.generateToken(user, markets);
+            log.info("user logged in username={} role={}", user.getUsername(), user.getRole());
             obs.onNext(LoginResponse.newBuilder()
                 .setToken(token).setUsername(user.getUsername()).setRole(user.getRole())
                 .build());
             obs.onCompleted();
-        } catch (Exception e) { obs.onError(e); }
+        } catch (Exception e) {
+            log.warn("login failed username={} reason={}", req.getUsername(), e.getMessage());
+            obs.onError(e);
+        }
     }
 
     @Override

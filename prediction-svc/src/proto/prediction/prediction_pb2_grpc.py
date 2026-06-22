@@ -5,7 +5,7 @@ import warnings
 
 from src.proto.prediction import prediction_pb2 as prediction_dot_prediction__pb2
 
-GRPC_GENERATED_VERSION = '1.81.1'
+GRPC_GENERATED_VERSION = '1.70.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in prediction/prediction_pb2_grpc.py depends on'
+        + f' but the generated code in prediction/prediction_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class PredictionServiceStub:
+class PredictionServiceStub(object):
     """PredictionService is the gRPC service exposed by the prediction microservice.
     The API backend calls these RPCs to trigger crawling, training, and prediction.
     """
@@ -91,6 +91,11 @@ class PredictionServiceStub:
                 request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
                 response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
                 _registered_method=True)
+        self.TriggerCryptoHistory = channel.unary_unary(
+                '/prediction.PredictionService/TriggerCryptoHistory',
+                request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
+                response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
+                _registered_method=True)
         self.TriggerSP500Crawler = channel.unary_unary(
                 '/prediction.PredictionService/TriggerSP500Crawler',
                 request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
@@ -138,7 +143,7 @@ class PredictionServiceStub:
                 _registered_method=True)
 
 
-class PredictionServiceServicer:
+class PredictionServiceServicer(object):
     """PredictionService is the gRPC service exposed by the prediction microservice.
     The API backend calls these RPCs to trigger crawling, training, and prediction.
     """
@@ -213,6 +218,12 @@ class PredictionServiceServicer:
         raise NotImplementedError('Method not implemented!')
 
     def TriggerCryptoPredict(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def TriggerCryptoHistory(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -333,6 +344,11 @@ def add_PredictionServiceServicer_to_server(servicer, server):
                     request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
                     response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
             ),
+            'TriggerCryptoHistory': grpc.unary_unary_rpc_method_handler(
+                    servicer.TriggerCryptoHistory,
+                    request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
+                    response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
+            ),
             'TriggerSP500Crawler': grpc.unary_unary_rpc_method_handler(
                     servicer.TriggerSP500Crawler,
                     request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
@@ -386,7 +402,7 @@ def add_PredictionServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class PredictionService:
+class PredictionService(object):
     """PredictionService is the gRPC service exposed by the prediction microservice.
     The API backend calls these RPCs to trigger crawling, training, and prediction.
     """
@@ -676,6 +692,33 @@ class PredictionService:
             request,
             target,
             '/prediction.PredictionService/TriggerCryptoPredict',
+            prediction_dot_prediction__pb2.Empty.SerializeToString,
+            prediction_dot_prediction__pb2.TriggerResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def TriggerCryptoHistory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/prediction.PredictionService/TriggerCryptoHistory',
             prediction_dot_prediction__pb2.Empty.SerializeToString,
             prediction_dot_prediction__pb2.TriggerResponse.FromString,
             options,

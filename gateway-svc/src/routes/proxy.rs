@@ -36,7 +36,7 @@ pub async fn proxy_handler(
 
     match state.router.route(path) {
         None | Some(RouteAction::Block) => {
-            info!(path = %path, "Blocked → 404");
+            info!(path = %path, "Blocked request, returning 404");
             StatusCode::NOT_FOUND.into_response()
         }
         Some(RouteAction::Proxy {

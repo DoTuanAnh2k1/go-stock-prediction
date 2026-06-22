@@ -1081,6 +1081,28 @@ def delete_old_pipeline_reports(days: int = 7) -> int:
         return 0
 
 
+def increment_crawl_count(market_key: str) -> int:
+    """Atomically increment and return the per-market crawl counter.
+
+    Persisted in `pipeline_crawl_counters` so the "train every 10th crawl"
+    logic survives prediction-svc restarts (replaces the old in-memory dict).
+    Uses a single upsert + RETURNING so concurrent callers stay consistent.
+    """
+    with session_scope() as session:
+        row = session.execute(
+            text("""
+                INSERT INTO pipeline_crawl_counters (market_key, crawl_count, updated_at)
+                VALUES (:mk, 1, :now)
+                ON CONFLICT (market_key) DO UPDATE
+                    SET crawl_count = pipeline_crawl_counters.crawl_count + 1,
+                        updated_at  = :now
+                RETURNING crawl_count
+            """),
+            {"mk": market_key, "now": datetime.now()},
+        ).fetchone()
+        return int(row[0]) if row else 0
+
+
 # ---------------------------------------------------------------------------
 # Simulation KPI aggregation
 # ---------------------------------------------------------------------------

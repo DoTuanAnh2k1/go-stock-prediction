@@ -39,10 +39,29 @@ interface LeaderboardSummary {
   avg_return_pct: number;
 }
 
+interface LeaderboardMarketDist {
+  market: string;
+  count: number;
+  avg_return_pct: number;
+}
+
+interface LeaderboardTopReturn {
+  display_name: string;
+  total_return_pct: number;
+}
+
 interface LeaderboardResponse {
   leaderboard: LeaderboardEntry[];
   summary: LeaderboardSummary;
+  distribution: LeaderboardMarketDist[];
+  top_returns: LeaderboardTopReturn[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -128,17 +147,40 @@ function algoClass(algo: string): string {
 }
 
 const MARKETS = ['ALL', 'GOLD', 'NASDAQ', 'SP500', 'CRYPTO'];
-const ALGORITHMS = ['ALL', 'ensemble', 'lstm_nn', 'arima_garch', 'moving_average', 'ema_macd', 'lightgbm'];
+// Keys must match the algorithm values stored in sim_bots (see prediction-svc seeder).
+const ALGORITHMS = [
+  'ALL',
+  'ensemble',
+  'lstm_nn',
+  'gru_nn',
+  'arima_garch',
+  'egarch',
+  'sarima',
+  'moving_average',
+  'ema',
+  'lightgbm',
+  'xgboost',
+  'random_forest',
+  'rl_dqn',
+];
 const CURRENCIES = ['ALL', 'USD', 'VND'];
 
 type SortKey =
   | 'rank'
+  | 'display_name'
+  | 'market'
+  | 'algorithm'
+  | 'initial_capital'
+  | 'final_value'
   | 'total_return_pct'
   | 'annualized_return_pct'
   | 'sharpe_ratio'
   | 'max_drawdown_pct'
   | 'win_rate_pct'
   | 'total_trades';
+
+// String columns sort alphabetically (ascending by default); the rest are numeric.
+const STRING_SORT_KEYS: SortKey[] = ['display_name', 'market', 'algorithm'];
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -149,59 +191,86 @@ export default function Simulation() {
 
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [summary, setSummary] = useState<LeaderboardSummary | null>(null);
+  const [distribution, setDistribution] = useState<LeaderboardMarketDist[]>([]);
+  const [topReturns, setTopReturns] = useState<LeaderboardTopReturn[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [marketFilter, setMarketFilter] = useState('ALL');
   const [algoFilter, setAlgoFilter] = useState('ALL');
   const [currencyFilter, setCurrencyFilter] = useState('ALL');
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
 
   const [sortKey, setSortKey] = useState<SortKey>('total_return_pct');
   const [sortAsc, setSortAsc] = useState(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+
+  // silent=true skips the full-page loading flash (used by the auto-refresh poll).
+  const load = useCallback((silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     const params = new URLSearchParams();
     if (marketFilter !== 'ALL') params.set('market', marketFilter);
     if (algoFilter !== 'ALL') params.set('algorithm', algoFilter);
     if (currencyFilter !== 'ALL') params.set('currency', currencyFilter);
-    const qs = params.toString();
-    apiFetch('/api/simulation/leaderboard' + (qs ? '?' + qs : ''))
+    if (search) params.set('search', search);
+    params.set('sort_by', sortKey);
+    params.set('sort_dir', sortAsc ? 'asc' : 'desc');
+    params.set('page', String(page));
+    params.set('page_size', String(pageSize));
+    apiFetch('/api/simulation/leaderboard?' + params.toString())
       .then((d: LeaderboardResponse) => {
         setEntries(Array.isArray(d.leaderboard) ? d.leaderboard : []);
         setSummary(d.summary || null);
+        setDistribution(Array.isArray(d.distribution) ? d.distribution : []);
+        setTopReturns(Array.isArray(d.top_returns) ? d.top_returns : []);
+        setTotal(d.total ?? 0);
+        setTotalPages(d.total_pages ?? 0);
         setLoading(false);
       })
       .catch((e) => {
         setError(String(e));
         setLoading(false);
       });
-  }, [marketFilter, algoFilter, currencyFilter]);
+  }, [marketFilter, algoFilter, currencyFilter, search, sortKey, sortAsc, page, pageSize]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Debounce the search box into the active term; reset to page 1.
+  useEffect(() => {
+    const id = setTimeout(() => { setSearch(searchInput.trim()); setPage(1); }, 350);
+    return () => clearTimeout(id);
+  }, [searchInput]);
+
+  // Auto-refresh leaderboard every 60s (silent — no loading flash). Resets when
+  // filters/sort/page change because `load` is a new callback.
+  useEffect(() => {
+    const id = setInterval(() => load(true), 60000);
+    return () => clearInterval(id);
+  }, [load]);
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
       setSortAsc(!sortAsc);
     } else {
       setSortKey(key);
-      setSortAsc(key === 'rank');
+      // rank and string columns read best ascending by default; metrics descending.
+      setSortAsc(key === 'rank' || STRING_SORT_KEYS.includes(key));
     }
+    setPage(1);
   }
 
-  const sorted = [...entries].sort((a, b) => {
-    const av = a[sortKey] as number;
-    const bv = b[sortKey] as number;
-    return sortAsc ? av - bv : bv - av;
-  });
+  // Entries arrive already filtered + sorted + paginated from the server.
+  const sorted = entries;
 
-  // Bar chart: top 8 by return
-  const top8 = [...entries]
-    .sort((a, b) => b.total_return_pct - a.total_return_pct)
-    .slice(0, 8);
-  const barData = top8.map((e) => e.total_return_pct);
-  const barLabels = top8.map((e) => e.display_name.split('—')[0].trim().slice(0, 6));
+  // Bar chart: top 8 by return (server-computed over the full filtered set).
+  const barData = topReturns.map((e) => e.total_return_pct);
+  const barLabels = topReturns.map((e) => e.display_name.split('—')[0].trim().slice(0, 6));
 
   function SortIndicator({ k }: { k: SortKey }) {
     if (sortKey !== k) return <span style={{ color: 'var(--text-3)', marginLeft: 3, fontSize: 10 }}>⇅</span>;
@@ -236,7 +305,7 @@ export default function Simulation() {
       <div className="grid grid--kpis section-gap">
         <KPI
           label={t.simulation.totalBots}
-          value={summary?.total_bots != null ? String(summary.total_bots) : entries.length.toString()}
+          value={summary?.total_bots != null ? String(summary.total_bots) : String(total)}
           sub={t.simulation.monitored}
         />
         <KPI
@@ -267,7 +336,7 @@ export default function Simulation() {
       )}
 
       {/* Charts row */}
-      {!error && top8.length > 0 && (
+      {!error && topReturns.length > 0 && (
         <div className="grid grid--halves section-gap">
           <Panel title={t.simulation.topReturnBots} sub={t.simulation.highest}>
             <BarChart
@@ -280,7 +349,7 @@ export default function Simulation() {
             />
           </Panel>
           <Panel title={t.simulation.marketDist} sub={t.simulation.byBotCount}>
-            <MarketDistribution entries={entries} />
+            <MarketDistribution distribution={distribution} />
           </Panel>
         </div>
       )}
@@ -288,14 +357,14 @@ export default function Simulation() {
       {/* Filter bar */}
       <Panel
         title={t.simulation.leaderboard}
-        sub={sorted.length + ' ' + t.simulation.bots}
+        sub={total + ' ' + t.simulation.bots}
         className="section-gap"
         tools={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             {/* Market filter */}
             <div className="seg">
               {MARKETS.map((m) => (
-                <button key={m} className={marketFilter === m ? 'active' : ''} onClick={() => setMarketFilter(m)}>
+                <button key={m} className={marketFilter === m ? 'active' : ''} onClick={() => { setMarketFilter(m); setPage(1); }}>
                   {m}
                 </button>
               ))}
@@ -303,7 +372,7 @@ export default function Simulation() {
             {/* Currency filter */}
             <div className="seg">
               {CURRENCIES.map((c) => (
-                <button key={c} className={currencyFilter === c ? 'active' : ''} onClick={() => setCurrencyFilter(c)}>
+                <button key={c} className={currencyFilter === c ? 'active' : ''} onClick={() => { setCurrencyFilter(c); setPage(1); }}>
                   {c}
                 </button>
               ))}
@@ -311,7 +380,7 @@ export default function Simulation() {
             {/* Algorithm filter */}
             <select
               value={algoFilter}
-              onChange={(e) => setAlgoFilter(e.target.value)}
+              onChange={(e) => { setAlgoFilter(e.target.value); setPage(1); }}
               style={{
                 background: 'var(--surface)',
                 border: '1px solid var(--border)',
@@ -325,6 +394,21 @@ export default function Simulation() {
                 <option key={a} value={a}>{a === 'ALL' ? t.simulation.allAlgos : algoLabel(a)}</option>
               ))}
             </select>
+            {/* Bot search */}
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder={t.simulation.searchBot}
+              style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                color: 'var(--text)',
+                padding: '5px 8px',
+                fontSize: 12,
+                fontFamily: 'var(--font-ui)',
+                minWidth: 140,
+              }}
+            />
             {isLoggedIn && (
               <button
                 className="btn btn--sm"
@@ -342,7 +426,7 @@ export default function Simulation() {
         }
         flush
       >
-        {sorted.length === 0 ? (
+        {total === 0 ? (
           <div className="empty" style={{ padding: '48px 20px' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>
             <p>{t.simulation.noSimData}</p>
@@ -361,17 +445,18 @@ export default function Simulation() {
             )}
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <>
+          <div className="tbl-scroll" style={{ overflowX: 'auto' }}>
             <table className="tbl">
               <thead>
                 <tr>
                   {th(t.simulation.colRank, 'rank', 'c')}
-                  <th>{t.simulation.colBot}</th>
-                  <th>{t.simulation.colMarket}</th>
-                  <th className="c">{t.simulation.colAlgo}</th>
+                  {th(t.simulation.colBot, 'display_name')}
+                  {th(t.simulation.colMarket, 'market')}
+                  {th(t.simulation.colAlgo, 'algorithm', 'c')}
                   {isLoggedIn && <th className="c">{t.simulation.colStatus}</th>}
-                  <th className="r">{t.simulation.colInitCapital}</th>
-                  <th className="r">{t.simulation.colFinalValue}</th>
+                  {th(t.simulation.colInitCapital, 'initial_capital', 'r')}
+                  {th(t.simulation.colFinalValue, 'final_value', 'r')}
                   {th('Return%', 'total_return_pct', 'r')}
                   {th('Annlzd%', 'annualized_return_pct', 'r')}
                   {th('Sharpe', 'sharpe_ratio', 'r')}
@@ -465,17 +550,148 @@ export default function Simulation() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile card view — same data, stacked instead of scrolling sideways */}
+          <div className="m-cards">
+            {sorted.map((e) => (
+              <div
+                key={e.bot_id}
+                className="m-card clickable"
+                onClick={() => navigate('/simulation/' + e.bot_id)}
+              >
+                <div className="m-card__head">
+                  <span className="m-card__rank" style={{ color: e.rank <= 3 ? 'var(--gold)' : 'var(--text-3)' }}>
+                    {e.rank <= 3 ? ['🥇', '🥈', '🥉'][e.rank - 1] : '#' + e.rank}
+                  </span>
+                  <div className="m-card__title">
+                    <div className="m-card__name">{e.display_name}</div>
+                    <div className="m-card__sub">
+                      {e.simulation_period?.start ? fmtDT(e.simulation_period.start) : '—'} → {e.simulation_period?.end ? fmtDT(e.simulation_period.end) : '—'}
+                    </div>
+                  </div>
+                  <Chg pct={e.total_return_pct ?? 0} />
+                </div>
+                <div className="m-card__badges">
+                  <span className="badge badge--muted" style={{ fontSize: 10.5, letterSpacing: 0.3 }}>{e.market}</span>
+                  <span className={`algo algo--${algoClass(e.algorithm)}`}>{algoLabel(e.algorithm)}</span>
+                  {isLoggedIn && (
+                    <button
+                      style={{
+                        marginLeft: 'auto',
+                        fontSize: 10,
+                        padding: '2px 8px',
+                        background: e.is_active ? 'var(--up-bg)' : 'var(--surface-2)',
+                        color: e.is_active ? 'var(--up)' : 'var(--text-3)',
+                        border: '1px solid ' + (e.is_active ? 'var(--up)' : 'var(--border)'),
+                        fontFamily: 'var(--font-mono)',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                      }}
+                      title={e.is_active ? 'Click to disable' : 'Click to enable'}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        authPost(`/api/simulation/bots/${e.bot_id}/toggle`).then((ok) => {
+                          if (ok) {
+                            setEntries((prev) =>
+                              prev.map((b) => b.bot_id === e.bot_id ? { ...b, is_active: !b.is_active } : b)
+                            );
+                            vnsToast(!e.is_active ? `${e.display_name} activated` : `${e.display_name} disabled`);
+                          } else {
+                            vnsToast('Failed (admin required)');
+                          }
+                        });
+                      }}
+                    >
+                      {e.is_active ? 'ON' : 'OFF'}
+                    </button>
+                  )}
+                </div>
+                <div className="m-card__metrics">
+                  <Metric label={t.simulation.colInitCapital} value={fmtCapital(e.initial_capital, e.currency)} />
+                  <Metric label={t.simulation.colFinalValue} value={fmtCapital(e.final_value, e.currency)} />
+                  <Metric
+                    label="Annlzd%"
+                    value={((e.annualized_return_pct ?? 0) >= 0 ? '+' : '') + (e.annualized_return_pct ?? 0).toFixed(1) + '%'}
+                    color={(e.annualized_return_pct ?? 0) >= 0 ? 'var(--up)' : 'var(--down)'}
+                  />
+                  <Metric label="Sharpe" value={(e.sharpe_ratio ?? 0).toFixed(2)} />
+                  <Metric label="Max DD" value={(e.max_drawdown_pct ?? 0).toFixed(1) + '%'} color="var(--down)" />
+                  <Metric
+                    label="Win%"
+                    value={(e.win_rate_pct ?? 0).toFixed(1) + '%'}
+                    color={(e.win_rate_pct ?? 0) >= 55 ? 'var(--up)' : undefined}
+                  />
+                  <Metric label="Trades" value={String(e.total_trades ?? 0)} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Pagination */}
+          <div style={{
+            display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center',
+            justifyContent: 'space-between', padding: '12px 14px',
+            borderTop: '1px solid var(--border)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-3)' }}>
+              <span>{t.simulation.rowsPerPage}:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                style={{
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  color: 'var(--text)', padding: '4px 8px', fontSize: 12,
+                }}
+              >
+                {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <span style={{ fontFamily: 'var(--font-mono)' }}>
+                {total === 0 ? 0 : (page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} / {total}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                className="btn btn--sm"
+                disabled={page <= 1 || loading}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                ‹ {t.simulation.prevPage}
+              </button>
+              <span style={{ fontSize: 12, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', minWidth: 80, textAlign: 'center' }}>
+                {t.simulation.page} {page} / {Math.max(1, totalPages)}
+              </span>
+              <button
+                className="btn btn--sm"
+                disabled={page >= totalPages || loading}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                {t.simulation.nextPage} ›
+              </button>
+            </div>
+          </div>
+          </>
         )}
       </Panel>
     </div>
   );
 }
 
+// ── Mobile metric cell ─────────────────────────────────────────────────────────
+
+function Metric({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="m-metric">
+      <span className="m-metric__label">{label}</span>
+      <span className="m-metric__value" style={color ? { color } : undefined}>{value}</span>
+    </div>
+  );
+}
+
 // ── Market distribution mini chart ───────────────────────────────────────────
 
-function MarketDistribution({ entries }: { entries: LeaderboardEntry[] }) {
+function MarketDistribution({ distribution }: { distribution: LeaderboardMarketDist[] }) {
   const { t } = useLanguage();
-  if (entries.length === 0) {
+  if (distribution.length === 0) {
     return (
       <div className="empty" style={{ height: 390, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <div className="empty__icon"><Icon name="layers" size={18} /></div>
@@ -484,15 +700,12 @@ function MarketDistribution({ entries }: { entries: LeaderboardEntry[] }) {
     );
   }
 
-  const marketCounts: Record<string, { count: number; avgReturn: number }> = {};
-  for (const e of entries) {
-    if (!marketCounts[e.market]) marketCounts[e.market] = { count: 0, avgReturn: 0 };
-    marketCounts[e.market].count += 1;
-    marketCounts[e.market].avgReturn += e.total_return_pct;
-  }
-  const markets = Object.entries(marketCounts)
-    .map(([market, { count, avgReturn }]) => ({ market, count, avgReturn: avgReturn / count }))
-    .sort((a, b) => b.avgReturn - a.avgReturn);
+  // Server already sorts by avg return desc; map to the chart's local shape.
+  const markets = distribution.map((d) => ({
+    market: d.market,
+    count: d.count,
+    avgReturn: d.avg_return_pct,
+  }));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

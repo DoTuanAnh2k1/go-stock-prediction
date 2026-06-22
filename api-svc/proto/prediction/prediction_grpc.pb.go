@@ -30,6 +30,7 @@ const (
 	PredictionService_TriggerNasdaqPredict_FullMethodName      = "/prediction.PredictionService/TriggerNasdaqPredict"
 	PredictionService_TriggerCryptoCrawler_FullMethodName      = "/prediction.PredictionService/TriggerCryptoCrawler"
 	PredictionService_TriggerCryptoPredict_FullMethodName      = "/prediction.PredictionService/TriggerCryptoPredict"
+	PredictionService_TriggerCryptoHistory_FullMethodName      = "/prediction.PredictionService/TriggerCryptoHistory"
 	PredictionService_TriggerSP500Crawler_FullMethodName       = "/prediction.PredictionService/TriggerSP500Crawler"
 	PredictionService_TriggerSP500Predict_FullMethodName       = "/prediction.PredictionService/TriggerSP500Predict"
 	PredictionService_TriggerSimulationBacktest_FullMethodName = "/prediction.PredictionService/TriggerSimulationBacktest"
@@ -68,6 +69,7 @@ type PredictionServiceClient interface {
 	// Crypto
 	TriggerCryptoCrawler(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
 	TriggerCryptoPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
+	TriggerCryptoHistory(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
 	// S&P 500
 	TriggerSP500Crawler(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
 	TriggerSP500Predict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error)
@@ -194,6 +196,16 @@ func (c *predictionServiceClient) TriggerCryptoPredict(ctx context.Context, in *
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(TriggerResponse)
 	err := c.cc.Invoke(ctx, PredictionService_TriggerCryptoPredict_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *predictionServiceClient) TriggerCryptoHistory(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*TriggerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TriggerResponse)
+	err := c.cc.Invoke(ctx, PredictionService_TriggerCryptoHistory_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -353,6 +365,7 @@ type PredictionServiceServer interface {
 	// Crypto
 	TriggerCryptoCrawler(context.Context, *Empty) (*TriggerResponse, error)
 	TriggerCryptoPredict(context.Context, *Empty) (*TriggerResponse, error)
+	TriggerCryptoHistory(context.Context, *Empty) (*TriggerResponse, error)
 	// S&P 500
 	TriggerSP500Crawler(context.Context, *Empty) (*TriggerResponse, error)
 	TriggerSP500Predict(context.Context, *Empty) (*TriggerResponse, error)
@@ -407,6 +420,9 @@ func (UnimplementedPredictionServiceServer) TriggerCryptoCrawler(context.Context
 }
 func (UnimplementedPredictionServiceServer) TriggerCryptoPredict(context.Context, *Empty) (*TriggerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TriggerCryptoPredict not implemented")
+}
+func (UnimplementedPredictionServiceServer) TriggerCryptoHistory(context.Context, *Empty) (*TriggerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TriggerCryptoHistory not implemented")
 }
 func (UnimplementedPredictionServiceServer) TriggerSP500Crawler(context.Context, *Empty) (*TriggerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TriggerSP500Crawler not implemented")
@@ -654,6 +670,24 @@ func _PredictionService_TriggerCryptoPredict_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PredictionService_TriggerCryptoHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PredictionServiceServer).TriggerCryptoHistory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PredictionService_TriggerCryptoHistory_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PredictionServiceServer).TriggerCryptoHistory(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PredictionService_TriggerSP500Crawler_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Empty)
 	if err := dec(in); err != nil {
@@ -838,6 +872,10 @@ var PredictionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TriggerCryptoPredict",
 			Handler:    _PredictionService_TriggerCryptoPredict_Handler,
+		},
+		{
+			MethodName: "TriggerCryptoHistory",
+			Handler:    _PredictionService_TriggerCryptoHistory_Handler,
 		},
 		{
 			MethodName: "TriggerSP500Crawler",

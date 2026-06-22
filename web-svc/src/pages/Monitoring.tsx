@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Panel, Icon } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LangContext';
 import {
   fetchMonitoringOverview,
+  fetchMonitoringBots,
   type MonitoringOverview,
   type MonitoringMarket,
-  type MonitoringBotRow,
+  type MonitoringBotsPage,
+  type MonitoringBotSortKey,
 } from '../api';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -249,41 +251,79 @@ function MarketCard({ market }: { market: MonitoringMarket }) {
 
 // ── Sort key type ─────────────────────────────────────────────────────────────
 
-type BotSortKey = 'win_rate' | 'total_pnl' | 'return_pct' | 'profit_factor' | 'trades';
 type SortDir = 'asc' | 'desc';
 
-// ── Bots Table ────────────────────────────────────────────────────────────────
+const BOT_MARKETS = ['GOLD', 'NASDAQ', 'CRYPTO', 'SP500'];
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 
-function BotsTable({ rows }: { rows: MonitoringBotRow[] }) {
+// ── Bots Table (server-side paginated / filtered / sorted) ──────────────────────
+
+function BotsTable() {
   const { t } = useLanguage();
   const m = t.monitoring;
-  const [sortKey, setSortKey] = useState<BotSortKey>('win_rate');
+
+  // Query state.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [market, setMarket] = useState('');
+  const [sortKey, setSortKey] = useState<MonitoringBotSortKey>('win_rate');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
-  const sorted = useMemo(() => {
-    return [...rows].sort((a, b) => {
-      const av = a[sortKey] as number;
-      const bv = b[sortKey] as number;
-      return sortDir === 'desc' ? bv - av : av - bv;
-    });
-  }, [rows, sortKey, sortDir]);
+  // Text inputs (debounced into the actual query terms).
+  const [algoInput, setAlgoInput] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [algo, setAlgo] = useState('');
+  const [search, setSearch] = useState('');
 
-  function handleSort(key: BotSortKey) {
+  // Data state.
+  const [resp, setResp] = useState<MonitoringBotsPage | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Debounce text filters → reset to page 1.
+  useEffect(() => {
+    const id = setTimeout(() => { setAlgo(algoInput.trim()); setPage(1); }, 350);
+    return () => clearTimeout(id);
+  }, [algoInput]);
+  useEffect(() => {
+    const id = setTimeout(() => { setSearch(searchInput.trim()); setPage(1); }, 350);
+    return () => clearTimeout(id);
+  }, [searchInput]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    fetchMonitoringBots({
+      page, page_size: pageSize,
+      market: market || undefined,
+      algorithm: algo || undefined,
+      search: search || undefined,
+      sort_by: sortKey, sort_dir: sortDir,
+    })
+      .then((res) => { if (!cancelled) setResp(res); })
+      .catch((e: any) => { if (!cancelled) setError(e.message || m.error); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [page, pageSize, market, algo, search, sortKey, sortDir, m.error]);
+
+  function handleSort(key: MonitoringBotSortKey) {
     if (sortKey === key) {
       setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'));
     } else {
       setSortKey(key);
       setSortDir('desc');
     }
+    setPage(1);
   }
 
-  function SortHeader({ colKey, label }: { colKey: BotSortKey; label: React.ReactNode }) {
+  function SortHeader({ colKey, label, align = 'right' }: { colKey: MonitoringBotSortKey; label: React.ReactNode; align?: 'left' | 'right' }) {
     const active = sortKey === colKey;
     return (
       <th
         onClick={() => handleSort(colKey)}
         style={{
-          textAlign: 'right', padding: '7px 10px',
+          textAlign: align, padding: '7px 10px',
           color: active ? 'var(--accent)' : 'var(--text-3)',
           fontWeight: 600, cursor: 'pointer', userSelect: 'none',
           whiteSpace: 'nowrap',
@@ -299,95 +339,190 @@ function BotsTable({ rows }: { rows: MonitoringBotRow[] }) {
     );
   }
 
-  if (!rows.length) {
-    return (
-      <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-3)' }}>
-        {m.noBotsTable}
-      </div>
-    );
-  }
+  const rows = resp?.data || [];
+  const total = resp?.total || 0;
+  const totalPages = resp?.total_pages || 0;
+  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, total);
+
+  const selectStyle: React.CSSProperties = {
+    background: 'var(--surface-2)', color: 'var(--text-1)',
+    border: '1px solid var(--border)', padding: '4px 8px', fontSize: 12,
+    borderRadius: 4,
+  };
+  const inputStyle: React.CSSProperties = { ...selectStyle, minWidth: 120 };
 
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <thead>
-          <tr style={{ borderBottom: '1px solid var(--border)' }}>
-            <th style={{ textAlign: 'left', padding: '7px 10px', color: 'var(--text-3)', fontWeight: 600 }}>{m.colBotId}</th>
-            <th style={{ textAlign: 'left', padding: '7px 10px', color: 'var(--text-3)', fontWeight: 600 }}>{m.colMarket}</th>
-            <th style={{ textAlign: 'left', padding: '7px 10px', color: 'var(--text-3)', fontWeight: 600 }}>{m.colAlgoBot}</th>
-            <SortHeader colKey="trades" label={m.colTrades} />
-            <th style={{ textAlign: 'right', padding: '7px 10px', color: 'var(--text-3)', fontWeight: 600 }}>{m.colWLBE}</th>
-            <SortHeader colKey="win_rate" label={m.colWinRate} />
-            <SortHeader colKey="total_pnl" label={m.colPnl} />
-            <SortHeader colKey="return_pct" label={
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                {m.colReturnPct}
-                <span
-                  title={m.returnPctNote}
-                  style={{
-                    fontSize: 10, width: 14, height: 14, borderRadius: '50%',
-                    border: '1px solid var(--text-3)', display: 'inline-flex',
-                    alignItems: 'center', justifyContent: 'center',
-                    color: 'var(--text-3)', cursor: 'help', flexShrink: 0,
-                  }}
-                >
-                  i
-                </span>
-              </span>
-            } />
-            <SortHeader colKey="profit_factor" label={m.colProfitFactor} />
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((row) => {
-            const pnlColor = row.total_pnl >= 0 ? 'var(--up)' : 'var(--down)';
-            const retColor = row.return_pct >= 0 ? 'var(--up)' : 'var(--down)';
-            const wrColor = row.win_rate >= 0.55 ? 'var(--up)' : row.win_rate >= 0.45 ? 'var(--gold)' : 'var(--down)';
-            return (
-              <tr key={row.bot_id} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-2)' }}>
-                  {row.bot_id}
-                </td>
-                <td style={{ padding: '7px 10px' }}>
-                  <span style={{
-                    fontSize: 11, padding: '2px 7px',
-                    background: `${MARKET_COLORS[row.market] || 'var(--accent)'}22`,
-                    color: MARKET_COLORS[row.market] || 'var(--accent)',
-                    fontFamily: 'var(--font-mono)',
-                  }}>
-                    {row.market}
+    <div>
+      {/* ── Filters ── */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+        marginBottom: 12, padding: '0 4px',
+      }}>
+        <select
+          value={market}
+          onChange={(e) => { setMarket(e.target.value); setPage(1); }}
+          style={selectStyle}
+        >
+          <option value="">{m.allMarkets}</option>
+          {BOT_MARKETS.map((mk) => <option key={mk} value={mk}>{mk}</option>)}
+        </select>
+        <input
+          value={algoInput}
+          onChange={(e) => setAlgoInput(e.target.value)}
+          placeholder={m.filterAlgo}
+          style={inputStyle}
+        />
+        <input
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder={m.filterBotId}
+          style={inputStyle}
+        />
+        {(market || algoInput || searchInput) && (
+          <button
+            className="btn btn--sm"
+            onClick={() => { setMarket(''); setAlgoInput(''); setSearchInput(''); setPage(1); }}
+          >
+            {m.clearFilters}
+          </button>
+        )}
+        <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+          {loading ? '…' : `${fmtNumber(rangeStart)}–${fmtNumber(rangeEnd)} / ${fmtNumber(total)}`}
+        </div>
+      </div>
+
+      {/* ── Error ── */}
+      {error && (
+        <div style={{ padding: '12px', color: 'var(--down)', fontSize: 13 }}>
+          {m.error}: {error}
+        </div>
+      )}
+
+      {/* ── Table ── */}
+      {!error && rows.length === 0 && !loading ? (
+        <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-3)' }}>
+          {m.noBotsTable}
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto', opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                <SortHeader colKey="bot_id" label={m.colBotId} align="left" />
+                <SortHeader colKey="market" label={m.colMarket} align="left" />
+                <SortHeader colKey="algorithm" label={m.colAlgoBot} align="left" />
+                <SortHeader colKey="trades" label={m.colTrades} />
+                <th style={{ textAlign: 'right', padding: '7px 10px', color: 'var(--text-3)', fontWeight: 600 }}>{m.colWLBE}</th>
+                <SortHeader colKey="win_rate" label={m.colWinRate} />
+                <SortHeader colKey="total_pnl" label={m.colPnl} />
+                <SortHeader colKey="return_pct" label={
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    {m.colReturnPct}
+                    <span
+                      title={m.returnPctNote}
+                      style={{
+                        fontSize: 10, width: 14, height: 14, borderRadius: '50%',
+                        border: '1px solid var(--text-3)', display: 'inline-flex',
+                        alignItems: 'center', justifyContent: 'center',
+                        color: 'var(--text-3)', cursor: 'help', flexShrink: 0,
+                      }}
+                    >
+                      i
+                    </span>
                   </span>
-                </td>
-                <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-                  {row.algorithm}
-                </td>
-                <td style={{ textAlign: 'right', padding: '7px 10px' }} className="mono">
-                  {fmtNumber(row.trades)}
-                </td>
-                <td style={{ textAlign: 'right', padding: '7px 10px', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-                  <span style={{ color: 'var(--up)' }}>{row.wins}</span>
-                  {' / '}
-                  <span style={{ color: 'var(--down)' }}>{row.losses}</span>
-                  {' / '}
-                  <span style={{ color: 'var(--text-3)' }}>{row.breakeven}</span>
-                </td>
-                <td style={{ textAlign: 'right', padding: '7px 10px' }} className="mono">
-                  <span style={{ color: wrColor }}>{fmtPct(row.win_rate)}</span>
-                </td>
-                <td style={{ textAlign: 'right', padding: '7px 10px' }} className="mono">
-                  <span style={{ color: pnlColor }}>{fmtPnl(row.total_pnl)}</span>
-                </td>
-                <td style={{ textAlign: 'right', padding: '7px 10px' }} className="mono">
-                  <span style={{ color: retColor }}>{fmtReturnPct(row.return_pct)}</span>
-                </td>
-                <td style={{ textAlign: 'right', padding: '7px 10px' }} className="mono">
-                  {row.profit_factor.toFixed(2)}
-                </td>
+                } />
+                <SortHeader colKey="profit_factor" label={m.colProfitFactor} />
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const pnlColor = row.total_pnl >= 0 ? 'var(--up)' : 'var(--down)';
+                const retColor = row.return_pct >= 0 ? 'var(--up)' : 'var(--down)';
+                const wrColor = row.win_rate >= 0.55 ? 'var(--up)' : row.win_rate >= 0.45 ? 'var(--gold)' : 'var(--down)';
+                return (
+                  <tr key={row.bot_id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-2)' }}>
+                      {row.bot_id}
+                    </td>
+                    <td style={{ padding: '7px 10px' }}>
+                      <span style={{
+                        fontSize: 11, padding: '2px 7px',
+                        background: `${MARKET_COLORS[row.market] || 'var(--accent)'}22`,
+                        color: MARKET_COLORS[row.market] || 'var(--accent)',
+                        fontFamily: 'var(--font-mono)',
+                      }}>
+                        {row.market}
+                      </span>
+                    </td>
+                    <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                      {row.algorithm}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '7px 10px' }} className="mono">
+                      {fmtNumber(row.trades)}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '7px 10px', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                      <span style={{ color: 'var(--up)' }}>{row.wins}</span>
+                      {' / '}
+                      <span style={{ color: 'var(--down)' }}>{row.losses}</span>
+                      {' / '}
+                      <span style={{ color: 'var(--text-3)' }}>{row.breakeven}</span>
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '7px 10px' }} className="mono">
+                      <span style={{ color: wrColor }}>{fmtPct(row.win_rate)}</span>
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '7px 10px' }} className="mono">
+                      <span style={{ color: pnlColor }}>{fmtPnl(row.total_pnl)}</span>
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '7px 10px' }} className="mono">
+                      <span style={{ color: retColor }}>{fmtReturnPct(row.return_pct)}</span>
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '7px 10px' }} className="mono">
+                      {row.profit_factor.toFixed(2)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── Pagination ── */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center',
+        justifyContent: 'space-between', marginTop: 14, padding: '0 4px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-3)' }}>
+          <span>{m.rowsPerPage}:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+            style={selectStyle}
+          >
+            {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            className="btn btn--sm"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            ‹ {m.prevPage}
+          </button>
+          <span style={{ fontSize: 12, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', minWidth: 80, textAlign: 'center' }}>
+            {m.page} {page} / {Math.max(1, totalPages)}
+          </span>
+          <button
+            className="btn btn--sm"
+            disabled={page >= totalPages || loading}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            {m.nextPage} ›
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -575,7 +710,7 @@ export default function Monitoring() {
               </span>
             }
           >
-            <BotsTable rows={data.bots.table} />
+            <BotsTable />
           </Panel>
         </>
       )}

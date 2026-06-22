@@ -105,6 +105,7 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("POST /api/trigger/nasdaq-predict", AdminRequired(TriggerNasdaqPredictHandler))
 	mux.HandleFunc("POST /api/trigger/crypto-crawler", AdminRequired(TriggerCryptoCrawlerHandler))
 	mux.HandleFunc("POST /api/trigger/crypto-predict", AdminRequired(TriggerCryptoPredictHandler))
+	mux.HandleFunc("POST /api/trigger/crypto-history", AdminRequired(TriggerCryptoHistoryHandler))
 	mux.HandleFunc("POST /api/trigger/sp500-crawler", AdminRequired(TriggerSP500CrawlerHandler))
 	mux.HandleFunc("POST /api/trigger/sp500-predict", AdminRequired(TriggerSP500PredictHandler))
 
@@ -178,6 +179,7 @@ func addHandler() *http.ServeMux {
 
 	// Monitoring APIs (require JWT authentication)
 	mux.HandleFunc("GET /api/monitoring/overview", AuthRequired(GetMonitoringOverview))
+	mux.HandleFunc("GET /api/monitoring/bots", AuthRequired(GetMonitoringBots))
 
 	// Pipeline Reports (require JWT authentication)
 	mux.HandleFunc("GET /api/pipeline-reports", AuthRequired(GetPipelineReports))
@@ -245,6 +247,7 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  POST /api/trigger/nasdaq-predict      [admin]")
 	logger.Logger.Info("  POST /api/trigger/crypto-crawler      [admin]")
 	logger.Logger.Info("  POST /api/trigger/crypto-predict      [admin]")
+	logger.Logger.Info("  POST /api/trigger/crypto-history      [admin]")
 	logger.Logger.Info("  POST /api/trigger/sp500-crawler       [admin]")
 	logger.Logger.Info("  POST /api/trigger/sp500-predict       [admin]")
 	logger.Logger.Info("  POST /api/trigger/backup              [admin]")
@@ -296,5 +299,6 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  POST /api/trigger/simulation-live-step [admin]")
 	logger.Logger.Info("  POST /api/trigger/sim-reset            [admin]")
 	logger.Logger.Info("  GET  /api/monitoring/overview")
+	logger.Logger.Info("  GET  /api/monitoring/bots")
 	logger.Logger.Info("  GET  /api/pipeline-reports          [auth]")
 }

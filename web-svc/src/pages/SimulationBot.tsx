@@ -261,7 +261,7 @@ function VariantsTab({
 
   return (
     <div className="section-gap">
-      <div style={{ overflowX: 'auto' }}>
+      <div className="tbl-scroll" style={{ overflowX: 'auto' }}>
         <table className="tbl">
           <thead>
             <tr>
@@ -318,6 +318,54 @@ function VariantsTab({
           </tbody>
         </table>
       </div>
+
+      {/* Mobile card view for variants */}
+      <div className="m-cards">
+        {sorted.map(v => {
+          const isCurrent = v.id === currentBotId;
+          return (
+            <div
+              key={v.id}
+              className={isCurrent ? 'm-card' : 'm-card clickable'}
+              style={isCurrent ? { background: 'var(--surface-2)' } : undefined}
+              onClick={() => !isCurrent && onNavigate(v.id)}
+            >
+              <div className="m-card__head">
+                <div className="m-card__title">
+                  <div className="m-card__name" style={{ color: isCurrent ? 'var(--accent, #58a6ff)' : undefined, fontWeight: isCurrent ? 700 : 600 }}>
+                    {v.display_name.split('—').pop()?.trim() || v.display_name}
+                    {isCurrent && <span style={{ color: 'var(--text-3)', fontWeight: 400, marginLeft: 6 }}>← đây</span>}
+                  </div>
+                </div>
+                <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600, color: v.kpis.total_return_pct >= 0 ? 'var(--up)' : 'var(--down)' }}>
+                  {v.kpis.total_return_pct >= 0 ? '+' : ''}{v.kpis.total_return_pct.toFixed(2)}%
+                </span>
+              </div>
+              <div className="m-card__metrics">
+                <Metric label="Buy" value={v.buy_threshold != null ? v.buy_threshold.toFixed(1) + '%' : '—'} />
+                <Metric label="Sell" value={v.sell_threshold != null ? v.sell_threshold.toFixed(1) + '%' : '—'} />
+                <Metric label="Conf" value={v.min_confidence != null ? (v.min_confidence * 100).toFixed(0) + '%' : '—'} />
+                <Metric label="SL" value={v.stop_loss != null ? v.stop_loss.toFixed(1) + '%' : '—'} />
+                <Metric label="TP" value={v.take_profit != null ? v.take_profit.toFixed(1) + '%' : '—'} />
+                <Metric label="Sharpe" value={v.kpis.sharpe_ratio.toFixed(2)} />
+                <Metric label="Win%" value={v.kpis.win_rate_pct.toFixed(1) + '%'} />
+                <Metric label="Trades" value={String(v.kpis.total_trades)} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Mobile metric cell ─────────────────────────────────────────────────────────
+
+function Metric({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="m-metric">
+      <span className="m-metric__label">{label}</span>
+      <span className="m-metric__value" style={color ? { color } : undefined}>{value}</span>
     </div>
   );
 }
@@ -840,7 +888,7 @@ export default function SimulationBot() {
           </div>
         ) : (
           <>
-            <div style={{ overflowX: 'auto' }}>
+            <div className="tbl-scroll" style={{ overflowX: 'auto' }}>
               <table className="tbl">
                 <thead>
                   <tr>
@@ -919,6 +967,56 @@ export default function SimulationBot() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile card view for trades */}
+            <div className="m-cards">
+              {trades.filter(tr => !hideHold || tr.action !== 'HOLD').map((tr) => (
+                <div key={tr.id} className="m-card">
+                  <div className="m-card__head">
+                    <span
+                      style={{
+                        padding: '2px 8px',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: 0.5,
+                        flexShrink: 0,
+                        background: tr.action === 'BUY' ? 'var(--up-bg)' : tr.action === 'SELL' ? 'var(--down-bg)' : 'var(--surface-2)',
+                        color: tr.action === 'BUY' ? 'var(--up)' : tr.action === 'SELL' ? 'var(--down)' : 'var(--text-3)',
+                        border: '1px solid ' + (tr.action === 'BUY' ? 'var(--up)' : tr.action === 'SELL' ? 'var(--down)' : 'var(--border)'),
+                      }}
+                    >
+                      {tr.action}
+                    </span>
+                    <div className="m-card__title">
+                      <div className="m-card__name">{tr.symbol}</div>
+                      <div className="m-card__sub">
+                        {fmtDT(tr.trade_date)}{tr.close_reason ? ' · ' + tr.close_reason : ''}
+                      </div>
+                    </div>
+                    {tr.pnl_pct != null && <Chg pct={tr.pnl_pct} />}
+                  </div>
+                  <div className="m-card__metrics">
+                    <Metric
+                      label={t.simulationBot.colPrice}
+                      value={tr.price != null
+                        ? (currency === 'VND'
+                            ? tr.price.toLocaleString('vi-VN')
+                            : '$' + tr.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                        : '—'}
+                    />
+                    <Metric label={t.simulationBot.colQuantity} value={tr.quantity != null ? tr.quantity.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'} />
+                    <Metric label={t.simulationBot.colValue} value={fmtValueShort(tr.trade_value, currency)} />
+                    <Metric label={t.simulationBot.colSignal} value={tr.signal_strength != null ? tr.signal_strength.toFixed(1) : '—'} />
+                    <Metric label="Conf." value={tr.confidence != null ? (tr.confidence * 100).toFixed(0) + '%' : '—'} />
+                    <Metric
+                      label="P&L"
+                      value={tr.pnl != null ? (tr.pnl >= 0 ? '+' : '') + fmtValueShort(tr.pnl, currency) : '—'}
+                      color={tr.pnl != null ? (tr.pnl >= 0 ? 'var(--up)' : 'var(--down)') : undefined}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
             {/* Pagination */}
             {totalPages > 1 && (

@@ -551,7 +551,7 @@ const file_proto_prediction_prediction_proto_rawDesc = "" +
 	"\x03msg\x18\x02 \x01(\tR\x03msg\x12\x1a\n" +
 	"\bprogress\x18\x03 \x01(\x02R\bprogress\x12\x12\n" +
 	"\x04done\x18\x04 \x01(\bR\x04done\x12\x14\n" +
-	"\x05error\x18\x05 \x01(\tR\x05error2\xd8\v\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error2\xa0\f\n" +
 	"\x11PredictionService\x12D\n" +
 	"\x12TriggerGoldCrawler\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12Q\n" +
 	"\fTriggerTrain\x12\x1f.prediction.TriggerTrainRequest\x1a .prediction.TriggerTrainResponse\x12B\n" +
@@ -563,7 +563,8 @@ const file_proto_prediction_prediction_proto_rawDesc = "" +
 	"\x14TriggerNasdaqCrawler\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12F\n" +
 	"\x14TriggerNasdaqPredict\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12F\n" +
 	"\x14TriggerCryptoCrawler\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12F\n" +
-	"\x14TriggerCryptoPredict\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12E\n" +
+	"\x14TriggerCryptoPredict\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12F\n" +
+	"\x14TriggerCryptoHistory\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12E\n" +
 	"\x13TriggerSP500Crawler\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12E\n" +
 	"\x13TriggerSP500Predict\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12W\n" +
 	"\x19TriggerSimulationBacktest\x12\x1d.prediction.SimulationRequest\x1a\x1b.prediction.TriggerResponse\x12K\n" +
@@ -609,37 +610,39 @@ var file_proto_prediction_prediction_proto_depIdxs = []int32{
 	0,  // 8: prediction.PredictionService.TriggerNasdaqPredict:input_type -> prediction.Empty
 	0,  // 9: prediction.PredictionService.TriggerCryptoCrawler:input_type -> prediction.Empty
 	0,  // 10: prediction.PredictionService.TriggerCryptoPredict:input_type -> prediction.Empty
-	0,  // 11: prediction.PredictionService.TriggerSP500Crawler:input_type -> prediction.Empty
-	0,  // 12: prediction.PredictionService.TriggerSP500Predict:input_type -> prediction.Empty
-	6,  // 13: prediction.PredictionService.TriggerSimulationBacktest:input_type -> prediction.SimulationRequest
-	0,  // 14: prediction.PredictionService.TriggerSimulationLiveStep:input_type -> prediction.Empty
-	0,  // 15: prediction.PredictionService.ResetSimBots:input_type -> prediction.Empty
-	0,  // 16: prediction.PredictionService.StreamGoldPredict:input_type -> prediction.Empty
-	0,  // 17: prediction.PredictionService.StreamNasdaqPredict:input_type -> prediction.Empty
-	0,  // 18: prediction.PredictionService.StreamCryptoPredict:input_type -> prediction.Empty
-	0,  // 19: prediction.PredictionService.StreamSP500Predict:input_type -> prediction.Empty
-	1,  // 20: prediction.PredictionService.TriggerGoldCrawler:output_type -> prediction.TriggerResponse
-	3,  // 21: prediction.PredictionService.TriggerTrain:output_type -> prediction.TriggerTrainResponse
-	1,  // 22: prediction.PredictionService.TriggerReconcile:output_type -> prediction.TriggerResponse
-	1,  // 23: prediction.PredictionService.TriggerGoldHistory:output_type -> prediction.TriggerResponse
-	1,  // 24: prediction.PredictionService.TriggerGoldPredict:output_type -> prediction.TriggerResponse
-	1,  // 25: prediction.PredictionService.TriggerHistoricalBacktest:output_type -> prediction.TriggerResponse
-	5,  // 26: prediction.PredictionService.GetTrainingStatus:output_type -> prediction.TrainingStatusResponse
-	1,  // 27: prediction.PredictionService.TriggerNasdaqCrawler:output_type -> prediction.TriggerResponse
-	1,  // 28: prediction.PredictionService.TriggerNasdaqPredict:output_type -> prediction.TriggerResponse
-	1,  // 29: prediction.PredictionService.TriggerCryptoCrawler:output_type -> prediction.TriggerResponse
-	1,  // 30: prediction.PredictionService.TriggerCryptoPredict:output_type -> prediction.TriggerResponse
-	1,  // 31: prediction.PredictionService.TriggerSP500Crawler:output_type -> prediction.TriggerResponse
-	1,  // 32: prediction.PredictionService.TriggerSP500Predict:output_type -> prediction.TriggerResponse
-	1,  // 33: prediction.PredictionService.TriggerSimulationBacktest:output_type -> prediction.TriggerResponse
-	1,  // 34: prediction.PredictionService.TriggerSimulationLiveStep:output_type -> prediction.TriggerResponse
-	1,  // 35: prediction.PredictionService.ResetSimBots:output_type -> prediction.TriggerResponse
-	7,  // 36: prediction.PredictionService.StreamGoldPredict:output_type -> prediction.PipelineLogEvent
-	7,  // 37: prediction.PredictionService.StreamNasdaqPredict:output_type -> prediction.PipelineLogEvent
-	7,  // 38: prediction.PredictionService.StreamCryptoPredict:output_type -> prediction.PipelineLogEvent
-	7,  // 39: prediction.PredictionService.StreamSP500Predict:output_type -> prediction.PipelineLogEvent
-	20, // [20:40] is the sub-list for method output_type
-	0,  // [0:20] is the sub-list for method input_type
+	0,  // 11: prediction.PredictionService.TriggerCryptoHistory:input_type -> prediction.Empty
+	0,  // 12: prediction.PredictionService.TriggerSP500Crawler:input_type -> prediction.Empty
+	0,  // 13: prediction.PredictionService.TriggerSP500Predict:input_type -> prediction.Empty
+	6,  // 14: prediction.PredictionService.TriggerSimulationBacktest:input_type -> prediction.SimulationRequest
+	0,  // 15: prediction.PredictionService.TriggerSimulationLiveStep:input_type -> prediction.Empty
+	0,  // 16: prediction.PredictionService.ResetSimBots:input_type -> prediction.Empty
+	0,  // 17: prediction.PredictionService.StreamGoldPredict:input_type -> prediction.Empty
+	0,  // 18: prediction.PredictionService.StreamNasdaqPredict:input_type -> prediction.Empty
+	0,  // 19: prediction.PredictionService.StreamCryptoPredict:input_type -> prediction.Empty
+	0,  // 20: prediction.PredictionService.StreamSP500Predict:input_type -> prediction.Empty
+	1,  // 21: prediction.PredictionService.TriggerGoldCrawler:output_type -> prediction.TriggerResponse
+	3,  // 22: prediction.PredictionService.TriggerTrain:output_type -> prediction.TriggerTrainResponse
+	1,  // 23: prediction.PredictionService.TriggerReconcile:output_type -> prediction.TriggerResponse
+	1,  // 24: prediction.PredictionService.TriggerGoldHistory:output_type -> prediction.TriggerResponse
+	1,  // 25: prediction.PredictionService.TriggerGoldPredict:output_type -> prediction.TriggerResponse
+	1,  // 26: prediction.PredictionService.TriggerHistoricalBacktest:output_type -> prediction.TriggerResponse
+	5,  // 27: prediction.PredictionService.GetTrainingStatus:output_type -> prediction.TrainingStatusResponse
+	1,  // 28: prediction.PredictionService.TriggerNasdaqCrawler:output_type -> prediction.TriggerResponse
+	1,  // 29: prediction.PredictionService.TriggerNasdaqPredict:output_type -> prediction.TriggerResponse
+	1,  // 30: prediction.PredictionService.TriggerCryptoCrawler:output_type -> prediction.TriggerResponse
+	1,  // 31: prediction.PredictionService.TriggerCryptoPredict:output_type -> prediction.TriggerResponse
+	1,  // 32: prediction.PredictionService.TriggerCryptoHistory:output_type -> prediction.TriggerResponse
+	1,  // 33: prediction.PredictionService.TriggerSP500Crawler:output_type -> prediction.TriggerResponse
+	1,  // 34: prediction.PredictionService.TriggerSP500Predict:output_type -> prediction.TriggerResponse
+	1,  // 35: prediction.PredictionService.TriggerSimulationBacktest:output_type -> prediction.TriggerResponse
+	1,  // 36: prediction.PredictionService.TriggerSimulationLiveStep:output_type -> prediction.TriggerResponse
+	1,  // 37: prediction.PredictionService.ResetSimBots:output_type -> prediction.TriggerResponse
+	7,  // 38: prediction.PredictionService.StreamGoldPredict:output_type -> prediction.PipelineLogEvent
+	7,  // 39: prediction.PredictionService.StreamNasdaqPredict:output_type -> prediction.PipelineLogEvent
+	7,  // 40: prediction.PredictionService.StreamCryptoPredict:output_type -> prediction.PipelineLogEvent
+	7,  // 41: prediction.PredictionService.StreamSP500Predict:output_type -> prediction.PipelineLogEvent
+	21, // [21:42] is the sub-list for method output_type
+	0,  // [0:21] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name

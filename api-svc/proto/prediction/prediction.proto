@@ -35,6 +35,7 @@ service PredictionService {
   // Crypto
   rpc TriggerCryptoCrawler(Empty) returns (TriggerResponse);
   rpc TriggerCryptoPredict(Empty) returns (TriggerResponse);
+  rpc TriggerCryptoHistory(Empty) returns (TriggerResponse);
 
   // S&P 500
   rpc TriggerSP500Crawler(Empty) returns (TriggerResponse);

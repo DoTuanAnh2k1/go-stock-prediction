@@ -323,6 +323,11 @@ export const translations: Record<Lang, Translations> = {
       cannotSendRequest: 'Không thể gửi yêu cầu',
       noSimData: 'Chưa có dữ liệu simulation. Hãy chạy backtest trước.',
       runNow: 'Chạy backtest ngay',
+      searchBot: 'Tìm bot…',
+      rowsPerPage: 'Dòng/trang',
+      prevPage: 'Trước',
+      nextPage: 'Sau',
+      page: 'Trang',
       colRank: '#',
       colBot: 'Bot',
       colMarket: 'Thị trường',
@@ -759,6 +764,14 @@ export const translations: Record<Lang, Translations> = {
       noBotsTable: 'Chưa có dữ liệu bot nào',
       sortAsc: 'Tăng dần',
       sortDesc: 'Giảm dần',
+      allMarkets: 'Tất cả thị trường',
+      filterAlgo: 'Lọc thuật toán…',
+      filterBotId: 'Tìm Bot ID…',
+      clearFilters: 'Xóa lọc',
+      rowsPerPage: 'Dòng/trang',
+      prevPage: 'Trước',
+      nextPage: 'Sau',
+      page: 'Trang',
     },
   },
 
@@ -1065,6 +1078,11 @@ export const translations: Record<Lang, Translations> = {
       cannotSendRequest: 'Cannot send request',
       noSimData: 'No simulation data. Please run backtest first.',
       runNow: 'Run backtest now',
+      searchBot: 'Search bot…',
+      rowsPerPage: 'Rows/page',
+      prevPage: 'Prev',
+      nextPage: 'Next',
+      page: 'Page',
       colRank: '#',
       colBot: 'Bot',
       colMarket: 'Market',
@@ -1492,6 +1510,14 @@ export const translations: Record<Lang, Translations> = {
       noBotsTable: 'No bots data',
       sortAsc: 'Ascending',
       sortDesc: 'Descending',
+      allMarkets: 'All markets',
+      filterAlgo: 'Filter algorithm…',
+      filterBotId: 'Search Bot ID…',
+      clearFilters: 'Clear filters',
+      rowsPerPage: 'Rows/page',
+      prevPage: 'Prev',
+      nextPage: 'Next',
+      page: 'Page',
     },
   },
 };
@@ -1775,6 +1801,11 @@ export interface Translations {
     cannotSendRequest: string;
     noSimData: string;
     runNow: string;
+    searchBot: string;
+    rowsPerPage: string;
+    prevPage: string;
+    nextPage: string;
+    page: string;
     colRank: string;
     colBot: string;
     colMarket: string;
@@ -2196,5 +2227,13 @@ export interface Translations {
     noBotsTable: string;
     sortAsc: string;
     sortDesc: string;
+    allMarkets: string;
+    filterAlgo: string;
+    filterBotId: string;
+    clearFilters: string;
+    rowsPerPage: string;
+    prevPage: string;
+    nextPage: string;
+    page: string;
   };
 }

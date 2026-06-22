@@ -8,9 +8,6 @@ from src.utils.logger import get_logger
 
 log = get_logger("jobs")
 
-# Crawl counter per market — triggers retraining every 10 crawls
-_crawl_counts: dict[str, int] = {}
-
 # Maps market_key → pipeline_key (matches cron_schedules job_key in DB)
 PIPELINE_KEY_MAP: dict[str, str] = {
     "GOLD": "crawler_gold",
@@ -33,7 +30,11 @@ def _run_pipeline(market_key: str, crawl_fn: Callable) -> None:
     Skips entirely if the market is closed (weekend/holiday for NASDAQ/SP500).
     A PipelineReport row is written to DB at the end of every branch.
     """
-    from src.database.repository import create_pipeline_report, delete_old_pipeline_reports
+    from src.database.repository import (
+        create_pipeline_report,
+        delete_old_pipeline_reports,
+        increment_crawl_count,
+    )
     from src.utils.market_calendar import is_market_open
 
     pipeline_key = PIPELINE_KEY_MAP.get(market_key, market_key.lower())
@@ -99,9 +100,12 @@ def _run_pipeline(market_key: str, crawl_fn: Callable) -> None:
             log.warning("pipeline.report.write.error", market=market_key, error=str(rep_exc))
         return  # Abort if crawl fails
 
-    # Step 2: Increment counter and train every 10th crawl
-    _crawl_counts[market_key] = _crawl_counts.get(market_key, 0) + 1
-    crawl_num = _crawl_counts[market_key]
+    # Step 2: Increment counter (DB-backed, survives restarts) and train every 10th crawl
+    try:
+        crawl_num = increment_crawl_count(market_key)
+    except Exception as exc:
+        log.warning("pipeline.crawl_count.error", market=market_key, error=str(exc))
+        crawl_num = 0  # 0 % 10 != 0 → skip training this run, never crash the pipeline
     log.info("pipeline.crawl_count", market=market_key, count=crawl_num)
 
     if crawl_num % 10 == 0:

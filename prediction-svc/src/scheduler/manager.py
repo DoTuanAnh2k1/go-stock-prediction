@@ -25,24 +25,24 @@ _lock = threading.Lock()
 
 # Default schedules (mirrors Go constants)
 DEFAULT_SCHEDULES = [
-    ("crawler_sp500", "Pipeline S&P 500 (30 phút, phút 0 và 30, mọi ngày — is_market_open lọc theo ET)", "0 0,30 * * * *", True),
-    ("crawler_gold", "Pipeline Gold (mỗi giờ, phút 0)", "0 0 * * * *", True),
-    ("gold_predict", "Dự đoán vàng (disabled — trong pipeline)", "0 0 11 * * *", False),
-    ("crawler_nasdaq", "Pipeline NASDAQ (30 phút, phút 15 và 45, mọi ngày — is_market_open lọc theo ET)", "0 15,45 * * * *", True),
-    ("crawler_crypto", "Pipeline Crypto (mỗi giờ, phút 0)", "0 0 * * * *", True),
-    ("weekly_training", "Huấn luyện mô hình (Chủ nhật 9AM)", "0 0 9 * * 0", False),
+    ("crawler_sp500", "Pipeline S&P 500 (every 30 min at :00 and :30, all days — is_market_open filters by ET)", "0 0,30 * * * *", True),
+    ("crawler_gold", "Pipeline Gold (every hour at :00)", "0 0 * * * *", True),
+    ("gold_predict", "Gold predict standalone (disabled — runs inside pipeline)", "0 0 11 * * *", False),
+    ("crawler_nasdaq", "Pipeline NASDAQ (every 30 min at :15 and :45, all days — is_market_open filters by ET)", "0 15,45 * * * *", True),
+    ("crawler_crypto", "Pipeline Crypto (every hour at :00)", "0 0 * * * *", True),
+    ("weekly_training", "Train all models (Sunday 9AM)", "0 0 9 * * 0", False),
     # Per-market training jobs — staggered on Sunday to avoid overlap
-    ("train_gold",   "Training Gold (Chủ nhật 3AM)",           "0 0 3 * * 0", True),
-    ("train_nasdaq", "Training NASDAQ (Chủ nhật 4AM)",         "0 0 4 * * 0", True),
-    ("train_crypto", "Training Crypto (Chủ nhật 5AM)",         "0 0 5 * * 0", True),
-    ("train_sp500",  "Training S&P 500 (Chủ nhật 7AM)",        "0 0 7 * * 0", True),
-    ("daily_prediction", "Dự đoán tất cả thị trường (mỗi giờ)", "0 0 */1 * * *", False),
-    ("predict_nasdaq", "Dự đoán NASDAQ (disabled — trong pipeline)",  "0 30 23 * * 1-5", False),
-    ("predict_crypto", "Dự đoán Crypto (disabled — trong pipeline)", "0 0 */6 * * *",   False),
-    ("predict_sp500",  "Dự đoán S&P 500 (disabled — trong pipeline)", "0 0 13 * * 1-5",  False),
-    ("daily_reconcile", "Reconcile dự đoán (6AM hàng ngày)", "0 0 6 * * *", True),
+    ("train_gold",   "Training Gold (Sunday 3AM)",           "0 0 3 * * 0", True),
+    ("train_nasdaq", "Training NASDAQ (Sunday 4AM)",         "0 0 4 * * 0", True),
+    ("train_crypto", "Training Crypto (Sunday 5AM)",         "0 0 5 * * 0", True),
+    ("train_sp500",  "Training S&P 500 (Sunday 7AM)",        "0 0 7 * * 0", True),
+    ("daily_prediction", "Predict all markets (every hour)", "0 0 */1 * * *", False),
+    ("predict_nasdaq", "NASDAQ predict standalone (disabled — runs inside pipeline)",  "0 30 23 * * 1-5", False),
+    ("predict_crypto", "Crypto predict standalone (disabled — runs inside pipeline)", "0 0 */6 * * *",   False),
+    ("predict_sp500",  "S&P 500 predict standalone (disabled — runs inside pipeline)", "0 0 13 * * 1-5",  False),
+    ("daily_reconcile", "Reconcile predictions (daily 6AM)", "0 0 6 * * *", True),
     # daily_backup moved to the Go API service (api/pkg/server/backup_scheduler.go)
-    # which now owns the schedule and runs mysqldump itself.
+    # which now owns the schedule and runs pg_dump itself.
 ]
 
 

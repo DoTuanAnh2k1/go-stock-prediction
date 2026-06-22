@@ -1950,6 +1950,87 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/monitoring/bots": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the bot trading win/loss table with server-side filtering, sorting and pagination. Backed by the same 30s-cached dataset as the monitoring overview. Requires JWT authentication.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Monitoring"
+                ],
+                "summary": "List bot trading stats (paginated)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Page number (1-based, default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Rows per page (default 50, max 200)",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by market: GOLD|NASDAQ|CRYPTO|SP500",
+                        "name": "market",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by algorithm (case-insensitive substring)",
+                        "name": "algorithm",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by bot id (case-insensitive substring)",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort column: win_rate|total_pnl|return_pct|profit_factor|trades|wins|losses|bot_id|market|algorithm (default win_rate)",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort direction: asc|desc (default desc)",
+                        "name": "sort_dir",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.monitoringBotsPage"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
         "/api/monitoring/overview": {
             "get": {
                 "security": [
@@ -2961,7 +3042,7 @@ const docTemplate = `{
         },
         "/api/simulation/leaderboard": {
             "get": {
-                "description": "Returns all bots sorted by total_return_pct. Supports filtering by market, algorithm, and currency.",
+                "description": "Returns bots ranked by total_return_pct. Supports filtering by market, algorithm, currency and bot search; optional server-side sort and pagination (page/page_size). When page/page_size are omitted, all matching rows are returned (backward compatible). Always returns chart aggregates (distribution, top_returns) over the full filtered set.",
                 "produces": [
                     "application/json"
                 ],
@@ -2986,6 +3067,36 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Filter by currency (VND or USD)",
                         "name": "currency",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by bot id / display name (case-insensitive substring)",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort column: rank|display_name|market|algorithm|initial_capital|final_value|total_return_pct|annualized_return_pct|sharpe_ratio|max_drawdown_pct|win_rate_pct|profit_factor|total_trades (default total_return_pct)",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort direction: asc|desc (default desc)",
+                        "name": "sort_dir",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (1-based); enables pagination",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Rows per page (default 50, max 200); enables pagination",
+                        "name": "page_size",
                         "in": "query"
                     }
                 ],
@@ -3568,6 +3679,49 @@ const docTemplate = `{
                     "Triggers"
                 ],
                 "summary": "Trigger crypto price crawler",
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/trigger/crypto-history": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Starts a historical crypto price import (BTC/ETH/SOL, 180-day daily from CoinGecko) in the background via the prediction service. Useful to backfill a newly added coin. Returns 202 immediately.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger crypto price history import",
                 "responses": {
                     "202": {
                         "description": "Accepted"
@@ -5121,6 +5275,10 @@ const docTemplate = `{
                 "stop_loss": {
                     "type": "number"
                 },
+                "symbol": {
+                    "description": "NULL = pooled per-market bot; set = per-symbol bot",
+                    "type": "string"
+                },
                 "take_profit": {
                     "type": "number"
                 },
@@ -5933,17 +6091,60 @@ const docTemplate = `{
                 }
             }
         },
+        "pkg_server.leaderboardMarketDist": {
+            "type": "object",
+            "properties": {
+                "avg_return_pct": {
+                    "type": "number"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "market": {
+                    "type": "string"
+                }
+            }
+        },
         "pkg_server.leaderboardResponse": {
             "type": "object",
             "properties": {
+                "distribution": {
+                    "description": "per-market aggregate over the full filtered set",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/pkg_server.leaderboardMarketDist"
+                    }
+                },
                 "leaderboard": {
+                    "description": "current page (or all rows when not paginated)",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/pkg_server.leaderboardEntry"
                     }
                 },
+                "page": {
+                    "description": "1-based",
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
                 "summary": {
                     "$ref": "#/definitions/pkg_server.leaderboardSummary"
+                },
+                "top_returns": {
+                    "description": "top 8 by return over the full filtered set",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/pkg_server.leaderboardTopReturn"
+                    }
+                },
+                "total": {
+                    "description": "rows after filtering",
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
                 }
             }
         },
@@ -5961,6 +6162,17 @@ const docTemplate = `{
                 },
                 "total_bots": {
                     "type": "integer"
+                }
+            }
+        },
+        "pkg_server.leaderboardTopReturn": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "total_return_pct": {
+                    "type": "number"
                 }
             }
         },
@@ -6140,6 +6352,39 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/pkg_server.monitoringBotTableRow"
                     }
+                }
+            }
+        },
+        "pkg_server.monitoringBotsPage": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/pkg_server.monitoringBotTableRow"
+                    }
+                },
+                "page": {
+                    "description": "1-based",
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "summary": {
+                    "description": "global summary (all bots, unfiltered)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/pkg_server.monitoringBotSummary"
+                        }
+                    ]
+                },
+                "total": {
+                    "description": "rows after filtering",
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
                 }
             }
         },

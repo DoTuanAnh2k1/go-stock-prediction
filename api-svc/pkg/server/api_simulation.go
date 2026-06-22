@@ -2,9 +2,12 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	modelsdb "go-stock-prediction/pkg/models/models_db"
@@ -355,8 +358,14 @@ type simPeriod struct {
 }
 
 type leaderboardResponse struct {
-	Leaderboard []leaderboardEntry `json:"leaderboard"`
-	Summary     leaderboardSummary `json:"summary"`
+	Leaderboard  []leaderboardEntry      `json:"leaderboard"` // current page (or all rows when not paginated)
+	Summary      leaderboardSummary      `json:"summary"`
+	Distribution []leaderboardMarketDist `json:"distribution"` // per-market aggregate over the full filtered set
+	TopReturns   []leaderboardTopReturn  `json:"top_returns"`  // top 8 by return over the full filtered set
+	Total        int                     `json:"total"`        // rows after filtering
+	Page         int                     `json:"page"`         // 1-based
+	PageSize     int                     `json:"page_size"`
+	TotalPages   int                     `json:"total_pages"`
 }
 
 type leaderboardSummary struct {
@@ -364,6 +373,64 @@ type leaderboardSummary struct {
 	BestMarket    string  `json:"best_market"`
 	BestAlgorithm string  `json:"best_algorithm"`
 	AvgReturnPct  float64 `json:"avg_return_pct"`
+}
+
+// leaderboardMarketDist is one market's bot count + average return, for the
+// market-distribution chart (computed server-side so it stays accurate across pages).
+type leaderboardMarketDist struct {
+	Market       string  `json:"market"`
+	Count        int     `json:"count"`
+	AvgReturnPct float64 `json:"avg_return_pct"`
+}
+
+// leaderboardTopReturn is one bar in the "top returns" chart.
+type leaderboardTopReturn struct {
+	DisplayName    string  `json:"display_name"`
+	TotalReturnPct float64 `json:"total_return_pct"`
+}
+
+// sortLeaderboardEntries sorts entries in place by the given column/direction.
+// Unknown sortBy falls back to total_return_pct. Note: rank is the canonical
+// return-rank and is assigned before this display sort, so it never changes here.
+func sortLeaderboardEntries(entries []leaderboardEntry, sortBy, sortDir string) {
+	asc := sortDir == "asc"
+	less := func(i, j int) bool {
+		a, b := entries[i], entries[j]
+		switch sortBy {
+		case "rank":
+			return a.Rank < b.Rank
+		case "display_name":
+			return a.DisplayName < b.DisplayName
+		case "market":
+			return a.Market < b.Market
+		case "algorithm":
+			return a.Algorithm < b.Algorithm
+		case "initial_capital":
+			return a.InitialCapital < b.InitialCapital
+		case "final_value":
+			return a.FinalValue < b.FinalValue
+		case "annualized_return_pct":
+			return a.AnnualizedReturnPct < b.AnnualizedReturnPct
+		case "sharpe_ratio":
+			return a.SharpeRatio < b.SharpeRatio
+		case "max_drawdown_pct":
+			return a.MaxDrawdownPct < b.MaxDrawdownPct
+		case "win_rate_pct":
+			return a.WinRatePct < b.WinRatePct
+		case "profit_factor":
+			return a.ProfitFactor < b.ProfitFactor
+		case "total_trades":
+			return a.TotalTrades < b.TotalTrades
+		default: // "total_return_pct"
+			return a.TotalReturnPct < b.TotalReturnPct
+		}
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		if asc {
+			return less(i, j)
+		}
+		return less(j, i)
+	})
 }
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
@@ -726,24 +793,55 @@ func pickBestSession(sessions []modelsdb.SimSessionWithCount) *modelsdb.SimSessi
 // GetSimLeaderboard godoc
 //
 //	@Summary      Get simulation leaderboard
-//	@Description  Returns all bots sorted by total_return_pct. Supports filtering by market, algorithm, and currency.
+//	@Description  Returns bots ranked by total_return_pct. Supports filtering by market, algorithm, currency and bot search; optional server-side sort and pagination (page/page_size). When page/page_size are omitted, all matching rows are returned (backward compatible). Always returns chart aggregates (distribution, top_returns) over the full filtered set.
 //	@Tags         Simulation
 //	@Produce      json
 //	@Param        market     query  string  false  "Filter by market (e.g. GOLD, CRYPTO)"
 //	@Param        algorithm  query  string  false  "Filter by algorithm key (e.g. lstm_nn)"
 //	@Param        currency   query  string  false  "Filter by currency (VND or USD)"
+//	@Param        search     query  string  false  "Filter by bot id / display name (case-insensitive substring)"
+//	@Param        sort_by    query  string  false  "Sort column: rank|display_name|market|algorithm|initial_capital|final_value|total_return_pct|annualized_return_pct|sharpe_ratio|max_drawdown_pct|win_rate_pct|profit_factor|total_trades (default total_return_pct)"
+//	@Param        sort_dir   query  string  false  "Sort direction: asc|desc (default desc)"
+//	@Param        page       query  int     false  "Page number (1-based); enables pagination"
+//	@Param        page_size  query  int     false  "Rows per page (default 50, max 200); enables pagination"
 //	@Success      200        {object}  leaderboardResponse
 //	@Failure      500        {object}  ResponseFailure
 //	@Router       /api/simulation/leaderboard [get]
 func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
-	marketFilter := r.URL.Query().Get("market")
-	algoFilter := r.URL.Query().Get("algorithm")
-	currencyFilter := r.URL.Query().Get("currency")
+	q := r.URL.Query()
+	marketFilter := q.Get("market")
+	algoFilter := q.Get("algorithm")
+	currencyFilter := q.Get("currency")
+	searchFilter := strings.ToLower(strings.TrimSpace(q.Get("search")))
 
-	// Cache key must include the active filters — otherwise the first cached
-	// response (e.g. ALL) is served for every filter combination until TTL expires,
-	// making market/algorithm/currency filters appear broken.
-	cacheKey := "simulation:leaderboard|m=" + marketFilter + "|a=" + algoFilter + "|c=" + currencyFilter
+	sortBy := q.Get("sort_by")
+	if sortBy == "" {
+		sortBy = "total_return_pct"
+	}
+	sortDir := q.Get("sort_dir")
+	if sortDir != "asc" {
+		sortDir = "desc"
+	}
+
+	// Pagination is opt-in: only when page/page_size is supplied (keeps cli-svc,
+	// which calls without params, returning the full list as before).
+	paginate := q.Get("page") != "" || q.Get("page_size") != ""
+	page := 1
+	if v, err := strconv.Atoi(q.Get("page")); err == nil && v > 0 {
+		page = v
+	}
+	pageSize := 50
+	if v, err := strconv.Atoi(q.Get("page_size")); err == nil && v > 0 {
+		pageSize = v
+	}
+	if pageSize > 200 {
+		pageSize = 200
+	}
+
+	// Cache key must include every parameter that changes the response — otherwise
+	// the first cached response is served for every variation until TTL expires.
+	cacheKey := fmt.Sprintf("simulation:leaderboard|m=%s|a=%s|c=%s|q=%s|sb=%s|sd=%s|pg=%t|p=%d|ps=%d",
+		marketFilter, algoFilter, currencyFilter, searchFilter, sortBy, sortDir, paginate, page, pageSize)
 	if cached, ok := globalCache.Get(cacheKey); ok {
 		ResponseSuccess(w, http.StatusOK, cached)
 		return
@@ -767,6 +865,11 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if currencyFilter != "" && row.Currency != currencyFilter {
+			continue
+		}
+		if searchFilter != "" &&
+			!strings.Contains(strings.ToLower(row.BotID), searchFilter) &&
+			!strings.Contains(strings.ToLower(row.DisplayName), searchFilter) {
 			continue
 		}
 
@@ -834,10 +937,13 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 		entries = append(entries, entry)
 	}
 
+	// Rank is the canonical return-rank. `entries` arrives in total_return_pct DESC
+	// order from the DB (ORDER BY ... DESC NULLS LAST), so rank = position + 1.
 	for i := range entries {
 		entries[i].Rank = i + 1
 	}
 
+	// ── Summary (over the full filtered set) ────────────────────────────────
 	summary := leaderboardSummary{TotalBots: len(entries)}
 	if len(entries) > 0 {
 		sum := 0.0
@@ -849,7 +955,90 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 		summary.BestAlgorithm = entries[0].Algorithm
 	}
 
-	resp := leaderboardResponse{Leaderboard: entries, Summary: summary}
+	// ── Chart aggregates (over the full filtered set, before paging) ─────────
+	// Top 8 by return — entries are already return-desc, so take the head.
+	topN := 8
+	if len(entries) < topN {
+		topN = len(entries)
+	}
+	topReturns := make([]leaderboardTopReturn, 0, topN)
+	for i := 0; i < topN; i++ {
+		topReturns = append(topReturns, leaderboardTopReturn{
+			DisplayName:    entries[i].DisplayName,
+			TotalReturnPct: entries[i].TotalReturnPct,
+		})
+	}
+
+	// Per-market distribution (count + average return).
+	type distAcc struct {
+		count int
+		sum   float64
+	}
+	distMap := make(map[string]*distAcc)
+	marketOrder := make([]string, 0, 8)
+	for _, e := range entries {
+		d, ok := distMap[e.Market]
+		if !ok {
+			d = &distAcc{}
+			distMap[e.Market] = d
+			marketOrder = append(marketOrder, e.Market)
+		}
+		d.count++
+		d.sum += e.TotalReturnPct
+	}
+	distribution := make([]leaderboardMarketDist, 0, len(marketOrder))
+	for _, mk := range marketOrder {
+		d := distMap[mk]
+		avg := 0.0
+		if d.count > 0 {
+			avg = d.sum / float64(d.count)
+		}
+		distribution = append(distribution, leaderboardMarketDist{
+			Market: mk, Count: d.count, AvgReturnPct: avg,
+		})
+	}
+	sort.Slice(distribution, func(i, j int) bool {
+		return distribution[i].AvgReturnPct > distribution[j].AvgReturnPct
+	})
+
+	// ── Display sort + pagination ───────────────────────────────────────────
+	sortLeaderboardEntries(entries, sortBy, sortDir)
+
+	total := len(entries)
+	if !paginate {
+		page = 1
+		pageSize = total
+	}
+	totalPages := 0
+	pageEntries := entries
+	if paginate {
+		totalPages = (total + pageSize - 1) / pageSize
+		start := (page - 1) * pageSize
+		if start > total {
+			start = total
+		}
+		end := start + pageSize
+		if end > total {
+			end = total
+		}
+		pageEntries = entries[start:end]
+		if pageEntries == nil {
+			pageEntries = []leaderboardEntry{}
+		}
+	} else if total > 0 {
+		totalPages = 1
+	}
+
+	resp := leaderboardResponse{
+		Leaderboard:  pageEntries,
+		Summary:      summary,
+		Distribution: distribution,
+		TopReturns:   topReturns,
+		Total:        total,
+		Page:         page,
+		PageSize:     pageSize,
+		TotalPages:   totalPages,
+	}
 	globalCache.Set(cacheKey, resp, 60*time.Second)
 	ResponseSuccess(w, http.StatusOK, resp)
 }
