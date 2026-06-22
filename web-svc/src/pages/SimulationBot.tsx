@@ -47,6 +47,7 @@ interface BotChart {
   bot_id: string;
   session_id: number;
   dates: string[];
+  timestamps?: string[];
   values: number[];
   returns_pct: number[];
 }
@@ -61,6 +62,7 @@ interface Trade {
   signal_strength: number | null;
   confidence: number | null;
   trade_date: string;
+  trade_at?: string;
   close_reason: string | null;
   pnl: number | null;
   pnl_pct: number | null;
@@ -185,6 +187,25 @@ function ddmm(s: string): string {
   } catch {
     return s.slice(0, 10);
   }
+}
+
+// Format a full timestamp as dd/MM HH:mm (for hourly equity curves).
+// On the first point of each new day, prefix with dd/MM so axis stays readable.
+function makeHourlyLabelFmt(): (s: string) => string {
+  let prevDay = '';
+  return (s: string): string => {
+    if (!s) return '';
+    try {
+      const d = new Date(s);
+      if (isNaN(d.getTime())) return s.slice(11, 16) || s;
+      const day = ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2);
+      const hhmm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+      if (day !== prevDay) { prevDay = day; return day + ' ' + hhmm; }
+      return hhmm;
+    } catch {
+      return s.slice(11, 16) || s;
+    }
+  };
 }
 
 function fmtDT(s: string): string {
@@ -496,10 +517,16 @@ export default function SimulationBot() {
   // Active chart data based on session selector
   const activeChartData = chartSession === 'live' ? liveChart : chart;
 
-  // Chart data
-  const n = activeChartData?.dates.length || 0;
+  // Chart data — prefer timestamps (hourly) over dates (daily) for X axis
+  const useTimestamps = (activeChartData?.timestamps?.length ?? 0) > 0;
+  const rawAxisValues = useTimestamps
+    ? (activeChartData?.timestamps || [])
+    : (activeChartData?.dates || []);
+  const n = rawAxisValues.length;
   const chartStep = Math.max(1, Math.ceil(n / 8));
-  const chartLabels = (activeChartData?.dates || []).map(ddmm);
+  const chartLabels = useTimestamps
+    ? rawAxisValues.map(makeHourlyLabelFmt())
+    : rawAxisValues.map(ddmm);
 
   const totalPages = Math.ceil(tradeTotal / TRADE_LIMIT);
 
@@ -649,7 +676,7 @@ export default function SimulationBot() {
             flexShrink: 0,
           }} />
           <span>Live session #{liveChart.session_id}</span>
-          {liveChart.dates.length > 0 && (
+          {(liveChart.timestamps?.length ?? liveChart.dates.length) > 0 && (
             <>
               <span style={{ color: 'var(--border-strong)' }}>|</span>
               <span>
@@ -666,7 +693,7 @@ export default function SimulationBot() {
               )}
             </>
           )}
-          {liveChart.dates.length === 0 && (
+          {(liveChart.timestamps?.length ?? liveChart.dates.length) === 0 && (
             <>
               <span style={{ color: 'var(--border-strong)' }}>|</span>
               <span style={{ color: 'var(--text-3)' }}>Chưa có dữ liệu hôm nay</span>
@@ -734,7 +761,7 @@ export default function SimulationBot() {
           </div>
         ) : chartSession === 'live' ? (
           // Live chart view
-          activeChartData && activeChartData.dates.length > 1 ? (
+          activeChartData && (useTimestamps ? (activeChartData.timestamps?.length ?? 0) > 1 : activeChartData.dates.length > 1) ? (
             <>
               {activeChart === 'value' ? (
                 <LineChart
@@ -771,16 +798,16 @@ export default function SimulationBot() {
               <div className="empty__icon"><Icon name="layers" size={18} /></div>
               <p style={{ textAlign: 'center', lineHeight: 1.6 }}>
                 {liveChart
-                  ? liveChart.dates.length === 0
+                  ? (liveChart.timestamps?.length ?? liveChart.dates.length) === 0
                     ? 'Live session chưa có dữ liệu giao dịch.'
-                    : `Live session bắt đầu ${liveChart.dates[0]}. Biểu đồ sẽ hiển thị sau khi có 2+ ngày giao dịch.`
+                    : `Live session bắt đầu ${liveChart.timestamps?.[0] ?? liveChart.dates[0]}. Biểu đồ sẽ hiển thị sau khi có 2+ điểm dữ liệu.`
                   : 'Không có dữ liệu live session.'}
               </p>
             </div>
           )
         ) : (
           // Backtest chart view
-          activeChartData && activeChartData.dates.length > 1 ? (
+          activeChartData && (useTimestamps ? (activeChartData.timestamps?.length ?? 0) > 1 : activeChartData.dates.length > 1) ? (
             <>
               {activeChart === 'value' ? (
                 <LineChart
@@ -815,8 +842,8 @@ export default function SimulationBot() {
           ) : (
             <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div className="empty__icon"><Icon name="layers" size={18} /></div>
-              <p>{chart && chart.dates.length === 1
-                ? `${t.simulationBot.onlyOneDay} (${chart.dates[0]}). ${t.simulationBot.needMinTwoDays}`
+              <p>{chart && (chart.timestamps?.length ?? chart.dates.length) === 1
+                ? `${t.simulationBot.onlyOneDay} (${chart.timestamps?.[0] ?? chart.dates[0]}). ${t.simulationBot.needMinTwoDays}`
                 : t.simulationBot.noChartData
               }</p>
             </div>
@@ -924,7 +951,7 @@ export default function SimulationBot() {
                           {t.action}
                         </span>
                       </td>
-                      <td className="num" style={{ color: 'var(--text-3)', fontSize: 12 }}>{fmtDT(t.trade_date)}</td>
+                      <td className="num" style={{ color: 'var(--text-3)', fontSize: 12 }}>{fmtDT(t.trade_at || t.trade_date)}</td>
                       <td className="r num" style={{ fontSize: 12 }}>
                         {t.price != null
                           ? (currency === 'VND'
@@ -991,7 +1018,7 @@ export default function SimulationBot() {
                     <div className="m-card__title">
                       <div className="m-card__name">{tr.symbol}</div>
                       <div className="m-card__sub">
-                        {fmtDT(tr.trade_date)}{tr.close_reason ? ' · ' + tr.close_reason : ''}
+                        {fmtDT(tr.trade_at || tr.trade_date)}{tr.close_reason ? ' · ' + tr.close_reason : ''}
                       </div>
                     </div>
                     {tr.pnl_pct != null && <Chg pct={tr.pnl_pct} />}

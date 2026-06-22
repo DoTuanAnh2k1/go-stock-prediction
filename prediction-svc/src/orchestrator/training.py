@@ -681,28 +681,24 @@ def reconcile_predictions() -> int:
         log.error("reconcile.gold.error", error=str(exc))
 
     # --- NASDAQ predictions ---
+    # GOLD-style: reconcile when target_date <= now (prediction has matured);
+    # use latest live price as actual (no longer waiting for next trading day).
     try:
         nasdaq_pending = repo.get_pending_nasdaq_predictions(days_back=10)
         log.info("reconcile.nasdaq.pending", count=len(nasdaq_pending))
 
+        now_ts = datetime.now()
         for pred in nasdaq_pending:
-            # target_date is DATETIME, trading_date in NasdaqPrice is DATE — convert
-            target_d = _to_date(pred.target_date)
+            # Only reconcile predictions whose target time has already passed
+            if pred.target_date > now_ts:
+                continue
 
             prices = repo.get_nasdaq_prices_asc(pred.symbol, limit=60)
             if not prices:
                 continue
 
-            # Find first price ON OR AFTER target_d — avoids using same-day price as actual
-            prices_after = [
-                p for p in prices
-                if p.trading_date is not None and _to_date(p.trading_date) >= target_d
-            ]
-            if not prices_after:
-                continue  # data not available yet for this target date
-
-            closest = prices_after[0]  # prices are ASC, so first = earliest on/after target_d
-            actual = Decimal(str(closest.close_price))
+            # actual = latest live price (most recent row in ASC list = last element)
+            actual = Decimal(str(prices[-1].close_price))
             if actual == 0:
                 continue
 
@@ -728,27 +724,23 @@ def reconcile_predictions() -> int:
         log.error("reconcile.nasdaq.error", error=str(exc))
 
     # --- SP500 predictions ---
+    # GOLD-style: reconcile when target_date <= now; actual = latest live price.
     try:
         sp500_pending = repo.get_pending_sp500_predictions(days_back=10)
         log.info("reconcile.sp500.pending", count=len(sp500_pending))
 
+        now_ts = datetime.now()
         for pred in sp500_pending:
-            target_d = _to_date(pred.target_date)
+            # Only reconcile predictions whose target time has already passed
+            if pred.target_date > now_ts:
+                continue
 
             prices = repo.get_sp500_prices_asc(pred.symbol, limit=60)
             if not prices:
                 continue
 
-            # Find first price ON OR AFTER target_d — avoids using same-day price as actual
-            prices_after = [
-                p for p in prices
-                if p.trading_date is not None and _to_date(p.trading_date) >= target_d
-            ]
-            if not prices_after:
-                continue  # data not available yet for this target date
-
-            closest = prices_after[0]  # prices are ASC, so first = earliest on/after target_d
-            actual = Decimal(str(closest.close_price))
+            # actual = latest live price
+            actual = Decimal(str(prices[-1].close_price))
             if actual == 0:
                 continue
 
@@ -774,27 +766,24 @@ def reconcile_predictions() -> int:
         log.error("reconcile.sp500.error", error=str(exc))
 
     # --- Crypto predictions ---
+    # GOLD-style: reconcile when target_date <= now; actual = latest live price.
+    # Crypto 24/7 — no day-boundary filtering needed.
     try:
         crypto_pending = repo.get_pending_crypto_predictions(days_back=10)
         log.info("reconcile.crypto.pending", count=len(crypto_pending))
 
+        now_ts = datetime.now()
         for pred in crypto_pending:
-            target_d = _to_date(pred.target_date)
+            # Only reconcile predictions whose target time has already passed
+            if pred.target_date > now_ts:
+                continue
 
             prices = repo.get_crypto_prices_asc(pred.coin_id, limit=60)
             if not prices:
                 continue
 
-            # Find first price ON OR AFTER target_d — same pattern as NASDAQ/SP500
-            prices_after = [
-                p for p in prices
-                if p.trading_date is not None and _to_date(p.trading_date) >= target_d
-            ]
-            if not prices_after:
-                continue  # data not available yet for this target date
-
-            closest = prices_after[0]  # prices are ASC, first = earliest on/after target_d
-            actual = Decimal(str(closest.close_price))
+            # actual = latest live price
+            actual = Decimal(str(prices[-1].close_price))
             if actual == 0:
                 continue
 

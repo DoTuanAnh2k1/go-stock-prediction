@@ -470,6 +470,11 @@ CREATE INDEX IF NOT EXISTS idx_sim_snap_session_date
     ON sim_portfolio_snapshots(session_id, snapshot_date DESC);
 CREATE INDEX IF NOT EXISTS idx_sim_snap_bot_date
     ON sim_portfolio_snapshots(bot_id, snapshot_date DESC);
+-- Exactly one snapshot per session per day. Upsert target for live-step
+-- (ON CONFLICT) — prevents duplicate intraday rows from hourly pipeline runs.
+-- Includes the hypertable partition column (snapshot_date) as required.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_sim_snap_session_date
+    ON sim_portfolio_snapshots(session_id, snapshot_date);
 
 -- ============================================================
 -- TIMESCALEDB HYPERTABLES
@@ -926,6 +931,49 @@ CREATE INDEX IF NOT EXISTS idx_service_instances_name
 
 CREATE INDEX IF NOT EXISTS idx_service_instances_status
     ON service_instances(status);
+
+-- ============================================================
+-- HOURLY PREDICTION / BOT TRADING SCHEMA (additive, idempotent)
+-- Adds snapshot_at / trade_at columns for sub-daily granularity.
+-- All statements use ADD COLUMN IF NOT EXISTS / CREATE INDEX IF NOT EXISTS
+-- so they are safe to run against existing production databases.
+--
+-- CRITICAL (TimescaleDB): CREATE UNIQUE INDEX on a hypertable MUST be a
+-- separate statement from any DML (DELETE/UPDATE). Mixing them in the same
+-- transaction/block causes Timescale to roll back the whole block.
+-- ============================================================
+
+-- sim_portfolio_snapshots: add snapshot_at for hourly upsert key
+ALTER TABLE sim_portfolio_snapshots
+    ADD COLUMN IF NOT EXISTS snapshot_at TIMESTAMP;
+
+-- Backfill: existing rows without snapshot_at get snapshot_date as fallback
+UPDATE sim_portfolio_snapshots
+    SET snapshot_at = snapshot_date
+    WHERE snapshot_at IS NULL;
+
+-- sim_trades: add trade_at for hourly granularity
+ALTER TABLE sim_trades
+    ADD COLUMN IF NOT EXISTS trade_at TIMESTAMP;
+
+-- Backfill: existing trades without trade_at get trade_date as fallback
+UPDATE sim_trades
+    SET trade_at = trade_date
+    WHERE trade_at IS NULL;
+
+-- Drop the old daily-only unique index: it enforces 1 row/(session,date) and
+-- would block the multiple hourly snapshots/day that live-step now writes.
+DROP INDEX IF EXISTS uq_sim_snap_session_date;
+
+-- Unique index for hourly live-step upsert. TimescaleDB requires the partition
+-- column (snapshot_date) to be part of any unique index on a hypertable, so the
+-- key is (session_id, snapshot_at, snapshot_date). Since snapshot_at is derived
+-- from snapshot_date this is effectively "1 row per session per snapshot_at"
+-- (per-hour for live, per-day midnight for backtest).
+-- MUST be a separate statement (not inside a DML transaction block) on
+-- TimescaleDB hypertables to avoid Timescale rollback.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_sim_snap_session_at
+    ON sim_portfolio_snapshots (session_id, snapshot_at, snapshot_date);
 
 -- ============================================================
 -- END OF SCHEMA

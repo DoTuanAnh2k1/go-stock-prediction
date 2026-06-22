@@ -4,11 +4,12 @@ from __future__ import annotations
 import os
 import threading
 import concurrent.futures
-from datetime import date, timedelta, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
 import sqlalchemy
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.database.connection import session_scope
 from src.database.models import SimBot, SimSession, SimTrade, SimPortfolioSnapshot
@@ -20,6 +21,63 @@ from src.utils.logger import get_logger
 log = get_logger("simulation.engine")
 
 _backtest_lock = threading.Lock()
+
+
+def _upsert_snapshot(session, session_id: int, bot_id: str, snap: dict) -> None:
+    """Insert-or-update the portfolio snapshot.
+
+    Live-step can run multiple times per day (hourly for some markets). To avoid
+    duplicate rows we upsert on:
+    - ``(session_id, snapshot_at)`` when snapshot_at is provided (hourly live-step
+      path) — one row per session per exact datetime, so each hourly run creates
+      its own row rather than overwriting.
+    - ``(session_id, snapshot_date)`` as fallback when snapshot_at is None
+      (backtest path and legacy daily live-step) — one row per session per day,
+      latest state wins.
+
+    NOTE: ``session.merge()`` was used previously with the intent of upserting,
+    but merge keys on the primary key (id, snapshot_date); since each snapshot is
+    built without an id it always INSERTed, accumulating duplicate daily rows.
+    """
+    # snapshot_at is part of the unique index and must be non-null. Live hourly
+    # steps pass the real datetime (one row per session per hour). The backtest /
+    # legacy daily path omits it, so we fall back to midnight of snapshot_date,
+    # yielding exactly one row per session per day.
+    snap_at: Optional[datetime] = snap.get("snapshot_at")
+    if snap_at is None:
+        snap_at = datetime.combine(snap["snapshot_date"], datetime.min.time())
+
+    values = {
+        "session_id": session_id,
+        "bot_id": bot_id,
+        "snapshot_date": snap["snapshot_date"],
+        "snapshot_at": snap_at,
+        "cash_balance": Decimal(str(round(snap["cash_balance"], 2))),
+        "positions_value": Decimal(str(round(snap["positions_value"], 2))),
+        "total_value": Decimal(str(round(snap["total_value"], 2))),
+        "total_return_pct": Decimal(str(round(snap["total_return_pct"], 4))),
+        "open_positions": snap["open_positions"],
+    }
+
+    # Timescale requires the partition column (snapshot_date) to be part of any
+    # unique index, so the conflict target is (session_id, snapshot_at,
+    # snapshot_date). Because snapshot_at is derived from snapshot_date this is
+    # effectively "one row per session per snapshot_at" (per-hour live / per-day
+    # backtest).
+    stmt = pg_insert(SimPortfolioSnapshot.__table__).values(**values)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["session_id", "snapshot_at", "snapshot_date"],
+        set_={
+            "bot_id": stmt.excluded.bot_id,
+            "cash_balance": stmt.excluded.cash_balance,
+            "positions_value": stmt.excluded.positions_value,
+            "total_value": stmt.excluded.total_value,
+            "total_return_pct": stmt.excluded.total_return_pct,
+            "open_positions": stmt.excluded.open_positions,
+        },
+    )
+
+    session.execute(stmt)
 
 
 class StepDataCache:
@@ -254,20 +312,11 @@ class SimulationEngine:
                         session.flush()
                     session.commit()
 
-                # Daily snapshot
-                snap = bot.get_snapshot(sim_date)
+                # Daily snapshot (upsert: exactly one row per session per day)
+                # Backtest path: snap_at=None → upsert on (session_id, snapshot_date)
+                snap = bot.get_snapshot(sim_date, snap_at=None)
                 with session_scope() as session:
-                    db_snap = SimPortfolioSnapshot(
-                        session_id=session_id,
-                        bot_id=bot_id,
-                        snapshot_date=snap["snapshot_date"],
-                        cash_balance=Decimal(str(round(snap["cash_balance"], 2))),
-                        positions_value=Decimal(str(round(snap["positions_value"], 2))),
-                        total_value=Decimal(str(round(snap["total_value"], 2))),
-                        total_return_pct=Decimal(str(round(snap["total_return_pct"], 4))),
-                        open_positions=snap["open_positions"],
-                    )
-                    session.merge(db_snap)  # Use merge to handle unique constraint
+                    _upsert_snapshot(session, session_id, bot_id, snap)
                     session.commit()
 
             self._finalize_session(session_id, end_date, "completed")
@@ -386,12 +435,27 @@ class SimulationEngine:
 
         Called immediately after predictions for that market are written to DB.
         market_key can be orchestrator keys like "NASDAQ100" — will be normalized.
+
+        For NASDAQ/SP500: skips if outside US session hours (is_intraday_open guard),
+        matching the predict guard so bots only trade when fresh prices exist.
+        GOLD and CRYPTO always run (no intraday guard).
         """
         from src.config import get_settings
+        from src.utils.market_calendar import is_intraday_open
 
         normalized = _MARKET_KEY_NORM.get(market_key.upper(), market_key.upper())
-        from datetime import date as date_type
-        today = date_type.today()
+
+        # Guard: NASDAQ/SP500 only trade during US session hours (9:30 AM – 4:00 PM ET)
+        if not is_intraday_open(normalized):
+            log.info(
+                "sim.live_step.skip.not_intraday",
+                market=normalized,
+                reason="outside US session hours",
+            )
+            return
+
+        now = datetime.now()  # VN local time (TZ=Asia/Ho_Chi_Minh)
+        today = now.date()
 
         with session_scope() as session:
             bots = session.query(SimBot).filter(
@@ -430,13 +494,15 @@ class SimulationEngine:
         n_workers = max(1, min(16, raw_workers))
 
         log.info("sim.live_step.market_start", market=normalized, bots=len(bot_configs), workers=n_workers)
-        self._run_bot_steps(bot_configs, today, cache=cache, n_workers=n_workers)
+        self._run_bot_steps(bot_configs, today, now=now, cache=cache, n_workers=n_workers)
         log.info("sim.live_step.market_done", market=normalized)
 
     def _run_single_bot(self, bot_id: str, config: BotConfig, today, now: datetime, cache=None) -> None:
         """Execute one live-step for a single bot.  Designed to be called from a
         thread pool; each invocation opens its OWN session_scope() blocks so
         SQLAlchemy sessions are never shared across threads.
+
+        ``now`` carries the full datetime for hourly trade_at / snapshot_at columns.
         """
         try:
             with session_scope() as session:
@@ -479,10 +545,14 @@ class SimulationEngine:
             if prior_trades:
                 _restore_portfolio_state(bot, prior_trades, config.initial_capital)
 
-            trades = bot.step(today, cache=cache)
+            # Pass now so bot propagates trade_at to each Trade object
+            trades = bot.step(today, cache=cache, now=now)
 
             with session_scope() as session:
                 for trade in trades:
+                    # trade_at: prefer trade.trade_at (set by bot when now is passed);
+                    # fall back to now for safety.
+                    trade_at_val = trade.trade_at if trade.trade_at is not None else now
                     db_trade = SimTrade(
                         session_id=session_id,
                         bot_id=bot_id,
@@ -493,27 +563,19 @@ class SimulationEngine:
                         trade_value=Decimal(str(round(trade.trade_value, 2))),
                         signal_strength=Decimal(str(round(trade.signal_strength, 4))) if trade.signal_strength is not None else None,
                         confidence=Decimal(str(round(trade.confidence, 3))) if trade.confidence is not None else None,
-                        trade_date=now,
+                        trade_date=trade_at_val,
                         close_reason=trade.close_reason,
+                        entry_trade_id=trade.entry_trade_id,
                         pnl=Decimal(str(round(trade.pnl, 2))) if trade.pnl is not None else None,
                         pnl_pct=Decimal(str(round(trade.pnl_pct, 4))) if trade.pnl_pct is not None else None,
                     )
                     session.add(db_trade)
                 session.commit()
 
-            snap = bot.get_snapshot(today)
+            # Snapshot with hourly snap_at so upsert creates 1 row per hour
+            snap = bot.get_snapshot(today, snap_at=now)
             with session_scope() as session:
-                db_snap = SimPortfolioSnapshot(
-                    session_id=session_id,
-                    bot_id=bot_id,
-                    snapshot_date=snap["snapshot_date"],
-                    cash_balance=Decimal(str(round(snap["cash_balance"], 2))),
-                    positions_value=Decimal(str(round(snap["positions_value"], 2))),
-                    total_value=Decimal(str(round(snap["total_value"], 2))),
-                    total_return_pct=Decimal(str(round(snap["total_return_pct"], 4))),
-                    open_positions=snap["open_positions"],
-                )
-                session.merge(db_snap)
+                _upsert_snapshot(session, session_id, bot_id, snap)
                 session.commit()
 
             # Refresh KPI columns after each live step so leaderboard/monitoring
@@ -526,7 +588,8 @@ class SimulationEngine:
         except Exception as exc:
             log.error("sim.live_step.bot_error", bot_id=bot_id, error=str(exc))
 
-    def _run_bot_steps(self, bot_configs: list, today, cache=None, n_workers: int = 1) -> None:
+    def _run_bot_steps(self, bot_configs: list, today, now: Optional[datetime] = None,
+                       cache=None, n_workers: int = 1) -> None:
         """Execute one simulation step for a list of (bot_id, BotConfig) pairs.
 
         When n_workers > 1 bots are dispatched to a ThreadPoolExecutor so that
@@ -534,18 +597,21 @@ class SimulationEngine:
         StepDataCache (if provided) is read-only and safe to share across threads.
         When n_workers == 1 (or cache is None — backtest path) the loop is
         sequential for backwards compatibility.
+
+        ``now`` is the live datetime used for trade_at / snapshot_at columns.
+        When None (backtest path), it defaults to datetime.now() inside each bot.
         """
-        now = datetime.now()  # VN local time (TZ=Asia/Ho_Chi_Minh set at startup)
+        step_now = now if now is not None else datetime.now()
 
         if n_workers <= 1:
             # Sequential path — preserves exact legacy behaviour for backtest /
             # small fleets / callers that don't pass n_workers.
             for bot_id, config in bot_configs:
-                self._run_single_bot(bot_id, config, today, now, cache=cache)
+                self._run_single_bot(bot_id, config, today, step_now, cache=cache)
         else:
             with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as executor:
                 futures = {
-                    executor.submit(self._run_single_bot, bot_id, config, today, now, cache): bot_id
+                    executor.submit(self._run_single_bot, bot_id, config, today, step_now, cache): bot_id
                     for bot_id, config in bot_configs
                 }
                 for future in concurrent.futures.as_completed(futures):
@@ -587,10 +653,11 @@ class SimulationEngine:
                     symbol=db_bot.symbol,
                 )))
 
+        now = datetime.now()
         log.info("sim.live_step.all_start", bots=len(bot_configs))
         # Fallback cron path: run sequentially (cache=None) to keep behaviour
         # identical to the pre-threading implementation.
-        self._run_bot_steps(bot_configs, today, cache=None, n_workers=1)
+        self._run_bot_steps(bot_configs, today, now=now, cache=None, n_workers=1)
         log.info("sim.live_step.all_done")
 
     def reset_active_bots(self) -> int:

@@ -27,7 +27,7 @@ from src.crawlers.nasdaq import NASDAQ_SYMBOLS
 from src.crawlers.sp500 import SP500_SYMBOLS
 from src.database import repository as repo
 from src.utils.logger import get_logger
-from src.utils.market_calendar import next_trading_day
+from src.utils.market_calendar import is_intraday_open, next_trading_day
 
 log = get_logger("orchestrator")
 
@@ -229,6 +229,12 @@ def _predict_gold_per_symbol(now: datetime, target: datetime) -> int:
 
 
 def _predict_nasdaq(algos: dict, emit: EmitFn) -> int:
+    # Guard: only predict during US market hours (9:30 AM – 4:00 PM ET, weekday, no holiday)
+    if not is_intraday_open("NASDAQ100"):
+        log.info("predict.nasdaq.skip.not_intraday", reason="outside US session hours")
+        emit("warn", "NASDAQ: outside US session hours, skipping predict", 1.0)
+        return 0
+
     symbols = repo.get_nasdaq_symbols() or NASDAQ_SYMBOLS
     total_ops = len(symbols) * len(algos)
     done_ops = 0
@@ -240,6 +246,7 @@ def _predict_nasdaq(algos: dict, emit: EmitFn) -> int:
     _apply_ensemble_weights(algos, dir_acc)
     count = 0
     now = datetime.now()
+    target = now + timedelta(hours=1)
 
     for sym_idx, symbol in enumerate(symbols):
         emit("info", f"[{sym_idx + 1}/{len(symbols)}] {symbol} - computing...", done_ops / max(total_ops, 1))
@@ -249,11 +256,6 @@ def _predict_nasdaq(algos: dict, emit: EmitFn) -> int:
             emit("warn", f"  {symbol}: insufficient data ({len(prices_asc)} points)", done_ops / max(total_ops, 1))
             done_ops += len(algos)
             continue
-
-        last_d = prices_asc[-1].trading_date
-        if isinstance(last_d, datetime):
-            last_d = last_d.date()
-        target = datetime.combine(next_trading_day(last_d, "NASDAQ100"), datetime.min.time())
 
         price_list = [float(p.close_price) for p in prices_asc]
         vol_list = [float(p.volume or 0) for p in prices_asc]
@@ -288,13 +290,13 @@ def _predict_nasdaq(algos: dict, emit: EmitFn) -> int:
     # Per-symbol pass (additive — only when enabled and instances are pre-trained)
     if get_settings().per_symbol_enabled:
         symbols_snap = repo.get_nasdaq_symbols() or NASDAQ_SYMBOLS
-        count += _predict_nasdaq_per_symbol(now, symbols_snap)
+        count += _predict_nasdaq_per_symbol(now, target, symbols_snap)
 
     emit("ok", f"NASDAQ complete: {count} predictions saved", 1.0)
     return count
 
 
-def _predict_nasdaq_per_symbol(now: datetime, symbols: list[str]) -> int:
+def _predict_nasdaq_per_symbol(now: datetime, target: datetime, symbols: list[str]) -> int:
     """Write per-symbol predictions for NASDAQ100 symbols."""
     def _work(symbol: str) -> int:
         ps_algos = get_trained_algos_for_symbol("NASDAQ100", symbol)
@@ -304,11 +306,6 @@ def _predict_nasdaq_per_symbol(now: datetime, symbols: list[str]) -> int:
         prices_asc = repo.get_nasdaq_prices_asc(symbol, limit=270)
         if len(prices_asc) < 20:
             return 0
-
-        last_d = prices_asc[-1].trading_date
-        if isinstance(last_d, datetime):
-            last_d = last_d.date()
-        target = datetime.combine(next_trading_day(last_d, "NASDAQ100"), datetime.min.time())
 
         price_list = [float(p.close_price) for p in prices_asc]
         vol_list = [float(p.volume or 0) for p in prices_asc]
@@ -363,6 +360,8 @@ def _predict_crypto(algos: dict, emit: EmitFn) -> int:
     _apply_ensemble_weights(algos, dir_acc)
     count = 0
     now = datetime.now()
+    # CRYPTO 24/7 — target = now + 1h (GOLD-style hourly prediction)
+    target = now + timedelta(hours=1)
 
     for coin_idx, (coin_id, symbol) in enumerate(coins):
         emit("info", f"[{coin_idx + 1}/{len(coins)}] {symbol} - computing...", done_ops / max(total_ops, 1))
@@ -372,12 +371,6 @@ def _predict_crypto(algos: dict, emit: EmitFn) -> int:
             emit("warn", f"  {symbol}: insufficient data ({len(prices_asc)} points)", done_ops / max(total_ops, 1))
             done_ops += len(algos)
             continue
-
-        # target = next calendar day after last available price (crypto is 24/7)
-        last_d = prices_asc[-1].trading_date
-        if isinstance(last_d, datetime):
-            last_d = last_d.date()
-        target = datetime.combine(last_d + timedelta(days=1), datetime.min.time())
 
         price_list = [float(p.close_price) for p in prices_asc]
         vol_list = [float(p.volume24h or 0) for p in prices_asc]
@@ -412,13 +405,13 @@ def _predict_crypto(algos: dict, emit: EmitFn) -> int:
 
     # Per-symbol pass (additive — only when enabled and instances are pre-trained)
     if get_settings().per_symbol_enabled:
-        count += _predict_crypto_per_symbol(now, list(CRYPTO_COINS))
+        count += _predict_crypto_per_symbol(now, target, list(CRYPTO_COINS))
 
     emit("ok", f"Crypto complete: {count} predictions saved", 1.0)
     return count
 
 
-def _predict_crypto_per_symbol(now: datetime, coins: list[tuple[str, str]]) -> int:
+def _predict_crypto_per_symbol(now: datetime, target: datetime, coins: list[tuple[str, str]]) -> int:
     """Write per-symbol predictions for Crypto coins."""
     def _work(coin_id: str, symbol: str) -> int:
         # symbol_label for crypto is the coin symbol (BTC/ETH/SOL)
@@ -429,11 +422,6 @@ def _predict_crypto_per_symbol(now: datetime, coins: list[tuple[str, str]]) -> i
         prices_asc = repo.get_crypto_prices_asc(coin_id, limit=270)
         if len(prices_asc) < 20:
             return 0
-
-        last_d = prices_asc[-1].trading_date
-        if isinstance(last_d, datetime):
-            last_d = last_d.date()
-        target = datetime.combine(last_d + timedelta(days=1), datetime.min.time())
 
         price_list = [float(p.close_price) for p in prices_asc]
         vol_list = [float(p.volume24h or 0) for p in prices_asc]
@@ -478,6 +466,12 @@ def _predict_crypto_per_symbol(now: datetime, coins: list[tuple[str, str]]) -> i
 
 
 def _predict_sp500(algos: dict, emit: EmitFn) -> int:
+    # Guard: only predict during US market hours (9:30 AM – 4:00 PM ET, weekday, no holiday)
+    if not is_intraday_open("SP500"):
+        log.info("predict.sp500.skip.not_intraday", reason="outside US session hours")
+        emit("warn", "S&P 500: outside US session hours, skipping predict", 1.0)
+        return 0
+
     symbols = repo.get_sp500_symbols() or SP500_SYMBOLS
     total_ops = len(symbols) * len(algos)
     done_ops = 0
@@ -489,6 +483,7 @@ def _predict_sp500(algos: dict, emit: EmitFn) -> int:
     _apply_ensemble_weights(algos, dir_acc)
     count = 0
     now = datetime.now()
+    target = now + timedelta(hours=1)
 
     for sym_idx, symbol in enumerate(symbols):
         emit("info", f"[{sym_idx + 1}/{len(symbols)}] {symbol} - computing...", done_ops / max(total_ops, 1))
@@ -498,11 +493,6 @@ def _predict_sp500(algos: dict, emit: EmitFn) -> int:
             emit("warn", f"  {symbol}: insufficient data ({len(prices_asc)} points)", done_ops / max(total_ops, 1))
             done_ops += len(algos)
             continue
-
-        last_d = prices_asc[-1].trading_date
-        if isinstance(last_d, datetime):
-            last_d = last_d.date()
-        target = datetime.combine(next_trading_day(last_d, "SP500"), datetime.min.time())
 
         price_list = [float(p.close_price) for p in prices_asc]
         vol_list = [float(p.volume or 0) for p in prices_asc]
@@ -537,13 +527,13 @@ def _predict_sp500(algos: dict, emit: EmitFn) -> int:
     # Per-symbol pass (additive — only when enabled and instances are pre-trained)
     if get_settings().per_symbol_enabled:
         sp_symbols_snap = repo.get_sp500_symbols() or SP500_SYMBOLS
-        count += _predict_sp500_per_symbol(now, sp_symbols_snap)
+        count += _predict_sp500_per_symbol(now, target, sp_symbols_snap)
 
     emit("ok", f"S&P 500 complete: {count} predictions saved", 1.0)
     return count
 
 
-def _predict_sp500_per_symbol(now: datetime, symbols: list[str]) -> int:
+def _predict_sp500_per_symbol(now: datetime, target: datetime, symbols: list[str]) -> int:
     """Write per-symbol predictions for SP500 symbols."""
     def _work(symbol: str) -> int:
         ps_algos = get_trained_algos_for_symbol("SP500", symbol)
@@ -553,11 +543,6 @@ def _predict_sp500_per_symbol(now: datetime, symbols: list[str]) -> int:
         prices_asc = repo.get_sp500_prices_asc(symbol, limit=270)
         if len(prices_asc) < 20:
             return 0
-
-        last_d = prices_asc[-1].trading_date
-        if isinstance(last_d, datetime):
-            last_d = last_d.date()
-        target = datetime.combine(next_trading_day(last_d, "SP500"), datetime.min.time())
 
         price_list = [float(p.close_price) for p in prices_asc]
         vol_list = [float(p.volume or 0) for p in prices_asc]

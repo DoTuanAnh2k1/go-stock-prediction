@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -60,17 +61,19 @@ type monitoringBotByMarket struct {
 }
 
 type monitoringBotTableRow struct {
-	BotID        string  `json:"bot_id"`
-	Market       string  `json:"market"`
-	Algorithm    string  `json:"algorithm"`
-	Trades       int     `json:"trades"`
-	Wins         int     `json:"wins"`
-	Losses       int     `json:"losses"`
-	Breakeven    int     `json:"breakeven"`
-	WinRate      float64 `json:"win_rate"`      // 0..1
-	TotalPnl     float64 `json:"total_pnl"`
-	ReturnPct    float64 `json:"return_pct"`
-	ProfitFactor float64 `json:"profit_factor"`
+	BotID          string   `json:"bot_id"`
+	Market         string   `json:"market"`
+	Algorithm      string   `json:"algorithm"`
+	Trades         int      `json:"trades"`
+	Wins           int      `json:"wins"`
+	Losses         int      `json:"losses"`
+	Breakeven      int      `json:"breakeven"`
+	WinRate        float64  `json:"win_rate"`       // 0..1
+	TotalPnl       float64  `json:"total_pnl"`
+	ReturnPct      float64  `json:"return_pct"`
+	ProfitFactor   *float64 `json:"profit_factor"`  // nil = ∞ (all wins, no losses)
+	OpenPositions  int      `json:"open_positions"`
+	UnrealizedPnl  float64  `json:"unrealized_pnl"`
 }
 
 type monitoringBotSummary struct {
@@ -335,10 +338,19 @@ func buildBotData(store repository.DatabaseStore) botData {
 		var stats modelsdb.SimTradeStats
 		var returnPct float64
 
+		var openPositions int
+		var unrealizedPnl float64
+
 		if sess != nil {
 			stats = tradeStats[sess.ID]
-			if snap, ok := lastSnaps[sess.ID]; ok && snap != nil && snap.TotalReturnPct != nil {
-				returnPct, _ = snap.TotalReturnPct.Float64()
+			if snap, ok := lastSnaps[sess.ID]; ok && snap != nil {
+				if snap.TotalReturnPct != nil {
+					returnPct, _ = snap.TotalReturnPct.Float64()
+				}
+				openPositions = snap.OpenPositions
+				totalValue, _ := snap.TotalValue.Float64()
+				initialCapital, _ := bot.InitialCapital.Float64()
+				unrealizedPnl = totalValue - initialCapital - stats.TotalPnl
 			}
 		}
 
@@ -347,23 +359,35 @@ func buildBotData(store repository.DatabaseStore) botData {
 		if denominator > 0 {
 			winRate = float64(stats.Wins) / float64(denominator)
 		}
-		profitFactor := 0.0
+
+		// profit_factor: nil = ∞ (wins exist but no losses); 0.0 = no closed trades
+		var profitFactor *float64
 		if stats.LossPnl > 0 {
-			profitFactor = stats.WinPnl / stats.LossPnl
+			pf := stats.WinPnl / stats.LossPnl
+			profitFactor = &pf
+		} else if stats.WinPnl > 0 {
+			// All closed trades are wins — profit factor is infinite
+			profitFactor = nil
+		} else {
+			// No closed trades at all
+			pf := 0.0
+			profitFactor = &pf
 		}
 
 		tableRows = append(tableRows, monitoringBotTableRow{
-			BotID:        bot.ID,
-			Market:       bot.Market,
-			Algorithm:    bot.Algorithm,
-			Trades:       stats.TotalTrades,
-			Wins:         stats.Wins,
-			Losses:       stats.Losses,
-			Breakeven:    stats.Breakeven,
-			WinRate:      winRate,
-			TotalPnl:     stats.TotalPnl,
-			ReturnPct:    returnPct,
-			ProfitFactor: profitFactor,
+			BotID:         bot.ID,
+			Market:        bot.Market,
+			Algorithm:     bot.Algorithm,
+			Trades:        stats.TotalTrades,
+			Wins:          stats.Wins,
+			Losses:        stats.Losses,
+			Breakeven:     stats.Breakeven,
+			WinRate:       winRate,
+			TotalPnl:      stats.TotalPnl,
+			ReturnPct:     returnPct,
+			ProfitFactor:  profitFactor,
+			OpenPositions: openPositions,
+			UnrealizedPnl: unrealizedPnl,
 		})
 
 		bm, exists := byMarketMap[bot.Market]
@@ -378,8 +402,8 @@ func buildBotData(store repository.DatabaseStore) botData {
 	}
 
 	sort.Slice(tableRows, func(i, j int) bool {
-		if tableRows[i].WinRate != tableRows[j].WinRate {
-			return tableRows[i].WinRate > tableRows[j].WinRate
+		if tableRows[i].ReturnPct != tableRows[j].ReturnPct {
+			return tableRows[i].ReturnPct > tableRows[j].ReturnPct
 		}
 		return tableRows[i].TotalPnl > tableRows[j].TotalPnl
 	})
@@ -406,8 +430,17 @@ func buildBotData(store repository.DatabaseStore) botData {
 	}
 }
 
+// pfValue converts a nullable profit_factor pointer to a float64 for comparison.
+// nil (infinite profit factor — all wins) maps to +Inf so it ranks highest.
+func pfValue(pf *float64) float64 {
+	if pf == nil {
+		return math.Inf(1)
+	}
+	return *pf
+}
+
 // sortBotRows sorts rows in place by the given column and direction. Unknown
-// sortBy falls back to the default win_rate (then total_pnl) order.
+// sortBy falls back to the default return_pct (then total_pnl) order.
 func sortBotRows(rows []monitoringBotTableRow, sortBy, sortDir string) {
 	asc := sortDir == "asc"
 	less := func(i, j int) bool {
@@ -418,20 +451,24 @@ func sortBotRows(rows []monitoringBotTableRow, sortBy, sortDir string) {
 		case "return_pct":
 			return a.ReturnPct < b.ReturnPct
 		case "profit_factor":
-			return a.ProfitFactor < b.ProfitFactor
+			return pfValue(a.ProfitFactor) < pfValue(b.ProfitFactor)
 		case "trades":
 			return a.Trades < b.Trades
 		case "wins":
 			return a.Wins < b.Wins
 		case "losses":
 			return a.Losses < b.Losses
+		case "open_positions":
+			return a.OpenPositions < b.OpenPositions
+		case "unrealized_pnl":
+			return a.UnrealizedPnl < b.UnrealizedPnl
 		case "bot_id":
 			return a.BotID < b.BotID
 		case "market":
 			return a.Market < b.Market
 		case "algorithm":
 			return a.Algorithm < b.Algorithm
-		default: // "win_rate"
+		default: // "win_rate" or unknown
 			if a.WinRate != b.WinRate {
 				return a.WinRate < b.WinRate
 			}
@@ -507,7 +544,7 @@ func GetMonitoringOverview(w http.ResponseWriter, r *http.Request) {
 //	@Param        market     query  string  false  "Filter by market: GOLD|NASDAQ|CRYPTO|SP500"
 //	@Param        algorithm  query  string  false  "Filter by algorithm (case-insensitive substring)"
 //	@Param        search     query  string  false  "Filter by bot id (case-insensitive substring)"
-//	@Param        sort_by    query  string  false  "Sort column: win_rate|total_pnl|return_pct|profit_factor|trades|wins|losses|bot_id|market|algorithm (default win_rate)"
+//	@Param        sort_by    query  string  false  "Sort column: win_rate|total_pnl|return_pct|profit_factor|trades|wins|losses|open_positions|unrealized_pnl|bot_id|market|algorithm (default return_pct)"
 //	@Param        sort_dir   query  string  false  "Sort direction: asc|desc (default desc)"
 //	@Success      200  {object}  monitoringBotsPage
 //	@Failure      401  {object}  ResponseFailure
@@ -541,7 +578,7 @@ func GetMonitoringBots(w http.ResponseWriter, r *http.Request) {
 	// ── Sort params ────────────────────────────────────────────────────────
 	sortBy := q.Get("sort_by")
 	if sortBy == "" {
-		sortBy = "win_rate"
+		sortBy = "return_pct"
 	}
 	sortDir := q.Get("sort_dir")
 	if sortDir != "asc" {

@@ -702,7 +702,9 @@ export interface MonitoringBotRow {
   win_rate: number;
   total_pnl: number;
   return_pct: number;
-  profit_factor: number;
+  profit_factor: number | null;
+  open_positions: number;
+  unrealized_pnl: number;
 }
 
 export interface MonitoringOverview {
@@ -729,7 +731,8 @@ export async function fetchMonitoringOverview(): Promise<MonitoringOverview> {
 
 export type MonitoringBotSortKey =
   | 'win_rate' | 'total_pnl' | 'return_pct' | 'profit_factor'
-  | 'trades' | 'wins' | 'losses' | 'bot_id' | 'market' | 'algorithm';
+  | 'trades' | 'wins' | 'losses' | 'bot_id' | 'market' | 'algorithm'
+  | 'open_positions' | 'unrealized_pnl';
 
 export interface MonitoringBotsParams {
   page?: number;

@@ -77,17 +77,25 @@ function buildMultiAlgoData(
   fmtDate: (s: string) => string,
   useIntraday = false,
 ): { labels: string[]; actual: (number | null)[]; predSeries: { key: string; data: (number | null)[] }[] } {
-  // When intraday mode: use prediction_date (full datetime) as key so multiple
+  // Auto-detect intraday: if any date value has a non-midnight time component,
+  // treat as intraday even when not explicitly requested (e.g. hourly predictions).
+  const hasTimestamps = !useIntraday && list.some(it => {
+    const d = new Date(it[dateField] || '');
+    return !isNaN(d.getTime()) && (d.getHours() !== 0 || d.getMinutes() !== 0);
+  });
+  const intraday = useIntraday || hasTimestamps;
+
+  // When intraday: use prediction_date (full datetime) as key so multiple
   // predictions within the same calendar day are not collapsed into one point.
   // Fallback to dateField when prediction_date is absent.
   const getKey = (it: any): string => {
-    if (useIntraday) {
+    if (intraday) {
       const pd = it['prediction_date'] || it[dateField] || '';
       return pd;
     }
     return it[dateField] || '';
   };
-  const fmtLabel = useIntraday
+  const fmtLabel = intraday
     ? (() => {
         let prevDay = '';
         return (s: string) => {

@@ -46,8 +46,17 @@ func computeKPIs(snaps []modelsdb.SimPortfolioSnapshot, trades []modelsdb.SimTra
 	}
 
 	// ── annualized_return_pct ─────────────────────────────────────────────
+	// Prefer snapshot_at (hourly precision) when available; fall back to snapshot_date.
 	first := snaps[0]
-	days := last.SnapshotDate.Sub(first.SnapshotDate).Hours() / 24
+	firstTime := first.SnapshotDate
+	if first.SnapshotAt != nil {
+		firstTime = *first.SnapshotAt
+	}
+	lastTime := last.SnapshotDate
+	if last.SnapshotAt != nil {
+		lastTime = *last.SnapshotAt
+	}
+	days := lastTime.Sub(firstTime).Hours() / 24
 	if days > 0 {
 		kpis.AnnualizedReturnPct = (math.Pow(1+kpis.TotalReturnPct/100, 365.0/days) - 1) * 100
 	}
@@ -150,19 +159,28 @@ func computeKPIs(snaps []modelsdb.SimPortfolioSnapshot, trades []modelsdb.SimTra
 	}
 
 	// ── avg trade duration ────────────────────────────────────────────────
-	// Build a map of buyID → tradeDate for BUY trades.
-	buyDates := make(map[int64]time.Time)
+	// Build a map of buyID → effective timestamp for BUY trades.
+	// Prefer trade_at (hourly precision) when set; fall back to trade_date.
+	buyTimes := make(map[int64]time.Time)
 	for _, t := range trades {
 		if t.Action == "BUY" {
-			buyDates[t.ID] = t.TradeDate
+			ts := t.TradeDate
+			if t.TradeAt != nil {
+				ts = *t.TradeAt
+			}
+			buyTimes[t.ID] = ts
 		}
 	}
 	totalDuration := 0.0
 	counted := 0
 	for _, t := range sellTrades {
 		if t.EntryTradeID != nil {
-			if buyDate, ok := buyDates[*t.EntryTradeID]; ok {
-				d := t.TradeDate.Sub(buyDate).Hours() / 24
+			if buyTime, ok := buyTimes[*t.EntryTradeID]; ok {
+				sellTime := t.TradeDate
+				if t.TradeAt != nil {
+					sellTime = *t.TradeAt
+				}
+				d := sellTime.Sub(buyTime).Hours() / 24
 				totalDuration += d
 				counted++
 			}
@@ -228,22 +246,23 @@ func botToJSON(b modelsdb.SimBot) simBotJSON {
 
 // simTradeJSON mirrors SimTrade with all decimal fields as float64.
 type simTradeJSON struct {
-	ID             int64     `json:"id"`
-	SessionID      int64     `json:"session_id"`
-	BotID          string    `json:"bot_id"`
-	Symbol         string    `json:"symbol"`
-	Action         string    `json:"action"`
-	Quantity       float64   `json:"quantity"`
-	Price          float64   `json:"price"`
-	TradeValue     float64   `json:"trade_value"`
-	SignalStrength *float64  `json:"signal_strength,omitempty"`
-	Confidence     *float64  `json:"confidence,omitempty"`
-	TradeDate      time.Time `json:"trade_date"`
-	CloseReason    string    `json:"close_reason,omitempty"`
-	EntryTradeID   *int64    `json:"entry_trade_id,omitempty"`
-	PnL            *float64  `json:"pnl,omitempty"`
-	PnLPct         *float64  `json:"pnl_pct,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID             int64      `json:"id"`
+	SessionID      int64      `json:"session_id"`
+	BotID          string     `json:"bot_id"`
+	Symbol         string     `json:"symbol"`
+	Action         string     `json:"action"`
+	Quantity       float64    `json:"quantity"`
+	Price          float64    `json:"price"`
+	TradeValue     float64    `json:"trade_value"`
+	SignalStrength *float64   `json:"signal_strength,omitempty"`
+	Confidence     *float64   `json:"confidence,omitempty"`
+	TradeDate      time.Time  `json:"trade_date"`
+	TradeAt        *time.Time `json:"trade_at,omitempty"` // hourly timestamp; NULL for legacy rows
+	CloseReason    string     `json:"close_reason,omitempty"`
+	EntryTradeID   *int64     `json:"entry_trade_id,omitempty"`
+	PnL            *float64   `json:"pnl,omitempty"`
+	PnLPct         *float64   `json:"pnl_pct,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 func tradeToJSON(t modelsdb.SimTrade) simTradeJSON {
@@ -260,6 +279,7 @@ func tradeToJSON(t modelsdb.SimTrade) simTradeJSON {
 		Price:        p,
 		TradeValue:   tv,
 		TradeDate:    t.TradeDate,
+		TradeAt:      t.TradeAt,
 		CloseReason:  t.CloseReason,
 		EntryTradeID: t.EntryTradeID,
 		CreatedAt:    t.CreatedAt,
@@ -320,9 +340,10 @@ type simTradesPage struct {
 }
 
 type simChartResponse struct {
-	BotID      string    `json:"bot_id"`
-	SessionID  int64     `json:"session_id"`
-	Dates      []string  `json:"dates"`
+	BotID      string   `json:"bot_id"`
+	SessionID  int64    `json:"session_id"`
+	Dates      []string `json:"dates"`       // "2006-01-02" for daily/backtest rows; "2006-01-02T15:04:05" for hourly rows
+	Timestamps []string `json:"timestamps"`  // RFC3339 from snapshot_at when available; falls back to snapshot_date start-of-day
 	Values     []float64 `json:"values"`
 	ReturnsPct []float64 `json:"returns_pct"`
 }
@@ -725,7 +746,7 @@ func GetSimBotChart(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// No session yet — return empty chart (200) instead of 404
 		ResponseSuccess(w, http.StatusOK, simChartResponse{
-			BotID: id, Dates: []string{}, Values: []float64{}, ReturnsPct: []float64{},
+			BotID: id, Dates: []string{}, Timestamps: []string{}, Values: []float64{}, ReturnsPct: []float64{},
 		})
 		return
 	}
@@ -738,11 +759,18 @@ func GetSimBotChart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dates := make([]string, 0, len(snaps))
+	timestamps := make([]string, 0, len(snaps))
 	values := make([]float64, 0, len(snaps))
 	returnsPct := make([]float64, 0, len(snaps))
 
 	for _, s := range snaps {
 		dates = append(dates, s.SnapshotDate.Format("2006-01-02"))
+		// Use snapshot_at (hourly precision) when available; fall back to snapshot_date (start of day).
+		if s.SnapshotAt != nil {
+			timestamps = append(timestamps, s.SnapshotAt.Format(time.RFC3339))
+		} else {
+			timestamps = append(timestamps, s.SnapshotDate.Format(time.RFC3339))
+		}
 		v, _ := s.TotalValue.Float64()
 		values = append(values, v)
 		rPct := 0.0
@@ -756,6 +784,7 @@ func GetSimBotChart(w http.ResponseWriter, r *http.Request) {
 		BotID:      id,
 		SessionID:  sess.ID,
 		Dates:      dates,
+		Timestamps: timestamps,
 		Values:     values,
 		ReturnsPct: returnsPct,
 	})

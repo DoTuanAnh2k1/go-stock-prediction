@@ -912,7 +912,10 @@ definitions:
         type: integer
       market:
         type: string
+      open_positions:
+        type: integer
       profit_factor:
+        description: nil = ∞ (all wins, no losses)
         type: number
       return_pct:
         type: number
@@ -920,6 +923,8 @@ definitions:
         type: number
       trades:
         type: integer
+      unrealized_pnl:
+        type: number
       win_rate:
         description: 0..1
         type: number
@@ -1362,6 +1367,8 @@ definitions:
       bot_id:
         type: string
       dates:
+        description: '"2006-01-02" for daily/backtest rows; "2006-01-02T15:04:05"
+          for hourly rows'
         items:
           type: string
         type: array
@@ -1371,6 +1378,12 @@ definitions:
         type: array
       session_id:
         type: integer
+      timestamps:
+        description: RFC3339 from snapshot_at when available; falls back to snapshot_date
+          start-of-day
+        items:
+          type: string
+        type: array
       values:
         items:
           type: number
@@ -1423,6 +1436,9 @@ definitions:
       signal_strength:
         type: number
       symbol:
+        type: string
+      trade_at:
+        description: hourly timestamp; NULL for legacy rows
         type: string
       trade_date:
         type: string
@@ -2918,8 +2934,8 @@ paths:
         in: query
         name: search
         type: string
-      - description: 'Sort column: win_rate|total_pnl|return_pct|profit_factor|trades|wins|losses|bot_id|market|algorithm
-          (default win_rate)'
+      - description: 'Sort column: win_rate|total_pnl|return_pct|profit_factor|trades|wins|losses|open_positions|unrealized_pnl|bot_id|market|algorithm
+          (default return_pct)'
         in: query
         name: sort_by
         type: string

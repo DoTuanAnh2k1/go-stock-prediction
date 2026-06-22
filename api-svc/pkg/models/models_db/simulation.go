@@ -66,6 +66,7 @@ type SimTrade struct {
 	SignalStrength *decimal.Decimal `gorm:"type:decimal(8,4)" json:"signal_strength,omitempty"`
 	Confidence     *decimal.Decimal `gorm:"type:decimal(4,3)" json:"confidence,omitempty"`
 	TradeDate      time.Time        `gorm:"not null;index" json:"trade_date"`
+	TradeAt        *time.Time       `gorm:"column:trade_at" json:"trade_at,omitempty"` // hourly timestamp (additive, may be NULL for old rows)
 	CloseReason    string           `gorm:"size:20" json:"close_reason,omitempty"` // signal, stop_loss, take_profit
 	EntryTradeID   *int64           `json:"entry_trade_id,omitempty"`
 	PnL            *decimal.Decimal `gorm:"type:decimal(20,2);column:pnl" json:"pnl,omitempty"`
@@ -75,12 +76,13 @@ type SimTrade struct {
 
 func (SimTrade) TableName() string { return "sim_trades" }
 
-// SimPortfolioSnapshot is a daily snapshot of portfolio state.
+// SimPortfolioSnapshot is a portfolio snapshot (daily or hourly for live bots).
 type SimPortfolioSnapshot struct {
 	ID             int64            `gorm:"primaryKey;autoIncrement" json:"id"`
 	SessionID      int64            `gorm:"not null;index:idx_sim_snap_session_date,priority:1" json:"session_id"`
 	BotID          string           `gorm:"size:50;not null;index:idx_sim_snap_bot_date,priority:1" json:"bot_id"`
 	SnapshotDate   time.Time        `gorm:"not null;index:idx_sim_snap_session_date,priority:2;index:idx_sim_snap_bot_date,priority:2" json:"snapshot_date"`
+	SnapshotAt     *time.Time       `gorm:"column:snapshot_at" json:"snapshot_at,omitempty"` // hourly timestamp (additive, may be NULL for old rows)
 	CashBalance    decimal.Decimal  `gorm:"type:decimal(20,2);not null" json:"cash_balance"`
 	PositionsValue decimal.Decimal  `gorm:"type:decimal(20,2);not null" json:"positions_value"`
 	TotalValue     decimal.Decimal  `gorm:"type:decimal(20,2);not null" json:"total_value"`

@@ -303,6 +303,8 @@ class SimTrade(Base):
     pnl = Column(Numeric(20, 2))
     pnl_pct = Column(Numeric(8, 4))
     created_at = Column(DateTime, default=datetime.now)
+    # Hourly granularity: full datetime of the trade (mirrors trade_date for new rows)
+    trade_at = Column(DateTime, nullable=True)
 
 
 class SimPortfolioSnapshot(Base):
@@ -315,6 +317,8 @@ class SimPortfolioSnapshot(Base):
     session_id = Column(BigInteger, nullable=False, index=True)
     bot_id = Column(String(50), nullable=False)
     snapshot_date = Column(Date, nullable=False)
+    # Hourly granularity: full datetime for upsert key (1 row per session per hour)
+    snapshot_at = Column(DateTime, nullable=True)
     cash_balance = Column(Numeric(20, 2), nullable=False)
     positions_value = Column(Numeric(20, 2), nullable=False)
     total_value = Column(Numeric(20, 2), nullable=False)

@@ -51,13 +51,16 @@ class TradingBot:
         )
         self.signal_gen = SignalGenerator()
 
-    def step(self, sim_date: date, cache=None) -> list[Trade]:
-        """Run one simulation day: SL/TP check then process new signals.
+    def step(self, sim_date: date, cache=None, now: Optional[datetime] = None) -> list[Trade]:
+        """Run one simulation step: SL/TP check then process new signals.
 
         cache (optional StepDataCache from engine): when provided, DB queries
         for predictions and current prices are served from the pre-fetched cache
         instead of issuing new round-trips.  When None (default / backtest path)
         every call issues its own DB queries — behaviour is unchanged.
+
+        now: the full datetime of this step (for hourly trade_at/snapshot_at).
+             When None (backtest path), trade_at/snapshot_at will be left None.
         """
         trades = []
 
@@ -80,7 +83,9 @@ class TradingBot:
                         sl_symbols,
                         sim_date,
                     )
-                sl_tp_trades = self.portfolio.check_stop_loss_take_profit(current_prices, sim_date)
+                sl_tp_trades = self.portfolio.check_stop_loss_take_profit(
+                    current_prices, sim_date, trade_at=now
+                )
                 trades.extend(sl_tp_trades)
                 # Block same-step re-entry
                 closed_this_step = {t.symbol for t in sl_tp_trades}
@@ -94,7 +99,7 @@ class TradingBot:
             # ------------------------------------------------------------------
             # RL native branch: policy directly decides BUY/SELL/HOLD per symbol
             # ------------------------------------------------------------------
-            rl_trades = self._step_rl(sim_date, closed_this_step)
+            rl_trades = self._step_rl(sim_date, closed_this_step, now=now)
             trades.extend(rl_trades)
         else:
             # ------------------------------------------------------------------
@@ -128,6 +133,7 @@ class TradingBot:
                         trade_date=sim_date,
                         signal_strength=signal.signal_strength,
                         confidence=signal.confidence,
+                        trade_at=now,
                     )
                     if trade:
                         trades.append(trade)
@@ -137,6 +143,7 @@ class TradingBot:
                         price=signal.current_price,
                         trade_date=sim_date,
                         close_reason="signal",
+                        trade_at=now,
                     )
                     if trade:
                         trade.signal_strength = signal.signal_strength
@@ -152,11 +159,13 @@ class TradingBot:
                         trade_date=sim_date,
                         signal_strength=signal.signal_strength,
                         confidence=signal.confidence,
+                        trade_at=now,
                     ))
 
         return trades
 
-    def _step_rl(self, sim_date: date, closed_this_step: set[str]) -> list[Trade]:
+    def _step_rl(self, sim_date: date, closed_this_step: set[str],
+                 now: Optional[datetime] = None) -> list[Trade]:
         """RL native step: for each tradable symbol, build observation and call policy.act()."""
         from src.algorithms.registry import get_algos_for_market, get_algos_for_symbol, PS_SUFFIX
         from src.database import repository as repo
@@ -248,6 +257,7 @@ class TradingBot:
                     trade_date=sim_date,
                     signal_strength=0.0,
                     confidence=confidence,
+                    trade_at=now,
                 )
                 if trade:
                     trades.append(trade)
@@ -257,6 +267,7 @@ class TradingBot:
                     price=current_price,
                     trade_date=sim_date,
                     close_reason="rl_signal",
+                    trade_at=now,
                 )
                 if trade:
                     trade.confidence = confidence
@@ -271,6 +282,7 @@ class TradingBot:
                     trade_date=sim_date,
                     signal_strength=0.0,
                     confidence=confidence,
+                    trade_at=now,
                 ))
 
         return trades
@@ -404,7 +416,8 @@ class TradingBot:
 
         return []
 
-    def get_snapshot(self, sim_date: date) -> dict:
+    def get_snapshot(self, sim_date: date, snap_at: Optional[datetime] = None) -> dict:
+        """Build portfolio snapshot. snap_at carries the full datetime for hourly upsert."""
         # Use entry prices as fallback current prices
         current_prices = {}
         if self.portfolio.positions:
@@ -413,4 +426,4 @@ class TradingBot:
                 list(self.portfolio.positions.keys()),
                 sim_date,
             )
-        return self.portfolio.snapshot(current_prices, sim_date)
+        return self.portfolio.snapshot(current_prices, sim_date, snap_at=snap_at)

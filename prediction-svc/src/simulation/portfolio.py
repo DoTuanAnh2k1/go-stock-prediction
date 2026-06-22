@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 
@@ -29,6 +29,7 @@ class Trade:
     entry_trade_id: Optional[int] = None
     pnl: Optional[float] = None
     pnl_pct: Optional[float] = None
+    trade_at: Optional[datetime] = None   # full datetime for hourly granularity
 
 
 class Portfolio:
@@ -48,7 +49,8 @@ class Portfolio:
         return self._trade_id_counter
 
     def buy(self, symbol: str, price: float, trade_date: date,
-            signal_strength: float = None, confidence: float = None) -> Optional[Trade]:
+            signal_strength: float = None, confidence: float = None,
+            trade_at: Optional[datetime] = None) -> Optional[Trade]:
         """Execute a BUY if within position limits."""
         if price <= 0:
             return None
@@ -84,10 +86,12 @@ class Portfolio:
             symbol=symbol, action="BUY", quantity=quantity, price=price,
             trade_value=trade_value, trade_date=trade_date,
             signal_strength=signal_strength, confidence=confidence,
+            trade_at=trade_at,
         )
 
     def sell(self, symbol: str, price: float, trade_date: date,
-             close_reason: str = "signal") -> Optional[Trade]:
+             close_reason: str = "signal",
+             trade_at: Optional[datetime] = None) -> Optional[Trade]:
         """Execute a SELL for all of a position."""
         if symbol not in self.positions:
             return None
@@ -105,9 +109,11 @@ class Portfolio:
             close_reason=close_reason,
             entry_trade_id=pos.entry_trade_id,
             pnl=pnl, pnl_pct=pnl_pct,
+            trade_at=trade_at,
         )
 
-    def check_stop_loss_take_profit(self, current_prices: dict[str, float], trade_date: date) -> list[Trade]:
+    def check_stop_loss_take_profit(self, current_prices: dict[str, float], trade_date: date,
+                                     trade_at: Optional[datetime] = None) -> list[Trade]:
         """Auto-sell positions that hit SL or TP."""
         trades = []
         for symbol in list(self.positions.keys()):
@@ -119,11 +125,11 @@ class Portfolio:
             change_pct = (price - pos.entry_price) / pos.entry_price * 100
 
             if change_pct <= -self.stop_loss_pct:
-                trade = self.sell(symbol, price, trade_date, close_reason="stop_loss")
+                trade = self.sell(symbol, price, trade_date, close_reason="stop_loss", trade_at=trade_at)
                 if trade:
                     trades.append(trade)
             elif change_pct >= self.take_profit_pct:
-                trade = self.sell(symbol, price, trade_date, close_reason="take_profit")
+                trade = self.sell(symbol, price, trade_date, close_reason="take_profit", trade_at=trade_at)
                 if trade:
                     trades.append(trade)
 
@@ -136,7 +142,14 @@ class Portfolio:
         )
         return self.cash + positions_value
 
-    def snapshot(self, current_prices: dict[str, float], snap_date: date) -> dict:
+    def snapshot(self, current_prices: dict[str, float], snap_date: date,
+                 snap_at: Optional[datetime] = None) -> dict:
+        """Build a portfolio snapshot dict.
+
+        snap_date — the calendar date (DATE type, hypertable partition column).
+        snap_at   — the full datetime for hourly granularity (new upsert key).
+                    Defaults to None for backtest paths that don't need sub-day resolution.
+        """
         positions_value = sum(
             pos.quantity * current_prices.get(sym, pos.entry_price)
             for sym, pos in self.positions.items()
@@ -145,6 +158,7 @@ class Portfolio:
         total_return_pct = (total - self.initial_capital) / self.initial_capital * 100 if self.initial_capital > 0 else 0.0
         return {
             "snapshot_date": snap_date,
+            "snapshot_at": snap_at,
             "cash_balance": self.cash,
             "positions_value": positions_value,
             "total_value": total,

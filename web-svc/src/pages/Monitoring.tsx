@@ -266,7 +266,7 @@ function BotsTable() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [market, setMarket] = useState('');
-  const [sortKey, setSortKey] = useState<MonitoringBotSortKey>('win_rate');
+  const [sortKey, setSortKey] = useState<MonitoringBotSortKey>('return_pct');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   // Text inputs (debounced into the actual query terms).
@@ -433,6 +433,8 @@ function BotsTable() {
                   </span>
                 } />
                 <SortHeader colKey="profit_factor" label={m.colProfitFactor} />
+                <SortHeader colKey="open_positions" label={m.colOpenPos} />
+                <SortHeader colKey="unrealized_pnl" label={m.colUnrealized} />
               </tr>
             </thead>
             <tbody>
@@ -478,7 +480,19 @@ function BotsTable() {
                       <span style={{ color: retColor }}>{fmtReturnPct(row.return_pct)}</span>
                     </td>
                     <td style={{ textAlign: 'right', padding: '7px 10px' }} className="mono">
-                      {row.profit_factor.toFixed(2)}
+                      <span style={{ color: row.profit_factor == null ? 'var(--up)' : undefined }}>
+                        {row.profit_factor == null ? '∞' : row.profit_factor.toFixed(2)}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '7px 10px' }} className="mono">
+                      <span style={{ color: row.open_positions > 0 ? 'var(--gold)' : undefined }}>
+                        {fmtNumber(row.open_positions)}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '7px 10px' }} className="mono">
+                      <span style={{ color: row.unrealized_pnl >= 0 ? 'var(--up)' : 'var(--down)' }}>
+                        {fmtPnl(row.unrealized_pnl)}
+                      </span>
                     </td>
                   </tr>
                 );

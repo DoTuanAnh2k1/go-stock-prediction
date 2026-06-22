@@ -1998,7 +1998,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Sort column: win_rate|total_pnl|return_pct|profit_factor|trades|wins|losses|bot_id|market|algorithm (default win_rate)",
+                        "description": "Sort column: win_rate|total_pnl|return_pct|profit_factor|trades|wins|losses|open_positions|unrealized_pnl|bot_id|market|algorithm (default return_pct)",
                         "name": "sort_by",
                         "in": "query"
                     },
@@ -6320,7 +6320,11 @@ const docTemplate = `{
                 "market": {
                     "type": "string"
                 },
+                "open_positions": {
+                    "type": "integer"
+                },
                 "profit_factor": {
+                    "description": "nil = ∞ (all wins, no losses)",
                     "type": "number"
                 },
                 "return_pct": {
@@ -6331,6 +6335,9 @@ const docTemplate = `{
                 },
                 "trades": {
                     "type": "integer"
+                },
+                "unrealized_pnl": {
+                    "type": "number"
                 },
                 "win_rate": {
                     "description": "0..1",
@@ -7006,6 +7013,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "dates": {
+                    "description": "\"2006-01-02\" for daily/backtest rows; \"2006-01-02T15:04:05\" for hourly rows",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -7019,6 +7027,13 @@ const docTemplate = `{
                 },
                 "session_id": {
                     "type": "integer"
+                },
+                "timestamps": {
+                    "description": "RFC3339 from snapshot_at when available; falls back to snapshot_date start-of-day",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "values": {
                     "type": "array",
@@ -7099,6 +7114,10 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "symbol": {
+                    "type": "string"
+                },
+                "trade_at": {
+                    "description": "hourly timestamp; NULL for legacy rows",
                     "type": "string"
                 },
                 "trade_date": {

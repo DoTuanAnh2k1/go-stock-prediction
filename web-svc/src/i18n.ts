@@ -760,7 +760,9 @@ export const translations: Record<Lang, Translations> = {
       colWLBE: 'W/L/BE',
       colReturnPct: 'Return %',
       colProfitFactor: 'Profit Factor',
-      returnPctNote: 'snapshot-derived, có thể bị inflated do bug duplicate snapshot',
+      colOpenPos: 'Vị thế mở',
+      colUnrealized: 'Lãi/lỗ tạm tính',
+      returnPctNote: 'Tính từ snapshot danh mục cuối ngày (mark-to-market, gồm cả vị thế đang mở) — số thật, không bị thiên lệch như win_rate',
       noBotsTable: 'Chưa có dữ liệu bot nào',
       sortAsc: 'Tăng dần',
       sortDesc: 'Giảm dần',
@@ -1506,7 +1508,9 @@ export const translations: Record<Lang, Translations> = {
       colWLBE: 'W/L/BE',
       colReturnPct: 'Return %',
       colProfitFactor: 'Profit Factor',
-      returnPctNote: 'snapshot-derived, may be inflated due to duplicate snapshot bug',
+      colOpenPos: 'Open Pos',
+      colUnrealized: 'Unrealized P&L',
+      returnPctNote: 'Derived from end-of-day portfolio snapshot (mark-to-market, includes open positions) — the honest metric, not survivorship-biased like win_rate',
       noBotsTable: 'No bots data',
       sortAsc: 'Ascending',
       sortDesc: 'Descending',
@@ -2223,6 +2227,8 @@ export interface Translations {
     colWLBE: string;
     colReturnPct: string;
     colProfitFactor: string;
+    colOpenPos: string;
+    colUnrealized: string;
     returnPctNote: string;
     noBotsTable: string;
     sortAsc: string;

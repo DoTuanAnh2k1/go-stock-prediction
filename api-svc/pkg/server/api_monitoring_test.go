@@ -88,6 +88,7 @@ func TestMonitoringAlgoStat_JSONFields(t *testing.T) {
 }
 
 func TestMonitoringBotTableRow_JSONFields(t *testing.T) {
+	pf := 2.1
 	row := monitoringBotTableRow{
 		BotID:        "gold_lstm_nn",
 		Market:       "GOLD",
@@ -99,7 +100,7 @@ func TestMonitoringBotTableRow_JSONFields(t *testing.T) {
 		WinRate:      0.667,
 		TotalPnl:     1500.0,
 		ReturnPct:    7.5,
-		ProfitFactor: 2.1,
+		ProfitFactor: &pf,
 	}
 
 	b, err := json.Marshal(row)

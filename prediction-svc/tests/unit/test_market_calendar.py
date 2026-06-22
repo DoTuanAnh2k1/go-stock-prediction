@@ -1,4 +1,4 @@
-"""Unit tests for market_calendar.is_market_open.
+"""Unit tests for market_calendar.is_market_open and is_intraday_open.
 
 No network, no DB, no Docker required — pure date logic.
 """
@@ -12,6 +12,7 @@ import pytest
 from src.utils.market_calendar import (
     _is_us_trading_day,
     _nyse_holidays,
+    is_intraday_open,
     is_market_open,
 )
 
@@ -160,3 +161,108 @@ def test_gold_not_restricted_by_time():
     # GOLD không bị giới hạn giờ — 3 AM ET weekday vẫn open
     assert is_market_open("GOLD", _et(2025, 6, 13, 3)) is True
     assert is_market_open("GOLD", _et(2025, 6, 13, 23)) is True
+
+
+# ---------------------------------------------------------------------------
+# is_intraday_open — giờ phiên thực (9:30 AM – 4:00 PM ET)
+# ---------------------------------------------------------------------------
+
+class TestIsIntradayOpen:
+    """Tests for is_intraday_open(market_key, when) -> bool.
+
+    Session window: 9:30 AM – 4:00 PM ET on US trading days.
+    GOLD, CRYPTO and unknown markets always return True.
+    """
+
+    # --- CRYPTO / GOLD / unknown always open ---
+
+    @pytest.mark.parametrize("market", ["CRYPTO", "crypto", "GOLD", "gold", "FOREX"])
+    def test_non_nyse_markets_always_open(self, market):
+        # Saturday at midnight — still True for non-NYSE markets
+        when = datetime(2025, 6, 14, 0, 0, tzinfo=ZoneInfo("America/New_York"))
+        assert is_intraday_open(market, when) is True
+
+    # --- NASDAQ / SP500 during session ---
+
+    @pytest.mark.parametrize("market", ["NASDAQ100", "NASDAQ", "SP500"])
+    def test_open_during_session(self, market):
+        # Tuesday 2025-06-17, 10:00 AM ET — well within 9:30-16:00 ET
+        when = _et(2025, 6, 17, 10, 0)
+        assert is_intraday_open(market, when) is True
+
+    @pytest.mark.parametrize("market", ["NASDAQ100", "SP500"])
+    def test_open_at_session_boundaries(self, market):
+        # Exactly 9:30 AM ET — session open boundary
+        assert is_intraday_open(market, _et(2025, 6, 17, 9, 30)) is True
+        # Exactly 4:00 PM ET — session close boundary (inclusive)
+        assert is_intraday_open(market, _et(2025, 6, 17, 16, 0)) is True
+
+    # --- Before session ---
+
+    @pytest.mark.parametrize("market", ["NASDAQ100", "SP500"])
+    def test_closed_before_session(self, market):
+        # 9:00 AM ET — pre-open, before 9:30 session start
+        assert is_intraday_open(market, _et(2025, 6, 17, 9, 0)) is False
+        # 9:29 AM ET — just before open
+        assert is_intraday_open(market, _et(2025, 6, 17, 9, 29)) is False
+
+    # --- After session ---
+
+    @pytest.mark.parametrize("market", ["NASDAQ100", "SP500"])
+    def test_closed_after_session(self, market):
+        # 4:01 PM ET — just after close
+        assert is_intraday_open(market, _et(2025, 6, 17, 16, 1)) is False
+        # 8:00 PM ET — after-hours
+        assert is_intraday_open(market, _et(2025, 6, 17, 20, 0)) is False
+
+    # --- Weekend ---
+
+    @pytest.mark.parametrize("market", ["NASDAQ100", "SP500"])
+    def test_closed_weekend(self, market):
+        # Saturday 2025-06-14, 12:00 PM ET — weekend
+        assert is_intraday_open(market, _et(2025, 6, 14, 12, 0)) is False
+        # Sunday 2025-06-15
+        assert is_intraday_open(market, _et(2025, 6, 15, 12, 0)) is False
+
+    # --- NYSE holidays ---
+
+    @pytest.mark.parametrize("market", ["NASDAQ100", "SP500"])
+    def test_closed_on_nyse_holiday(self, market):
+        # Labor Day 2025 (Mon Sep 1) — NYSE holiday
+        assert is_intraday_open(market, _et(2025, 9, 1, 12, 0)) is False
+        # Christmas 2025 (Thu Dec 25)
+        assert is_intraday_open(market, _et(2025, 12, 25, 12, 0)) is False
+
+    # --- GOLD not affected (always True) ---
+
+    def test_gold_open_during_nyse_session(self):
+        # GOLD open even at 2 AM ET (no time restriction)
+        assert is_intraday_open("GOLD", _et(2025, 6, 17, 2, 0)) is True
+
+    def test_gold_open_on_nyse_holiday(self):
+        # GOLD open on Labor Day (not restricted by NYSE calendar)
+        assert is_intraday_open("GOLD", _et(2025, 9, 1, 12, 0)) is True
+
+    # --- Defaulting to datetime.now() ---
+
+    def test_default_when_uses_now(self):
+        # Just check it doesn't raise; result is time-dependent
+        result = is_intraday_open("NASDAQ100")
+        assert isinstance(result, bool)
+
+    # --- is_intraday_open is strictly narrower than is_market_open for NYSE ---
+
+    def test_intraday_narrower_than_market_open(self):
+        # 9:15 AM ET on a trading day:
+        # is_market_open = True (pre-open window 9:00–16:30)
+        # is_intraday_open = False (session 9:30–16:00 not started yet)
+        when = _et(2025, 6, 17, 9, 15)
+        assert is_market_open("NASDAQ100", when) is True
+        assert is_intraday_open("NASDAQ100", when) is False
+
+        # 4:15 PM ET on a trading day:
+        # is_market_open = True (still within 9:00–16:30 buffer)
+        # is_intraday_open = False (session ended at 16:00)
+        when2 = _et(2025, 6, 17, 16, 15)
+        assert is_market_open("NASDAQ100", when2) is True
+        assert is_intraday_open("NASDAQ100", when2) is False

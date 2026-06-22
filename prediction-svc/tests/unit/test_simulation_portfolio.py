@@ -4,7 +4,7 @@ No network, no DB, no Docker required — pure portfolio logic.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 
@@ -319,3 +319,95 @@ class TestPortfolioSnapshot:
         current_price = 110.0
         snap = self.p.snapshot({"VCB": current_price}, TODAY)
         assert snap["total_value"] == pytest.approx(snap["cash_balance"] + snap["positions_value"], rel=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# Hourly snapshot_at and trade_at fields
+# ---------------------------------------------------------------------------
+
+NOW_DT = datetime(2024, 6, 1, 14, 30, 0)  # 14:30 — arbitrary ICT datetime
+
+
+class TestSnapshotAt:
+    """Tests for snap_at parameter and snapshot_at key in snapshot dict."""
+
+    def setup_method(self):
+        self.p = make_portfolio(initial_capital=100_000.0)
+
+    def test_snapshot_without_snap_at_returns_none(self):
+        snap = self.p.snapshot({}, TODAY)
+        assert snap["snapshot_at"] is None
+
+    def test_snapshot_with_snap_at_returns_datetime(self):
+        snap = self.p.snapshot({}, TODAY, snap_at=NOW_DT)
+        assert snap["snapshot_at"] == NOW_DT
+
+    def test_snapshot_contains_snapshot_at_key(self):
+        snap = self.p.snapshot({}, TODAY)
+        assert "snapshot_at" in snap
+
+    def test_snapshot_date_and_snap_at_coexist(self):
+        snap = self.p.snapshot({}, TODAY, snap_at=NOW_DT)
+        assert snap["snapshot_date"] == TODAY
+        assert snap["snapshot_at"] == NOW_DT
+
+    def test_multiple_hourly_snapshots_distinct_snap_at(self):
+        """Different snap_at datetimes should be distinct (for per-hour upsert key)."""
+        snap1 = self.p.snapshot({}, TODAY, snap_at=datetime(2024, 6, 1, 14, 0, 0))
+        snap2 = self.p.snapshot({}, TODAY, snap_at=datetime(2024, 6, 1, 15, 0, 0))
+        assert snap1["snapshot_at"] != snap2["snapshot_at"]
+        # Same calendar date
+        assert snap1["snapshot_date"] == snap2["snapshot_date"]
+
+
+class TestTradeAt:
+    """Tests for trade_at field on Trade objects."""
+
+    def setup_method(self):
+        self.p = make_portfolio()
+
+    def test_buy_without_trade_at_returns_none(self):
+        trade = self.p.buy("VCB", 100.0, TODAY)
+        assert trade.trade_at is None
+
+    def test_buy_with_trade_at_stored(self):
+        trade = self.p.buy("VCB", 100.0, TODAY, trade_at=NOW_DT)
+        assert trade.trade_at == NOW_DT
+
+    def test_sell_without_trade_at_returns_none(self):
+        self.p.buy("VCB", 100.0, TODAY)
+        sell_trade = self.p.sell("VCB", 110.0, TODAY)
+        assert sell_trade.trade_at is None
+
+    def test_sell_with_trade_at_stored(self):
+        self.p.buy("VCB", 100.0, TODAY)
+        sell_trade = self.p.sell("VCB", 110.0, TODAY, trade_at=NOW_DT)
+        assert sell_trade.trade_at == NOW_DT
+
+    def test_sl_tp_trade_at_propagated(self):
+        self.p.buy("VCB", 100.0, TODAY)
+        trades = self.p.check_stop_loss_take_profit(
+            {"VCB": 90.0}, TODAY, trade_at=NOW_DT  # -10% → stop loss
+        )
+        assert len(trades) == 1
+        assert trades[0].trade_at == NOW_DT
+
+    def test_sl_tp_without_trade_at_is_none(self):
+        self.p.buy("VCB", 100.0, TODAY)
+        trades = self.p.check_stop_loss_take_profit({"VCB": 90.0}, TODAY)
+        assert len(trades) == 1
+        assert trades[0].trade_at is None
+
+    def test_trade_dataclass_has_trade_at_field(self):
+        t = Trade(
+            symbol="VCB", action="BUY", quantity=10, price=100,
+            trade_value=1000, trade_date=TODAY, trade_at=NOW_DT,
+        )
+        assert t.trade_at == NOW_DT
+
+    def test_trade_dataclass_default_trade_at_none(self):
+        t = Trade(
+            symbol="VCB", action="BUY", quantity=10, price=100,
+            trade_value=1000, trade_date=TODAY,
+        )
+        assert t.trade_at is None

@@ -16,6 +16,12 @@ is_market_open kiểm tra cả ngày lẫn giờ ET:
   Tương đương 8:00 PM – 3:30 AM ICT ngày hôm sau.
 - GOLD: weekday only (no time restriction — commodity 24/5)
 - CRYPTO: luôn True
+
+is_intraday_open kiểm tra xem có đang trong giờ phiên giao dịch thực để predict:
+- NASDAQ/SP500: True chỉ trong giờ phiên Mỹ (9:30 AM – 4:00 PM ET) VÀ ngày giao dịch.
+  Cửa sổ hẹp hơn is_market_open (không có pre-open buffer) — chỉ predict khi có
+  giá tươi thật sự trong phiên.
+- GOLD, CRYPTO và mọi key khác: True (không hạn chế giờ).
 """
 from __future__ import annotations
 
@@ -25,6 +31,10 @@ from zoneinfo import ZoneInfo
 # NYSE/NASDAQ session window (ET): pre-open đến 30 phút sau đóng cửa thực tế
 _NYSE_OPEN_ET = time(9, 0)
 _NYSE_CLOSE_ET = time(16, 30)
+
+# Giờ phiên giao dịch thực (intraday predict/trade): 9:30 AM – 4:00 PM ET
+_NYSE_SESSION_OPEN_ET = time(9, 30)
+_NYSE_SESSION_CLOSE_ET = time(16, 0)
 
 # NASDAQ/SP500 đóng cuối tuần + ngày lễ NYSE.
 _NYSE_MARKETS = {"NASDAQ", "NASDAQ100", "SP500"}
@@ -76,6 +86,31 @@ def is_market_open(market_key: str, when: datetime | None = None) -> bool:
         return False
     et_time = et_moment.time()
     return _NYSE_OPEN_ET <= et_time <= _NYSE_CLOSE_ET
+
+
+def is_intraday_open(market_key: str, when: datetime | None = None) -> bool:
+    """True nếu market đang trong giờ phiên giao dịch để predict/trade theo giờ.
+
+    NASDAQ/SP500: True chỉ khi trong giờ phiên Mỹ thực (9:30 AM – 4:00 PM ET)
+      VÀ là ngày giao dịch hợp lệ (weekday + không phải lễ NYSE).
+      Cửa sổ này hẹp hơn ``is_market_open`` (không có pre-open buffer) vì ta
+      chỉ predict khi thật sự có giá tươi trong phiên.
+    GOLD, CRYPTO và mọi key khác: luôn True.
+    """
+    key = (market_key or "").strip().upper()
+    if key not in _NYSE_MARKETS:
+        return True  # GOLD, CRYPTO, unknown → không hạn chế
+
+    moment = when or datetime.now()
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
+    et_moment = moment.astimezone(_US_EASTERN)
+    et_date = et_moment.date()
+
+    if not _is_us_trading_day(et_date):
+        return False
+    et_time = et_moment.time()
+    return _NYSE_SESSION_OPEN_ET <= et_time <= _NYSE_SESSION_CLOSE_ET
 
 
 def _is_us_trading_day(d: date) -> bool:
