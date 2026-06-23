@@ -613,15 +613,28 @@ def _to_date(value):
     return value
 
 
-def reconcile_predictions() -> int:
+def reconcile_predictions(only_market: str | None = None) -> int:
     """Fill actual_price and compute accuracy for past pending predictions.
+
+    only_market: when set (e.g. "CRYPTO", "NASDAQ100"), reconcile ONLY that
+    market's predictions. Each market's hourly pipeline calls this right after it
+    crawls fresh prices, so a +1h prediction is scored ~1h later on that market's
+    own cadence. None = reconcile every market (daily catch-all safety net).
 
     Stock predictions: match close_price from stock_prices within ±3 days.
     Gold predictions: match sell_price from gold_prices within ±1 day.
     accuracy = max(0, 1 - |actual - predicted| / actual)
     status: accuracy >= 0.70 → 'confirmed', else 'wrong'
     """
-    log.info("reconcile.start")
+    # Normalize the optional market filter (NASDAQ100 → NASDAQ to match branches).
+    _norm = {"NASDAQ100": "NASDAQ", "NASDAQ": "NASDAQ", "GOLD": "GOLD",
+             "SP500": "SP500", "CRYPTO": "CRYPTO"}
+    wanted = _norm.get(only_market.upper()) if only_market else None
+
+    def _want(m: str) -> bool:
+        return wanted is None or wanted == m
+
+    log.info("reconcile.start", market=wanted or "ALL")
     total_updated = 0
 
     # --- Backfill direction_correct for already-reconciled predictions ---
@@ -633,6 +646,8 @@ def reconcile_predictions() -> int:
         ("sp500", repo.backfill_direction_correct_sp500),
         ("crypto", repo.backfill_direction_correct_crypto),
     ]:
+        if not _want(market.upper()):
+            continue
         try:
             n = backfill_fn()
             if n:
@@ -643,7 +658,7 @@ def reconcile_predictions() -> int:
 
     # --- Gold predictions ---
     try:
-        gold_pending = repo.get_pending_gold_predictions(days_back=5)
+        gold_pending = repo.get_pending_gold_predictions(days_back=5) if _want("GOLD") else []
         log.info("reconcile.gold.pending", count=len(gold_pending))
 
         for pred in gold_pending:
@@ -684,7 +699,7 @@ def reconcile_predictions() -> int:
     # GOLD-style: reconcile when target_date <= now (prediction has matured);
     # use latest live price as actual (no longer waiting for next trading day).
     try:
-        nasdaq_pending = repo.get_pending_nasdaq_predictions(days_back=10)
+        nasdaq_pending = repo.get_pending_nasdaq_predictions(days_back=10) if _want("NASDAQ") else []
         log.info("reconcile.nasdaq.pending", count=len(nasdaq_pending))
 
         now_ts = datetime.now()
@@ -726,7 +741,7 @@ def reconcile_predictions() -> int:
     # --- SP500 predictions ---
     # GOLD-style: reconcile when target_date <= now; actual = latest live price.
     try:
-        sp500_pending = repo.get_pending_sp500_predictions(days_back=10)
+        sp500_pending = repo.get_pending_sp500_predictions(days_back=10) if _want("SP500") else []
         log.info("reconcile.sp500.pending", count=len(sp500_pending))
 
         now_ts = datetime.now()
@@ -769,7 +784,7 @@ def reconcile_predictions() -> int:
     # GOLD-style: reconcile when target_date <= now; actual = latest live price.
     # Crypto 24/7 — no day-boundary filtering needed.
     try:
-        crypto_pending = repo.get_pending_crypto_predictions(days_back=10)
+        crypto_pending = repo.get_pending_crypto_predictions(days_back=10) if _want("CRYPTO") else []
         log.info("reconcile.crypto.pending", count=len(crypto_pending))
 
         now_ts = datetime.now()

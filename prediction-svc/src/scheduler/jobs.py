@@ -138,6 +138,19 @@ def _run_pipeline(market_key: str, crawl_fn: Callable) -> None:
         # Crawl succeeded but predict failed → partial if training ran, failed otherwise
         status = "partial" if trained or crawled_count > 0 else "failed"
 
+    # Step 4: Reconcile THIS market's matured predictions on its own cadence.
+    # Fresh prices were just crawled in Step 1, so a +1h prediction from the
+    # previous run (target now passed) is scored here rather than waiting for the
+    # daily 6AM catch-all. Never let a reconcile error break the pipeline.
+    try:
+        from src.orchestrator.training import reconcile_predictions
+        rec = reconcile_predictions(only_market=market_key)
+        log.info("pipeline.reconcile.done", market=market_key, scored=rec)
+        steps.append({"label": "Reconcile", "status": "success", "detail": f"{rec} scored"})
+    except Exception as exc:
+        log.warning("pipeline.reconcile.error", market=market_key, error=str(exc))
+        steps.append({"label": "Reconcile", "status": "failed", "detail": str(exc)})
+
     # Write report — wrap entirely so DB errors never break the pipeline
     try:
         finished_at = datetime.now()

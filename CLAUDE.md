@@ -190,7 +190,7 @@ prediction-svc/
 │   │   └── jobs.py                     # Định nghĩa tất cả jobs (crawlers + predictions + training + reconcile)
 │   ├── orchestrator/
 │   │   ├── runner.py                   # run_all_markets() — GOLD/NASDAQ100/CRYPTO/SP500; run_for_market(key); tất cả 4 market dự đoán GIỜ KẾ TIẾP (target = now + 1h); NASDAQ/SP500 bỏ qua predict ngoài giờ phiên Mỹ (is_intraday_open guard)
-│   │   └── training.py                 # reconcile_predictions() — tính direction_correct cho 4 markets (GOLD/NASDAQ/SP500/CRYPTO); tất cả 4 market reconcile GOLD-style: chỉ chấm khi target_date <= now, dùng giá live mới nhất (dòng *_prices được ghi đè mỗi lần crawl); train_for_market()
+│   │   └── training.py                 # reconcile_predictions(only_market=None) — tính direction_correct; tất cả 4 market reconcile GOLD-style: chỉ chấm khi target_date <= now, dùng giá live mới nhất (dòng *_prices được ghi đè mỗi lần crawl). only_market (vd "CRYPTO"/"NASDAQ100") → chấm CHỈ market đó (pipeline gọi mỗi giờ); None → tất cả (job daily_reconcile 6h sáng, catch-all). train_for_market()
 │   └── utils/
 │       ├── logger.py                   # structlog config
 │       ├── timezone.py                 # Asia/Ho_Chi_Minh helpers
@@ -590,8 +590,9 @@ Bốn markets chạy pipeline (`crawler_gold`, `crawler_nasdaq`, `crawler_sp500`
 1. Crawl dữ liệu mới — skip nếu `is_market_open` = False (ngày đóng cửa)
 2. Tăng counter per-market (lưu trong bảng `pipeline_crawl_counters` — DB-backed, **không** còn in-memory nên sống sót qua restart); mỗi 10 lần crawl → trigger `train_for_market()`. Increment qua `increment_crawl_count(market_key)` trong `repository.py` (upsert atomic + RETURNING)
 3. Chạy `run_for_market()` để sinh dự đoán mới — NASDAQ/SP500 skip predict nếu `is_intraday_open` = False (ngoài giờ phiên Mỹ); `target = now + 1h` cho tất cả 4 market
-4. Ghi một row vào bảng `pipeline_reports` (status, steps, crawled_count, predictions_count, duration_ms, v.v.) qua `repository.py`
-5. Chạy `delete_old_pipeline_reports(7)` để xóa báo cáo cũ hơn 7 ngày (retention tự động)
+4. **Reconcile theo market** (`reconcile_predictions(only_market=market_key)`) — chấm điểm các prediction +1h đã chín (`target_date <= now`) của CHÍNH market này, dùng giá vừa crawl ở bước 1. Nhờ vậy direction_correct cập nhật theo đúng nhịp pipeline của từng market (crypto/gold mỗi giờ, NASDAQ/SP500 mỗi 30 phút trong phiên) thay vì đợi job `daily_reconcile` 6h sáng. Job `daily_reconcile` (gọi `reconcile_predictions()` không tham số → tất cả market) vẫn giữ làm lưới an toàn catch-all (idempotent)
+5. Ghi một row vào bảng `pipeline_reports` (status, steps gồm cả bước Reconcile, crawled_count, predictions_count, duration_ms, v.v.) qua `repository.py`
+6. Chạy `delete_old_pipeline_reports(7)` để xóa báo cáo cũ hơn 7 ngày (retention tự động)
 
 ### Bot RL native (rl_dqn)
 
