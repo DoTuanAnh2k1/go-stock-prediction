@@ -136,6 +136,10 @@ type nasdaqChartResponse struct {
 	Symbol      string            `json:"symbol"`
 	Dates       []string          `json:"dates"`
 	Prices      []decimal.Decimal `json:"prices"`
+	Opens       []decimal.Decimal `json:"opens"`
+	Highs       []decimal.Decimal `json:"highs"`
+	Lows        []decimal.Decimal `json:"lows"`
+	Closes      []decimal.Decimal `json:"closes"`
 	Granularity string            `json:"granularity"`
 }
 
@@ -174,20 +178,33 @@ func GetNasdaqChart(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		dates := make([]string, 0, len(intradayPrices))
-		closePrices := make([]decimal.Decimal, 0, len(intradayPrices))
+		n := len(intradayPrices)
+		dates := make([]string, 0, n)
+		closePrices := make([]decimal.Decimal, 0, n)
+		opens := make([]decimal.Decimal, 0, n)
+		highs := make([]decimal.Decimal, 0, n)
+		lows := make([]decimal.Decimal, 0, n)
+		closes := make([]decimal.Decimal, 0, n)
 
 		// intraday prices are ordered DESC from DB — reverse for chart (oldest first)
-		for i := len(intradayPrices) - 1; i >= 0; i-- {
+		for i := n - 1; i >= 0; i-- {
 			p := intradayPrices[i]
 			dates = append(dates, p.Timestamp.Format("2006-01-02 15:04"))
 			closePrices = append(closePrices, p.ClosePrice)
+			opens = append(opens, p.OpenPrice)
+			highs = append(highs, p.HighPrice)
+			lows = append(lows, p.LowPrice)
+			closes = append(closes, p.ClosePrice)
 		}
 
 		ResponseSuccess(w, http.StatusOK, nasdaqChartResponse{
 			Symbol:      symbol,
 			Dates:       dates,
 			Prices:      closePrices,
+			Opens:       opens,
+			Highs:       highs,
+			Lows:        lows,
+			Closes:      closes,
 			Granularity: "1h",
 		})
 		return
@@ -203,20 +220,33 @@ func GetNasdaqChart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dates := make([]string, 0, len(prices))
-	closePrices := make([]decimal.Decimal, 0, len(prices))
+	n := len(prices)
+	dates := make([]string, 0, n)
+	closePrices := make([]decimal.Decimal, 0, n)
+	opens := make([]decimal.Decimal, 0, n)
+	highs := make([]decimal.Decimal, 0, n)
+	lows := make([]decimal.Decimal, 0, n)
+	closes := make([]decimal.Decimal, 0, n)
 
 	// prices are ordered DESC from DB — reverse for chart (oldest first)
-	for i := len(prices) - 1; i >= 0; i-- {
+	for i := n - 1; i >= 0; i-- {
 		p := prices[i]
 		dates = append(dates, p.TradingDate.Format("2006-01-02"))
 		closePrices = append(closePrices, p.ClosePrice)
+		opens = append(opens, p.OpenPrice)
+		highs = append(highs, p.HighPrice)
+		lows = append(lows, p.LowPrice)
+		closes = append(closes, p.ClosePrice)
 	}
 
 	ResponseSuccess(w, http.StatusOK, nasdaqChartResponse{
 		Symbol:      symbol,
 		Dates:       dates,
 		Prices:      closePrices,
+		Opens:       opens,
+		Highs:       highs,
+		Lows:        lows,
+		Closes:      closes,
 		Granularity: "1d",
 	})
 }

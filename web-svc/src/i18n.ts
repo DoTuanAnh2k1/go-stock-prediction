@@ -143,6 +143,7 @@ export const translations: Record<Lang, Translations> = {
       noDataForItem: 'Không có dữ liệu cho mục này.',
       source: 'Nguồn',
       product: 'Sản phẩm',
+      chartType: { line: 'Đường', candle: 'Nến' },
     },
     // Dashboard page
     dashboard: {
@@ -906,6 +907,7 @@ export const translations: Record<Lang, Translations> = {
       noDataForItem: 'No data for this item.',
       source: 'Source',
       product: 'Product',
+      chartType: { line: 'Line', candle: 'Candle' },
     },
     dashboard: {
       liquidity: 'Liquidity',
@@ -1631,6 +1633,7 @@ export interface Translations {
     noDataForItem: string;
     source: string;
     product: string;
+    chartType: { line: string; candle: string };
   };
   dashboard: {
     liquidity: string;

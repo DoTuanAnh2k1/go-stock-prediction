@@ -976,5 +976,33 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_sim_snap_session_at
     ON sim_portfolio_snapshots (session_id, snapshot_at, snapshot_date);
 
 -- ============================================================
+-- CANDLESTICK CHART OHLC COLUMNS (additive, idempotent)
+-- Adds open_price / high_price / low_price to CRYPTO and GOLD tables.
+-- NASDAQ and SP500 already have OHLC columns — no changes needed.
+-- All statements use ADD COLUMN IF NOT EXISTS so they are safe to run
+-- against existing production databases.
+-- ============================================================
+
+-- crypto_prices: daily OHLC (close_price already exists)
+ALTER TABLE crypto_prices          ADD COLUMN IF NOT EXISTS open_price NUMERIC(20,2);
+ALTER TABLE crypto_prices          ADD COLUMN IF NOT EXISTS high_price NUMERIC(20,2);
+ALTER TABLE crypto_prices          ADD COLUMN IF NOT EXISTS low_price  NUMERIC(20,2);
+
+-- crypto_intraday_prices: hourly OHLC (price/close already exists)
+ALTER TABLE crypto_intraday_prices ADD COLUMN IF NOT EXISTS open_price NUMERIC(30,8);
+ALTER TABLE crypto_intraday_prices ADD COLUMN IF NOT EXISTS high_price NUMERIC(30,8);
+ALTER TABLE crypto_intraday_prices ADD COLUMN IF NOT EXISTS low_price  NUMERIC(30,8);
+
+-- gold_prices: daily OHLC for XAU source (buy_price/sell_price kept for VN sources)
+ALTER TABLE gold_prices            ADD COLUMN IF NOT EXISTS open_price NUMERIC(15,2);
+ALTER TABLE gold_prices            ADD COLUMN IF NOT EXISTS high_price NUMERIC(15,2);
+ALTER TABLE gold_prices            ADD COLUMN IF NOT EXISTS low_price  NUMERIC(15,2);
+
+-- gold_intraday_prices: hourly OHLC for XAU source
+ALTER TABLE gold_intraday_prices   ADD COLUMN IF NOT EXISTS open_price NUMERIC(15,2);
+ALTER TABLE gold_intraday_prices   ADD COLUMN IF NOT EXISTS high_price NUMERIC(15,2);
+ALTER TABLE gold_intraday_prices   ADD COLUMN IF NOT EXISTS low_price  NUMERIC(15,2);
+
+-- ============================================================
 -- END OF SCHEMA
 -- ============================================================

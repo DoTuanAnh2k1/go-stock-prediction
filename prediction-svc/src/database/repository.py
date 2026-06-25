@@ -83,7 +83,17 @@ def upsert_gold_price(
     buy_price: Decimal,
     sell_price: Decimal,
     currency: str,
+    open_price: Decimal | None = None,
+    high_price: Decimal | None = None,
+    low_price: Decimal | None = None,
 ) -> None:
+    """Upsert a daily gold price row.
+
+    ``open_price``, ``high_price``, ``low_price`` are populated for the XAU/XAU_VND
+    sources (Yahoo Finance already returns OHLC).  VN sources (SJC, BTMC, etc.)
+    pass None — those columns remain NULL in the DB and candlestick toggle is
+    disabled on the frontend for those rows.
+    """
     with session_scope() as session:
         existing = (
             session.query(GoldPrice)
@@ -93,6 +103,14 @@ def upsert_gold_price(
         if existing:
             existing.buy_price = buy_price
             existing.sell_price = sell_price
+            # Only overwrite OHLC when the caller supplies a value (don't clobber
+            # an existing OHLC row just because a VN-source update arrives later)
+            if open_price is not None:
+                existing.open_price = open_price
+            if high_price is not None:
+                existing.high_price = high_price
+            if low_price is not None:
+                existing.low_price = low_price
             existing.updated_at = datetime.now()
         else:
             session.add(
@@ -100,6 +118,9 @@ def upsert_gold_price(
                     source=source,
                     product_type=product_type,
                     trading_date=trading_date,
+                    open_price=open_price,
+                    high_price=high_price,
+                    low_price=low_price,
                     buy_price=buy_price,
                     sell_price=sell_price,
                     currency=currency,
@@ -429,7 +450,19 @@ def upsert_crypto_price(
     market_cap: Decimal | None,
     volume_24h: Decimal | None,
     currency: str = "USD",
+    open_price: Decimal | None = None,
+    high_price: Decimal | None = None,
+    low_price: Decimal | None = None,
 ) -> None:
+    """Upsert a daily crypto price row.
+
+    ``open_price``, ``high_price``, ``low_price`` come from CoinGecko ``/ohlc``
+    endpoint.  They are optional so that callers that only know the close price
+    (e.g. legacy simple/price path) can still call this without changes.
+    When updating an existing row, OHLC is only written when the caller supplies
+    a non-None value — avoiding accidental NULL-clobbering during plain close
+    refreshes.
+    """
     with session_scope() as session:
         existing = (
             session.query(CryptoPrice)
@@ -440,6 +473,12 @@ def upsert_crypto_price(
             existing.close_price = close_price
             existing.market_cap = market_cap
             existing.volume24h = volume_24h
+            if open_price is not None:
+                existing.open_price = open_price
+            if high_price is not None:
+                existing.high_price = high_price
+            if low_price is not None:
+                existing.low_price = low_price
             existing.updated_at = datetime.now()
         else:
             session.add(
@@ -447,6 +486,9 @@ def upsert_crypto_price(
                     coin_id=coin_id,
                     symbol=symbol,
                     trading_date=trading_date,
+                    open_price=open_price,
+                    high_price=high_price,
+                    low_price=low_price,
                     close_price=close_price,
                     market_cap=market_cap,
                     volume24h=volume_24h,
@@ -824,6 +866,13 @@ def upsert_sp500_intraday(record: SP500IntradayPrice) -> None:
 
 
 def upsert_crypto_intraday(record: CryptoIntradayPrice) -> None:
+    """Upsert an intraday crypto price bar.
+
+    Persists OHLC fields (``open_price``, ``high_price``, ``low_price``) when
+    present on the record — these come from the CoinGecko ``/ohlc?days=1``
+    endpoint merged with the market_chart data.  Falls back gracefully when
+    OHLC attributes are absent (None).
+    """
     with session_scope() as session:
         existing = (
             session.query(CryptoIntradayPrice)
@@ -834,11 +883,21 @@ def upsert_crypto_intraday(record: CryptoIntradayPrice) -> None:
             existing.price = record.price
             existing.market_cap = record.market_cap
             existing.volume = record.volume
+            # Only overwrite OHLC when the record carries them
+            if getattr(record, "open_price", None) is not None:
+                existing.open_price = record.open_price
+            if getattr(record, "high_price", None) is not None:
+                existing.high_price = record.high_price
+            if getattr(record, "low_price", None) is not None:
+                existing.low_price = record.low_price
             existing.updated_at = datetime.now()
         else:
             new = CryptoIntradayPrice(
                 coin_id=record.coin_id,
                 timestamp=record.timestamp,
+                open_price=getattr(record, "open_price", None),
+                high_price=getattr(record, "high_price", None),
+                low_price=getattr(record, "low_price", None),
                 price=record.price,
                 market_cap=record.market_cap,
                 volume=record.volume,
@@ -847,6 +906,12 @@ def upsert_crypto_intraday(record: CryptoIntradayPrice) -> None:
 
 
 def upsert_gold_intraday(record: GoldIntradayPrice) -> None:
+    """Upsert an intraday gold price bar.
+
+    Persists OHLC fields (``open_price``, ``high_price``, ``low_price``) when
+    present on the record — these come from Yahoo Finance hourly OHLC data for
+    the XAU/XAU_VND sources.  VN-source records carry None for OHLC.
+    """
     with session_scope() as session:
         existing = (
             session.query(GoldIntradayPrice)
@@ -856,12 +921,22 @@ def upsert_gold_intraday(record: GoldIntradayPrice) -> None:
         if existing:
             existing.buy_price = record.buy_price
             existing.sell_price = record.sell_price
+            # Only overwrite OHLC when the record carries them
+            if getattr(record, "open_price", None) is not None:
+                existing.open_price = record.open_price
+            if getattr(record, "high_price", None) is not None:
+                existing.high_price = record.high_price
+            if getattr(record, "low_price", None) is not None:
+                existing.low_price = record.low_price
             existing.updated_at = datetime.now()
         else:
             new = GoldIntradayPrice(
                 source=record.source,
                 product_type=record.product_type,
                 timestamp=record.timestamp,
+                open_price=getattr(record, "open_price", None),
+                high_price=getattr(record, "high_price", None),
+                low_price=getattr(record, "low_price", None),
                 buy_price=record.buy_price,
                 sell_price=record.sell_price,
                 currency=record.currency,

@@ -132,6 +132,10 @@ type goldChartResponse struct {
 	Labels      []string          `json:"labels"`
 	BuyPrices   []decimal.Decimal `json:"buy_prices"`
 	SellPrices  []decimal.Decimal `json:"sell_prices"`
+	Opens       []decimal.Decimal `json:"opens"`
+	Highs       []decimal.Decimal `json:"highs"`
+	Lows        []decimal.Decimal `json:"lows"`
+	Closes      []decimal.Decimal `json:"closes"`
 	Granularity string            `json:"granularity"`
 }
 
@@ -162,6 +166,8 @@ func GetGoldChart(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 	to := time.Now()
 
+	isXAU := source == "XAU"
+
 	if days == 1 {
 		from := to.Add(-24 * time.Hour)
 		intradayPrices, err := store.GetGoldIntradayByRange(source, from, to)
@@ -171,22 +177,55 @@ func GetGoldChart(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		labels := make([]string, 0, len(intradayPrices))
-		buyPrices := make([]decimal.Decimal, 0, len(intradayPrices))
-		sellPrices := make([]decimal.Decimal, 0, len(intradayPrices))
+		n := len(intradayPrices)
+		labels := make([]string, 0, n)
+		buyPrices := make([]decimal.Decimal, 0, n)
+		sellPrices := make([]decimal.Decimal, 0, n)
+		opens := make([]decimal.Decimal, 0, n)
+		highs := make([]decimal.Decimal, 0, n)
+		lows := make([]decimal.Decimal, 0, n)
+		closes := make([]decimal.Decimal, 0, n)
+		allNilOHLC := true
 
 		// intraday prices are ordered DESC from DB — reverse for chart (oldest first)
-		for i := len(intradayPrices) - 1; i >= 0; i-- {
+		for i := n - 1; i >= 0; i-- {
 			p := intradayPrices[i]
 			labels = append(labels, p.Timestamp.Format("2006-01-02 15:04"))
 			buyPrices = append(buyPrices, p.BuyPrice)
 			sellPrices = append(sellPrices, p.SellPrice)
+			// OHLC only available for XAU source; sell_price acts as close
+			if isXAU {
+				closes = append(closes, p.SellPrice)
+				if p.OpenPrice != nil && p.HighPrice != nil && p.LowPrice != nil {
+					allNilOHLC = false
+					opens = append(opens, *p.OpenPrice)
+					highs = append(highs, *p.HighPrice)
+					lows = append(lows, *p.LowPrice)
+				} else {
+					// doji fallback: fill with close to keep alignment
+					opens = append(opens, p.SellPrice)
+					highs = append(highs, p.SellPrice)
+					lows = append(lows, p.SellPrice)
+				}
+			}
+		}
+
+		// non-XAU sources or XAU with all-nil OHLC → return empty OHLC arrays
+		if !isXAU || allNilOHLC {
+			opens = []decimal.Decimal{}
+			highs = []decimal.Decimal{}
+			lows = []decimal.Decimal{}
+			closes = []decimal.Decimal{}
 		}
 
 		ResponseSuccess(w, http.StatusOK, goldChartResponse{
 			Labels:      labels,
 			BuyPrices:   buyPrices,
 			SellPrices:  sellPrices,
+			Opens:       opens,
+			Highs:       highs,
+			Lows:        lows,
+			Closes:      closes,
 			Granularity: "1h",
 		})
 		return
@@ -202,22 +241,55 @@ func GetGoldChart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	labels := make([]string, 0, len(prices))
-	buyPrices := make([]decimal.Decimal, 0, len(prices))
-	sellPrices := make([]decimal.Decimal, 0, len(prices))
+	n := len(prices)
+	labels := make([]string, 0, n)
+	buyPrices := make([]decimal.Decimal, 0, n)
+	sellPrices := make([]decimal.Decimal, 0, n)
+	opens := make([]decimal.Decimal, 0, n)
+	highs := make([]decimal.Decimal, 0, n)
+	lows := make([]decimal.Decimal, 0, n)
+	closes := make([]decimal.Decimal, 0, n)
+	allNilOHLC := true
 
 	// prices are ordered DESC from DB — reverse for chart (oldest first)
-	for i := len(prices) - 1; i >= 0; i-- {
+	for i := n - 1; i >= 0; i-- {
 		p := prices[i]
 		labels = append(labels, p.TradingDate.Format("2006-01-02"))
 		buyPrices = append(buyPrices, p.BuyPrice)
 		sellPrices = append(sellPrices, p.SellPrice)
+		// OHLC only available for XAU source; sell_price acts as close
+		if isXAU {
+			closes = append(closes, p.SellPrice)
+			if p.OpenPrice != nil && p.HighPrice != nil && p.LowPrice != nil {
+				allNilOHLC = false
+				opens = append(opens, *p.OpenPrice)
+				highs = append(highs, *p.HighPrice)
+				lows = append(lows, *p.LowPrice)
+			} else {
+				// doji fallback: fill with close to keep alignment
+				opens = append(opens, p.SellPrice)
+				highs = append(highs, p.SellPrice)
+				lows = append(lows, p.SellPrice)
+			}
+		}
+	}
+
+	// non-XAU sources or XAU with all-nil OHLC → return empty OHLC arrays
+	if !isXAU || allNilOHLC {
+		opens = []decimal.Decimal{}
+		highs = []decimal.Decimal{}
+		lows = []decimal.Decimal{}
+		closes = []decimal.Decimal{}
 	}
 
 	ResponseSuccess(w, http.StatusOK, goldChartResponse{
 		Labels:      labels,
 		BuyPrices:   buyPrices,
 		SellPrices:  sellPrices,
+		Opens:       opens,
+		Highs:       highs,
+		Lows:        lows,
+		Closes:      closes,
 		Granularity: "1d",
 	})
 }

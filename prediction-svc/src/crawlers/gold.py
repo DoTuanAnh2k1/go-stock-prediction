@@ -181,11 +181,19 @@ class GoldCrawler(BaseCrawler):
                 low_price = Decimal(str(lows[i] or 0)) if i < len(lows) else Decimal(0)
                 close_price = Decimal(str(close))
 
-                # Save USD bar using buy/sell = close (spot)
+                # Save USD bar using buy/sell = close (spot); attach OHLC from
+                # Yahoo response — open/high/low may be 0 or None for some bars.
+                _open = open_price if (open_price and open_price > 0) else None
+                _high = high_price if (high_price and high_price > 0) else None
+                _low = low_price if (low_price and low_price > 0) else None
+
                 record_usd = GoldIntradayPrice(
                     source="XAU",
                     product_type="spot",
                     timestamp=dt,
+                    open_price=_open,
+                    high_price=_high,
+                    low_price=_low,
                     buy_price=close_price,
                     sell_price=close_price,
                     currency="USD",
@@ -193,13 +201,19 @@ class GoldCrawler(BaseCrawler):
                 repo.upsert_gold_intraday(record_usd)
                 saved += 1
 
-                # Also save VND converted bar
+                # Also save VND converted bar — scale OHLC by USD/VND rate
                 if vnd_rate:
                     vnd_price = (close_price * vnd_rate).quantize(Decimal("1"))
+                    vnd_open = (_open * vnd_rate).quantize(Decimal("1")) if _open else None
+                    vnd_high = (_high * vnd_rate).quantize(Decimal("1")) if _high else None
+                    vnd_low = (_low * vnd_rate).quantize(Decimal("1")) if _low else None
                     record_vnd = GoldIntradayPrice(
                         source="XAU_VND",
                         product_type="spot",
                         timestamp=dt,
+                        open_price=vnd_open,
+                        high_price=vnd_high,
+                        low_price=vnd_low,
                         buy_price=vnd_price,
                         sell_price=vnd_price,
                         currency="VND",
@@ -226,27 +240,54 @@ class GoldCrawler(BaseCrawler):
         if not results:
             raise ValueError("Yahoo Finance returned empty result")
 
-        price = float(results[0]["meta"]["regularMarketPrice"])
+        result = results[0]
+        price = float(result["meta"]["regularMarketPrice"])
         if price == 0:
             raise ValueError("Yahoo Finance returned zero price")
 
         trading_date = datetime.now(tz=_VN_TZ).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
 
+        # Extract OHLC from the quote block when available (Yahoo v8 chart returns
+        # indicators.quote[0] with open/high/low/close arrays for the requested
+        # range — even for range=1d there is usually one entry).
+        open_price: Decimal | None = None
+        high_price: Decimal | None = None
+        low_price: Decimal | None = None
+        try:
+            quote = result.get("indicators", {}).get("quote", [{}])[0]
+            opens = quote.get("open", [])
+            highs = quote.get("high", [])
+            lows = quote.get("low", [])
+            if opens and opens[0] is not None:
+                open_price = Decimal(str(opens[0]))
+            if highs and highs[0] is not None:
+                high_price = Decimal(str(highs[0]))
+            if lows and lows[0] is not None:
+                low_price = Decimal(str(lows[0]))
+        except Exception as exc:
+            log.warning("gold.xau.ohlc_extract.error", error=str(exc))
+
+        close = Decimal(str(price))
         xau_usd = dict(
             source="XAU", product_type="spot", trading_date=trading_date,
-            buy_price=Decimal(str(price)), sell_price=Decimal(str(price)), currency="USD",
+            buy_price=close, sell_price=close, currency="USD",
+            open_price=open_price, high_price=high_price, low_price=low_price,
         )
 
-        # XAU/VND
+        # XAU/VND — scale OHLC by USD/VND rate
         xau_vnd = None
         try:
             vnd_rate = self._fetch_usd_vnd_rate()
-            vnd_price = Decimal(str(price)) * vnd_rate
+            vnd_price = close * vnd_rate
+            vnd_open = (open_price * vnd_rate).quantize(Decimal("1")) if open_price else None
+            vnd_high = (high_price * vnd_rate).quantize(Decimal("1")) if high_price else None
+            vnd_low = (low_price * vnd_rate).quantize(Decimal("1")) if low_price else None
             xau_vnd = dict(
                 source="XAU_VND", product_type="spot", trading_date=trading_date,
                 buy_price=vnd_price.quantize(Decimal("1")),
                 sell_price=vnd_price.quantize(Decimal("1")),
                 currency="VND",
+                open_price=vnd_open, high_price=vnd_high, low_price=vnd_low,
             )
         except Exception as exc:
             log.warning("gold.xau_vnd.error", error=str(exc))
@@ -271,8 +312,13 @@ class GoldCrawler(BaseCrawler):
         if not results:
             return 0
 
-        timestamps = results[0]["timestamp"]
-        closes = results[0]["indicators"]["quote"][0]["close"]
+        result = results[0]
+        timestamps = result["timestamp"]
+        quote = result["indicators"]["quote"][0]
+        opens = quote.get("open", [])
+        highs = quote.get("high", [])
+        lows = quote.get("low", [])
+        closes = quote.get("close", [])
 
         # Fetch USD/VND rate once for all conversions
         try:
@@ -281,23 +327,46 @@ class GoldCrawler(BaseCrawler):
             vnd_rate = None
 
         saved = 0
-        for ts, close in zip(timestamps, closes):
+        for i, (ts, close) in enumerate(zip(timestamps, closes)):
             if not close or close == 0:
                 continue
-            trading_date = datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(_VN_TZ).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+            trading_date = (
+                datetime.fromtimestamp(ts, tz=timezone.utc)
+                .astimezone(_VN_TZ)
+                .replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+            )
             price = Decimal(str(close))
+
+            # Extract per-bar OHLC
+            open_price: Decimal | None = None
+            high_price: Decimal | None = None
+            low_price: Decimal | None = None
+            try:
+                if i < len(opens) and opens[i] is not None:
+                    open_price = Decimal(str(opens[i]))
+                if i < len(highs) and highs[i] is not None:
+                    high_price = Decimal(str(highs[i]))
+                if i < len(lows) and lows[i] is not None:
+                    low_price = Decimal(str(lows[i]))
+            except Exception:
+                pass  # non-fatal; leave as None
 
             repo.upsert_gold_price(
                 source="XAU", product_type="spot", trading_date=trading_date,
                 buy_price=price, sell_price=price, currency="USD",
+                open_price=open_price, high_price=high_price, low_price=low_price,
             )
             saved += 1
 
             if vnd_rate:
                 vnd_price = (price * vnd_rate).quantize(Decimal("1"))
+                vnd_open = (open_price * vnd_rate).quantize(Decimal("1")) if open_price else None
+                vnd_high = (high_price * vnd_rate).quantize(Decimal("1")) if high_price else None
+                vnd_low = (low_price * vnd_rate).quantize(Decimal("1")) if low_price else None
                 repo.upsert_gold_price(
                     source="XAU_VND", product_type="spot", trading_date=trading_date,
                     buy_price=vnd_price, sell_price=vnd_price, currency="VND",
+                    open_price=vnd_open, high_price=vnd_high, low_price=vnd_low,
                 )
                 saved += 1
 

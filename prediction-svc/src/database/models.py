@@ -31,6 +31,9 @@ class GoldPrice(Base):
     source = Column(String(50), nullable=False)
     product_type = Column(String(50), nullable=False)
     trading_date = Column(DateTime, nullable=False)
+    open_price = Column(Numeric(15, 2), nullable=True)   # OHLC — only XAU source; VN sources stay NULL
+    high_price = Column(Numeric(15, 2), nullable=True)
+    low_price = Column(Numeric(15, 2), nullable=True)
     buy_price = Column(Numeric(20, 2), nullable=False)
     sell_price = Column(Numeric(20, 2))
     currency = Column(String(3), nullable=False, default="VND")
@@ -150,6 +153,9 @@ class CryptoPrice(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     coin_id = Column(String(50), nullable=False)
     symbol = Column(String(10), nullable=False)
+    open_price = Column(Numeric(20, 2), nullable=True)   # OHLC candlestick
+    high_price = Column(Numeric(20, 2), nullable=True)
+    low_price = Column(Numeric(20, 2), nullable=True)
     close_price = Column(Numeric(20, 2), nullable=False)
     market_cap = Column(Numeric(30, 2))
     volume24h = Column("volume24h", Numeric(30, 2))
@@ -375,7 +381,10 @@ class CryptoIntradayPrice(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     coin_id = Column(String(50), nullable=False)
     timestamp = Column(DateTime, nullable=False)
-    price = Column(Numeric(30, 8))
+    open_price = Column(Numeric(30, 8), nullable=True)   # OHLC candlestick
+    high_price = Column(Numeric(30, 8), nullable=True)
+    low_price = Column(Numeric(30, 8), nullable=True)
+    price = Column(Numeric(30, 8))                       # close / line-chart price
     market_cap = Column(Numeric(30, 2))
     volume = Column(Numeric(30, 2))
     created_at = Column(DateTime, default=datetime.now)
@@ -392,6 +401,9 @@ class GoldIntradayPrice(Base):
     source = Column(String(50), nullable=False)
     product_type = Column(String(50), nullable=False)
     timestamp = Column(DateTime, nullable=False)
+    open_price = Column(Numeric(15, 2), nullable=True)   # OHLC — only XAU source; VN sources stay NULL
+    high_price = Column(Numeric(15, 2), nullable=True)
+    low_price = Column(Numeric(15, 2), nullable=True)
     buy_price = Column(Numeric(15, 2))
     sell_price = Column(Numeric(15, 2))
     currency = Column(String(3), nullable=False)

@@ -136,6 +136,10 @@ type cryptoChartResponse struct {
 	CoinID      string            `json:"coin_id"`
 	Dates       []string          `json:"dates"`
 	Prices      []decimal.Decimal `json:"prices"`
+	Opens       []decimal.Decimal `json:"opens"`
+	Highs       []decimal.Decimal `json:"highs"`
+	Lows        []decimal.Decimal `json:"lows"`
+	Closes      []decimal.Decimal `json:"closes"`
 	Granularity string            `json:"granularity"`
 }
 
@@ -173,20 +177,50 @@ func GetCryptoChart(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		dates := make([]string, 0, len(intradayPrices))
-		closePrices := make([]decimal.Decimal, 0, len(intradayPrices))
+		n := len(intradayPrices)
+		dates := make([]string, 0, n)
+		closePrices := make([]decimal.Decimal, 0, n)
+		opens := make([]decimal.Decimal, 0, n)
+		highs := make([]decimal.Decimal, 0, n)
+		lows := make([]decimal.Decimal, 0, n)
+		closes := make([]decimal.Decimal, 0, n)
+		allNilOHLC := true
 
 		// intraday prices are ordered DESC from DB — reverse for chart (oldest first)
-		for i := len(intradayPrices) - 1; i >= 0; i-- {
+		for i := n - 1; i >= 0; i-- {
 			p := intradayPrices[i]
 			dates = append(dates, p.Timestamp.Format("2006-01-02 15:04"))
 			closePrices = append(closePrices, p.Price)
+			closes = append(closes, p.Price)
+			if p.OpenPrice != nil && p.HighPrice != nil && p.LowPrice != nil {
+				allNilOHLC = false
+				opens = append(opens, *p.OpenPrice)
+				highs = append(highs, *p.HighPrice)
+				lows = append(lows, *p.LowPrice)
+			} else {
+				// doji fallback: fill with close to keep alignment
+				opens = append(opens, p.Price)
+				highs = append(highs, p.Price)
+				lows = append(lows, p.Price)
+			}
+		}
+
+		// if every point lacked OHLC, return empty arrays so frontend hides candle toggle
+		if allNilOHLC {
+			opens = []decimal.Decimal{}
+			highs = []decimal.Decimal{}
+			lows = []decimal.Decimal{}
+			closes = []decimal.Decimal{}
 		}
 
 		ResponseSuccess(w, http.StatusOK, cryptoChartResponse{
 			CoinID:      coinID,
 			Dates:       dates,
 			Prices:      closePrices,
+			Opens:       opens,
+			Highs:       highs,
+			Lows:        lows,
+			Closes:      closes,
 			Granularity: "1h",
 		})
 		return
@@ -202,20 +236,50 @@ func GetCryptoChart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dates := make([]string, 0, len(prices))
-	closePrices := make([]decimal.Decimal, 0, len(prices))
+	n := len(prices)
+	dates := make([]string, 0, n)
+	closePrices := make([]decimal.Decimal, 0, n)
+	opens := make([]decimal.Decimal, 0, n)
+	highs := make([]decimal.Decimal, 0, n)
+	lows := make([]decimal.Decimal, 0, n)
+	closes := make([]decimal.Decimal, 0, n)
+	allNilOHLC := true
 
 	// prices are ordered DESC from DB — reverse for chart (oldest first)
-	for i := len(prices) - 1; i >= 0; i-- {
+	for i := n - 1; i >= 0; i-- {
 		p := prices[i]
 		dates = append(dates, p.TradingDate.Format("2006-01-02"))
 		closePrices = append(closePrices, p.ClosePrice)
+		closes = append(closes, p.ClosePrice)
+		if p.OpenPrice != nil && p.HighPrice != nil && p.LowPrice != nil {
+			allNilOHLC = false
+			opens = append(opens, *p.OpenPrice)
+			highs = append(highs, *p.HighPrice)
+			lows = append(lows, *p.LowPrice)
+		} else {
+			// doji fallback: fill with close to keep alignment
+			opens = append(opens, p.ClosePrice)
+			highs = append(highs, p.ClosePrice)
+			lows = append(lows, p.ClosePrice)
+		}
+	}
+
+	// if every point lacked OHLC, return empty arrays so frontend hides candle toggle
+	if allNilOHLC {
+		opens = []decimal.Decimal{}
+		highs = []decimal.Decimal{}
+		lows = []decimal.Decimal{}
+		closes = []decimal.Decimal{}
 	}
 
 	ResponseSuccess(w, http.StatusOK, cryptoChartResponse{
 		CoinID:      coinID,
 		Dates:       dates,
 		Prices:      closePrices,
+		Opens:       opens,
+		Highs:       highs,
+		Lows:        lows,
+		Closes:      closes,
 		Granularity: "1d",
 	})
 }

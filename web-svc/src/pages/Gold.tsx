@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { Panel, KPI, Icon, Chg, Seg, ConfBar, MarketTabs } from '../components/ui';
-import { Sparkline, LineChart } from '../components/charts';
+import { Sparkline, LineChart, Candlestick } from '../components/charts';
 import { crawlGold, predictGold, goldBacktest, goldChart } from '../api';
 import { vnsToast } from '../components/ui';
 import { useLanguage } from '../context/LangContext';
@@ -87,8 +87,9 @@ export default function Gold() {
   const [confirmedGoldFilter, setConfirmedGoldFilter] = useState('');
   const [predPage, setPredPage] = useState(0);
   const [confirmedPage, setConfirmedPage] = useState(0);
-  const [chartData, setChartData] = useState<{ labels: string[]; sell: number[]; granularity?: string }>({ labels: [], sell: [], granularity: '1d' });
+  const [chartData, setChartData] = useState<{ labels: string[]; sell: number[]; opens: number[]; highs: number[]; lows: number[]; closes: number[]; granularity?: string }>({ labels: [], sell: [], opens: [], highs: [], lows: [], closes: [], granularity: '1d' });
   const [chartLoading, setChartLoading] = useState(false);
+  const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [predChartAlgo, setPredChartAlgo] = useState('');
 
   const src = srcs.find((g) => g.id === active) || srcs[0] || null;
@@ -99,7 +100,7 @@ export default function Gold() {
     const daysN = parseInt(days, 10) || 180;
     setChartLoading(true);
     goldChart(src.source, src.product, daysN)
-      .then((c) => setChartData({ labels: c.labels, sell: c.sell, granularity: c.granularity }))
+      .then((c) => setChartData({ labels: c.labels, sell: c.sell, opens: c.opens, highs: c.highs, lows: c.lows, closes: c.closes, granularity: c.granularity }))
       .finally(() => setChartLoading(false));
   }, [src?.id, days]);
 
@@ -117,6 +118,7 @@ export default function Gold() {
 
   const hist = chartData.sell;
   const histLabels = chartData.labels;
+  const hasOHLC = chartData.closes.length > 0;
 
   const find = (pred: (g: any) => boolean) => srcs.find(pred);
   let kpis = [
@@ -193,8 +195,18 @@ export default function Gold() {
         dot={src ? src.name : '—'}
         className="section-gap"
         tools={
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Seg options={[{ value: '1', label: t.dateRange.today }, { value: '7', label: t.dateRange.d7 }, { value: '30', label: t.dateRange.d30 }, { value: '90', label: t.dateRange.d90 }, { value: '180', label: t.dateRange.d180 }]} value={days} onChange={setDays} />
+            {hasOHLC && (
+              <Seg
+                options={[
+                  { value: 'line', label: t.common.chartType.line },
+                  { value: 'candle', label: t.common.chartType.candle },
+                ]}
+                value={chartType}
+                onChange={(v) => setChartType(v as 'line' | 'candle')}
+              />
+            )}
             <button className="btn btn--sm" style={{ background: 'var(--gold)', borderColor: 'var(--gold)', color: 'oklch(0.2 0.02 80)' }}
               onClick={() => crawlGold().then((ok) => vnsToast(ok ? t.gold.collectRequest : t.gold.collectFail))}>
               <Icon name="download" size={13} />{t.common.collect}
@@ -215,29 +227,51 @@ export default function Gold() {
             <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{src.vendor} · {src.region}</span>
           </div>
         )}
-        {chartLoading
-          ? <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div className="empty__icon"><Icon name="layers" size={18} /></div>
-              <p>...</p>
-            </div>
-          : hist.length > 0
-            ? <LineChart
-                series={[{ name: src!.name, data: hist, color: 'var(--gold)' }]}
-                labels={histLabels.length
-                  ? histLabels.map((l) => {
-                      if (chartData.granularity === '1h') {
-                        return l.length >= 16 ? l.slice(11, 16) : l;
-                      }
-                      const p = l.slice(5).split('-'); return p[1] + '/' + p[0];
-                    })
-                  : hist.map((_, i) => `${i + 1}`)}
-                height={540} area yFmt={fmtGold} valueFmt={fmtFull} padL={58}
-              />
-            : <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        {(() => {
+          const fmtHistLabels = histLabels.length
+            ? histLabels.map((l) => {
+                if (chartData.granularity === '1h') {
+                  return l.length >= 16 ? l.slice(11, 16) : l;
+                }
+                const p = l.slice(5).split('-'); return p[1] + '/' + p[0];
+              })
+            : hist.map((_, i) => `${i + 1}`);
+          if (chartLoading) {
+            return (
+              <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div className="empty__icon"><Icon name="layers" size={18} /></div>
+                <p>...</p>
+              </div>
+            );
+          }
+          if (hist.length === 0) {
+            return (
+              <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div className="empty__icon"><Icon name="layers" size={18} /></div>
                 <p>{t.gold.noGoldHistory}</p>
               </div>
-        }
+            );
+          }
+          if (chartType === 'candle' && hasOHLC) {
+            return (
+              <Candlestick
+                data={chartData.closes.map((c, i) => ({ o: chartData.opens[i], h: chartData.highs[i], l: chartData.lows[i], c }))}
+                labels={fmtHistLabels}
+                height={540}
+                yFmt={fmtGold}
+                valueFmt={fmtFull}
+                padL={58}
+              />
+            );
+          }
+          return (
+            <LineChart
+              series={[{ name: src!.name, data: hist, color: 'var(--gold)' }]}
+              labels={fmtHistLabels}
+              height={540} area yFmt={fmtGold} valueFmt={fmtFull} padL={58}
+            />
+          );
+        })()}
       </Panel>
 
       <div className="sec-head"><h2>{t.gold.providerComparison}</h2><div className="line"></div></div>

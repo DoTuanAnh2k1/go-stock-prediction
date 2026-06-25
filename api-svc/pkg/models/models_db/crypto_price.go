@@ -9,17 +9,20 @@ import (
 
 // CryptoPrice stores daily price data for tracked cryptocurrencies.
 type CryptoPrice struct {
-	ID          uint            `gorm:"primaryKey;autoIncrement" json:"id"`
-	CoinID      string          `gorm:"type:varchar(50);not null;uniqueIndex:idx_crypto_coin_date,priority:1" json:"coin_id"`
-	Symbol      string          `gorm:"type:varchar(10);not null" json:"symbol"`
-	ClosePrice  decimal.Decimal `gorm:"type:decimal(20,2);not null" json:"close_price"`
-	MarketCap   decimal.Decimal `gorm:"type:decimal(30,2)" json:"market_cap"`
-	Volume24h   decimal.Decimal `gorm:"type:decimal(30,2)" json:"volume_24h"`
-	TradingDate time.Time       `gorm:"type:date;not null;uniqueIndex:idx_crypto_coin_date,priority:2" json:"trading_date"`
-	Currency    string          `gorm:"type:varchar(3);not null;default:'USD'" json:"currency"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt  `gorm:"index" json:"deleted_at,omitempty"`
+	ID          uint             `gorm:"primaryKey;autoIncrement" json:"id"`
+	CoinID      string           `gorm:"type:varchar(50);not null;uniqueIndex:idx_crypto_coin_date,priority:1" json:"coin_id"`
+	Symbol      string           `gorm:"type:varchar(10);not null" json:"symbol"`
+	OpenPrice   *decimal.Decimal `gorm:"type:numeric(20,2)" json:"open_price"`
+	HighPrice   *decimal.Decimal `gorm:"type:numeric(20,2)" json:"high_price"`
+	LowPrice    *decimal.Decimal `gorm:"type:numeric(20,2)" json:"low_price"`
+	ClosePrice  decimal.Decimal  `gorm:"type:decimal(20,2);not null" json:"close_price"`
+	MarketCap   decimal.Decimal  `gorm:"type:decimal(30,2)" json:"market_cap"`
+	Volume24h   decimal.Decimal  `gorm:"type:decimal(30,2)" json:"volume_24h"`
+	TradingDate time.Time        `gorm:"type:date;not null;uniqueIndex:idx_crypto_coin_date,priority:2" json:"trading_date"`
+	Currency    string           `gorm:"type:varchar(3);not null;default:'USD'" json:"currency"`
+	CreatedAt   time.Time        `json:"created_at"`
+	UpdatedAt   time.Time        `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt   `gorm:"index" json:"deleted_at,omitempty"`
 }
 
 func (CryptoPrice) TableName() string { return "crypto_prices" }

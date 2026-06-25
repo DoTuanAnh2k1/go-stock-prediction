@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Panel, KPI, Icon, Chg, Seg, ConfBar, vnsToast, MarketTabs } from '../components/ui';
-import { LineChart } from '../components/charts';
+import { LineChart, Candlestick } from '../components/charts';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LangContext';
 
@@ -20,6 +20,10 @@ interface CryptoLatestItem {
 interface ChartData {
   dates: string[];
   prices: number[];
+  opens: number[];
+  highs: number[];
+  lows: number[];
+  closes: number[];
   granularity?: string;
 }
 
@@ -248,7 +252,8 @@ export default function Crypto() {
   const [latest, setLatest] = useState<CryptoLatestItem[]>([]);
   const [activeCoin, setActiveCoin] = useState<string>('bitcoin');
   const [days, setDays] = useState('90');
-  const [chart, setChart] = useState<ChartData>({ dates: [], prices: [] });
+  const [chart, setChart] = useState<ChartData>({ dates: [], prices: [], opens: [], highs: [], lows: [], closes: [] });
+  const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [preds, setPreds] = useState<PredictionItem[]>([]);
   const [confirmedResults, setConfirmedResults] = useState<PredictionItem[]>([]);
   const [predChart, setPredChart] = useState<PredChartData>({ labels: [], actual: [], predSeries: [] });
@@ -297,6 +302,10 @@ export default function Crypto() {
         setChart({
           dates: Array.isArray(v.dates) ? v.dates : [],
           prices: Array.isArray(v.prices) ? v.prices.map(num) : [],
+          opens:  Array.isArray(v.opens)  ? v.opens.map(num)  : [],
+          highs:  Array.isArray(v.highs)  ? v.highs.map(num)  : [],
+          lows:   Array.isArray(v.lows)   ? v.lows.map(num)   : [],
+          closes: Array.isArray(v.closes) ? v.closes.map(num) : [],
           granularity: v.granularity ?? '1d',
         });
       })
@@ -325,6 +334,7 @@ export default function Crypto() {
     ? (s: string) => s.length >= 16 ? s.slice(11, 16) : s
     : ddmm;
   const chartLabels = chart.dates.map(fmtLabel);
+  const hasOHLC = chart.closes.length > 0;
 
   // Deduplicate predictions: keep only the first occurrence per (coin + algorithm)
   const dedupPreds = (() => {
@@ -442,6 +452,16 @@ export default function Crypto() {
               value={days}
               onChange={setDays}
             />
+            {hasOHLC && (
+              <Seg
+                options={[
+                  { value: 'line', label: t.common.chartType.line },
+                  { value: 'candle', label: t.common.chartType.candle },
+                ]}
+                value={chartType}
+                onChange={(v) => setChartType(v as 'line' | 'candle')}
+              />
+            )}
             {isLoggedIn && (
               <>
                 <button
@@ -524,15 +544,26 @@ export default function Crypto() {
             <p>{t.common.loadingChart}</p>
           </div>
         ) : chart.prices.length > 0 ? (
-          <LineChart
-            series={[{ name: activeCoinDef.label, data: chart.prices, color: activeCoinDef.color }]}
-            labels={chartLabels}
-            height={540}
-            area
-            yFmt={fmtCryptoShort}
-            valueFmt={fmtCrypto}
-            padL={70}
-          />
+          chartType === 'candle' && hasOHLC ? (
+            <Candlestick
+              data={chart.closes.map((c, i) => ({ o: chart.opens[i], h: chart.highs[i], l: chart.lows[i], c }))}
+              labels={chartLabels}
+              height={540}
+              yFmt={fmtCryptoShort}
+              valueFmt={fmtCrypto}
+              padL={70}
+            />
+          ) : (
+            <LineChart
+              series={[{ name: activeCoinDef.label, data: chart.prices, color: activeCoinDef.color }]}
+              labels={chartLabels}
+              height={540}
+              area
+              yFmt={fmtCryptoShort}
+              valueFmt={fmtCrypto}
+              padL={70}
+            />
+          )
         ) : (
           <div className="empty" style={{ height: 540, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="empty__icon"><Icon name="layers" size={18} /></div>

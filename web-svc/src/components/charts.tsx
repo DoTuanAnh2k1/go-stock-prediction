@@ -417,6 +417,163 @@ export function Scatter({ points, height = 680, xLabel }: ScatterProps) {
   );
 }
 
+// ── Candlestick ───────────────────────────────────────────────────────────────
+interface CandlestickCandle {
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+}
+
+interface CandlestickProps {
+  data: CandlestickCandle[];
+  labels: string[];
+  height?: number;
+  yFmt?: (v: number) => string;
+  valueFmt?: (v: number) => string;
+  padL?: number;
+}
+
+export function Candlestick({ data, labels, height = 540, yFmt, valueFmt, padL = 46 }: CandlestickProps) {
+  const ref = useRef<SVGSVGElement>(null);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const W = 800, H = height;
+  const padR = 14, padT = 14, padB = 26;
+
+  if (!data || data.length === 0 || labels.length < 2) {
+    return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)', fontSize: 12 }}>Không có dữ liệu</div>;
+  }
+
+  const allLows = data.map((c) => c.l);
+  const allHighs = data.map((c) => c.h);
+  const [lo, hi] = niceExtent(Math.min(...allLows), Math.max(...allHighs), 0.08);
+
+  const n = data.length;
+  const plotW = W - padL - padR;
+  // candle spacing: each candle occupies plotW/n pixels; body is 0.65 of that
+  const slotW = plotW / Math.max(n, 1);
+  const bodyW = Math.max(1, slotW * 0.65);
+
+  const x = (i: number) => padL + (i / (n - 1)) * plotW;
+  const y = (v: number) => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB);
+
+  const fmtY = yFmt || ((v: number) => v.toFixed(0));
+  const fmtV = valueFmt || ((v: number) => v.toFixed(2));
+  const ticks = 4;
+  const yTicks = Array.from({ length: ticks + 1 }, (_, i) => lo + (i / ticks) * (hi - lo));
+  const xStep = Math.max(1, Math.ceil(n / 7));
+
+  function move(e: React.MouseEvent) {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * W;
+    const idx = Math.max(0, Math.min(n - 1, Math.round(((px - padL) / plotW) * (n - 1))));
+    setHoverIdx(idx);
+  }
+
+  const tipPct = hoverIdx != null ? Math.min(Math.max(x(hoverIdx) / W * 100, 8), 88) : 0;
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <svg
+        ref={ref}
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        height={H}
+        preserveAspectRatio="none"
+        onMouseMove={move}
+        onMouseLeave={() => setHoverIdx(null)}
+        style={{ display: 'block', overflow: 'visible' }}
+      >
+        {/* Grid lines + Y labels */}
+        {yTicks.map((t, i) => (
+          <g key={i}>
+            <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="var(--grid-line)" strokeWidth="1" />
+            <text x={padL - 8} y={y(t) + 3} textAnchor="end" fontSize="10" fill="var(--text-3)" fontFamily="var(--font-mono)">{fmtY(t)}</text>
+          </g>
+        ))}
+        {/* X labels */}
+        {labels.map((l, i) => i % xStep === 0 && (
+          <text key={i} x={x(i)} y={H - 8} textAnchor="middle" fontSize="10" fill="var(--text-3)" fontFamily="var(--font-mono)">{l}</text>
+        ))}
+        {/* Candles */}
+        {data.map((c, i) => {
+          const cx = x(i);
+          const isUp = c.c >= c.o;
+          const color = isUp ? 'var(--up)' : 'var(--down)';
+          const bodyTop = y(Math.max(c.o, c.c));
+          const bodyBot = y(Math.min(c.o, c.c));
+          const bodyH = Math.max(1, bodyBot - bodyTop);
+          const highlighted = hoverIdx === i;
+          return (
+            <g key={i} opacity={highlighted ? 1 : 0.88}>
+              {/* Wick high→low */}
+              <line
+                x1={cx} x2={cx}
+                y1={y(c.h)} y2={y(c.l)}
+                stroke={color} strokeWidth={Math.max(1, slotW * 0.08)}
+                vectorEffect="non-scaling-stroke"
+              />
+              {/* Body open→close */}
+              <rect
+                x={cx - bodyW / 2}
+                y={bodyTop}
+                width={bodyW}
+                height={bodyH}
+                fill={isUp ? color : color}
+                fillOpacity={isUp ? 0.85 : 0.92}
+                stroke={color}
+                strokeWidth="0.5"
+              />
+            </g>
+          );
+        })}
+        {/* Hover crosshair */}
+        {hoverIdx != null && (
+          <line
+            x1={x(hoverIdx)} x2={x(hoverIdx)}
+            y1={padT} y2={H - padB}
+            stroke="var(--border-strong)" strokeWidth="1"
+          />
+        )}
+      </svg>
+      {/* Tooltip */}
+      {hoverIdx != null && (
+        <div style={{
+          position: 'absolute',
+          left: tipPct + '%',
+          top: 0,
+          transform: 'translateX(-50%)',
+          pointerEvents: 'none',
+          zIndex: 50,
+          background: 'var(--bg-2)',
+          border: '1px solid var(--border-strong)',
+          padding: '7px 10px',
+          fontSize: '11.5px',
+          fontFamily: 'var(--font-mono)',
+          boxShadow: '0 8px 24px oklch(0 0 0 / 0.35)',
+          whiteSpace: 'nowrap',
+        }}>
+          <div style={{ color: 'var(--text-3)', fontSize: 10, marginBottom: 4 }}>{labels[hoverIdx]}</div>
+          {[
+            ['O', data[hoverIdx].o, 'var(--text-2)'],
+            ['H', data[hoverIdx].h, 'var(--up)'],
+            ['L', data[hoverIdx].l, 'var(--down)'],
+            ['C', data[hoverIdx].c, data[hoverIdx].c >= data[hoverIdx].o ? 'var(--up)' : 'var(--down)'],
+          ].map(([label, val, color]) => (
+            <div key={label as string} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ color: 'var(--text-3)', width: 14 }}>{label}</span>
+              <span style={{ marginLeft: 'auto', paddingLeft: 12, color: color as string, fontWeight: label === 'C' ? 600 : 400 }}>
+                {fmtV(val as number)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Donut ─────────────────────────────────────────────────────────────────────
 export function Donut({ value, size = 92, stroke = 9, color = 'var(--accent)', label }: DonutProps) {
   const safeVal = isFinite(value) ? value : 0;
