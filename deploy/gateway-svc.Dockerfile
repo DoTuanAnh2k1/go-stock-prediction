@@ -25,6 +25,11 @@ RUN touch src/main.rs && cargo build --release
 # Stage 2: Minimal runtime image
 FROM debian:bookworm-slim
 
+ARG GIT_SHA=unknown
+ARG BUILD_TIME=unknown
+ARG GIT_DIRTY=unknown
+ENV GIT_SHA=$GIT_SHA BUILD_TIME=$BUILD_TIME GIT_DIRTY=$GIT_DIRTY
+
 WORKDIR /app
 
 RUN apt-get update && \

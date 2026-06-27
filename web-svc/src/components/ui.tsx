@@ -81,6 +81,23 @@ const defaultFmt: FmtUtils = {
   goldShort: (n) => n >= 1e6 ? (n / 1e6).toFixed(2) + 'tr' : n.toLocaleString('vi-VN'),
 };
 
+// ── BuildStamp ────────────────────────────────────────────────────────────────
+function BuildStamp() {
+  const rawSha = import.meta.env.VITE_GIT_SHA;
+  const rawTime = import.meta.env.VITE_BUILD_TIME;
+  const dirty = import.meta.env.VITE_GIT_DIRTY === 'true';
+
+  const sha = rawSha && rawSha !== 'unknown' ? rawSha.slice(0, 7) : 'dev';
+  const date = rawTime && rawTime !== 'unknown' ? rawTime.slice(0, 10) : '';
+
+  return (
+    <div className="sidebar__ver">
+      <span>{sha}{dirty ? '*' : ''}</span>
+      {date && <span>{date}</span>}
+    </div>
+  );
+}
+
 // ── Panel ─────────────────────────────────────────────────────────────────────
 export function Panel({
   title, sub, dot, tools, children, flush, className = '', style,
@@ -366,6 +383,7 @@ export function Sidebar({ status, collapsed = false, onToggle }: {
             <Icon name="clock" size={13} /><span>{t.footer.dataSession}</span>
           </div>
         </div>
+        {!collapsed && <BuildStamp />}
       </div>
     </aside>
   );

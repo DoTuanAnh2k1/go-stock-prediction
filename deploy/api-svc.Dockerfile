@@ -19,6 +19,10 @@ COPY --from=builder /api-server .
 # Backup directory — owned by appuser so a fresh backup_data volume inherits
 # write permission for the scheduled/manual database backup.
 RUN mkdir -p /backups && chown appuser:appgroup /backups
+ARG GIT_SHA=unknown
+ARG BUILD_TIME=unknown
+ARG GIT_DIRTY=unknown
+ENV GIT_SHA=$GIT_SHA BUILD_TIME=$BUILD_TIME GIT_DIRTY=$GIT_DIRTY
 USER appuser
 EXPOSE 8118
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s CMD wget -qO- http://localhost:8118/health/simple || exit 1

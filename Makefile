@@ -13,6 +13,15 @@
 COMPOSE      = docker compose --env-file .env -f deploy/docker-compose.yaml
 COMPOSE_TEST = docker compose -f deploy/docker-compose.test.yml
 
+# --- Version stamping: baked into every image at build time via build args. ---
+# Exported so `docker compose build` interpolation picks them up (shell env wins
+# over .env). Each service writes /versions/<svc>.json + a startup `version ...`
+# log line; api-svc aggregates them at GET /api/version. `make versions` reads it.
+# GIT_DIRTY=true when the working tree has ANY uncommitted/untracked change.
+export GIT_SHA    := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+export BUILD_TIME := $(shell date +%Y-%m-%dT%H:%M:%S%z)
+export GIT_DIRTY  := $(shell test -z "$$(git status --porcelain 2>/dev/null)" && echo false || echo true)
+
 .PHONY: help \
         up down reset restart rebuild ps logs \
         build test test-unit test-integration test-coverage test-phase5 \
@@ -24,7 +33,8 @@ COMPOSE_TEST = docker compose -f deploy/docker-compose.test.yml
         cli-build cli-test \
         proto-go proto-auth proto-py proto \
         test-db-up test-db-down \
-        stats stats-watch
+        stats stats-watch \
+        versions versions-logs
 
 # ---------------------------------------------------------------------------
 help:
@@ -83,6 +93,10 @@ help:
 	@echo "  make stats            One-shot CPU/RAM snapshot sorted by memory desc + TOTAL"
 	@echo "  make stats-watch      Auto-refresh every 3 s (log-safe; Ctrl-C to stop)"
 	@echo "  bash scripts/svc-metrics.sh --json    NDJSON lines for scripting"
+	@echo ""
+	@echo "Version stamping (GIT_SHA/BUILD_TIME/GIT_DIRTY baked at build):"
+	@echo "  make versions         Query GET /api/version (running stack) — per-service SHA + drift"
+	@echo "  make versions-logs    Fallback: grep the 'version ...' startup log line per container"
 	@echo ""
 	@echo "Aggregate / legacy aliases:"
 	@echo "  make build  make test  make test-unit  make swagger  make vet  make test-phase5"
@@ -270,3 +284,22 @@ stats:
 # Auto-refresh every 3 seconds (log-safe loop, not interactive docker stats).
 stats-watch:
 	bash scripts/svc-metrics.sh --watch 3
+
+# ===========================================================================
+# Version stamping — what code is actually running?
+# ===========================================================================
+# Hit the aggregated endpoint through the gateway (api-svc has no published port).
+# /api/version is public (no auth). Pretty-prints with jq if available, else raw.
+# Falls back to scraping container startup logs if the endpoint is unreachable.
+versions:
+	@echo "GET /api/version (via gateway):"
+	@curl -fsSk https://localhost/api/version 2>/dev/null | (jq . 2>/dev/null || cat) \
+		|| curl -fsS http://localhost/api/version 2>/dev/null | (jq . 2>/dev/null || cat) \
+		|| { echo "endpoint unreachable — falling back to container logs:"; $(MAKE) --no-print-directory versions-logs; }
+
+# Binary-proof fallback: every service logs one `version ...` line at startup.
+versions-logs:
+	@for s in api-svc prediction-svc auth-svc gateway-svc web-svc; do \
+		printf "%-16s" "$$s"; \
+		docker logs $$s 2>&1 | grep -m1 'version git_sha=' || echo "(no version log — see /versions/$$s.json)"; \
+	done

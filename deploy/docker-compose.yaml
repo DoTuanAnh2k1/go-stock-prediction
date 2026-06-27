@@ -41,6 +41,10 @@ services:
     build:
       context: ..
       dockerfile: deploy/prediction-svc.Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+        GIT_DIRTY: ${GIT_DIRTY:-unknown}
     container_name: prediction-svc
     depends_on:
       db:
@@ -68,6 +72,7 @@ services:
       PER_SYMBOL_WORKERS: "${PER_SYMBOL_WORKERS:-0}"
     volumes:
       - rl_models:/models
+      - version_data:/versions
     networks:
       - app-network
 
@@ -76,6 +81,10 @@ services:
     build:
       context: ../auth-svc
       dockerfile: ../deploy/auth-svc.Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+        GIT_DIRTY: ${GIT_DIRTY:-unknown}
     container_name: auth-svc
     depends_on:
       db:
@@ -96,6 +105,8 @@ services:
       REGISTRY_GRPC_TARGET: "service-mgt:8121"
     expose:
       - "8120"
+    volumes:
+      - version_data:/versions
     networks:
       - app-network
 
@@ -128,6 +139,10 @@ services:
       # Repo-root context so the sibling service-mgt module is available.
       context: ..
       dockerfile: deploy/api-svc.Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+        GIT_DIRTY: ${GIT_DIRTY:-unknown}
     container_name: api-svc
     depends_on:
       db:
@@ -163,6 +178,7 @@ services:
       INTERNAL_SECRET: "${INTERNAL_SECRET}"
     volumes:
       - backup_data:/backups
+      - version_data:/versions
     networks:
       - app-network
 
@@ -171,6 +187,10 @@ services:
     build:
       context: ../gateway-svc
       dockerfile: ../deploy/gateway-svc.Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+        GIT_DIRTY: ${GIT_DIRTY:-unknown}
     container_name: gateway-svc
     depends_on:
       - api-svc
@@ -186,6 +206,7 @@ services:
       - "443:443"
     volumes:
       - ../gateway-svc/certs:/etc/gateway/certs
+      - version_data:/versions
     networks:
       - app-network
 
@@ -194,12 +215,18 @@ services:
     build:
       context: ../web-svc
       dockerfile: ../deploy/web-svc.Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+        GIT_DIRTY: ${GIT_DIRTY:-unknown}
     container_name: web-svc
     depends_on:
       - api-svc
     restart: unless-stopped
     expose:
       - "3000"
+    volumes:
+      - version_data:/versions
     networks:
       - app-network
 
@@ -252,3 +279,6 @@ volumes:
   backup_data:
   cli_keys:
   rl_models:
+  # Shared version stamps — each service writes /versions/<service>.json at startup;
+  # api-svc reads them all for GET /api/version. See Makefile (GIT_SHA/BUILD_TIME/GIT_DIRTY).
+  version_data:

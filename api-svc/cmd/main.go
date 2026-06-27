@@ -15,6 +15,7 @@ import (
 	"go-stock-prediction/pkg/logger"
 	"go-stock-prediction/pkg/server"
 	"go-stock-prediction/pkg/store/repository"
+	"go-stock-prediction/pkg/version"
 
 	regclient "go-stock-prediction/service-mgt/client"
 
@@ -44,6 +45,9 @@ func main() {
 
 	// Initialize the logger
 	logger.Init()
+
+	// Stamp version info (reads GIT_SHA/BUILD_TIME/GIT_DIRTY env vars, logs, writes /versions/api-svc.json)
+	version.Init()
 
 	// Initialize the database connection (read queries)
 	repository.Init()

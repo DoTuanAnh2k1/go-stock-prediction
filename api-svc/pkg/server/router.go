@@ -29,6 +29,9 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("GET /api/auth/me", MeHandler)
 	mux.HandleFunc("PUT /api/auth/password", AuthRequired(ChangePasswordHandler))
 
+	// Version endpoint (public — no auth required)
+	mux.HandleFunc("GET /api/version", GetVersionHandler)
+
 	// Dashboard APIs (public)
 	mux.HandleFunc("/api/dashboard/stats", GetDashboardStats)
 
@@ -207,6 +210,7 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  POST /api/auth/login")
 	logger.Logger.Info("  GET  /api/auth/me")
 	logger.Logger.Info("  PUT  /api/auth/password")
+	logger.Logger.Info("  GET  /api/version              [public]")
 	logger.Logger.Info("  GET  /api/dashboard/stats")
 	logger.Logger.Info("  GET  /api/training/status")
 	logger.Logger.Info("  GET  /api/training/history")

@@ -45,6 +45,13 @@ log = get_logger("main")
 log.info("service.starting", grpc_port=cfg.grpc_server_port)
 
 # ---------------------------------------------------------------------------
+# 3b. Version stamp (reads GIT_SHA/BUILD_TIME/GIT_DIRTY, writes /versions/prediction-svc.json)
+# ---------------------------------------------------------------------------
+from src.utils.version import stamp_version
+
+stamp_version()
+
+# ---------------------------------------------------------------------------
 # 4. Database
 # ---------------------------------------------------------------------------
 from src.database.connection import init_db

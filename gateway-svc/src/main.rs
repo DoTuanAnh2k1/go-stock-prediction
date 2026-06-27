@@ -10,6 +10,7 @@ mod proxy;
 mod registry;
 mod router;
 mod routes;
+mod version;
 
 use config::AppConfig;
 use proxy::ProxyClient;
@@ -24,6 +25,8 @@ async fn main() {
         .expect("Failed to install rustls crypto provider");
 
     init_tracing();
+
+    version::stamp();
 
     info!("Starting go-stock-prediction gateway");
 

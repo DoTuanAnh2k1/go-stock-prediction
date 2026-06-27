@@ -41,6 +41,11 @@ RUN mkdir -p src/proto/prediction src/proto/registry && \
 # ---------------------------------------------------------------------------
 FROM python:3.12-slim
 
+ARG GIT_SHA=unknown
+ARG BUILD_TIME=unknown
+ARG GIT_DIRTY=unknown
+ENV GIT_SHA=$GIT_SHA BUILD_TIME=$BUILD_TIME GIT_DIRTY=$GIT_DIRTY
+
 # System deps for lxml and potential native extensions
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2 \
