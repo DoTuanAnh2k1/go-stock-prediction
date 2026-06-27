@@ -124,12 +124,20 @@ class TradingBot:
                 signals = [s for s in signals if s.symbol == self.config.symbol]
 
             for signal in signals:
+                # Use live price from cache for execution; signal.current_price is
+                # the price recorded at prediction time and may be stale by the time
+                # the bot step runs (e.g. price crashed after prediction was written).
+                exec_price = (
+                    cache.current_prices.get(signal.symbol, signal.current_price)
+                    if cache is not None and hasattr(cache, "current_prices")
+                    else signal.current_price
+                )
                 if signal.action == "BUY":
                     if signal.symbol in closed_this_step:
                         continue
                     trade = self.portfolio.buy(
                         symbol=signal.symbol,
-                        price=signal.current_price,
+                        price=exec_price,
                         trade_date=sim_date,
                         signal_strength=signal.signal_strength,
                         confidence=signal.confidence,
@@ -140,7 +148,7 @@ class TradingBot:
                 elif signal.action == "SELL":
                     trade = self.portfolio.sell(
                         symbol=signal.symbol,
-                        price=signal.current_price,
+                        price=exec_price,
                         trade_date=sim_date,
                         close_reason="signal",
                         trade_at=now,
@@ -154,7 +162,7 @@ class TradingBot:
                         symbol=signal.symbol,
                         action="HOLD",
                         quantity=0,
-                        price=signal.current_price,
+                        price=exec_price,
                         trade_value=0.0,
                         trade_date=sim_date,
                         signal_strength=signal.signal_strength,
