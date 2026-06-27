@@ -45,6 +45,9 @@ RUN useradd -m -u 1001 gateway && \
     chmod +x /docker-entrypoint.sh && \
     mkdir -p /etc/gateway/certs && \
     chown -R gateway:gateway /etc/gateway
+# Shared version-stamp dir — 0777 so the named volume initializes world-writable
+# (services run under different non-root UIDs; each writes /versions/<svc>.json).
+RUN mkdir -p /versions && chmod 0777 /versions
 
 EXPOSE 80 443
 

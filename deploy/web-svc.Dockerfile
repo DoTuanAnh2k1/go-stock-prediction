@@ -39,6 +39,9 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Startup script — writes /versions/web-svc.json before nginx starts
 COPY docker-entrypoint.d/40-write-version.sh /docker-entrypoint.d/40-write-version.sh
 RUN chmod +x /docker-entrypoint.d/40-write-version.sh
+# Shared version-stamp dir — 0777 so the named volume initializes world-writable
+# (services run under different non-root UIDs; each writes /versions/<svc>.json).
+RUN mkdir -p /versions && chmod 0777 /versions
 
 EXPOSE 3000
 CMD ["nginx", "-g", "daemon off;"]

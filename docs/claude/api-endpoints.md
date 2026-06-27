@@ -2,6 +2,12 @@
 
 Tất cả endpoints yêu cầu `Authorization: Bearer <token>` trừ khi ghi khác.
 
+## Version (public, no auth)
+
+| Method | Path | Ghi chú |
+|--------|------|---------|
+| `GET` | `/api/version` | **Không cần JWT.** Trả version của api-svc + tổng hợp tất cả `/versions/*.json` (mỗi service ghi lúc startup vào shared volume `version_data`). Fields: `git_sha`, `build_time`, `dirty`, `started_at`, `consistent` (mọi service cùng SHA?), `mismatched` (service lệch SHA), `services[]`. Mỗi service cũng có 1 dòng log startup `version git_sha=... build_time=... dirty=...`. Build args `GIT_SHA/BUILD_TIME/GIT_DIRTY` do `make` tính + bake vào image. Kiểm tra nhanh: `make versions` (qua gateway) hoặc `make versions-logs` (grep log container). `gateway-svc` cũng nhúng version trong `GET /healthz`. |
+
 ## Auth
 
 | Method | Path | Ghi chú |

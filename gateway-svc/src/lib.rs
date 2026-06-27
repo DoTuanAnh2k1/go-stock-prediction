@@ -4,6 +4,7 @@ pub mod models;
 pub mod proxy;
 pub mod router;
 pub mod routes;
+pub mod version;
 
 pub use config::AppConfig;
 pub use proxy::ProxyClient;

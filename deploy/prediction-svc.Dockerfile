@@ -73,6 +73,9 @@ COPY prediction-svc/tests/ tests/
 RUN useradd -m -u 1000 appuser && \
     mkdir -p /models && \
     chown -R appuser:appuser /app /models
+# Shared version-stamp dir — 0777 so the named volume initializes world-writable
+# (services run under different non-root UIDs; each writes /versions/<svc>.json).
+RUN mkdir -p /versions && chmod 0777 /versions
 USER appuser
 
 EXPOSE 8119
