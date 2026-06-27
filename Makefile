@@ -301,5 +301,5 @@ versions:
 versions-logs:
 	@for s in api-svc prediction-svc auth-svc gateway-svc web-svc; do \
 		printf "%-16s" "$$s"; \
-		docker logs $$s 2>&1 | grep -m1 'version git_sha=' || echo "(no version log — see /versions/$$s.json)"; \
+		docker logs $$s 2>&1 | grep -m1 'git_sha' || echo "(no version log — see /versions/$$s.json)"; \
 	done
