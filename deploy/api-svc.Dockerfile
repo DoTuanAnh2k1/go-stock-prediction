@@ -22,10 +22,13 @@ RUN mkdir -p /backups && chown appuser:appgroup /backups
 ARG GIT_SHA=unknown
 ARG BUILD_TIME=unknown
 ARG GIT_DIRTY=unknown
+# Consume the version args in a RUN so a changed GIT_SHA/BUILD_TIME busts the
+# cache for the ENV below — a bare ENV layer is keyed on the literal instruction
+# string and would otherwise freeze the first build's values. Also seeds the
+# shared version-stamp dir 0777 (volume inits world-writable for non-root UIDs).
+RUN mkdir -p /versions && chmod 0777 /versions && \
+    printf 'git_sha=%s build_time=%s dirty=%s\n' "$GIT_SHA" "$BUILD_TIME" "$GIT_DIRTY" > /etc/image-version
 ENV GIT_SHA=$GIT_SHA BUILD_TIME=$BUILD_TIME GIT_DIRTY=$GIT_DIRTY
-# Shared version-stamp dir — 0777 so the named volume initializes world-writable
-# (services run under different non-root UIDs; each writes /versions/<svc>.json).
-RUN mkdir -p /versions && chmod 0777 /versions
 USER appuser
 EXPOSE 8118
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s CMD wget -qO- http://localhost:8118/health/simple || exit 1
