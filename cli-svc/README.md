@@ -14,7 +14,7 @@ SSH in with your **dashboard account**, get a shell, and run four verbs
 
 ```
 ssh user@host -p 2345
-   │  password auth → POST {API_BASE_URL}/auth/login
+   │  password auth → POST {API_BASE_URL}/x/grant (X-Token header)
    ▼
 cli-svc shell (bubbletea)
    │  on init → GET {API_BASE_URL}/me/commands → allowed-set
@@ -189,7 +189,7 @@ docker run --rm -p 2345:2345 \
 cli-svc/
 ├── main.go                 # start the wish SSH server
 ├── internal/
-│   ├── server/             # wish setup, password auth → /auth/login, host key, catalog upsert
+│   ├── server/             # wish setup, password auth → /x/grant, host key, catalog upsert
 │   ├── shell/              # per-session bubbletea model + parse/enforce/run/completer
 │   ├── handlers/           # handler catalog: registry + each handler {execute, render}
 │   ├── client/             # HTTP client to API_BASE_URL (Bearer JWT) + JWT claim decode

@@ -50,8 +50,17 @@ class Portfolio:
 
     def buy(self, symbol: str, price: float, trade_date: date,
             signal_strength: float = None, confidence: float = None,
-            trade_at: Optional[datetime] = None) -> Optional[Trade]:
-        """Execute a BUY if within position limits."""
+            trade_at: Optional[datetime] = None,
+            position_pct: Optional[float] = None) -> Optional[Trade]:
+        """Execute a BUY if within position limits.
+
+        Args:
+            position_pct: Override the portfolio max_position_pct for this order
+                          (e.g. meta-stacking bot uses conviction-scaled sizing).
+                          None (default) → use self.max_position_pct as before.
+                          Backward-compatible: all existing callers that omit this
+                          parameter continue to behave exactly as before.
+        """
         if price <= 0:
             return None
         if len(self.positions) >= self.max_positions:
@@ -59,9 +68,10 @@ class Portfolio:
         if symbol in self.positions:
             return None  # already holding this symbol
 
-        # Position size: min(max_position_pct% of total, cash / remaining_slots)
+        # Position size: min(effective_pct% of total, cash / remaining_slots)
+        effective_pct = position_pct if position_pct is not None else self.max_position_pct
         total_value = self.total_value({symbol: price})
-        max_by_pct = total_value * (self.max_position_pct / 100.0)
+        max_by_pct = total_value * (effective_pct / 100.0)
         remaining_slots = max(1, self.max_positions - len(self.positions))
         max_by_slots = self.cash / remaining_slots
         position_cash = min(max_by_pct, max_by_slots, self.cash)

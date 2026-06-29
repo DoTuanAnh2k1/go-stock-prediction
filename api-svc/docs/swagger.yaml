@@ -237,6 +237,19 @@ definitions:
       updated_at:
         type: string
     type: object
+  go-stock-prediction_pkg_version.Info:
+    properties:
+      build_time:
+        type: string
+      dirty:
+        type: string
+      git_sha:
+        type: string
+      service:
+        type: string
+      started_at:
+        type: string
+    type: object
   go-stock-prediction_proto_auth.MarketGroupResponse:
     properties:
       created_at:
@@ -309,6 +322,24 @@ definitions:
         type: integer
       total_alloc_mb:
         type: integer
+    type: object
+  pkg_server.RebuildReplayRequest:
+    properties:
+      cutoff_date:
+        description: |-
+          CutoffDate is an ISO date string "YYYY-MM-DD". Only predictions with
+          target_date > cutoff_date are kept after the wipe. Empty → server default
+          (2026-06-13).
+        type: string
+      step_size:
+        description: StepSize is the walk-forward step in days. 0 → server default
+          (1).
+        type: integer
+    type: object
+  pkg_server.RebuildReplayResponse:
+    properties:
+      message:
+        type: string
     type: object
   pkg_server.ResponseFailure:
     properties:
@@ -427,6 +458,10 @@ definitions:
     type: object
   pkg_server.cryptoChartResponse:
     properties:
+      closes:
+        items:
+          type: number
+        type: array
       coin_id:
         type: string
       dates:
@@ -435,6 +470,18 @@ definitions:
         type: array
       granularity:
         type: string
+      highs:
+        items:
+          type: number
+        type: array
+      lows:
+        items:
+          type: number
+        type: array
+      opens:
+        items:
+          type: number
+        type: array
       prices:
         items:
           type: number
@@ -583,11 +630,27 @@ definitions:
         items:
           type: number
         type: array
+      closes:
+        items:
+          type: number
+        type: array
       granularity:
         type: string
+      highs:
+        items:
+          type: number
+        type: array
       labels:
         items:
           type: string
+        type: array
+      lows:
+        items:
+          type: number
+        type: array
+      opens:
+        items:
+          type: number
         type: array
       sell_prices:
         items:
@@ -817,13 +880,6 @@ definitions:
       total_return_pct:
         type: number
     type: object
-  pkg_server.loginRequest:
-    properties:
-      password:
-        type: string
-      username:
-        type: string
-    type: object
   pkg_server.loginResponse:
     properties:
       token:
@@ -1022,12 +1078,28 @@ definitions:
     type: object
   pkg_server.nasdaqChartResponse:
     properties:
+      closes:
+        items:
+          type: number
+        type: array
       dates:
         items:
           type: string
         type: array
       granularity:
         type: string
+      highs:
+        items:
+          type: number
+        type: array
+      lows:
+        items:
+          type: number
+        type: array
+      opens:
+        items:
+          type: number
+        type: array
       prices:
         items:
           type: number
@@ -1464,12 +1536,28 @@ definitions:
     type: object
   pkg_server.sp500ChartResponse:
     properties:
+      closes:
+        items:
+          type: number
+        type: array
       dates:
         items:
           type: string
         type: array
       granularity:
         type: string
+      highs:
+        items:
+          type: number
+        type: array
+      lows:
+        items:
+          type: number
+        type: array
+      opens:
+        items:
+          type: number
+        type: array
       prices:
         items:
           type: number
@@ -1641,6 +1729,29 @@ definitions:
       username:
         type: string
     type: object
+  pkg_server.versionResponse:
+    properties:
+      build_time:
+        type: string
+      consistent:
+        type: boolean
+      dirty:
+        type: string
+      git_sha:
+        type: string
+      mismatched:
+        items:
+          type: string
+        type: array
+      service:
+        type: string
+      services:
+        items:
+          $ref: '#/definitions/go-stock-prediction_pkg_version.Info'
+        type: array
+      started_at:
+        type: string
+    type: object
 host: localhost:8118
 info:
   contact: {}
@@ -1649,41 +1760,6 @@ info:
   title: Go Stock Prediction API
   version: "1.0"
 paths:
-  /api/auth/login:
-    post:
-      consumes:
-      - application/json
-      description: Authenticate with username/password; returns JWT signed by Java
-        Auth Service
-      parameters:
-      - description: Login credentials
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/pkg_server.loginRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/pkg_server.loginResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/pkg_server.ResponseFailure'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/pkg_server.ResponseFailure'
-        "503":
-          description: Service Unavailable
-          schema:
-            $ref: '#/definitions/pkg_server.ResponseFailure'
-      summary: Login
-      tags:
-      - Auth
   /api/auth/me:
     get:
       description: Returns username and role from JWT claims (no DB call)
@@ -4387,6 +4463,53 @@ paths:
       summary: Trigger NASDAQ100 prediction
       tags:
       - Triggers
+  /api/trigger/rebuild-replay:
+    post:
+      consumes:
+      - application/json
+      description: Wipes all predictions and simulation data, then replays a walk-forward
+        backtest from cutoff_date+1 → today (out-of-sample), retrains meta-models,
+        and replays bot simulation. Runs in the background; returns 202 immediately.
+        Returns 409 if a rebuild-replay is already in progress, 400 for invalid arguments,
+        503 if the prediction service is unavailable.
+      parameters:
+      - description: Rebuild-replay parameters (both fields optional)
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/pkg_server.RebuildReplayRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/pkg_server.RebuildReplayResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Trigger rebuild & replay
+      tags:
+      - Triggers
   /api/trigger/reconcile:
     post:
       consumes:
@@ -4850,6 +4973,55 @@ paths:
       summary: Reset user password
       tags:
       - Users
+  /api/version:
+    get:
+      description: Returns git SHA, build time, and dirty flag for api-svc and all
+        co-deployed services. consistent=true when every service's git_sha (ignoring
+        "unknown"/empty) matches api-svc's git_sha.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/pkg_server.versionResponse'
+      summary: Get version information
+      tags:
+      - Version
+  /api/x/grant:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate via the X-Token header (base64 of "username:password");
+        returns JWT signed by Java Auth Service. Body is ignored.
+      parameters:
+      - description: base64(\
+        in: header
+        name: X-Token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/pkg_server.loginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+      summary: Login
+      tags:
+      - Auth
   /health:
     get:
       description: Returns full system health including database, config, and runtime
@@ -4902,7 +5074,7 @@ paths:
       - health
 securityDefinitions:
   BearerAuth:
-    description: 'JWT token from POST /api/auth/login. Format: Bearer {token}'
+    description: 'JWT token from POST /api/x/grant. Format: Bearer {token}'
     in: header
     name: Authorization
     type: apiKey

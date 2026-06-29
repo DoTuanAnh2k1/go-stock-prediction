@@ -1,8 +1,10 @@
 package server
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	authclient "go-stock-prediction/pkg/grpc/authclient"
 	"go-stock-prediction/pkg/logger"
@@ -11,10 +13,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type loginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
+// grantTokenHeader carries base64("username:password"). Replaces the old
+// username/password JSON body so the login surface is less obvious to
+// automated scanners.
+const grantTokenHeader = "X-Token"
 
 type loginResponse struct {
 	Token string   `json:"token"`
@@ -26,23 +28,41 @@ type userInfo struct {
 	Role     string `json:"role"`
 }
 
+// decodeGrantToken decodes the X-Token header (base64 of "username:password")
+// and splits on the first ':' so passwords containing ':' survive. Returns
+// ok=false when the header is absent, not valid base64, or has no separator.
+func decodeGrantToken(header string) (username, password string, ok bool) {
+	if header == "" {
+		return "", "", false
+	}
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(header))
+	if err != nil {
+		return "", "", false
+	}
+	user, pass, found := strings.Cut(string(raw), ":")
+	if !found {
+		return "", "", false
+	}
+	return user, pass, true
+}
+
 // LoginHandler godoc
 //
 //	@Summary      Login
-//	@Description  Authenticate with username/password; returns JWT signed by Java Auth Service
+//	@Description  Authenticate via the X-Token header (base64 of "username:password"); returns JWT signed by Java Auth Service. Body is ignored.
 //	@Tags         Auth
 //	@Accept       json
 //	@Produce      json
-//	@Param        body body loginRequest true "Login credentials"
+//	@Param        X-Token header string true "base64(\"username:password\")"
 //	@Success      200 {object} loginResponse
 //	@Failure      400 {object} ResponseFailure
 //	@Failure      401 {object} ResponseFailure
 //	@Failure      503 {object} ResponseFailure
-//	@Router       /api/auth/login [post]
+//	@Router       /api/x/grant [post]
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
-	var req loginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		ResponseError(w, http.StatusBadRequest, "invalid request body")
+	username, password, ok := decodeGrantToken(r.Header.Get(grantTokenHeader))
+	if !ok {
+		ResponseError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
 	client := authclient.GetClient()
@@ -51,8 +71,8 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp, err := client.Login(r.Context(), &authpb.LoginRequest{
-		Username: req.Username,
-		Password: req.Password,
+		Username: username,
+		Password: password,
 	})
 	if err != nil {
 		st, _ := status.FromError(err)

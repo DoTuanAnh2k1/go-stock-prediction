@@ -40,7 +40,7 @@ three React Contexts (`Auth`, `Lang`, `Data`).
 
 Auth is implemented entirely in `src/context/AuthContext.tsx` and is JWT-based.
 
-- **Login** — `login(username, password)` POSTs to `/api/auth/login`. On success
+- **Login** — `login(username, password)` POSTs to `/api/x/grant` with credentials in the `X-Token: base64("user:pass")` header (body is a generic `{"request":""}`). On success
   the JWT and a small `{username, role}` object are stored in `localStorage`
   (`vns_token`, `vns_user`). The handler tolerates both bare and `{data: ...}`
   wrapped responses.

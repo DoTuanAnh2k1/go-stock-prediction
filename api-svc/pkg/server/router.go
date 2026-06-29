@@ -25,7 +25,7 @@ func addHandler() *http.ServeMux {
 	// ===========================================
 
 	// Auth APIs
-	mux.HandleFunc("POST /api/auth/login", LoginHandler)
+	mux.HandleFunc("POST /api/x/grant", LoginHandler)
 	mux.HandleFunc("GET /api/auth/me", MeHandler)
 	mux.HandleFunc("PUT /api/auth/password", AuthRequired(ChangePasswordHandler))
 
@@ -175,6 +175,8 @@ func addHandler() *http.ServeMux {
 	// GET /api/simulation/bots/{id} must come last (catch-all for bot detail)
 	mux.HandleFunc("GET /api/simulation/bots/", GetSimBot)
 
+	mux.HandleFunc("POST /api/trigger/rebuild-replay", AdminRequired(TriggerRebuildReplayHandler))
+
 	// Trigger simulation (admin only)
 	mux.HandleFunc("POST /api/trigger/simulation-backtest", AdminRequired(TriggerSimulationBacktestHandler))
 	mux.HandleFunc("POST /api/trigger/simulation-live-step", AdminRequired(TriggerSimulationLiveStepHandler))
@@ -207,7 +209,7 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  GET  /health/simple       -> Simple Health Check")
 	logger.Logger.Info("  GET  /health/ready        -> Readiness Check")
 	logger.Logger.Info("API Routes:")
-	logger.Logger.Info("  POST /api/auth/login")
+	logger.Logger.Info("  POST /api/x/grant")
 	logger.Logger.Info("  GET  /api/auth/me")
 	logger.Logger.Info("  PUT  /api/auth/password")
 	logger.Logger.Info("  GET  /api/version              [public]")
@@ -254,6 +256,7 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  POST /api/trigger/crypto-history      [admin]")
 	logger.Logger.Info("  POST /api/trigger/sp500-crawler       [admin]")
 	logger.Logger.Info("  POST /api/trigger/sp500-predict       [admin]")
+	logger.Logger.Info("  POST /api/trigger/rebuild-replay      [admin]")
 	logger.Logger.Info("  POST /api/trigger/backup              [admin]")
 	logger.Logger.Info("  GET  /api/backups                     [auth]")
 	logger.Logger.Info("  GET  /api/backups/{filename}          [auth]")

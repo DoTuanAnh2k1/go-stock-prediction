@@ -141,6 +141,11 @@ class PredictionServiceStub(object):
                 request_serializer=prediction_dot_prediction__pb2.Empty.SerializeToString,
                 response_deserializer=prediction_dot_prediction__pb2.PipelineLogEvent.FromString,
                 _registered_method=True)
+        self.TriggerRebuildReplay = channel.unary_unary(
+                '/prediction.PredictionService/TriggerRebuildReplay',
+                request_serializer=prediction_dot_prediction__pb2.RebuildReplayRequest.SerializeToString,
+                response_deserializer=prediction_dot_prediction__pb2.TriggerResponse.FromString,
+                _registered_method=True)
 
 
 class PredictionServiceServicer(object):
@@ -286,6 +291,15 @@ class PredictionServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def TriggerRebuildReplay(self, request, context):
+        """Rebuild & Replay — wipe all predictions + sim data, replay walk-forward
+        from cutoff+1 → today (out-of-sample), retrain meta, replay bots.
+        Runs in background; returns immediately (202-style).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_PredictionServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -393,6 +407,11 @@ def add_PredictionServiceServicer_to_server(servicer, server):
                     servicer.StreamSP500Predict,
                     request_deserializer=prediction_dot_prediction__pb2.Empty.FromString,
                     response_serializer=prediction_dot_prediction__pb2.PipelineLogEvent.SerializeToString,
+            ),
+            'TriggerRebuildReplay': grpc.unary_unary_rpc_method_handler(
+                    servicer.TriggerRebuildReplay,
+                    request_deserializer=prediction_dot_prediction__pb2.RebuildReplayRequest.FromString,
+                    response_serializer=prediction_dot_prediction__pb2.TriggerResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -964,6 +983,33 @@ class PredictionService(object):
             '/prediction.PredictionService/StreamSP500Predict',
             prediction_dot_prediction__pb2.Empty.SerializeToString,
             prediction_dot_prediction__pb2.PipelineLogEvent.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def TriggerRebuildReplay(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/prediction.PredictionService/TriggerRebuildReplay',
+            prediction_dot_prediction__pb2.RebuildReplayRequest.SerializeToString,
+            prediction_dot_prediction__pb2.TriggerResponse.FromString,
             options,
             channel_credentials,
             insecure,

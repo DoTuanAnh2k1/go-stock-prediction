@@ -40,6 +40,7 @@ const (
 	PredictionService_StreamNasdaqPredict_FullMethodName       = "/prediction.PredictionService/StreamNasdaqPredict"
 	PredictionService_StreamCryptoPredict_FullMethodName       = "/prediction.PredictionService/StreamCryptoPredict"
 	PredictionService_StreamSP500Predict_FullMethodName        = "/prediction.PredictionService/StreamSP500Predict"
+	PredictionService_TriggerRebuildReplay_FullMethodName      = "/prediction.PredictionService/TriggerRebuildReplay"
 )
 
 // PredictionServiceClient is the client API for PredictionService service.
@@ -82,6 +83,10 @@ type PredictionServiceClient interface {
 	StreamNasdaqPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PipelineLogEvent], error)
 	StreamCryptoPredict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PipelineLogEvent], error)
 	StreamSP500Predict(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PipelineLogEvent], error)
+	// Rebuild & Replay — wipe all predictions + sim data, replay walk-forward
+	// from cutoff+1 → today (out-of-sample), retrain meta, replay bots.
+	// Runs in background; returns immediately (202-style).
+	TriggerRebuildReplay(ctx context.Context, in *RebuildReplayRequest, opts ...grpc.CallOption) (*TriggerResponse, error)
 }
 
 type predictionServiceClient struct {
@@ -338,6 +343,16 @@ func (c *predictionServiceClient) StreamSP500Predict(ctx context.Context, in *Em
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PredictionService_StreamSP500PredictClient = grpc.ServerStreamingClient[PipelineLogEvent]
 
+func (c *predictionServiceClient) TriggerRebuildReplay(ctx context.Context, in *RebuildReplayRequest, opts ...grpc.CallOption) (*TriggerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TriggerResponse)
+	err := c.cc.Invoke(ctx, PredictionService_TriggerRebuildReplay_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PredictionServiceServer is the server API for PredictionService service.
 // All implementations must embed UnimplementedPredictionServiceServer
 // for forward compatibility.
@@ -378,6 +393,10 @@ type PredictionServiceServer interface {
 	StreamNasdaqPredict(*Empty, grpc.ServerStreamingServer[PipelineLogEvent]) error
 	StreamCryptoPredict(*Empty, grpc.ServerStreamingServer[PipelineLogEvent]) error
 	StreamSP500Predict(*Empty, grpc.ServerStreamingServer[PipelineLogEvent]) error
+	// Rebuild & Replay — wipe all predictions + sim data, replay walk-forward
+	// from cutoff+1 → today (out-of-sample), retrain meta, replay bots.
+	// Runs in background; returns immediately (202-style).
+	TriggerRebuildReplay(context.Context, *RebuildReplayRequest) (*TriggerResponse, error)
 	mustEmbedUnimplementedPredictionServiceServer()
 }
 
@@ -450,6 +469,9 @@ func (UnimplementedPredictionServiceServer) StreamCryptoPredict(*Empty, grpc.Ser
 }
 func (UnimplementedPredictionServiceServer) StreamSP500Predict(*Empty, grpc.ServerStreamingServer[PipelineLogEvent]) error {
 	return status.Error(codes.Unimplemented, "method StreamSP500Predict not implemented")
+}
+func (UnimplementedPredictionServiceServer) TriggerRebuildReplay(context.Context, *RebuildReplayRequest) (*TriggerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TriggerRebuildReplay not implemented")
 }
 func (UnimplementedPredictionServiceServer) mustEmbedUnimplementedPredictionServiceServer() {}
 func (UnimplementedPredictionServiceServer) testEmbeddedByValue()                           {}
@@ -822,6 +844,24 @@ func _PredictionService_StreamSP500Predict_Handler(srv interface{}, stream grpc.
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PredictionService_StreamSP500PredictServer = grpc.ServerStreamingServer[PipelineLogEvent]
 
+func _PredictionService_TriggerRebuildReplay_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RebuildReplayRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PredictionServiceServer).TriggerRebuildReplay(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PredictionService_TriggerRebuildReplay_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PredictionServiceServer).TriggerRebuildReplay(ctx, req.(*RebuildReplayRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PredictionService_ServiceDesc is the grpc.ServiceDesc for PredictionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -896,6 +936,10 @@ var PredictionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResetSimBots",
 			Handler:    _PredictionService_ResetSimBots_Handler,
+		},
+		{
+			MethodName: "TriggerRebuildReplay",
+			Handler:    _PredictionService_TriggerRebuildReplay_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

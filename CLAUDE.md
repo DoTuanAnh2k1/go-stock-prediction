@@ -9,7 +9,7 @@ Hệ thống dự đoán giá tài sản tài chính. Thu thập dữ liệu t�
 - **Auth Service** (`auth-svc/`) — **Java** Spring Boot 3, gRPC `:8120`. Toàn bộ auth/RBAC: login, JWT (HMAC256), user CRUD, market groups, command RBAC, bcrypt, Flyway V1–V3. Seeds `chon/super_admin` on startup. Ba roles: `super_admin`, `admin`, `user`.
 - **Prediction Service** (`prediction-svc/`) — **Python** gRPC `:8119`. Crawling, 12 thuật toán ML, training, APScheduler cron jobs.
 - **Gateway Service** (`gateway-svc/`) — **Rust** Axum `:80`/`:443`. Longest-prefix routing: `/swagger`→404, `/api`→api-svc:8118, `/`→web-svc:3000. TLS self-signed cert tự tạo.
-- **CLI Service** (`cli-svc/`) — **Go** SSH server `:2345` (expose trực tiếp, không qua gateway). charmbracelet/wish + bubbletea TUI. SSH auth → POST /api/auth/login. Command RBAC client-side. **KHÔNG tích hợp service-mgt.**
+- **CLI Service** (`cli-svc/`) — **Go** SSH server `:2345` (expose trực tiếp, không qua gateway). charmbracelet/wish + bubbletea TUI. SSH auth → POST /api/x/grant (X-Token header). Command RBAC client-side. **KHÔNG tích hợp service-mgt.**
 - **Service Management** (`service-mgt/`) — **Go** gRPC `:8121` (internal only). Registry/discovery — **4 service tích hợp** (api-svc, auth-svc, prediction-svc, gateway-svc). `SERVICE_MGT_ENABLED=false` by default — có static fallback.
 
 ## Lệnh thường dùng
@@ -160,12 +160,13 @@ PER_SYMBOL_WORKERS=0                     # 0 = os.cpu_count()
 - **Dynamic cron:** Python poll DB 60s, tự reschedule APScheduler. API `PUT /api/schedules/{key}` để chỉnh live.
 - **Market calendar:** `market_calendar.py` — `is_market_open()` (guard ngày) và `is_intraday_open()` (guard giờ phiên). CRYPTO = 24/7. GOLD = 24/5 (đóng T7+CN). NASDAQ/SP500 = đóng cuối tuần + lễ NYSE + ngoài giờ phiên Mỹ (≈20:30–03:00 ICT).
 - **Service discovery (service-mgt):** Client-side discovery; write-through cache (Postgres + in-memory). Reaper 1s (TTL 30s→DOWN, +60s→evict). Heartbeat 10s. Toàn bộ tắt khi `SERVICE_MGT_ENABLED=false`. Static fallback.
-- **Per-symbol models:** Khi `PER_SYMBOL_ENABLED=true`, mỗi (mã × algo) có instance riêng; prediction lưu với `algorithm_name = f"{key}__ps"`. Seeder: 3996 bot per-symbol + 444 bot pooled = 4440 tổng. Xem `algo-per-symbol.md`.
+- **Per-symbol models:** Khi `PER_SYMBOL_ENABLED=true`, mỗi (mã × algo) có instance riêng; prediction lưu với `algorithm_name = f"{key}__ps"`. Seeder base algos: 3996 bot per-symbol + 444 bot pooled = 4440 tổng; `meta_stack` thêm 4 bot pooled + per-symbol bots khi `PER_SYMBOL_ENABLED`. Xem `algo-per-symbol.md`.
 - **sim_portfolio_snapshots — upsert theo giờ:** 1 row/session/giờ via `ON CONFLICT (session_id, snapshot_at) DO UPDATE`. `CREATE UNIQUE INDEX` phải TÁCH RIÊNG khỏi DML transaction.
 - **Java Auth — nguồn sự thật RBAC:** Flyway V1 (auth + market RBAC), V2 (full_name/email/phone), V3 (command RBAC). Go chỉ là thin proxy. `super_admin` = chon, không thể xóa/reset bởi ai khác.
 - **Command RBAC:** Mirror market-group RBAC. `allowed-commands(user)` = UNION qua command_groups, lọc `enabled=true`. super_admin/admin bypass. Catalog upsert từ cli-svc qua `POST /api/command-handlers/upsert` (`X-Internal-Secret` header).
 - **Shared feature builder:** `features.py` — `build_basic_features()` (14 features), `build_enhanced_features()` (~30 features). Pandas-ta nếu có, numpy fallback. `MIN_DATA_POINTS = 80`.
 - **Optuna:** LightGBM và XGBoost dùng Optuna khi data ≥ 200 và optuna cài (`[ml]` extras). Max 30 trials, timeout 120s. RandomForest không dùng Optuna.
+- **Tactic meta-stacking (simulation):** `meta_stack` là CHIẾN THUẬT giao dịch (tầng `simulation/`) — KHÔNG phải thuật toán dự đoán thứ 13, KHÔNG đăng ký vào `algorithms/registry.py` hay `algorithms.go`. `MetaStackModel` (`simulation/meta_stack.py`): đọc tất cả dự đoán các algo + direction accuracy rolling từng algo → LightGBM binary classifier + calibration isotonic → P(up) đã hiệu chỉnh → quyết định + size theo conviction. Fallback reliability-weighted vote khi thiếu checkpoint. `bot.py` nhánh `is_meta` (base_key == "meta_stack") → `_step_meta`. Bot pooled: `meta_stack` (1/market, 4 tổng); per-symbol: `meta_stack__ps` (gate `PER_SYMBOL_ENABLED`). Checkpoint: `${RL_MODEL_DIR}/meta_{market}.pkl` (pooled) / `meta_{market}_{symbol}.pkl` (per-symbol). Training: `train_meta_for_market()` + `train_meta_all()` trong `orchestrator/training.py`; cron `train_meta` (Chủ nhật 8AM); trigger tay: `POST /api/trigger/train` body `{"algorithm":"meta_stack"}`.
 
 ## Hướng dẫn mở rộng
 

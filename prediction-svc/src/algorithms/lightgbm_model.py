@@ -17,6 +17,7 @@ import numpy as np
 
 from src.algorithms.base import PredictionAlgorithm, PredictionResult, get_max_change_pct
 from src.algorithms.features import build_enhanced_features, build_basic_features
+from src.algorithms.runtime_flags import is_optuna_enabled
 from src.utils.logger import get_logger
 
 log = get_logger("lightgbm")
@@ -171,8 +172,13 @@ class LightGBMPredictor(PredictionAlgorithm):
         try:
             return self._train_and_predict(prices, volumes, current)
         except Exception as exc:
-            log.warning("lightgbm.fallback", error=str(exc))
-            return self._ema_fallback(prices, current)
+            log.error(
+                "algo.lightgbm.failed",
+                market=self._market_key,
+                error=str(exc),
+                exc_info=True,
+            )
+            raise
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -300,6 +306,10 @@ def _tune_lightgbm_params(
 ) -> dict:
     """Return best LightGBM params via Optuna, or defaults if unavailable/insufficient data."""
     if n_data_points < HYPEROPT_MIN_POINTS or len(X_val) < 5:
+        return dict(_DEFAULT_PARAMS)
+
+    if not is_optuna_enabled():
+        log.debug("lightgbm.hyperopt_skip", reason="fast_mode")
         return dict(_DEFAULT_PARAMS)
 
     try:

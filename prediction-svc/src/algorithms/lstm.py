@@ -148,8 +148,13 @@ class LSTMPredictor(PredictionAlgorithm):
         try:
             return self._train_and_predict(prices)
         except Exception as exc:
-            log.warning("lstm.fallback", error=str(exc))
-            return self._ema_fallback(prices)
+            log.error(
+                "algo.lstm_nn.failed",
+                market=self._market_key,
+                error=str(exc),
+                exc_info=True,
+            )
+            raise
 
     # ------------------------------------------------------------------
     # Internal helpers

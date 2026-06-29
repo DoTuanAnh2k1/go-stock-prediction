@@ -414,18 +414,44 @@ class SimulationEngine:
                 log.warning("sim.kpi.finalize_failed", session_id=session_id, error=str(kpi_exc))
 
     def run_all_bots_backtest(self, start_date: date, end_date: date) -> int:
-        """Backtest all active bots sequentially. Returns count of completed."""
+        """Backtest all active bots in parallel. Returns count of completed.
+
+        Each bot is dispatched to a ThreadPoolExecutor worker.  run_backtest()
+        opens its own session_scope() for every DB operation — no shared session
+        state between threads.  Worker count follows per_symbol_workers setting
+        (0 = os.cpu_count()), capped at 8.
+        """
+        from src.config import get_settings
+
         with session_scope() as session:
             bots = session.query(SimBot).filter(SimBot.is_active == True).all()
             bot_ids = [b.id for b in bots]
 
+        cfg = get_settings()
+        workers = max(1, min(8, cfg.per_symbol_workers or (os.cpu_count() or 4)))
+        log.info("sim.all_bots.start", total=len(bot_ids), workers=workers)
+
         completed = 0
-        for bot_id in bot_ids:
-            try:
-                self.run_backtest(bot_id, start_date, end_date)
-                completed += 1
-            except Exception as exc:
-                log.error("sim.all_bots.bot_failed", bot_id=bot_id, error=str(exc))
+        completed_lock = threading.Lock()
+
+        def _run_one(bot_id: str) -> None:
+            self.run_backtest(bot_id, start_date, end_date)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(_run_one, bid): bid for bid in bot_ids}
+            for fut in concurrent.futures.as_completed(futures):
+                bot_id = futures[fut]
+                try:
+                    fut.result()
+                    with completed_lock:
+                        completed += 1
+                except Exception as exc:
+                    log.error(
+                        "sim.all_bots.bot_failed",
+                        bot_id=bot_id,
+                        error=str(exc),
+                        exc_info=True,
+                    )
 
         log.info("sim.all_bots.done", total=len(bot_ids), completed=completed)
         return completed

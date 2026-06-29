@@ -60,7 +60,7 @@ api-svc/
     │   ├── helper.go           #   requireGRPCClient(), ResponseSuccess/ResponseError, etc.
     │   ├── cache.go            #   small in-process response cache (e.g. monitoring)
     │   ├── backup_scheduler.go #   Start/StopBackupScheduler — DB-backed daily pg_dump
-    │   ├── api_auth.go         #   POST /api/auth/login, GET /api/auth/me, PUT /api/auth/password (→ auth-svc)
+    │   ├── api_auth.go         #   POST /api/x/grant (login, X-Token header), GET /api/auth/me, PUT /api/auth/password (→ auth-svc)
     │   ├── api_users.go        #   /api/users* (→ auth-svc)
     │   ├── api_market_groups.go#   /api/market-groups* (→ auth-svc)
     │   ├── api_gold*.go        #   Gold prices + predictions (direct DB read)

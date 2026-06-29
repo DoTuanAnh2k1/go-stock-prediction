@@ -16,58 +16,6 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api/auth/login": {
-            "post": {
-                "description": "Authenticate with username/password; returns JWT signed by Java Auth Service",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Auth"
-                ],
-                "summary": "Login",
-                "parameters": [
-                    {
-                        "description": "Login credentials",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/pkg_server.loginRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/pkg_server.loginResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/pkg_server.ResponseFailure"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/pkg_server.ResponseFailure"
-                        }
-                    },
-                    "503": {
-                        "description": "Service Unavailable",
-                        "schema": {
-                            "$ref": "#/definitions/pkg_server.ResponseFailure"
-                        }
-                    }
-                }
-            }
-        },
         "/api/auth/me": {
             "get": {
                 "security": [
@@ -4141,6 +4089,74 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/trigger/rebuild-replay": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Wipes all predictions and simulation data, then replays a walk-forward backtest from cutoff_date+1 → today (out-of-sample), retrains meta-models, and replays bot simulation. Runs in the background; returns 202 immediately. Returns 409 if a rebuild-replay is already in progress, 400 for invalid arguments, 503 if the prediction service is unavailable.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Triggers"
+                ],
+                "summary": "Trigger rebuild \u0026 replay",
+                "parameters": [
+                    {
+                        "description": "Rebuild-replay parameters (both fields optional)",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.RebuildReplayRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.RebuildReplayResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
         "/api/trigger/reconcile": {
             "post": {
                 "security": [
@@ -4852,6 +4868,76 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/version": {
+            "get": {
+                "description": "Returns git SHA, build time, and dirty flag for api-svc and all co-deployed services. consistent=true when every service's git_sha (ignoring \"unknown\"/empty) matches api-svc's git_sha.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Version"
+                ],
+                "summary": "Get version information",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.versionResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/x/grant": {
+            "post": {
+                "description": "Authenticate via the X-Token header (base64 of \"username:password\"); returns JWT signed by Java Auth Service. Body is ignored.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Login",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "base64(\\",
+                        "name": "X-Token",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.loginResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Returns full system health including database, config, and runtime metrics",
@@ -5287,6 +5373,26 @@ const docTemplate = `{
                 }
             }
         },
+        "go-stock-prediction_pkg_version.Info": {
+            "type": "object",
+            "properties": {
+                "build_time": {
+                    "type": "string"
+                },
+                "dirty": {
+                    "type": "string"
+                },
+                "git_sha": {
+                    "type": "string"
+                },
+                "service": {
+                    "type": "string"
+                },
+                "started_at": {
+                    "type": "string"
+                }
+            }
+        },
         "go-stock-prediction_proto_auth.MarketGroupResponse": {
             "type": "object",
             "properties": {
@@ -5396,6 +5502,27 @@ const docTemplate = `{
                 },
                 "total_alloc_mb": {
                     "type": "integer"
+                }
+            }
+        },
+        "pkg_server.RebuildReplayRequest": {
+            "type": "object",
+            "properties": {
+                "cutoff_date": {
+                    "description": "CutoffDate is an ISO date string \"YYYY-MM-DD\". Only predictions with\ntarget_date \u003e cutoff_date are kept after the wipe. Empty → server default\n(2026-06-13).",
+                    "type": "string"
+                },
+                "step_size": {
+                    "description": "StepSize is the walk-forward step in days. 0 → server default (1).",
+                    "type": "integer"
+                }
+            }
+        },
+        "pkg_server.RebuildReplayResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
                 }
             }
         },
@@ -5580,6 +5707,12 @@ const docTemplate = `{
         "pkg_server.cryptoChartResponse": {
             "type": "object",
             "properties": {
+                "closes": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
                 "coin_id": {
                     "type": "string"
                 },
@@ -5591,6 +5724,24 @@ const docTemplate = `{
                 },
                 "granularity": {
                     "type": "string"
+                },
+                "highs": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "lows": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "opens": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
                 },
                 "prices": {
                     "type": "array",
@@ -5820,13 +5971,37 @@ const docTemplate = `{
                         "type": "number"
                     }
                 },
+                "closes": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
                 "granularity": {
                     "type": "string"
+                },
+                "highs": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
                 },
                 "labels": {
                     "type": "array",
                     "items": {
                         "type": "string"
+                    }
+                },
+                "lows": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "opens": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
                     }
                 },
                 "sell_prices": {
@@ -6176,17 +6351,6 @@ const docTemplate = `{
                 }
             }
         },
-        "pkg_server.loginRequest": {
-            "type": "object",
-            "properties": {
-                "password": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
         "pkg_server.loginResponse": {
             "type": "object",
             "properties": {
@@ -6486,6 +6650,12 @@ const docTemplate = `{
         "pkg_server.nasdaqChartResponse": {
             "type": "object",
             "properties": {
+                "closes": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
                 "dates": {
                     "type": "array",
                     "items": {
@@ -6494,6 +6664,24 @@ const docTemplate = `{
                 },
                 "granularity": {
                     "type": "string"
+                },
+                "highs": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "lows": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "opens": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
                 },
                 "prices": {
                     "type": "array",
@@ -7157,6 +7345,12 @@ const docTemplate = `{
         "pkg_server.sp500ChartResponse": {
             "type": "object",
             "properties": {
+                "closes": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
                 "dates": {
                     "type": "array",
                     "items": {
@@ -7165,6 +7359,24 @@ const docTemplate = `{
                 },
                 "granularity": {
                     "type": "string"
+                },
+                "highs": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "lows": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "opens": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
                 },
                 "prices": {
                     "type": "array",
@@ -7429,11 +7641,46 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "pkg_server.versionResponse": {
+            "type": "object",
+            "properties": {
+                "build_time": {
+                    "type": "string"
+                },
+                "consistent": {
+                    "type": "boolean"
+                },
+                "dirty": {
+                    "type": "string"
+                },
+                "git_sha": {
+                    "type": "string"
+                },
+                "mismatched": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "service": {
+                    "type": "string"
+                },
+                "services": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/go-stock-prediction_pkg_version.Info"
+                    }
+                },
+                "started_at": {
+                    "type": "string"
+                }
+            }
         }
     },
     "securityDefinitions": {
         "BearerAuth": {
-            "description": "JWT token from POST /api/auth/login. Format: Bearer {token}",
+            "description": "JWT token from POST /api/x/grant. Format: Bearer {token}",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"

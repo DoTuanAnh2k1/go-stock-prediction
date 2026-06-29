@@ -57,6 +57,7 @@ Lưu trong bảng `cron_schedules`, chỉnh live qua `/api/schedules` hoặc Set
 | `train_nasdaq` | `0 0 4 * * 0` | bật | Training NASDAQ (Chủ nhật 4AM) |
 | `train_crypto` | `0 0 5 * * 0` | bật | Training Crypto (Chủ nhật 5AM) |
 | `train_sp500` | `0 0 7 * * 0` | bật | Training S&P 500 (Chủ nhật 7AM) |
+| `train_meta` | `0 0 8 * * 0` | bật | Training Meta-Stack LightGBM classifier cho 4 markets (Chủ nhật 8AM) |
 | `simulation_daily` | `0 0 20 * * *` | bật | Bot trading (8PM); live-step theo giờ; NASDAQ/SP500 skip nếu is_intraday_open=False |
 | `daily_backup` | `0 0 3 * * *` | bật | Backup PostgreSQL lúc 3AM — **Go api-svc** chạy, không phải Python |
 | `gold_predict`, `predict_nasdaq`, `predict_crypto`, `predict_sp500` | — | **tắt** | Disabled — đã chạy trong pipeline |
@@ -74,3 +75,7 @@ Lưu trong bảng `cron_schedules`, chỉnh live qua `/api/schedules` hoặc Set
 ### Bot RL DQN
 
 `simulation/bot.py` nhánh rl_dqn: action policy trực tiếp (không threshold); SL/TP vẫn là hard guard. Observation = `build_enhanced_features()` + position_state. Seeder: **1 bot RL/market** (4 tổng). Checkpoint: `${RL_MODEL_DIR}/rl_dqn_{market}.pt`.
+
+### Bot Meta-Stack
+
+`simulation/bot.py` nhánh is_meta (`base_key == "meta_stack"`): đọc tất cả dự đoán hiện tại của các algo + direction accuracy rolling (K=40 lần, as-of t, chống leakage) → `MetaStackModel.predict_proba()` → P(up) đã calibrate; quyết định BUY nếu `p > 0.5 + δ`, SELL nếu `p < 0.5 - δ` và đang giữ vị thế, size theo conviction `(p−0.5)/0.5 × max_position_pct` (dùng `Portfolio.buy(position_pct=...)`). SL/TP là hard guard như mọi bot. Fallback: reliability-weighted vote khi thiếu LightGBM/checkpoint. Seeder: **1 bot `meta_stack`/market** (4 tổng pooled); `meta_stack__ps` per-symbol khi `PER_SYMBOL_ENABLED=true`. Checkpoint: `${RL_MODEL_DIR}/meta_{market}.pkl` (pooled) / `meta_{market}_{symbol}.pkl` (per-symbol). Leaderboard/monitoring tự hiện vì là rows `sim_bots` thường.

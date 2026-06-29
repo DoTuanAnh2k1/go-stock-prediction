@@ -127,8 +127,37 @@ def seed_bots() -> int:
                 inserted += 1
 
         # -----------------------------------------------------------------------
+        # Meta-stacking bots: 1 pooled bot per market (4 total)
+        # buy_threshold/sell_threshold/min_confidence are reused as the δ
+        # dead-band and SL/TP guard (same convention as RL DQN bots).
+        # -----------------------------------------------------------------------
+        for market_key, market_display, initial_capital, currency in MARKETS:
+            bot_id = f"{market_key.lower()}_meta_stack"
+            display_name = f"{market_display} — Meta-Stack"
+            existing = session.query(SimBot).filter(SimBot.id == bot_id).first()
+            if existing is None:
+                bot = SimBot(
+                    id=bot_id,
+                    market=market_key,
+                    algorithm="meta_stack",
+                    display_name=display_name,
+                    initial_capital=initial_capital,
+                    currency=currency,
+                    buy_threshold=Decimal("0.50"),   # δ dead-band (p must exceed 0.5+δ/100)
+                    sell_threshold=Decimal("0.30"),  # unused (SELL uses buy_threshold)
+                    min_confidence=Decimal("0.40"),  # unused by meta native branch
+                    stop_loss=Decimal("5.00"),        # hard SL guard still active
+                    take_profit=Decimal("8.00"),      # hard TP guard still active
+                    max_position_pct=Decimal("15.00"),
+                    max_positions=5,
+                    is_active=True,
+                )
+                session.add(bot)
+                inserted += 1
+
+        # -----------------------------------------------------------------------
         # Per-symbol bots (only when per_symbol_enabled is true)
-        # For each (market, symbol): 11 algo × 10 variants + 1 RL DQN
+        # For each (market, symbol): 11 algo × 10 variants + 1 RL DQN + 1 meta_stack
         # algorithm column carries the "__ps" suffix; symbol column is set.
         # -----------------------------------------------------------------------
         if get_settings().per_symbol_enabled:
@@ -235,6 +264,33 @@ def _seed_per_symbol_bots(session) -> int:
                     min_confidence=Decimal("0.40"),  # unused by RL native branch
                     stop_loss=Decimal("5.00"),        # SL guard still active
                     take_profit=Decimal("8.00"),      # TP guard still active
+                    max_position_pct=Decimal("15.00"),
+                    max_positions=5,
+                    is_active=True,
+                )
+                session.add(bot)
+                inserted += 1
+
+            # --- Meta-stack per-symbol bot: 1 per (market, symbol) ---
+            meta_ps_algorithm = f"meta_stack{ps_algo_suffix}"  # "meta_stack__ps"
+            meta_bot_id = f"{market_key.lower()}_{sym_slug}_meta_stack{ps_algo_suffix}"[:50]
+            meta_display = f"{market_display} {symbol} — Meta-Stack"
+
+            existing = session.query(SimBot).filter(SimBot.id == meta_bot_id).first()
+            if existing is None:
+                bot = SimBot(
+                    id=meta_bot_id,
+                    market=market_key,
+                    algorithm=meta_ps_algorithm,
+                    symbol=symbol,
+                    display_name=meta_display,
+                    initial_capital=initial_capital,
+                    currency=currency,
+                    buy_threshold=Decimal("0.50"),   # δ dead-band for meta policy
+                    sell_threshold=Decimal("0.30"),  # not used by meta native branch
+                    min_confidence=Decimal("0.40"),  # not used by meta native branch
+                    stop_loss=Decimal("5.00"),        # hard SL guard still active
+                    take_profit=Decimal("8.00"),      # hard TP guard still active
                     max_position_pct=Decimal("15.00"),
                     max_positions=5,
                     is_active=True,

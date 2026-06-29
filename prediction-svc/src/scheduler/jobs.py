@@ -315,6 +315,16 @@ def job_train_sp500() -> None:
         log.error("job.train_sp500.error", error=str(exc))
 
 
+def job_train_meta() -> None:
+    """Train MetaStackModel for all markets (runs after per-market algo trains)."""
+    from src.orchestrator.training import train_meta_all
+    try:
+        train_meta_all()
+        log.info("job.train_meta.done")
+    except Exception as exc:
+        log.error("job.train_meta.error", error=str(exc))
+
+
 # Note: the database backup job lives in the Go API service
 # (api/pkg/server/backup_scheduler.go). The API owns the daily_backup schedule
 # and runs mysqldump itself, so the prediction service no longer performs backups.
@@ -338,4 +348,6 @@ JOB_FUNCTIONS = {
     "train_nasdaq": job_train_nasdaq,
     "train_crypto": job_train_crypto,
     "train_sp500": job_train_sp500,
+    # Meta-stacking training (runs after per-market algo trains on Sunday)
+    "train_meta": job_train_meta,
 }

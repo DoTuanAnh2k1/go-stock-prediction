@@ -486,8 +486,13 @@ class RLDQNPredictor(PredictionAlgorithm):
         try:
             return self._inference(prices, volumes)
         except Exception as exc:
-            log.warning("rl_dqn.predict.fallback", error=str(exc))
-            return self._ema_fallback(prices)
+            log.error(
+                "algo.rl_dqn.failed",
+                market=self._market_key,
+                error=str(exc),
+                exc_info=True,
+            )
+            raise
 
     def _inference(self, prices: list[float], volumes: list[float] | None) -> PredictionResult:
         arr = np.array(prices, dtype=np.float32)

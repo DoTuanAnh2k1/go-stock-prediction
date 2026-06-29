@@ -91,10 +91,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (username: string, password: string) => {
-    const res = await fetch('/api/auth/login', {
+    const res = await fetch('/api/x/grant', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      headers: {
+        'Content-Type': 'application/json',
+        // base64("username:password") — credential lives in the header, not the body.
+        'X-Token': btoa(`${username}:${password}`),
+      },
+      body: JSON.stringify({ request: '' }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

@@ -145,9 +145,10 @@ The `db` container auto-initialises the schema from `database.sql` on first star
 
 ```bash
 # Get a JWT token (super_admin seeded by auth-svc)
-TOKEN=$(curl -s -X POST http://localhost/api/auth/login \
+TOKEN=$(curl -s -X POST http://localhost/api/x/grant \
   -H "Content-Type: application/json" \
-  -d '{"username":"chon","password":"super_admin"}' | jq -r '.token')
+  -H "X-Token: $(printf '%s' 'chon:super_admin' | base64)" \
+  -d '{"request":""}' | jq -r '.token')
 
 # Crawl initial data for all markets
 curl -X POST http://localhost/api/trigger/gold-crawler   -H "Authorization: Bearer $TOKEN"
@@ -277,7 +278,7 @@ Do not edit generated `*.pb.go` or `*_pb2*.py` files by hand.
 
 | Method | Path | Notes |
 |--------|------|-------|
-| `POST` | `/api/auth/login` | Login — returns JWT with `accessible_markets` claim |
+| `POST` | `/api/x/grant` | Login — `X-Token: base64("user:pass")` header, body `{"request":""}` (ignored); returns JWT with `accessible_markets` claim |
 | `GET` | `/api/auth/me` | Verify token |
 | `PUT` | `/api/auth/password` | Change own password (JWT required) |
 | `GET` | `/api/users` | List users (admin) |

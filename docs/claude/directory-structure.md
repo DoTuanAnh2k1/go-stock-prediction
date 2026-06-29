@@ -40,7 +40,7 @@ api-svc/pkg/server/api_trigger_crypto_crawler.go  # POST /api/trigger/crypto-cra
 api-svc/pkg/server/api_trigger_crypto_history.go  # POST /api/trigger/crypto-history (backfill 180 ngày, background, 202)
 api-svc/pkg/server/api_trigger_sp500.go           # POST /api/trigger/sp500-crawler, POST /api/trigger/sp500-predict
 api-svc/pkg/server/api_trigger_simulation.go      # POST /api/trigger/simulation-backtest, simulation-live-step, sim-reset
-api-svc/pkg/server/api_auth.go                    # POST /api/auth/login, GET /api/auth/me, PUT /api/auth/password
+api-svc/pkg/server/api_auth.go                    # POST /api/x/grant (login, X-Token header), GET /api/auth/me, PUT /api/auth/password
 api-svc/pkg/server/api_users.go                   # CRUD /api/users — quản lý user (admin only)
 api-svc/pkg/server/api_market_groups.go           # CRUD /api/market-groups (admin only)
 api-svc/pkg/server/api_schedules.go               # GET /api/schedules, PUT /api/schedules/{key}
@@ -72,7 +72,7 @@ api-svc/pkg/testutil/                              # Test helpers (db, fixtures,
 web-svc/src/context/AuthContext.tsx    # AuthProvider + useAuth hook — quản lý JWT; canAccessMarket(key)
 web-svc/src/context/LangContext.tsx    # LangProvider + useLanguage hook — VI/EN toggle
 web-svc/src/i18n.ts                    # Bảng dịch VI/EN
-web-svc/src/components/LoginModal.tsx  # Login modal — gọi POST /api/auth/login
+web-svc/src/components/LoginModal.tsx  # Login modal — gọi POST /api/x/grant (X-Token header)
 web-svc/src/pages/Users.tsx            # Trang quản lý user (admin only)
 web-svc/src/pages/MarketGroups.tsx     # Trang quản lý market groups (admin only)
 web-svc/src/pages/Monitoring.tsx       # Data Pipeline — bảng bots dùng server-side paging /api/monitoring/bots
@@ -121,7 +121,12 @@ prediction-svc/
 │   │   └── jobs.py                     # Định nghĩa tất cả jobs (_run_pipeline, train, reconcile)
 │   ├── orchestrator/
 │   │   ├── runner.py                   # run_for_market(key); target = now+1h; is_intraday_open guard NASDAQ/SP500
-│   │   └── training.py                 # reconcile_predictions(only_market=None); train_for_market()
+│   │   └── training.py                 # reconcile_predictions(only_market=None); train_for_market(); train_meta_for_market(); train_meta_all()
+│   ├── simulation/
+│   │   ├── bot.py                      # Bot step logic: is_rl → _step_rl, is_meta → _step_meta, còn lại → _step_threshold
+│   │   ├── meta_stack.py               # MetaStackModel: LightGBM classifier + calibration isotonic → P(up); fallback reliability-weighted vote; KHÔNG thuộc algorithms/
+│   │   ├── portfolio.py                # Portfolio; buy() có kwarg position_pct tùy chọn (sizing theo conviction, dùng bởi meta_stack)
+│   │   └── seeder.py                   # Seed bots: algo pooled + per-symbol + rl_dqn + meta_stack (+ meta_stack__ps)
 │   └── utils/
 │       ├── logger.py                   # structlog config
 │       ├── timezone.py                 # Asia/Ho_Chi_Minh helpers
@@ -133,6 +138,8 @@ prediction-svc/
 │   └── integration/                    # End-to-end tests qua gRPC và HTTP API
 └── proto/prediction/prediction_pb2*.py # Generated Python stubs (không sửa tay)
 ```
+
+**Tài liệu chiến thuật bot:** thư mục `tactics/` (bên dưới `docs/`) chứa tài liệu CHIẾN THUẬT giao dịch của bot — phân biệt với `algos/` là tài liệu thuật toán dự đoán. `tactics/README.md` giải thích phân tầng; `tactics/meta-stacking.md` mô tả toán học bản supervised meta-stack; `tactics/meta-rl.md` mô tả phương án RL meta (doc-only, chưa code).
 
 ## Java Auth Service
 
@@ -191,7 +198,7 @@ Gateway-local: `GET /healthz`, `GET /readyz` (không proxy).
 cli-svc/
 ├── main.go                      # wish.Server :2345; upsert handler catalog khi boot
 └── internal/
-    ├── server/                  # password-auth → POST /api/auth/login; boot handler-upsert
+    ├── server/                  # password-auth → POST /api/x/grant; boot handler-upsert
     ├── shell/                   # bubbletea Model: model.go, update.go, view.go, completer.go
     ├── handlers/                # Handler catalog registry
     ├── client/                  # HTTP → gateway (/api), gắn JWT từ ssh.Context

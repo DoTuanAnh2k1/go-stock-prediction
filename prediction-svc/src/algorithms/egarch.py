@@ -32,8 +32,13 @@ class EGARCHPredictor(PredictionAlgorithm):
         try:
             return self._fit_and_predict(prices, current)
         except Exception as exc:
-            log.warning("egarch.fallback", error=str(exc))
-            return self._ema_fallback(prices, current)
+            log.error(
+                "algo.egarch.failed",
+                market=self._market_key,
+                error=str(exc),
+                exc_info=True,
+            )
+            raise
 
     def _fit_and_predict(self, prices: list[float], current: float) -> PredictionResult:
         import warnings

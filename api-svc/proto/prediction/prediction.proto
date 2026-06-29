@@ -51,6 +51,11 @@ service PredictionService {
   rpc StreamNasdaqPredict(Empty) returns (stream PipelineLogEvent);
   rpc StreamCryptoPredict(Empty) returns (stream PipelineLogEvent);
   rpc StreamSP500Predict(Empty) returns (stream PipelineLogEvent);
+
+  // Rebuild & Replay — wipe all predictions + sim data, replay walk-forward
+  // from cutoff+1 → today (out-of-sample), retrain meta, replay bots.
+  // Runs in background; returns immediately (202-style).
+  rpc TriggerRebuildReplay(RebuildReplayRequest) returns (TriggerResponse);
 }
 
 message Empty {}
@@ -99,4 +104,12 @@ message PipelineLogEvent {
   float progress = 3;  // 0.0–1.0
   bool done = 4;       // true on last event
   string error = 5;    // non-empty on fatal error
+}
+
+message RebuildReplayRequest {
+  // ISO date string "YYYY-MM-DD"; only predictions with target_date > cutoff are saved.
+  // Empty = default "2026-06-13".
+  string cutoff_date = 1;
+  // Walk-forward step size in days; 0 = default 1.
+  int32 step_size = 2;
 }

@@ -192,7 +192,16 @@ class PredictionServicer:
             if training.get_training_status()["is_training"]:
                 return pb2.TriggerTrainResponse(success=False, error="training already in progress")
 
-            if algo:
+            if algo == "meta_stack":
+                # Meta-stacking is not a PredictionAlgorithm; route to its
+                # own training function which runs in background.
+                threading.Thread(target=_bg_train_meta, daemon=True).start()
+                return pb2.TriggerTrainResponse(
+                    success=True,
+                    session_id="",
+                    message="Meta-stack training started in background for all markets",
+                )
+            elif algo:
                 success, session_id = training.train_single_algorithm(algo)
             else:
                 # Start in background, return immediately with session ID
@@ -270,6 +279,39 @@ class PredictionServicer:
         except Exception as exc:
             log.error("grpc.ResetSimBots.error", error=str(exc))
             return pb2.TriggerResponse(success=False, error=str(exc))
+
+    # -------------------------------------------------------------------
+    # Rebuild & Replay
+    # -------------------------------------------------------------------
+
+    def TriggerRebuildReplay(self, request, context):
+        pb2, _ = _get_pb()
+        cutoff_str = (request.cutoff_date or "").strip() or "2026-06-13"
+        step_size = request.step_size if request.step_size > 0 else 1
+
+        try:
+            from datetime import date
+            cutoff = date.fromisoformat(cutoff_str)
+        except ValueError as exc:
+            log.error("grpc.TriggerRebuildReplay.invalid_date", cutoff=cutoff_str, error=str(exc))
+            return pb2.TriggerResponse(
+                success=False,
+                error=f"invalid cutoff_date {cutoff_str!r}: {exc}",
+            )
+
+        log.info("grpc.TriggerRebuildReplay", cutoff=str(cutoff), step_size=step_size)
+        threading.Thread(
+            target=_bg_rebuild_replay,
+            args=(cutoff, step_size),
+            daemon=True,
+        ).start()
+        return pb2.TriggerResponse(
+            success=True,
+            message=(
+                f"Rebuild & replay started in background "
+                f"(cutoff={cutoff}, step_size={step_size})"
+            ),
+        )
 
     # -------------------------------------------------------------------
     # Streaming pipeline predict RPCs
@@ -399,6 +441,15 @@ def _bg_backtest(train_window: int, step_size: int, market_key: str):
         _backtest_running.clear()
 
 
+def _bg_train_meta():
+    try:
+        from src.orchestrator.training import train_meta_all
+        train_meta_all()
+        log.info("bg.train_meta.done")
+    except Exception as exc:
+        log.error("bg.train_meta.error", error=str(exc))
+
+
 def _bg_simulation_backtest(bot_id: str, start_date_str: str, end_date_str: str):
     from datetime import date, datetime
     from src.simulation.engine import SimulationEngine
@@ -412,6 +463,15 @@ def _bg_simulation_backtest(bot_id: str, start_date_str: str, end_date_str: str)
             engine.run_all_bots_backtest(start, end)
     except Exception as exc:
         log.error("sim.backtest.error", error=str(exc))
+
+
+def _bg_rebuild_replay(cutoff, step_size: int):
+    try:
+        from src.orchestrator.rebuild import rebuild_and_replay
+        result = rebuild_and_replay(cutoff, step_size)
+        log.info("bg.rebuild_replay.done", **result)
+    except Exception as exc:
+        log.error("bg.rebuild_replay.error", error=str(exc), exc_info=True)
 
 
 def _bg_simulation_live_step():

@@ -136,8 +136,13 @@ class RandomForestPredictor(PredictionAlgorithm):
         try:
             return self._train_and_predict(prices, volumes, current)
         except Exception as exc:
-            log.warning("random_forest.fallback", error=str(exc))
-            return self._ema_fallback(prices, current)
+            log.error(
+                "algo.random_forest.failed",
+                market=self._market_key,
+                error=str(exc),
+                exc_info=True,
+            )
+            raise
 
     # ------------------------------------------------------------------
     # Internal helpers

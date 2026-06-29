@@ -5,7 +5,7 @@ import os
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from src.algorithms.base import PredictionAlgorithm
@@ -920,7 +920,13 @@ def _walk_forward_prices(prices_asc: list, algos: dict, train_window: int, step_
                             total += len(batch)
                             batch = []
                 except Exception:
-                    pass
+                    log.error(
+                        "backtest.predict.failed",
+                        algo=key,
+                        idx=t,
+                        exc_info=True,
+                    )
+                    continue
 
         if batch:
             repo.bulk_create_predictions(batch)
@@ -968,7 +974,13 @@ def _backtest_gold(algos: dict, train_window: int, step_size: int) -> tuple[int,
                             total += len(batch)
                             batch = []
                     except Exception:
-                        pass
+                        log.error(
+                            "backtest.predict.failed",
+                            algo=key,
+                            idx=t,
+                            exc_info=True,
+                        )
+                        continue
             if batch:
                 _bulk_gold_predictions(batch)
                 total += len(batch)
@@ -1020,7 +1032,13 @@ def _backtest_nasdaq(algos: dict, train_window: int, step_size: int) -> tuple[in
                             total += len(batch)
                             batch = []
                     except Exception:
-                        pass
+                        log.error(
+                            "backtest.predict.failed",
+                            algo=key,
+                            idx=t,
+                            exc_info=True,
+                        )
+                        continue
             if batch:
                 _bulk_nasdaq_predictions(batch)
                 total += len(batch)
@@ -1071,7 +1089,13 @@ def _backtest_crypto(algos: dict, train_window: int, step_size: int) -> tuple[in
                             total += len(batch)
                             batch = []
                     except Exception:
-                        pass
+                        log.error(
+                            "backtest.predict.failed",
+                            algo=key,
+                            idx=t,
+                            exc_info=True,
+                        )
+                        continue
             if batch:
                 _bulk_crypto_predictions(batch)
                 total += len(batch)
@@ -1123,7 +1147,13 @@ def _backtest_sp500(algos: dict, train_window: int, step_size: int) -> tuple[int
                             total += len(batch)
                             batch = []
                     except Exception:
-                        pass
+                        log.error(
+                            "backtest.predict.failed",
+                            algo=key,
+                            idx=t,
+                            exc_info=True,
+                        )
+                        continue
             if batch:
                 _bulk_sp500_predictions(batch)
                 total += len(batch)
@@ -1135,3 +1165,113 @@ def _bulk_sp500_predictions(batch: list) -> None:
     from src.database.models import SP500Prediction
     with session_scope() as session:
         session.bulk_save_objects([SP500Prediction(**r) for r in batch])
+
+
+# ---------------------------------------------------------------------------
+# Meta-stacking training
+# ---------------------------------------------------------------------------
+
+# Simulation market key → MetaStackModel market key (NASDAQ100→NASDAQ)
+_TRAINING_TO_SIM_MARKET: dict[str, str] = {
+    "GOLD": "GOLD",
+    "NASDAQ100": "NASDAQ",
+    "NASDAQ": "NASDAQ",
+    "CRYPTO": "CRYPTO",
+    "SP500": "SP500",
+}
+
+
+def train_meta_for_market(
+    market: str,
+    symbol: str | None = None,
+    max_train_date: date | None = None,
+) -> dict:
+    """Train MetaStackModel for one market (optionally per-symbol).
+
+    Saves checkpoint to ${RL_MODEL_DIR}/meta_{MARKET}.pkl.
+    When symbol is None and PER_SYMBOL_ENABLED, also trains per-symbol variants.
+
+    Args:
+        market: Market key — accepts both registry style (NASDAQ100) and
+                simulation style (NASDAQ).
+        symbol: Optional symbol to train per-symbol model for. When None,
+                trains the pooled model (and per-symbol if enabled).
+        max_train_date: When set, only prediction rows with prediction_date <=
+                max_train_date are used for training.  None = use all rows
+                (normal cron behaviour).  Passed through to MetaStackModel.train().
+
+    Returns:
+        Metrics dict from MetaStackModel.train().
+    """
+    from src.simulation.meta_stack import MetaStackModel, invalidate_cache
+
+    sim_market = _TRAINING_TO_SIM_MARKET.get(market.upper(), market.upper())
+
+    log.info("training.meta.start", market=sim_market, symbol=symbol,
+             max_train_date=str(max_train_date) if max_train_date else None)
+
+    model = MetaStackModel(sim_market, symbol)
+    metrics = model.train(max_date=max_train_date)
+
+    status = metrics.get("status", "unknown")
+    if status == "success":
+        log.info("training.meta.done",
+                 market=sim_market, symbol=symbol,
+                 direction_accuracy=metrics.get("direction_accuracy"),
+                 brier_score=metrics.get("brier_score"),
+                 n_test=metrics.get("n_test"))
+        # Invalidate in-process cache so the bot picks up fresh checkpoint
+        invalidate_cache(sim_market)
+    else:
+        log.warning("training.meta.skipped",
+                    market=sim_market, symbol=symbol,
+                    reason=metrics.get("reason"))
+
+    # Per-symbol training (pooled only triggers per-symbol)
+    if symbol is None:
+        settings = get_settings()
+        if settings.per_symbol_enabled:
+            _train_meta_per_symbol(sim_market, settings, max_train_date=max_train_date)
+
+    return metrics
+
+
+def _train_meta_per_symbol(
+    sim_market: str,
+    settings,
+    max_train_date: date | None = None,
+) -> None:
+    """Train per-symbol MetaStackModel instances for all symbols of the market."""
+    from src.simulation.meta_stack import MetaStackModel
+
+    symbol_series = _collect_symbol_series_for_market(sim_market)
+    min_pts = settings.per_symbol_min_points
+
+    for symbol, prices, _ in symbol_series:
+        if len(prices) < min_pts:
+            log.info("training.meta.per_symbol.skip.data_starved",
+                     market=sim_market, symbol=symbol, n=len(prices))
+            continue
+        try:
+            model = MetaStackModel(sim_market, symbol)
+            m = model.train(max_date=max_train_date)
+            log.info("training.meta.per_symbol.done",
+                     market=sim_market, symbol=symbol, status=m.get("status"))
+        except Exception as exc:
+            log.warning("training.meta.per_symbol.error",
+                        market=sim_market, symbol=symbol, error=str(exc))
+
+
+def train_meta_all(max_train_date: "date | None" = None) -> None:
+    """Train MetaStackModel for all 4 simulation markets.
+
+    Args:
+        max_train_date: When set, only prediction rows with prediction_date <=
+                max_train_date are used for training in each market model.
+                None = use all rows (normal cron behaviour, backward-compatible).
+    """
+    for sim_market in ["GOLD", "NASDAQ", "CRYPTO", "SP500"]:
+        try:
+            train_meta_for_market(sim_market, max_train_date=max_train_date)
+        except Exception as exc:
+            log.error("training.meta.market.error", market=sim_market, error=str(exc))

@@ -30,7 +30,7 @@ import (
 //	@securityDefinitions.apikey	BearerAuth
 //	@in							header
 //	@name						Authorization
-//	@description				JWT token from POST /api/auth/login. Format: Bearer {token}
+//	@description				JWT token from POST /api/x/grant. Format: Bearer {token}
 
 func main() {
 	// Initialize the configuration

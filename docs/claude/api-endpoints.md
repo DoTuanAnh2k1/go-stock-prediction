@@ -12,7 +12,7 @@ Tất cả endpoints yêu cầu `Authorization: Bearer <token>` trừ khi ghi kh
 
 | Method | Path | Ghi chú |
 |--------|------|---------|
-| `POST` | `/api/auth/login` | body: `{"username":"","password":""}` → JWT 24h với claims `sub`, `role`, `user_id`, `accessible_markets` |
+| `POST` | `/api/x/grant` | header `X-Token: base64("username:password")`, body generic `{"request":""}` (bị bỏ qua) → JWT 24h với claims `sub`, `role`, `user_id`, `accessible_markets`. **Thay cho `/api/auth/login` cũ** — đổi path + đưa credential vào header để né scanner tự động. Base64 KHÔNG phải mã hóa. |
 | `GET` | `/api/auth/me` | Xác minh token |
 | `PUT` | `/api/auth/password` | body: `{"old_password":"","new_password":""}` |
 
@@ -105,7 +105,7 @@ Tất cả đều wrap bằng `AdminRequired()` — yêu cầu role `admin` ho�
 
 | Method | Path | Ghi chú |
 |--------|------|---------|
-| `POST` | `/api/trigger/train` | body: `{"algorithm":"lstm_nn"}` (optional) |
+| `POST` | `/api/trigger/train` | body: `{"algorithm":"lstm_nn"}` (optional); `"algorithm":"meta_stack"` → background `train_meta_all()` |
 | `POST` | `/api/trigger/gold-crawler` | Đồng bộ |
 | `POST` | `/api/trigger/gold-history` | Background |
 | `POST` | `/api/trigger/gold-predict` | Background |
@@ -127,9 +127,10 @@ Tất cả đều wrap bằng `AdminRequired()` — yêu cầu role `admin` ho�
 ## Trigger thủ công (curl)
 
 ```bash
-TOKEN=$(curl -s -X POST http://localhost:8118/api/auth/login \
+TOKEN=$(curl -s -X POST http://localhost:8118/api/x/grant \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
+  -H "X-Token: $(printf '%s' 'admin:admin123' | base64)" \
+  -d '{"request":""}' | jq -r '.token')
 
 curl -X POST http://localhost:8118/api/trigger/gold-crawler -H "Authorization: Bearer $TOKEN"
 curl -X POST http://localhost:8118/api/trigger/nasdaq-crawler -H "Authorization: Bearer $TOKEN"
@@ -154,7 +155,7 @@ curl -X PUT http://localhost:8118/api/schedules/crawler_gold \
 | RPC | Ghi chú |
 |-----|---------|
 | `TriggerGoldCrawler` | Đồng bộ |
-| `TriggerTrain(TriggerTrainRequest)` | field `algorithm` optional |
+| `TriggerTrain(TriggerTrainRequest)` | field `algorithm` optional; `"meta_stack"` → background `train_meta_all()` |
 | `TriggerReconcile` | Đồng bộ |
 | `TriggerGoldHistory` | Background |
 | `TriggerGoldPredict` | Background |

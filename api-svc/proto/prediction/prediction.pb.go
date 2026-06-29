@@ -509,6 +509,61 @@ func (x *PipelineLogEvent) GetError() string {
 	return ""
 }
 
+type RebuildReplayRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ISO date string "YYYY-MM-DD"; only predictions with target_date > cutoff are saved.
+	// Empty = default "2026-06-13".
+	CutoffDate string `protobuf:"bytes,1,opt,name=cutoff_date,json=cutoffDate,proto3" json:"cutoff_date,omitempty"`
+	// Walk-forward step size in days; 0 = default 1.
+	StepSize      int32 `protobuf:"varint,2,opt,name=step_size,json=stepSize,proto3" json:"step_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RebuildReplayRequest) Reset() {
+	*x = RebuildReplayRequest{}
+	mi := &file_proto_prediction_prediction_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RebuildReplayRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RebuildReplayRequest) ProtoMessage() {}
+
+func (x *RebuildReplayRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_prediction_prediction_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RebuildReplayRequest.ProtoReflect.Descriptor instead.
+func (*RebuildReplayRequest) Descriptor() ([]byte, []int) {
+	return file_proto_prediction_prediction_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *RebuildReplayRequest) GetCutoffDate() string {
+	if x != nil {
+		return x.CutoffDate
+	}
+	return ""
+}
+
+func (x *RebuildReplayRequest) GetStepSize() int32 {
+	if x != nil {
+		return x.StepSize
+	}
+	return 0
+}
+
 var File_proto_prediction_prediction_proto protoreflect.FileDescriptor
 
 const file_proto_prediction_prediction_proto_rawDesc = "" +
@@ -551,7 +606,11 @@ const file_proto_prediction_prediction_proto_rawDesc = "" +
 	"\x03msg\x18\x02 \x01(\tR\x03msg\x12\x1a\n" +
 	"\bprogress\x18\x03 \x01(\x02R\bprogress\x12\x12\n" +
 	"\x04done\x18\x04 \x01(\bR\x04done\x12\x14\n" +
-	"\x05error\x18\x05 \x01(\tR\x05error2\xa0\f\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\"T\n" +
+	"\x14RebuildReplayRequest\x12\x1f\n" +
+	"\vcutoff_date\x18\x01 \x01(\tR\n" +
+	"cutoffDate\x12\x1b\n" +
+	"\tstep_size\x18\x02 \x01(\x05R\bstepSize2\xf7\f\n" +
 	"\x11PredictionService\x12D\n" +
 	"\x12TriggerGoldCrawler\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12Q\n" +
 	"\fTriggerTrain\x12\x1f.prediction.TriggerTrainRequest\x1a .prediction.TriggerTrainResponse\x12B\n" +
@@ -573,7 +632,8 @@ const file_proto_prediction_prediction_proto_rawDesc = "" +
 	"\x11StreamGoldPredict\x12\x11.prediction.Empty\x1a\x1c.prediction.PipelineLogEvent0\x01\x12H\n" +
 	"\x13StreamNasdaqPredict\x12\x11.prediction.Empty\x1a\x1c.prediction.PipelineLogEvent0\x01\x12H\n" +
 	"\x13StreamCryptoPredict\x12\x11.prediction.Empty\x1a\x1c.prediction.PipelineLogEvent0\x01\x12G\n" +
-	"\x12StreamSP500Predict\x12\x11.prediction.Empty\x1a\x1c.prediction.PipelineLogEvent0\x01B&Z$go-stock-prediction/proto/predictionb\x06proto3"
+	"\x12StreamSP500Predict\x12\x11.prediction.Empty\x1a\x1c.prediction.PipelineLogEvent0\x01\x12U\n" +
+	"\x14TriggerRebuildReplay\x12 .prediction.RebuildReplayRequest\x1a\x1b.prediction.TriggerResponseB&Z$go-stock-prediction/proto/predictionb\x06proto3"
 
 var (
 	file_proto_prediction_prediction_proto_rawDescOnce sync.Once
@@ -587,7 +647,7 @@ func file_proto_prediction_prediction_proto_rawDescGZIP() []byte {
 	return file_proto_prediction_prediction_proto_rawDescData
 }
 
-var file_proto_prediction_prediction_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_proto_prediction_prediction_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_proto_prediction_prediction_proto_goTypes = []any{
 	(*Empty)(nil),                  // 0: prediction.Empty
 	(*TriggerResponse)(nil),        // 1: prediction.TriggerResponse
@@ -597,6 +657,7 @@ var file_proto_prediction_prediction_proto_goTypes = []any{
 	(*TrainingStatusResponse)(nil), // 5: prediction.TrainingStatusResponse
 	(*SimulationRequest)(nil),      // 6: prediction.SimulationRequest
 	(*PipelineLogEvent)(nil),       // 7: prediction.PipelineLogEvent
+	(*RebuildReplayRequest)(nil),   // 8: prediction.RebuildReplayRequest
 }
 var file_proto_prediction_prediction_proto_depIdxs = []int32{
 	0,  // 0: prediction.PredictionService.TriggerGoldCrawler:input_type -> prediction.Empty
@@ -620,29 +681,31 @@ var file_proto_prediction_prediction_proto_depIdxs = []int32{
 	0,  // 18: prediction.PredictionService.StreamNasdaqPredict:input_type -> prediction.Empty
 	0,  // 19: prediction.PredictionService.StreamCryptoPredict:input_type -> prediction.Empty
 	0,  // 20: prediction.PredictionService.StreamSP500Predict:input_type -> prediction.Empty
-	1,  // 21: prediction.PredictionService.TriggerGoldCrawler:output_type -> prediction.TriggerResponse
-	3,  // 22: prediction.PredictionService.TriggerTrain:output_type -> prediction.TriggerTrainResponse
-	1,  // 23: prediction.PredictionService.TriggerReconcile:output_type -> prediction.TriggerResponse
-	1,  // 24: prediction.PredictionService.TriggerGoldHistory:output_type -> prediction.TriggerResponse
-	1,  // 25: prediction.PredictionService.TriggerGoldPredict:output_type -> prediction.TriggerResponse
-	1,  // 26: prediction.PredictionService.TriggerHistoricalBacktest:output_type -> prediction.TriggerResponse
-	5,  // 27: prediction.PredictionService.GetTrainingStatus:output_type -> prediction.TrainingStatusResponse
-	1,  // 28: prediction.PredictionService.TriggerNasdaqCrawler:output_type -> prediction.TriggerResponse
-	1,  // 29: prediction.PredictionService.TriggerNasdaqPredict:output_type -> prediction.TriggerResponse
-	1,  // 30: prediction.PredictionService.TriggerCryptoCrawler:output_type -> prediction.TriggerResponse
-	1,  // 31: prediction.PredictionService.TriggerCryptoPredict:output_type -> prediction.TriggerResponse
-	1,  // 32: prediction.PredictionService.TriggerCryptoHistory:output_type -> prediction.TriggerResponse
-	1,  // 33: prediction.PredictionService.TriggerSP500Crawler:output_type -> prediction.TriggerResponse
-	1,  // 34: prediction.PredictionService.TriggerSP500Predict:output_type -> prediction.TriggerResponse
-	1,  // 35: prediction.PredictionService.TriggerSimulationBacktest:output_type -> prediction.TriggerResponse
-	1,  // 36: prediction.PredictionService.TriggerSimulationLiveStep:output_type -> prediction.TriggerResponse
-	1,  // 37: prediction.PredictionService.ResetSimBots:output_type -> prediction.TriggerResponse
-	7,  // 38: prediction.PredictionService.StreamGoldPredict:output_type -> prediction.PipelineLogEvent
-	7,  // 39: prediction.PredictionService.StreamNasdaqPredict:output_type -> prediction.PipelineLogEvent
-	7,  // 40: prediction.PredictionService.StreamCryptoPredict:output_type -> prediction.PipelineLogEvent
-	7,  // 41: prediction.PredictionService.StreamSP500Predict:output_type -> prediction.PipelineLogEvent
-	21, // [21:42] is the sub-list for method output_type
-	0,  // [0:21] is the sub-list for method input_type
+	8,  // 21: prediction.PredictionService.TriggerRebuildReplay:input_type -> prediction.RebuildReplayRequest
+	1,  // 22: prediction.PredictionService.TriggerGoldCrawler:output_type -> prediction.TriggerResponse
+	3,  // 23: prediction.PredictionService.TriggerTrain:output_type -> prediction.TriggerTrainResponse
+	1,  // 24: prediction.PredictionService.TriggerReconcile:output_type -> prediction.TriggerResponse
+	1,  // 25: prediction.PredictionService.TriggerGoldHistory:output_type -> prediction.TriggerResponse
+	1,  // 26: prediction.PredictionService.TriggerGoldPredict:output_type -> prediction.TriggerResponse
+	1,  // 27: prediction.PredictionService.TriggerHistoricalBacktest:output_type -> prediction.TriggerResponse
+	5,  // 28: prediction.PredictionService.GetTrainingStatus:output_type -> prediction.TrainingStatusResponse
+	1,  // 29: prediction.PredictionService.TriggerNasdaqCrawler:output_type -> prediction.TriggerResponse
+	1,  // 30: prediction.PredictionService.TriggerNasdaqPredict:output_type -> prediction.TriggerResponse
+	1,  // 31: prediction.PredictionService.TriggerCryptoCrawler:output_type -> prediction.TriggerResponse
+	1,  // 32: prediction.PredictionService.TriggerCryptoPredict:output_type -> prediction.TriggerResponse
+	1,  // 33: prediction.PredictionService.TriggerCryptoHistory:output_type -> prediction.TriggerResponse
+	1,  // 34: prediction.PredictionService.TriggerSP500Crawler:output_type -> prediction.TriggerResponse
+	1,  // 35: prediction.PredictionService.TriggerSP500Predict:output_type -> prediction.TriggerResponse
+	1,  // 36: prediction.PredictionService.TriggerSimulationBacktest:output_type -> prediction.TriggerResponse
+	1,  // 37: prediction.PredictionService.TriggerSimulationLiveStep:output_type -> prediction.TriggerResponse
+	1,  // 38: prediction.PredictionService.ResetSimBots:output_type -> prediction.TriggerResponse
+	7,  // 39: prediction.PredictionService.StreamGoldPredict:output_type -> prediction.PipelineLogEvent
+	7,  // 40: prediction.PredictionService.StreamNasdaqPredict:output_type -> prediction.PipelineLogEvent
+	7,  // 41: prediction.PredictionService.StreamCryptoPredict:output_type -> prediction.PipelineLogEvent
+	7,  // 42: prediction.PredictionService.StreamSP500Predict:output_type -> prediction.PipelineLogEvent
+	1,  // 43: prediction.PredictionService.TriggerRebuildReplay:output_type -> prediction.TriggerResponse
+	22, // [22:44] is the sub-list for method output_type
+	0,  // [0:22] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name
@@ -659,7 +722,7 @@ func file_proto_prediction_prediction_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_prediction_prediction_proto_rawDesc), len(file_proto_prediction_prediction_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

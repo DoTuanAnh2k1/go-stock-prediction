@@ -28,6 +28,14 @@ class BotConfig:
     symbol: str | None = None
 
 
+# Cross-section threshold multiplier for meta_stack adaptive threshold.
+# threshold = max(0.5 + delta, mu_p + K * sigma_p)
+# K=1.0 means "buy only symbols whose p is at least 1 std-dev above the
+# cross-section mean" — prevents buying the least-bad symbol when the whole
+# market looks bearish.  The absolute floor (0.5+delta) ensures we never
+# buy a symbol the model rates as likely to fall.
+_META_ADAPTIVE_K: float = 1.0
+
 # Map simulation market key → registry market key used by RL DQN
 # SignalGenerator / seeder use "GOLD", "NASDAQ", "SP500", "CRYPTO"
 # Registry uses "GOLD", "NASDAQ100", "SP500", "CRYPTO"
@@ -94,6 +102,7 @@ class TradingBot:
         # ("rl_dqn__ps") variants so that the policy path is used in both cases.
         base_key = self.config.algorithm.split("__")[0]
         is_rl = base_key == "rl_dqn"
+        is_meta = base_key == "meta_stack"
 
         if is_rl:
             # ------------------------------------------------------------------
@@ -101,6 +110,12 @@ class TradingBot:
             # ------------------------------------------------------------------
             rl_trades = self._step_rl(sim_date, closed_this_step, now=now)
             trades.extend(rl_trades)
+        elif is_meta:
+            # ------------------------------------------------------------------
+            # Meta-stacking branch: P(up|x_t) → conviction-sized BUY/HOLD/SELL
+            # ------------------------------------------------------------------
+            meta_trades = self._step_meta(sim_date, closed_this_step, now=now)
+            trades.extend(meta_trades)
         else:
             # ------------------------------------------------------------------
             # Standard threshold branch
@@ -290,6 +305,152 @@ class TradingBot:
                     trade_date=sim_date,
                     signal_strength=0.0,
                     confidence=confidence,
+                    trade_at=now,
+                ))
+
+        return trades
+
+    def _step_meta(self, sim_date: date, closed_this_step: set[str],
+                   now: Optional[datetime] = None) -> list[Trade]:
+        """Meta-stacking native step: P(up|x_t) → conviction-sized position.
+
+        Policy — adaptive threshold (2-pass):
+          delta = buy_threshold / 100        (reuse existing config)
+          p = P(up | x_t)                    (trained model or fallback vote)
+
+          Pass 1: compute p for ALL tradable symbols of this step.
+          Pass 2: derive adaptive threshold then decide per symbol:
+
+            threshold = max(0.5 + delta, mu_p + K * sigma_p)   [K = _META_ADAPTIVE_K]
+
+            When only 1 symbol is available (per-symbol bot or single-symbol
+            market): sigma_p is undefined → threshold = 0.5 + delta (absolute
+            floor only; K is not applied).
+
+          p > threshold:                   BUY  with size = clamp((p−0.5)/0.5, 0..1) × max_position_pct
+          p < 0.5 − delta  AND holding:   SELL
+          otherwise:                       HOLD
+
+        Floor semantics: the absolute floor (0.5+delta) guarantees we NEVER buy
+        a symbol the model rates as likely to fall, even when it is the "least
+        bad" of a down-sweep step.  If no symbol clears the threshold → hold cash.
+        That is correct behaviour.
+
+        SL/TP hard guard runs before this method (in step()), same as all bots.
+        """
+        import numpy as np
+        from src.database import repository as repo
+        from src.simulation.meta_stack import get_meta_model
+
+        trades: list[Trade] = []
+
+        # Load or retrieve cached meta model for this market (+ optional symbol)
+        is_per_symbol = self.config.symbol is not None
+        meta = get_meta_model(
+            self.config.market,
+            self.config.symbol if is_per_symbol else None,
+        )
+
+        # Enumerate tradable symbols and current prices as-of sim_date
+        symbol_prices = self._get_symbols_and_prices_as_of(sim_date, repo)
+        if is_per_symbol:
+            symbol_prices = {k: v for k, v in symbol_prices.items()
+                             if k == self.config.symbol}
+
+        as_of_dt = datetime.combine(sim_date, datetime.max.time())
+        delta = self.config.buy_threshold / 100.0  # confidence dead-band
+
+        # ------------------------------------------------------------------
+        # Pass 1: compute p for all tradable symbols
+        # ------------------------------------------------------------------
+        # symbol_data: {symbol: (p, current_price)}
+        symbol_data: dict[str, tuple[float, float]] = {}
+
+        for symbol, current_price in symbol_prices.items():
+            if current_price <= 0:
+                continue
+
+            # Price history for sigma/momentum features
+            prices_list = self._get_price_history_as_of(symbol, as_of_dt, repo)
+
+            # Build feature vector (AS-OF as_of_dt, no leakage)
+            try:
+                x = meta.build_features_for_inference(symbol, as_of_dt, prices_list)
+                if x is None:
+                    continue
+            except Exception:
+                continue
+
+            # Get P(up)
+            try:
+                p = meta.predict_proba(x)
+            except Exception:
+                p = 0.5  # safest neutral assumption on any error
+
+            symbol_data[symbol] = (p, current_price)
+
+        if not symbol_data:
+            return trades
+
+        # ------------------------------------------------------------------
+        # Pass 2: adaptive threshold, then decide per symbol
+        # ------------------------------------------------------------------
+        all_p = [p for p, _ in symbol_data.values()]
+
+        if len(all_p) > 1:
+            # Cross-section available: adaptive threshold
+            mu_p = float(np.mean(all_p))
+            sigma_p = float(np.std(all_p))
+            threshold = max(0.5 + delta, mu_p + _META_ADAPTIVE_K * sigma_p)
+        else:
+            # Single symbol — no cross-section; use absolute floor only
+            threshold = 0.5 + delta
+
+        for symbol, (p, current_price) in symbol_data.items():
+            has_position = symbol in self.portfolio.positions
+
+            if p > threshold:
+                # BUY: size scaled by conviction
+                if symbol in closed_this_step:
+                    continue
+                conviction = min(1.0, max(0.0, (p - 0.5) / 0.5))
+                pos_pct = conviction * self.config.max_position_pct
+                trade = self.portfolio.buy(
+                    symbol=symbol,
+                    price=current_price,
+                    trade_date=sim_date,
+                    signal_strength=round(p - 0.5, 4),
+                    confidence=round(p, 4),
+                    trade_at=now,
+                    position_pct=pos_pct,
+                )
+                if trade:
+                    trades.append(trade)
+
+            elif p < 0.5 - delta and has_position:
+                # SELL: close existing position
+                trade = self.portfolio.sell(
+                    symbol=symbol,
+                    price=current_price,
+                    trade_date=sim_date,
+                    close_reason="meta_signal",
+                    trade_at=now,
+                )
+                if trade:
+                    trade.confidence = round(p, 4)
+                    trades.append(trade)
+
+            else:
+                # HOLD
+                trades.append(Trade(
+                    symbol=symbol,
+                    action="HOLD",
+                    quantity=0,
+                    price=current_price,
+                    trade_value=0.0,
+                    trade_date=sim_date,
+                    signal_strength=round(p - 0.5, 4),
+                    confidence=round(p, 4),
                     trade_at=now,
                 ))
 

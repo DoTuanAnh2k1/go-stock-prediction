@@ -4,6 +4,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,7 +17,7 @@ import (
 // HTTPClient is the interface the shell/handlers depend on. It is small on
 // purpose so tests can mock it without any real network.
 type HTTPClient interface {
-	// Login authenticates against POST /auth/login and returns the auth result.
+	// Login authenticates against POST /x/grant (creds in the X-Token header) and returns the auth result.
 	Login(ctx context.Context, username, password string) (*LoginResult, error)
 	// GetMyCommands fetches GET /me/commands using the supplied JWT.
 	GetMyCommands(ctx context.Context, jwt string) ([]AllowedCommand, error)
@@ -61,13 +62,32 @@ func New(baseURL string) *Client {
 var _ HTTPClient = (*Client)(nil)
 
 func (c *Client) Login(ctx context.Context, username, password string) (*LoginResult, error) {
-	payload := map[string]string{"username": username, "password": password}
-	raw, status, err := c.do(ctx, "", http.MethodPost, "/auth/login", nil, payload)
+	// Credentials travel in the X-Token header (base64 of "user:pass"); the body
+	// is a generic placeholder. Built inline because do() does not set custom headers.
+	token := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+	body, _ := json.Marshal(map[string]string{"request": ""})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/x/grant", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
-	if status != http.StatusOK {
-		return nil, fmt.Errorf("login failed: status %d", status)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Token", token)
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("login failed: status %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return nil, err
+	}
+	var raw any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("login response invalid: %w", err)
 	}
 	// Response is wrapped: {success, data:{token, user:{...}}} OR flat {token,...}.
 	obj := unwrapObject(raw)

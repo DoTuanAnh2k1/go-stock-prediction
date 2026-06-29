@@ -50,7 +50,7 @@ func NewWith(cfg Config, c client.HTTPClient, reg *handlers.Registry) *Server {
 	return &Server{cfg: cfg, client: c, reg: reg}
 }
 
-// passwordHandler authenticates the SSH user against POST /auth/login and, on
+// passwordHandler authenticates the SSH user against POST /x/grant and, on
 // success, stashes the JWT/role/user_id into the SSH context.
 func (s *Server) passwordHandler(ctx ssh.Context, password string) bool {
 	c, cancel := context.WithTimeout(context.Background(), 15*time.Second)

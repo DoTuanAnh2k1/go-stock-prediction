@@ -160,7 +160,15 @@ def _predict_gold(algos: dict, emit: EmitFn) -> int:
             except Exception as exc:
                 done_ops += 1
                 emit("warn", f"  {label} / {key}: error - {exc}", done_ops / max(total_ops, 1))
-                log.warning("predict.gold.algo_failed", source=source, product_type=product_type, algo=key, error=str(exc))
+                log.error(
+                    "algo.predict.failed",
+                    market="GOLD",
+                    algo=key,
+                    source=source,
+                    product_type=product_type,
+                    error=str(exc),
+                    exc_info=True,
+                )
 
     log.info("predict.gold.done", count=count)
 
@@ -205,9 +213,14 @@ def _predict_gold_per_symbol(now: datetime, target: datetime) -> int:
                 )
                 local_count += 1
             except Exception as exc:
-                log.warning(
-                    "predict.gold.ps.algo_failed",
-                    source=source, product_type=product_type, algo=key, error=str(exc),
+                log.error(
+                    "algo.predict.failed",
+                    market="GOLD",
+                    algo=key,
+                    source=source,
+                    product_type=product_type,
+                    error=str(exc),
+                    exc_info=True,
                 )
         return local_count
 
@@ -283,7 +296,14 @@ def _predict_nasdaq(algos: dict, emit: EmitFn) -> int:
             except Exception as exc:
                 done_ops += 1
                 emit("warn", f"  {symbol} / {key}: error - {exc}", done_ops / max(total_ops, 1))
-                log.warning("predict.nasdaq.algo_failed", symbol=symbol, algo=key, error=str(exc))
+                log.error(
+                    "algo.predict.failed",
+                    market="NASDAQ100",
+                    algo=key,
+                    symbol=symbol,
+                    error=str(exc),
+                    exc_info=True,
+                )
 
     log.info("predict.nasdaq.done", count=count)
 
@@ -328,9 +348,13 @@ def _predict_nasdaq_per_symbol(now: datetime, target: datetime, symbols: list[st
                 )
                 local_count += 1
             except Exception as exc:
-                log.warning(
-                    "predict.nasdaq.ps.algo_failed",
-                    symbol=symbol, algo=key, error=str(exc),
+                log.error(
+                    "algo.predict.failed",
+                    market="NASDAQ100",
+                    algo=key,
+                    symbol=symbol,
+                    error=str(exc),
+                    exc_info=True,
                 )
         return local_count
 
@@ -399,7 +423,15 @@ def _predict_crypto(algos: dict, emit: EmitFn) -> int:
             except Exception as exc:
                 done_ops += 1
                 emit("warn", f"  {symbol} / {key}: error - {exc}", done_ops / max(total_ops, 1))
-                log.warning("predict.crypto.algo_failed", coin=coin_id, algo=key, error=str(exc))
+                log.error(
+                    "algo.predict.failed",
+                    market="CRYPTO",
+                    algo=key,
+                    symbol=symbol,
+                    coin=coin_id,
+                    error=str(exc),
+                    exc_info=True,
+                )
 
     log.info("predict.crypto.done", count=count)
 
@@ -445,9 +477,14 @@ def _predict_crypto_per_symbol(now: datetime, target: datetime, coins: list[tupl
                 )
                 local_count += 1
             except Exception as exc:
-                log.warning(
-                    "predict.crypto.ps.algo_failed",
-                    coin=coin_id, symbol=symbol, algo=key, error=str(exc),
+                log.error(
+                    "algo.predict.failed",
+                    market="CRYPTO",
+                    algo=key,
+                    symbol=symbol,
+                    coin=coin_id,
+                    error=str(exc),
+                    exc_info=True,
                 )
         return local_count
 
@@ -520,7 +557,14 @@ def _predict_sp500(algos: dict, emit: EmitFn) -> int:
             except Exception as exc:
                 done_ops += 1
                 emit("warn", f"  {symbol} / {key}: error - {exc}", done_ops / max(total_ops, 1))
-                log.warning("predict.sp500.algo_failed", symbol=symbol, algo=key, error=str(exc))
+                log.error(
+                    "algo.predict.failed",
+                    market="SP500",
+                    algo=key,
+                    symbol=symbol,
+                    error=str(exc),
+                    exc_info=True,
+                )
 
     log.info("predict.sp500.done", count=count)
 
@@ -565,9 +609,13 @@ def _predict_sp500_per_symbol(now: datetime, target: datetime, symbols: list[str
                 )
                 local_count += 1
             except Exception as exc:
-                log.warning(
-                    "predict.sp500.ps.algo_failed",
-                    symbol=symbol, algo=key, error=str(exc),
+                log.error(
+                    "algo.predict.failed",
+                    market="SP500",
+                    algo=key,
+                    symbol=symbol,
+                    error=str(exc),
+                    exc_info=True,
                 )
         return local_count
 
