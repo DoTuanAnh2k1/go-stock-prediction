@@ -833,6 +833,7 @@ func pickBestSession(sessions []modelsdb.SimSessionWithCount) *modelsdb.SimSessi
 //	@Param        sort_dir   query  string  false  "Sort direction: asc|desc (default desc)"
 //	@Param        page       query  int     false  "Page number (1-based); enables pagination"
 //	@Param        page_size  query  int     false  "Rows per page (default 50, max 200); enables pagination"
+//	@Param        include_inactive  query  bool  false  "Include inactive bots (default false = active only)"
 //	@Success      200        {object}  leaderboardResponse
 //	@Failure      500        {object}  ResponseFailure
 //	@Router       /api/simulation/leaderboard [get]
@@ -842,6 +843,7 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 	algoFilter := q.Get("algorithm")
 	currencyFilter := q.Get("currency")
 	searchFilter := strings.ToLower(strings.TrimSpace(q.Get("search")))
+	includeInactive := q.Get("include_inactive") == "true"
 
 	sortBy := q.Get("sort_by")
 	if sortBy == "" {
@@ -869,8 +871,8 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 	// Cache key must include every parameter that changes the response — otherwise
 	// the first cached response is served for every variation until TTL expires.
-	cacheKey := fmt.Sprintf("simulation:leaderboard|m=%s|a=%s|c=%s|q=%s|sb=%s|sd=%s|pg=%t|p=%d|ps=%d",
-		marketFilter, algoFilter, currencyFilter, searchFilter, sortBy, sortDir, paginate, page, pageSize)
+	cacheKey := fmt.Sprintf("simulation:leaderboard|m=%s|a=%s|c=%s|q=%s|sb=%s|sd=%s|pg=%t|p=%d|ps=%d|ia=%t",
+		marketFilter, algoFilter, currencyFilter, searchFilter, sortBy, sortDir, paginate, page, pageSize, includeInactive)
 	if cached, ok := globalCache.Get(cacheKey); ok {
 		ResponseSuccess(w, http.StatusOK, cached)
 		return
@@ -887,6 +889,9 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 	entries := make([]leaderboardEntry, 0, len(rows))
 	for _, row := range rows {
+		if !includeInactive && !row.IsActive {
+			continue
+		}
 		if marketFilter != "" && row.Market != marketFilter {
 			continue
 		}

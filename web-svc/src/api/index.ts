@@ -746,6 +746,7 @@ export interface MonitoringBotsParams {
   search?: string;
   sort_by?: MonitoringBotSortKey;
   sort_dir?: 'asc' | 'desc';
+  include_inactive?: boolean;
 }
 
 export interface MonitoringBotsPage {
@@ -768,6 +769,7 @@ export async function fetchMonitoringBots(
   if (params.search)    p.set('search', params.search);
   if (params.sort_by)   p.set('sort_by', params.sort_by);
   if (params.sort_dir)  p.set('sort_dir', params.sort_dir);
+  if (params.include_inactive) p.set('include_inactive', 'true');
   const res = await fetch('/api/monitoring/bots?' + p.toString(), {
     headers: {
       Accept: 'application/json',

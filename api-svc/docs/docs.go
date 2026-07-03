@@ -1955,6 +1955,12 @@ const docTemplate = `{
                         "description": "Sort direction: asc|desc (default desc)",
                         "name": "sort_dir",
                         "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include inactive bots (default false = active only)",
+                        "name": "include_inactive",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -3045,6 +3051,12 @@ const docTemplate = `{
                         "type": "integer",
                         "description": "Rows per page (default 50, max 200); enables pagination",
                         "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include inactive bots (default false = active only)",
+                        "name": "include_inactive",
                         "in": "query"
                     }
                 ],
@@ -5368,6 +5380,9 @@ const docTemplate = `{
                 "take_profit": {
                     "type": "number"
                 },
+                "trailing_stop": {
+                    "type": "boolean"
+                },
                 "updated_at": {
                     "type": "string"
                 }
@@ -6477,6 +6492,9 @@ const docTemplate = `{
                 },
                 "breakeven": {
                     "type": "integer"
+                },
+                "is_active": {
+                    "type": "boolean"
                 },
                 "losses": {
                     "type": "integer"

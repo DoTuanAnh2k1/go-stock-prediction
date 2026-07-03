@@ -209,6 +209,7 @@ export default function Simulation() {
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [showInactive, setShowInactive] = useState(false);
 
   // silent=true skips the full-page loading flash (used by the auto-refresh poll).
   const load = useCallback((silent = false) => {
@@ -219,6 +220,7 @@ export default function Simulation() {
     if (algoFilter !== 'ALL') params.set('algorithm', algoFilter);
     if (currencyFilter !== 'ALL') params.set('currency', currencyFilter);
     if (search) params.set('search', search);
+    if (showInactive) params.set('include_inactive', 'true');
     params.set('sort_by', sortKey);
     params.set('sort_dir', sortAsc ? 'asc' : 'desc');
     params.set('page', String(page));
@@ -237,7 +239,7 @@ export default function Simulation() {
         setError(String(e));
         setLoading(false);
       });
-  }, [marketFilter, algoFilter, currencyFilter, search, sortKey, sortAsc, page, pageSize]);
+  }, [marketFilter, algoFilter, currencyFilter, search, showInactive, sortKey, sortAsc, page, pageSize]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -409,6 +411,15 @@ export default function Simulation() {
                 minWidth: 140,
               }}
             />
+            {isLoggedIn && (
+              <button
+                className="btn btn--sm"
+                onClick={() => { setShowInactive((v) => !v); setPage(1); }}
+                title="Toggle inactive bots"
+              >
+                {showInactive ? 'Tất cả' : 'Active'}
+              </button>
+            )}
             {isLoggedIn && (
               <button
                 className="btn btn--sm"

@@ -274,6 +274,7 @@ function BotsTable() {
   const [searchInput, setSearchInput] = useState('');
   const [algo, setAlgo] = useState('');
   const [search, setSearch] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
 
   // Data state.
   const [resp, setResp] = useState<MonitoringBotsPage | null>(null);
@@ -300,12 +301,13 @@ function BotsTable() {
       algorithm: algo || undefined,
       search: search || undefined,
       sort_by: sortKey, sort_dir: sortDir,
+      include_inactive: showInactive || undefined,
     })
       .then((res) => { if (!cancelled) setResp(res); })
       .catch((e: any) => { if (!cancelled) setError(e.message || m.error); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [page, pageSize, market, algo, search, sortKey, sortDir, m.error]);
+  }, [page, pageSize, market, algo, search, sortKey, sortDir, showInactive, m.error]);
 
   function handleSort(key: MonitoringBotSortKey) {
     if (sortKey === key) {
@@ -387,6 +389,13 @@ function BotsTable() {
             {m.clearFilters}
           </button>
         )}
+        <button
+          className="btn btn--sm"
+          onClick={() => { setShowInactive((v) => !v); setPage(1); }}
+          title="Toggle inactive bots"
+        >
+          {showInactive ? 'Tất cả' : 'Active'}
+        </button>
         <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
           {loading ? '…' : `${fmtNumber(rangeStart)}–${fmtNumber(rangeEnd)} / ${fmtNumber(total)}`}
         </div>

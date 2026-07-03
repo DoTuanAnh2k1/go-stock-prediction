@@ -74,6 +74,7 @@ type monitoringBotTableRow struct {
 	ProfitFactor   *float64 `json:"profit_factor"`  // nil = ∞ (all wins, no losses)
 	OpenPositions  int      `json:"open_positions"`
 	UnrealizedPnl  float64  `json:"unrealized_pnl"`
+	IsActive       bool     `json:"is_active"`
 }
 
 type monitoringBotSummary struct {
@@ -388,6 +389,7 @@ func buildBotData(store repository.DatabaseStore) botData {
 			ProfitFactor:  profitFactor,
 			OpenPositions: openPositions,
 			UnrealizedPnl: unrealizedPnl,
+			IsActive:      bot.IsActive,
 		})
 
 		bm, exists := byMarketMap[bot.Market]
@@ -546,6 +548,7 @@ func GetMonitoringOverview(w http.ResponseWriter, r *http.Request) {
 //	@Param        search     query  string  false  "Filter by bot id (case-insensitive substring)"
 //	@Param        sort_by    query  string  false  "Sort column: win_rate|total_pnl|return_pct|profit_factor|trades|wins|losses|open_positions|unrealized_pnl|bot_id|market|algorithm (default return_pct)"
 //	@Param        sort_dir   query  string  false  "Sort direction: asc|desc (default desc)"
+//	@Param        include_inactive  query  bool  false  "Include inactive bots (default false = active only)"
 //	@Success      200  {object}  monitoringBotsPage
 //	@Failure      401  {object}  ResponseFailure
 //	@Failure      500  {object}  ResponseFailure
@@ -574,6 +577,7 @@ func GetMonitoringBots(w http.ResponseWriter, r *http.Request) {
 	marketFilter := strings.ToUpper(strings.TrimSpace(q.Get("market")))
 	algoFilter := strings.ToLower(strings.TrimSpace(q.Get("algorithm")))
 	searchFilter := strings.ToLower(strings.TrimSpace(q.Get("search")))
+	includeInactive := q.Get("include_inactive") == "true"
 
 	// ── Sort params ────────────────────────────────────────────────────────
 	sortBy := q.Get("sort_by")
@@ -590,6 +594,9 @@ func GetMonitoringBots(w http.ResponseWriter, r *http.Request) {
 	// ── Filter (copy so the cached slice is never mutated) ──────────────────
 	filtered := make([]monitoringBotTableRow, 0, len(bd.rows))
 	for _, row := range bd.rows {
+		if !includeInactive && !row.IsActive {
+			continue
+		}
 		if marketFilter != "" && strings.ToUpper(row.Market) != marketFilter {
 			continue
 		}

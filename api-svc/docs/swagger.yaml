@@ -234,6 +234,8 @@ definitions:
         type: string
       take_profit:
         type: number
+      trailing_stop:
+        type: boolean
       updated_at:
         type: string
     type: object
@@ -964,6 +966,8 @@ definitions:
         type: string
       breakeven:
         type: integer
+      is_active:
+        type: boolean
       losses:
         type: integer
       market:
@@ -3019,6 +3023,10 @@ paths:
         in: query
         name: sort_dir
         type: string
+      - description: Include inactive bots (default false = active only)
+        in: query
+        name: include_inactive
+        type: boolean
       produces:
       - application/json
       responses:
@@ -3756,6 +3764,10 @@ paths:
         in: query
         name: page_size
         type: integer
+      - description: Include inactive bots (default false = active only)
+        in: query
+        name: include_inactive
+        type: boolean
       produces:
       - application/json
       responses:
