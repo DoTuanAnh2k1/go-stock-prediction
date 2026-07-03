@@ -64,6 +64,26 @@ COINS = [
     ("solana", "SOL"),
 ]
 
+# Binance REST base for klines (no auth required for public market data)
+BINANCE_KLINES = "https://api.binance.com/api/v3/klines"
+
+# Map CoinGecko coin_id → Binance base symbol (appended with USDT for the pair)
+_COIN_TO_BINANCE: dict[str, str] = {
+    "bitcoin": "BTCUSDT",
+    "ethereum": "ETHUSDT",
+    "solana": "SOLUSDT",
+}
+
+# Binance kline field indices (each element is a 12-item list)
+# [0] openTime(ms), [1] open, [2] high, [3] low, [4] close,
+# [5] volume(base), [6] closeTime(ms), [7] quoteAssetVolume, ...
+_K_OPEN_TIME = 0
+_K_OPEN = 1
+_K_HIGH = 2
+_K_LOW = 3
+_K_CLOSE = 4
+_K_VOLUME = 5  # base asset volume (e.g. BTC quantity traded)
+
 
 def _fetch_ohlc(
     session: requests.Session,
@@ -326,3 +346,182 @@ class CryptoCrawler(BaseCrawler):
 
         log.info("crypto.history.done", saved=saved, errors=errors)
         return saved
+
+    def backfill_intraday_binance(self, interval: str = "1h", years: int = 2) -> int:
+        """Backfill many years of hourly OHLCV candles from Binance klines API.
+
+        CoinGecko's free-tier hourly endpoint only covers ~2 days (``days=2``),
+        making it unsuitable as a training source.  Binance's public klines
+        endpoint has no such cap — it returns up to 1 000 candles per call and
+        allows paging back years in time via the ``startTime`` parameter.
+
+        For each coin the method pages forward in 1 000-candle windows starting
+        from ``now - years`` until it reaches the present, calling
+        ``repo.upsert_crypto_intraday(record)`` for every candle so the DB's
+        unique constraint ``(coin_id, timestamp)`` acts as the dedup guard —
+        existing rows are updated with the latest OHLCV values, new rows are
+        inserted.
+
+        Timestamp handling
+        ------------------
+        Binance returns ``openTime`` in UTC milliseconds.  The codebase stores
+        ICT wallclock (``TIMESTAMP WITHOUT TIME ZONE``).  We convert exactly as
+        ``crawl_intraday`` does::
+
+            datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+                    .astimezone(_VN_TZ)
+                    .replace(minute=0, second=0, microsecond=0, tzinfo=None)
+
+        The ``replace(tzinfo=None)`` strips the tzinfo so the stored value is a
+        naive ICT wallclock, matching all other rows in the table.
+
+        Fields populated on ``CryptoIntradayPrice``
+        --------------------------------------------
+        * ``coin_id``   — "bitcoin" / "ethereum" / "solana"
+        * ``timestamp`` — naive ICT datetime (hour-truncated, matches CoinGecko rows)
+        * ``open_price`` — kline open
+        * ``high_price`` — kline high
+        * ``low_price``  — kline low
+        * ``price``      — kline close (the line-chart / close column; the model has
+                           no separate ``close_price`` column on the intraday table)
+        * ``market_cap`` — ``Decimal("0")`` (Binance klines do not carry mcap)
+        * ``volume``     — kline base-asset volume (e.g. quantity of BTC traded)
+
+        Parameters
+        ----------
+        interval:
+            Binance kline interval string.  Default ``"1h"`` (hourly).
+            Other valid values: ``"4h"``, ``"1d"``, etc.
+        years:
+            How many years of history to fetch.  Default ``2``.
+
+        Returns
+        -------
+        int
+            Total number of rows passed to ``upsert_crypto_intraday`` across
+            all coins.
+        """
+        from datetime import timedelta
+
+        log.info("crypto.binance_backfill.start", interval=interval, years=years)
+        total = 0
+        limit = 1000  # Binance max candles per request
+
+        now_ts_ms = int(datetime.now(tz=_VN_TZ).timestamp() * 1000)
+        start_offset_ms = int(timedelta(days=365 * years).total_seconds() * 1000)
+        global_start_ms = now_ts_ms - start_offset_ms
+
+        for coin_id, _symbol in COINS:
+            binance_symbol = _COIN_TO_BINANCE.get(coin_id)
+            if binance_symbol is None:
+                log.warning("crypto.binance_backfill.unknown_coin", coin_id=coin_id)
+                continue
+
+            log.info(
+                "crypto.binance_backfill.coin.start",
+                coin_id=coin_id,
+                symbol=binance_symbol,
+                interval=interval,
+            )
+            coin_saved = 0
+            coin_errors = 0
+            start_ms = global_start_ms
+
+            while start_ms < now_ts_ms:
+                params = {
+                    "symbol": binance_symbol,
+                    "interval": interval,
+                    "startTime": start_ms,
+                    "limit": limit,
+                }
+                try:
+                    resp = self._session.get(
+                        BINANCE_KLINES, params=params, timeout=self._timeout
+                    )
+                    resp.raise_for_status()
+                    klines = resp.json()
+                except Exception as exc:
+                    log.warning(
+                        "crypto.binance_backfill.http_error",
+                        coin_id=coin_id,
+                        start_ms=start_ms,
+                        error=str(exc),
+                    )
+                    coin_errors += 1
+                    # Advance by one full window to avoid getting stuck on a
+                    # bad time range and retrying the same segment forever.
+                    interval_ms = _interval_to_ms(interval)
+                    start_ms += limit * interval_ms
+                    time.sleep(0.25)
+                    continue
+
+                if not klines:
+                    # No more data from Binance for this coin; exit inner loop.
+                    break
+
+                for kline in klines:
+                    open_time_ms = int(kline[_K_OPEN_TIME])
+                    # Convert UTC ms → naive ICT wallclock, hour-truncated
+                    dt_ict = (
+                        datetime.fromtimestamp(open_time_ms / 1000, tz=timezone.utc)
+                        .astimezone(_VN_TZ)
+                        .replace(minute=0, second=0, microsecond=0, tzinfo=None)
+                    )
+                    record = CryptoIntradayPrice(
+                        coin_id=coin_id,
+                        timestamp=dt_ict,
+                        open_price=Decimal(str(kline[_K_OPEN])),
+                        high_price=Decimal(str(kline[_K_HIGH])),
+                        low_price=Decimal(str(kline[_K_LOW])),
+                        price=Decimal(str(kline[_K_CLOSE])),
+                        market_cap=Decimal("0"),
+                        volume=Decimal(str(kline[_K_VOLUME])),
+                    )
+                    repo.upsert_crypto_intraday(record)
+                    coin_saved += 1
+
+                # Advance startTime to just after the last candle's open time
+                last_open_ms = int(klines[-1][_K_OPEN_TIME])
+                start_ms = last_open_ms + 1
+
+                # Polite pause between paginated requests (Binance is generous
+                # at 1 200 weight/min on the public endpoint, but stay civil)
+                time.sleep(0.25)
+
+            total += coin_saved
+            log.info(
+                "crypto.binance_backfill.coin.done",
+                coin_id=coin_id,
+                saved=coin_saved,
+                errors=coin_errors,
+            )
+
+        log.info("crypto.binance_backfill.done", total=total)
+        return total
+
+
+def _interval_to_ms(interval: str) -> int:
+    """Convert a Binance interval string to its duration in milliseconds.
+
+    Used as a fallback step when an HTTP error is encountered mid-page so the
+    loop can still advance rather than retrying the same time window forever.
+
+    Only common intervals are mapped; unknown strings default to 1 hour.
+    """
+    _table = {
+        "1m": 60_000,
+        "3m": 180_000,
+        "5m": 300_000,
+        "15m": 900_000,
+        "30m": 1_800_000,
+        "1h": 3_600_000,
+        "2h": 7_200_000,
+        "4h": 14_400_000,
+        "6h": 21_600_000,
+        "8h": 28_800_000,
+        "12h": 43_200_000,
+        "1d": 86_400_000,
+        "3d": 259_200_000,
+        "1w": 604_800_000,
+    }
+    return _table.get(interval, 3_600_000)

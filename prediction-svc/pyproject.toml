@@ -24,6 +24,7 @@ dependencies = [
     "pandas-ta>=0.3.14b",
     "scikit-learn==1.6.1",
     "cryptography>=42.0.0",
+    "yfinance>=0.2.40",
 ]
 
 [project.optional-dependencies]

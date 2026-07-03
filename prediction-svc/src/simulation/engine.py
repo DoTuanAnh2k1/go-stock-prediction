@@ -188,6 +188,7 @@ def _restore_portfolio_state(bot, db_trades: list, initial_capital: float) -> No
                 'quantity': float(t["quantity"]),
                 'price': float(t["price"]),
                 'date': td.date() if hasattr(td, 'date') else td,
+                'entry_at': td if hasattr(td, 'date') else None,
                 'id': t["id"],
                 'trade_value': tv,
             })
@@ -211,6 +212,7 @@ def _restore_portfolio_state(bot, db_trades: list, initial_capital: float) -> No
                 entry_price=b['price'],
                 entry_date=b['date'],
                 entry_trade_id=b['id'],
+                entry_at=b.get('entry_at'),
             )
         # Refund extra duplicate buys (Bug artifacts) back to cash
         for extra in buys[1:]:
@@ -257,6 +259,7 @@ class SimulationEngine:
                 max_position_pct=float(db_bot.max_position_pct),
                 max_positions=int(db_bot.max_positions),
                 symbol=db_bot.symbol,
+                trailing_stop=bool(getattr(db_bot, "trailing_stop", False) or False),
             )
 
         bot = TradingBot(config)
@@ -503,6 +506,7 @@ class SimulationEngine:
                     max_position_pct=float(db_bot.max_position_pct),
                     max_positions=int(db_bot.max_positions),
                     symbol=db_bot.symbol,
+                    trailing_stop=bool(getattr(db_bot, "trailing_stop", False) or False),
                 )))
 
         if not bot_configs:
@@ -677,6 +681,7 @@ class SimulationEngine:
                     max_position_pct=float(db_bot.max_position_pct),
                     max_positions=int(db_bot.max_positions),
                     symbol=db_bot.symbol,
+                    trailing_stop=bool(getattr(db_bot, "trailing_stop", False) or False),
                 )))
 
         now = datetime.now()

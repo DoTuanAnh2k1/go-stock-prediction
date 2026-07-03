@@ -1,6 +1,6 @@
 # Thuật toán dự đoán giá
 
-Hệ thống chạy **12 thuật toán** song song cho mỗi market, kết quả được lưu vào DB và so sánh với giá thực tế thông qua `direction_correct`.
+Hệ thống chạy **13 thuật toán** song song cho mỗi market, kết quả được lưu vào DB và so sánh với giá thực tế thông qua `direction_correct`.
 
 ## Danh sách
 
@@ -18,6 +18,7 @@ Hệ thống chạy **12 thuật toán** song song cho mỗi market, kết quả
 | 10 | `random_forest` | Random Forest | [10_random_forest.md](10_random_forest.md) | 80 points | Có |
 | 11 | `ensemble` | Ensemble | [11_ensemble.md](11_ensemble.md) | — | Không |
 | 12 | `rl_dqn` | RL DQN (Reinforcement Learning) | [12_rldqn.md](12_rldqn.md) | 80 points | Có (lưu checkpoint) |
+| 13 | `transformer_nn` | Transformer (PatchTST) + fundamentals | [13_transformer.md](13_transformer.md) | 106 points | Có (lưu checkpoint) |
 
 Tài liệu kỹ thuật chung về feature engineering dùng bởi LightGBM / XGBoost / Random Forest: [features.md](features.md)
 

@@ -37,6 +37,11 @@ class PredictionResult:
     confidence: float  # 0.0 - 1.0
     current_price: float
     algorithm_name: str
+    # Selective prediction: True = the model has no real conviction (coin-flip)
+    # and asks the runner NOT to persist this row. Skipped rows are simply
+    # absent — they are never reconciled, so direction accuracy is measured
+    # only on predictions the model actually stands behind.
+    skip_write: bool = False
 
 
 class PredictionAlgorithm(ABC):
@@ -90,6 +95,18 @@ class PredictionAlgorithm(ABC):
         """
         for prices, volumes in series:
             self.train(prices, volumes)
+
+    def train_batch_labeled(
+        self, series: "list[tuple[list[float], list[float] | None, str | None]]"
+    ) -> None:
+        """Train on multiple LABELED price series: (prices, volumes, symbol).
+
+        The label lets symbol-aware algorithms (e.g. transformer_nn joining
+        stock_fundamentals) know which instrument each series belongs to.
+        Default implementation strips labels and delegates to train_batch(),
+        so existing algorithms are unaffected.
+        """
+        self.train_batch([(prices, volumes) for prices, volumes, _label in series])
 
     def is_trained(self) -> bool:
         """Return True if this instance has a cached trained model."""

@@ -264,6 +264,57 @@ def _collect_all_training_series() -> list[tuple[list[float], list[float], str]]
     return series
 
 
+def _collect_intraday_series_for_market(mk: str) -> list[tuple[list[float], "list[float] | None", str]]:
+    """Collect labeled INTRADAY (hourly) series for horizon-matched training.
+
+    Used for transformer_nn: the system predicts +1h, so training on hourly
+    bars matches the deployed horizon (same fix rl_replay applies to rl_dqn).
+    Labels are plain symbols (fundamentals-map keys). Series shorter than
+    ~110 bars are dropped. Falls back to [] so callers can use daily series.
+    """
+    now = datetime.now()
+    min_pts = 110
+    series: list[tuple[list[float], "list[float] | None", str]] = []
+    try:
+        if mk == "NASDAQ100":
+            for symbol in NASDAQ_SYMBOLS:
+                rows = repo.get_nasdaq_intraday_asc_as_of(symbol, now, limit=400)
+                prices = [float(r.close_price) for r in rows if r.close_price is not None]
+                if len(prices) >= min_pts:
+                    series.append((prices, None, symbol))
+        elif mk == "SP500":
+            for symbol in SP500_SYMBOLS:
+                rows = repo.get_sp500_intraday_asc_as_of(symbol, now, limit=400)
+                prices = [float(r.close_price) for r in rows if r.close_price is not None]
+                if len(prices) >= min_pts:
+                    series.append((prices, None, symbol))
+        elif mk == "CRYPTO":
+            for coin_id, symbol in CRYPTO_COINS:
+                rows = repo.get_crypto_intraday_asc_as_of(coin_id, now, limit=400)
+                prices = [float(r.price) for r in rows if r.price is not None]
+                if len(prices) >= min_pts:
+                    series.append((prices, None, symbol))
+        elif mk == "GOLD":
+            try:
+                sources = repo.get_gold_intraday_sources(as_of=now) or []
+            except Exception:
+                sources = []
+            for source in (sources or ["XAU", "BTMC"]):
+                rows = repo.get_gold_intraday_asc_as_of(source, now, limit=400)
+                prices = []
+                for r in rows:
+                    if r.sell_price is not None:
+                        prices.append(float(r.sell_price))
+                    elif r.buy_price is not None:
+                        prices.append(float(r.buy_price))
+                if len(prices) >= min_pts:
+                    series.append((prices, None, source))
+    except Exception as exc:
+        log.warning("training.intraday_series.failed", market=mk, error=str(exc))
+        return []
+    return series
+
+
 def _collect_series_for_market(mk: str) -> list[tuple[list[float], list[float], str]]:
     """Collect (price_list, vol_list, label) for a single market.
 
@@ -376,21 +427,29 @@ def train_for_market(market_key: str) -> tuple[bool, str]:
     # Build fresh instances exclusively for this market
     algos = build_algorithms(market_key=mk)
 
-    # Convert to (prices, volumes) tuples — drop label
-    series_data = [
-        (price_list, vol_list if vol_list else None)
-        for price_list, vol_list, _label in series
+    # Labeled tuples — symbol label lets symbol-aware algos join fundamentals
+    series_labeled = [
+        (price_list, vol_list if vol_list else None, label)
+        for price_list, vol_list, label in series
     ]
+    series_data = [(p, v) for p, v, _ in series_labeled]
 
     total_success = 0
     total_error = 0
 
     log.info("training.market.start", market=mk, series=len(series), algorithms=len(algos))
 
+    # Horizon-matched training data for transformer_nn (hourly bars — the
+    # system predicts +1h). Computed once; empty → fall back to daily series.
+    intraday_labeled = _collect_intraday_series_for_market(mk)
+
     for key, algo in algos.items():
         algo_started = datetime.now()
         try:
-            algo.train_batch(series_data)
+            if key == "transformer_nn" and intraday_labeled:
+                algo.train_batch_labeled(intraday_labeled)
+            else:
+                algo.train_batch_labeled(series_labeled)
             success = len(series_data)
             error = 0
         except Exception as exc:
@@ -551,16 +610,23 @@ def train_single_algorithm(algorithm_name: str) -> tuple[bool, str]:
                 log.warning("training.single.no_data", algo=algorithm_name, market=mk)
                 continue
 
-            series_data = [
-                (price_list, vol_list if vol_list else None)
-                for price_list, vol_list, _label in series
+            series_labeled = [
+                (price_list, vol_list if vol_list else None, label)
+                for price_list, vol_list, label in series
             ]
+            series_data = [(p, v) for p, v, _ in series_labeled]
 
             algo_started = datetime.now()
             try:
                 # Trains the cached instance in place; market-aware models save
                 # their per-market checkpoint here (e.g. rl_dqn_{mk}.pt).
-                algo.train_batch(series_data)
+                # transformer_nn trains on hourly intraday bars when available
+                # (horizon-matched to the +1h prediction target).
+                if algorithm_name == "transformer_nn":
+                    intraday_labeled = _collect_intraday_series_for_market(mk)
+                    algo.train_batch_labeled(intraday_labeled or series_labeled)
+                else:
+                    algo.train_batch_labeled(series_labeled)
                 success = len(series_data)
                 error = 0
             except Exception as exc:
@@ -682,12 +748,13 @@ def reconcile_predictions(only_market: str | None = None) -> int:
 
             pred_diff = predicted - current
             actual_diff = actual - current
-            if actual_diff == 0:
-                direction_correct: bool | None = (pred_diff == 0)
-            elif pred_diff != 0:
-                direction_correct = (pred_diff > 0) == (actual_diff > 0)
-            else:
-                direction_correct = False
+            direction_correct: bool | None = repo.direction_verdict(pred_diff, actual_diff)
+            if direction_correct is None:
+                # Frozen actual: no fresh price arrived since the prediction (market closed
+                # past the target hour, or crawl lag) so the latest live price still equals
+                # the entry. Scoring would mark EVERY algorithm wrong — skip and leave the
+                # prediction pending until a real price move can score it.
+                continue
 
             repo.update_gold_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
             total_updated += 1
@@ -725,12 +792,13 @@ def reconcile_predictions(only_market: str | None = None) -> int:
 
             pred_diff = predicted - current
             actual_diff = actual - current
-            if actual_diff == 0:
-                direction_correct: bool | None = (pred_diff == 0)
-            elif pred_diff != 0:
-                direction_correct = (pred_diff > 0) == (actual_diff > 0)
-            else:
-                direction_correct = False
+            direction_correct: bool | None = repo.direction_verdict(pred_diff, actual_diff)
+            if direction_correct is None:
+                # Frozen actual: no fresh price arrived since the prediction (market closed
+                # past the target hour, or crawl lag) so the latest live price still equals
+                # the entry. Scoring would mark EVERY algorithm wrong — skip and leave the
+                # prediction pending until a real price move can score it.
+                continue
 
             repo.update_nasdaq_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
             total_updated += 1
@@ -767,12 +835,13 @@ def reconcile_predictions(only_market: str | None = None) -> int:
 
             pred_diff = predicted - current
             actual_diff = actual - current
-            if actual_diff == 0:
-                direction_correct: bool | None = (pred_diff == 0)
-            elif pred_diff != 0:
-                direction_correct = (pred_diff > 0) == (actual_diff > 0)
-            else:
-                direction_correct = False
+            direction_correct: bool | None = repo.direction_verdict(pred_diff, actual_diff)
+            if direction_correct is None:
+                # Frozen actual: no fresh price arrived since the prediction (market closed
+                # past the target hour, or crawl lag) so the latest live price still equals
+                # the entry. Scoring would mark EVERY algorithm wrong — skip and leave the
+                # prediction pending until a real price move can score it.
+                continue
 
             repo.update_sp500_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
             total_updated += 1
@@ -810,12 +879,13 @@ def reconcile_predictions(only_market: str | None = None) -> int:
 
             pred_diff = predicted - current
             actual_diff = actual - current
-            if actual_diff == 0:
-                direction_correct: bool | None = (pred_diff == 0)
-            elif pred_diff != 0:
-                direction_correct = (pred_diff > 0) == (actual_diff > 0)
-            else:
-                direction_correct = False
+            direction_correct: bool | None = repo.direction_verdict(pred_diff, actual_diff)
+            if direction_correct is None:
+                # Frozen actual: no fresh price arrived since the prediction (market closed
+                # past the target hour, or crawl lag) so the latest live price still equals
+                # the entry. Scoring would mark EVERY algorithm wrong — skip and leave the
+                # prediction pending until a real price move can score it.
+                continue
 
             repo.update_crypto_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
             total_updated += 1

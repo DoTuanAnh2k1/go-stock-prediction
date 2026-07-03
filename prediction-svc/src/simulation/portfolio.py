@@ -13,6 +13,10 @@ class Position:
     entry_price: float
     entry_date: date
     entry_trade_id: Optional[int] = None
+    # Full entry datetime (when available) — used by trailing-stop peak lookup
+    # to bound the intraday MAX query window. Falls back to entry_date at
+    # midnight when None (e.g. positions restored from legacy trades).
+    entry_at: Optional[datetime] = None
 
 
 @dataclass
@@ -34,7 +38,8 @@ class Trade:
 
 class Portfolio:
     def __init__(self, initial_capital: float, stop_loss_pct: float,
-                 take_profit_pct: float, max_position_pct: float, max_positions: int):
+                 take_profit_pct: float, max_position_pct: float, max_positions: int,
+                 trailing_stop: bool = False):
         self.initial_capital = initial_capital
         self.cash = initial_capital
         self.positions: dict[str, Position] = {}
@@ -42,6 +47,7 @@ class Portfolio:
         self.take_profit_pct = take_profit_pct    # e.g. 8.0 → +8%
         self.max_position_pct = max_position_pct  # e.g. 15.0
         self.max_positions = max_positions
+        self.trailing_stop = trailing_stop        # True → SL trails the peak price since entry
         self._trade_id_counter = 0
 
     def _next_id(self) -> int:
@@ -89,6 +95,7 @@ class Portfolio:
             entry_price=price,
             entry_date=trade_date,
             entry_trade_id=trade_id,
+            entry_at=trade_at,
         )
         self.cash -= trade_value
 
@@ -123,8 +130,18 @@ class Portfolio:
         )
 
     def check_stop_loss_take_profit(self, current_prices: dict[str, float], trade_date: date,
-                                     trade_at: Optional[datetime] = None) -> list[Trade]:
-        """Auto-sell positions that hit SL or TP."""
+                                     trade_at: Optional[datetime] = None,
+                                     peak_prices: Optional[dict[str, float]] = None) -> list[Trade]:
+        """Auto-sell positions that hit SL or TP.
+
+        peak_prices: optional {symbol: highest intraday price observed since
+            entry}. Only consulted when ``self.trailing_stop`` is True AND the
+            symbol has an entry — in that case the stop is computed off the
+            peak (trailing) instead of the fixed entry price. When trailing is
+            disabled, or the symbol has no peak entry, behaviour is identical
+            to the classic entry-anchored stop loss (backward compatible).
+        Take-profit is always entry-anchored regardless of trailing_stop.
+        """
         trades = []
         for symbol in list(self.positions.keys()):
             price = current_prices.get(symbol)
@@ -133,6 +150,20 @@ class Portfolio:
 
             pos = self.positions[symbol]
             change_pct = (price - pos.entry_price) / pos.entry_price * 100
+
+            peak = peak_prices.get(symbol) if peak_prices else None
+            if self.trailing_stop and peak is not None and peak > 0:
+                stop_price = peak * (1 - self.stop_loss_pct / 100.0)
+                if price <= stop_price:
+                    trade = self.sell(symbol, price, trade_date, close_reason="trailing_stop", trade_at=trade_at)
+                    if trade:
+                        trades.append(trade)
+                    continue
+                if change_pct >= self.take_profit_pct:
+                    trade = self.sell(symbol, price, trade_date, close_reason="take_profit", trade_at=trade_at)
+                    if trade:
+                        trades.append(trade)
+                continue
 
             if change_pct <= -self.stop_loss_pct:
                 trade = self.sell(symbol, price, trade_date, close_reason="stop_loss", trade_at=trade_at)

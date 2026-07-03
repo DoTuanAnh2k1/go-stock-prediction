@@ -636,7 +636,7 @@ class TestMetaTraining:
                     "symbol": "AAPL",
                 })
 
-        model._fetch_all_predictions = lambda: rows
+        model._fetch_all_predictions = lambda max_date=None: rows
 
     def test_train_returns_success_dict(self, tmp_path, monkeypatch):
         monkeypatch.setenv("RL_MODEL_DIR", str(tmp_path))
@@ -687,7 +687,7 @@ class TestMetaTraining:
     def test_insufficient_data_returns_skipped(self, tmp_path, monkeypatch):
         monkeypatch.setenv("RL_MODEL_DIR", str(tmp_path))
         model = MetaStackModel("GOLD")
-        model._fetch_all_predictions = lambda: []
+        model._fetch_all_predictions = lambda max_date=None: []
         metrics = model.train(min_samples=80)
         assert metrics.get("status") == "skipped"
 

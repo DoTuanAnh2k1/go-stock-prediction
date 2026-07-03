@@ -21,7 +21,8 @@ log = get_logger("crawler.gold")
 
 YAHOO_GOLD_DAILY = "https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1d&range=1d"
 YAHOO_GOLD_HISTORY = "https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1d&range=6mo"
-YAHOO_GOLD_INTRADAY = "https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1h&range=2d"
+YAHOO_GOLD_INTRADAY = "https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1h&range={range}"
+BACKFILL_DELAY = 0.3  # 300ms
 USD_VND_RATE_URL = "https://open.er-api.com/v6/latest/USD"
 BTMC_API_URL = "http://api.btmc.vn/api/BTMCAPI/getpricebtmc?key=3kd8ub1llcg9t45hnoh8hmn7t5kc2v"
 BTMH_URL = "https://giavang.org/trong-nuoc/bao-tin-manh-hai/"
@@ -143,24 +144,6 @@ class GoldCrawler(BaseCrawler):
         saved = 0
 
         try:
-            resp = self._session.get(YAHOO_GOLD_INTRADAY, timeout=self._timeout)
-            resp.raise_for_status()
-            data = resp.json()
-
-            results = data.get("chart", {}).get("result", [])
-            if not results:
-                log.warning("gold.intraday.empty")
-                return 0
-
-            result = results[0]
-            timestamps = result.get("timestamp", [])
-            quote = result.get("indicators", {}).get("quote", [{}])[0]
-
-            opens = quote.get("open", [])
-            highs = quote.get("high", [])
-            lows = quote.get("low", [])
-            closes = quote.get("close", [])
-
             # Fetch USD/VND rate once for VND conversion
             try:
                 vnd_rate = self._fetch_usd_vnd_rate()
@@ -168,63 +151,131 @@ class GoldCrawler(BaseCrawler):
                 log.warning("gold.intraday.vnd_rate.error", error=str(exc))
                 vnd_rate = None
 
-            for i, ts in enumerate(timestamps):
-                close = closes[i] if i < len(closes) else None
-                if close is None:
-                    continue
-
-                dt = datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(_VN_TZ).replace(
-                    minute=0, second=0, microsecond=0, tzinfo=None
-                )
-                open_price = Decimal(str(opens[i] or 0)) if i < len(opens) else Decimal(0)
-                high_price = Decimal(str(highs[i] or 0)) if i < len(highs) else Decimal(0)
-                low_price = Decimal(str(lows[i] or 0)) if i < len(lows) else Decimal(0)
-                close_price = Decimal(str(close))
-
-                # Save USD bar using buy/sell = close (spot); attach OHLC from
-                # Yahoo response — open/high/low may be 0 or None for some bars.
-                _open = open_price if (open_price and open_price > 0) else None
-                _high = high_price if (high_price and high_price > 0) else None
-                _low = low_price if (low_price and low_price > 0) else None
-
-                record_usd = GoldIntradayPrice(
-                    source="XAU",
-                    product_type="spot",
-                    timestamp=dt,
-                    open_price=_open,
-                    high_price=_high,
-                    low_price=_low,
-                    buy_price=close_price,
-                    sell_price=close_price,
-                    currency="USD",
-                )
-                repo.upsert_gold_intraday(record_usd)
-                saved += 1
-
-                # Also save VND converted bar — scale OHLC by USD/VND rate
-                if vnd_rate:
-                    vnd_price = (close_price * vnd_rate).quantize(Decimal("1"))
-                    vnd_open = (_open * vnd_rate).quantize(Decimal("1")) if _open else None
-                    vnd_high = (_high * vnd_rate).quantize(Decimal("1")) if _high else None
-                    vnd_low = (_low * vnd_rate).quantize(Decimal("1")) if _low else None
-                    record_vnd = GoldIntradayPrice(
-                        source="XAU_VND",
-                        product_type="spot",
-                        timestamp=dt,
-                        open_price=vnd_open,
-                        high_price=vnd_high,
-                        low_price=vnd_low,
-                        buy_price=vnd_price,
-                        sell_price=vnd_price,
-                        currency="VND",
-                    )
-                    repo.upsert_gold_intraday(record_vnd)
-                    saved += 1
-
+            saved = self._fetch_and_upsert_xau_intraday(range_="2d", vnd_rate=vnd_rate)
         except Exception as exc:
             log.warning("gold.intraday.error", error=str(exc))
 
         log.info("gold.intraday.done", saved=saved)
+        return saved
+
+    def backfill_intraday(self, range_: str = "2y") -> int:
+        """Backfill up to ~2 years of hourly XAU/USD bars from Yahoo Finance (GC=F only).
+
+        VN sources (SJC, BTMC, Phu Quy, etc.) do not expose intraday history, so
+        only the Yahoo Finance GC=F feed is used.  A single USD/VND rate is fetched
+        once and applied to all bars for the XAU_VND series.
+
+        Args:
+            range_: Yahoo Finance range string — default "2y" (~730 days of 1h bars).
+                    Valid alternatives: "1y", "6mo", "3mo".
+
+        Returns:
+            Total number of intraday rows upserted (USD + VND bars counted separately).
+        """
+        log.info("gold.backfill_intraday.start", range=range_)
+
+        try:
+            vnd_rate = self._fetch_usd_vnd_rate()
+        except Exception as exc:
+            log.warning("gold.backfill_intraday.vnd_rate.error", error=str(exc))
+            vnd_rate = None
+
+        try:
+            saved = self._fetch_and_upsert_xau_intraday(range_=range_, vnd_rate=vnd_rate)
+        except Exception as exc:
+            log.warning("gold.backfill_intraday.error", error=str(exc))
+            saved = 0
+
+        log.info("gold.backfill_intraday.done", saved=saved, range=range_)
+        return saved
+
+    # -------------------------------------------------------------------
+    # XAU intraday shared helper
+    # -------------------------------------------------------------------
+
+    def _fetch_and_upsert_xau_intraday(
+        self, range_: str, vnd_rate: Decimal | None
+    ) -> int:
+        """Fetch Yahoo Finance hourly bars for GC=F and upsert XAU + XAU_VND rows.
+
+        Shared by crawl_intraday() and backfill_intraday() so the parse/upsert
+        logic lives in exactly one place.
+
+        Returns the total number of rows upserted (USD + VND bars counted separately).
+        """
+        url = YAHOO_GOLD_INTRADAY.format(range=range_)
+        resp = self._session.get(url, timeout=self._timeout)
+        resp.raise_for_status()
+        data = resp.json()
+
+        results = data.get("chart", {}).get("result", [])
+        if not results:
+            log.warning("gold.intraday.empty", range=range_)
+            return 0
+
+        result = results[0]
+        timestamps = result.get("timestamp", [])
+        quote = result.get("indicators", {}).get("quote", [{}])[0]
+
+        opens = quote.get("open", [])
+        highs = quote.get("high", [])
+        lows = quote.get("low", [])
+        closes = quote.get("close", [])
+
+        saved = 0
+        for i, ts in enumerate(timestamps):
+            close = closes[i] if i < len(closes) else None
+            if close is None:
+                continue
+
+            dt = datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(_VN_TZ).replace(
+                minute=0, second=0, microsecond=0, tzinfo=None
+            )
+            open_price = Decimal(str(opens[i] or 0)) if i < len(opens) else Decimal(0)
+            high_price = Decimal(str(highs[i] or 0)) if i < len(highs) else Decimal(0)
+            low_price = Decimal(str(lows[i] or 0)) if i < len(lows) else Decimal(0)
+            close_price = Decimal(str(close))
+
+            # Save USD bar using buy/sell = close (spot); attach OHLC from
+            # Yahoo response — open/high/low may be 0 or None for some bars.
+            _open = open_price if (open_price and open_price > 0) else None
+            _high = high_price if (high_price and high_price > 0) else None
+            _low = low_price if (low_price and low_price > 0) else None
+
+            record_usd = GoldIntradayPrice(
+                source="XAU",
+                product_type="spot",
+                timestamp=dt,
+                open_price=_open,
+                high_price=_high,
+                low_price=_low,
+                buy_price=close_price,
+                sell_price=close_price,
+                currency="USD",
+            )
+            repo.upsert_gold_intraday(record_usd)
+            saved += 1
+
+            # Also save VND converted bar — scale OHLC by USD/VND rate
+            if vnd_rate:
+                vnd_price = (close_price * vnd_rate).quantize(Decimal("1"))
+                vnd_open = (_open * vnd_rate).quantize(Decimal("1")) if _open else None
+                vnd_high = (_high * vnd_rate).quantize(Decimal("1")) if _high else None
+                vnd_low = (_low * vnd_rate).quantize(Decimal("1")) if _low else None
+                record_vnd = GoldIntradayPrice(
+                    source="XAU_VND",
+                    product_type="spot",
+                    timestamp=dt,
+                    open_price=vnd_open,
+                    high_price=vnd_high,
+                    low_price=vnd_low,
+                    buy_price=vnd_price,
+                    sell_price=vnd_price,
+                    currency="VND",
+                )
+                repo.upsert_gold_intraday(record_vnd)
+                saved += 1
+
         return saved
 
     # -------------------------------------------------------------------

@@ -110,6 +110,38 @@ def run_for_market(market_key: str, force: bool = False, emit: EmitFn | None = N
 # Market-specific prediction runners
 # ---------------------------------------------------------------------------
 
+def _transformer_intraday_prices(registry_market: str, ident: str, now: datetime) -> list[float]:
+    """Hourly intraday history for transformer_nn (horizon-matched input).
+
+    The system predicts +1h; transformer_nn is trained on hourly bars, so its
+    inference input must be hourly too. ident: symbol (NASDAQ/SP500), coin_id
+    (CRYPTO) or source (GOLD). Returns [] on any error → caller falls back to
+    the daily series.
+    """
+    try:
+        if registry_market == "NASDAQ100":
+            rows = repo.get_nasdaq_intraday_asc_as_of(ident, now, limit=400)
+            return [float(r.close_price) for r in rows if r.close_price is not None]
+        if registry_market == "SP500":
+            rows = repo.get_sp500_intraday_asc_as_of(ident, now, limit=400)
+            return [float(r.close_price) for r in rows if r.close_price is not None]
+        if registry_market == "CRYPTO":
+            rows = repo.get_crypto_intraday_asc_as_of(ident, now, limit=400)
+            return [float(r.price) for r in rows if r.price is not None]
+        if registry_market == "GOLD":
+            rows = repo.get_gold_intraday_asc_as_of(ident, now, limit=400)
+            out = []
+            for r in rows:
+                if r.sell_price is not None:
+                    out.append(float(r.sell_price))
+                elif r.buy_price is not None:
+                    out.append(float(r.buy_price))
+            return out
+    except Exception:
+        return []
+    return []
+
+
 def _predict_gold(algos: dict, emit: EmitFn) -> int:
     instruments = GOLD_INSTRUMENTS
     total_ops = len(instruments) * len(algos)
@@ -139,14 +171,23 @@ def _predict_gold(algos: dict, emit: EmitFn) -> int:
 
         for key, algo in algos.items():
             try:
-                result = algo.predict(price_list)
+                p_input = price_list
+                if key == "transformer_nn":
+                    ip = _transformer_intraday_prices("GOLD", source, now)
+                    if len(ip) >= 110:
+                        p_input = ip
+                result = algo.predict(p_input)
+                if getattr(result, "skip_write", False):
+                    done_ops += 1
+                    emit("info", f"  {label} / {key}: skipped (no conviction)", done_ops / max(total_ops, 1))
+                    continue
                 algo_acc_pct = dir_acc.get(key, None)
                 algo_acc = Decimal(str(round(algo_acc_pct / 100, 4))) if algo_acc_pct is not None else None
                 repo.create_gold_prediction(
                     source=source,
                     product_type=product_type,
                     predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.01")),
-                    current_price=Decimal(str(current)).quantize(Decimal("0.01")),
+                    current_price=Decimal(str(result.current_price)).quantize(Decimal("0.01")),
                     confidence=Decimal(str(round(result.confidence, 4))),
                     algorithm_name=key,
                     prediction_date=now,
@@ -199,11 +240,13 @@ def _predict_gold_per_symbol(now: datetime, target: datetime) -> int:
         for key, algo in ps_algos.items():
             try:
                 result = algo.predict(price_list)
+                if getattr(result, "skip_write", False):
+                    continue
                 repo.create_gold_prediction(
                     source=source,
                     product_type=product_type,
                     predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.01")),
-                    current_price=Decimal(str(current)).quantize(Decimal("0.01")),
+                    current_price=Decimal(str(result.current_price)).quantize(Decimal("0.01")),
                     confidence=Decimal(str(round(result.confidence, 4))),
                     algorithm_name=f"{key}{PS_SUFFIX}",
                     prediction_date=now,
@@ -276,13 +319,24 @@ def _predict_nasdaq(algos: dict, emit: EmitFn) -> int:
 
         for key, algo in algos.items():
             try:
-                result = algo.predict(price_list, vol_list)
+                # Symbol context for symbol-aware algos (transformer_nn joins fundamentals)
+                algo._context_symbol = symbol
+                p_input, v_input = price_list, vol_list
+                if key == "transformer_nn":
+                    ip = _transformer_intraday_prices("NASDAQ100", symbol, now)
+                    if len(ip) >= 110:
+                        p_input, v_input = ip, None
+                result = algo.predict(p_input, v_input)
+                if getattr(result, "skip_write", False):
+                    done_ops += 1
+                    emit("info", f"  {symbol} / {key}: skipped (no conviction)", done_ops / max(total_ops, 1))
+                    continue
                 algo_acc_pct = dir_acc.get(key, None)
                 algo_acc = Decimal(str(round(algo_acc_pct / 100, 4))) if algo_acc_pct is not None else None
                 repo.create_nasdaq_prediction(
                     symbol=symbol,
                     predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.0001")),
-                    current_price=Decimal(str(current)).quantize(Decimal("0.0001")),
+                    current_price=Decimal(str(result.current_price)).quantize(Decimal("0.0001")),
                     confidence=Decimal(str(round(result.confidence, 4))),
                     algorithm_name=key,
                     prediction_date=now,
@@ -335,10 +389,12 @@ def _predict_nasdaq_per_symbol(now: datetime, target: datetime, symbols: list[st
         for key, algo in ps_algos.items():
             try:
                 result = algo.predict(price_list, vol_list)
+                if getattr(result, "skip_write", False):
+                    continue
                 repo.create_nasdaq_prediction(
                     symbol=symbol,
                     predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.0001")),
-                    current_price=Decimal(str(current)).quantize(Decimal("0.0001")),
+                    current_price=Decimal(str(result.current_price)).quantize(Decimal("0.0001")),
                     confidence=Decimal(str(round(result.confidence, 4))),
                     algorithm_name=f"{key}{PS_SUFFIX}",
                     prediction_date=now,
@@ -402,14 +458,23 @@ def _predict_crypto(algos: dict, emit: EmitFn) -> int:
 
         for key, algo in algos.items():
             try:
-                result = algo.predict(price_list, vol_list)
+                p_input, v_input = price_list, vol_list
+                if key == "transformer_nn":
+                    ip = _transformer_intraday_prices("CRYPTO", coin_id, now)
+                    if len(ip) >= 110:
+                        p_input, v_input = ip, None
+                result = algo.predict(p_input, v_input)
+                if getattr(result, "skip_write", False):
+                    done_ops += 1
+                    emit("info", f"  {symbol} / {key}: skipped (no conviction)", done_ops / max(total_ops, 1))
+                    continue
                 algo_acc_pct = dir_acc.get(key, None)
                 algo_acc = Decimal(str(round(algo_acc_pct / 100, 4))) if algo_acc_pct is not None else None
                 repo.create_crypto_prediction(
                     coin_id=coin_id,
                     symbol=symbol,
                     predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.01")),
-                    current_price=Decimal(str(current)).quantize(Decimal("0.01")),
+                    current_price=Decimal(str(result.current_price)).quantize(Decimal("0.01")),
                     confidence=Decimal(str(round(result.confidence, 4))),
                     algorithm_name=key,
                     prediction_date=now,
@@ -463,11 +528,13 @@ def _predict_crypto_per_symbol(now: datetime, target: datetime, coins: list[tupl
         for key, algo in ps_algos.items():
             try:
                 result = algo.predict(price_list, vol_list)
+                if getattr(result, "skip_write", False):
+                    continue
                 repo.create_crypto_prediction(
                     coin_id=coin_id,
                     symbol=symbol,
                     predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.01")),
-                    current_price=Decimal(str(current)).quantize(Decimal("0.01")),
+                    current_price=Decimal(str(result.current_price)).quantize(Decimal("0.01")),
                     confidence=Decimal(str(round(result.confidence, 4))),
                     algorithm_name=f"{key}{PS_SUFFIX}",
                     prediction_date=now,
@@ -537,13 +604,24 @@ def _predict_sp500(algos: dict, emit: EmitFn) -> int:
 
         for key, algo in algos.items():
             try:
-                result = algo.predict(price_list, vol_list)
+                # Symbol context for symbol-aware algos (transformer_nn joins fundamentals)
+                algo._context_symbol = symbol
+                p_input, v_input = price_list, vol_list
+                if key == "transformer_nn":
+                    ip = _transformer_intraday_prices("SP500", symbol, now)
+                    if len(ip) >= 110:
+                        p_input, v_input = ip, None
+                result = algo.predict(p_input, v_input)
+                if getattr(result, "skip_write", False):
+                    done_ops += 1
+                    emit("info", f"  {symbol} / {key}: skipped (no conviction)", done_ops / max(total_ops, 1))
+                    continue
                 algo_acc_pct = dir_acc.get(key, None)
                 algo_acc = Decimal(str(round(algo_acc_pct / 100, 4))) if algo_acc_pct is not None else None
                 repo.create_sp500_prediction(
                     symbol=symbol,
                     predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.0001")),
-                    current_price=Decimal(str(current)).quantize(Decimal("0.0001")),
+                    current_price=Decimal(str(result.current_price)).quantize(Decimal("0.0001")),
                     confidence=Decimal(str(round(result.confidence, 4))),
                     algorithm_name=key,
                     prediction_date=now,
@@ -596,10 +674,12 @@ def _predict_sp500_per_symbol(now: datetime, target: datetime, symbols: list[str
         for key, algo in ps_algos.items():
             try:
                 result = algo.predict(price_list, vol_list)
+                if getattr(result, "skip_write", False):
+                    continue
                 repo.create_sp500_prediction(
                     symbol=symbol,
                     predicted_price=Decimal(str(result.predicted_price)).quantize(Decimal("0.0001")),
-                    current_price=Decimal(str(current)).quantize(Decimal("0.0001")),
+                    current_price=Decimal(str(result.current_price)).quantize(Decimal("0.0001")),
                     confidence=Decimal(str(round(result.confidence, 4))),
                     algorithm_name=f"{key}{PS_SUFFIX}",
                     prediction_date=now,

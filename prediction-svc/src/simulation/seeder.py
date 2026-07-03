@@ -1,13 +1,18 @@
 """Seed sim_bots table with trading bots.
 
 Pooled fleet (always seeded):
-  4 markets × 11 algorithms × 10 variants + 4 RL DQN bots = 444 bots.
+  4 markets × 12 algorithms × 10 variants
+  + 4 markets × 12 algorithms × 2 trailing-stop variants (_v11/_v12)
+  + 4 RL DQN bots + 4 Meta-Stack bots
+  = 480 + 96 + 4 + 4 = 584 bots
+  (12th algorithm = transformer_nn, added 2026-07;
+   trailing-stop variants added 2026-07 — see TRAILING_VARIANTS).
 
 Per-symbol fleet (seeded only when settings.per_symbol_enabled is true):
-  For each (market, symbol): 11 algorithms × 10 variants + 1 RL DQN bot.
+  For each (market, symbol): 12 algorithms × 10 variants + 1 RL DQN bot + 1 Meta-Stack bot.
   Markets and symbol counts:
     GOLD (3) + NASDAQ (15) + SP500 (16) + CRYPTO (3) = 37 symbols
-  Total per-symbol bots: 37 × (11 × 10 + 1) = 37 × 111 = 4,107 bots.
+  Trailing-stop variants are pooled-only (NOT seeded per-symbol).
 """
 from __future__ import annotations
 
@@ -31,6 +36,7 @@ ALGORITHMS = [
     ("random_forest", "Random Forest"),
     ("xgboost", "XGBoost"),
     ("ensemble", "Ensemble"),
+    ("transformer_nn", "Transformer (PatchTST)"),
 ]
 
 MARKETS = [
@@ -53,6 +59,15 @@ VARIANTS = [
     ("_v8", "Momentum",        Decimal("0.80"), Decimal("0.50"), Decimal("0.55"), Decimal("6.00"),  Decimal("12.00")),
     ("_v9", "Scalping",        Decimal("0.20"), Decimal("0.20"), Decimal("0.30"), Decimal("2.00"),  Decimal("3.00")),
     ("_v10","Swing",           Decimal("2.00"), Decimal("1.00"), Decimal("0.65"), Decimal("10.00"), Decimal("20.00")),
+]
+
+# Trailing-stop variant configs: (suffix, label, buy, sell, conf, sl, tp).
+# stop_loss here is the trailing distance (peak * (1 - sl/100)) instead of an
+# entry-anchored stop — see Portfolio.check_stop_loss_take_profit(peak_prices=...).
+# Pooled-only (NOT seeded per-symbol) — see _seed_per_symbol_bots.
+TRAILING_VARIANTS = [
+    ("_v11", "Trailing Tight", Decimal("0.50"), Decimal("0.30"), Decimal("0.40"), Decimal("3.00"), Decimal("99.00")),
+    ("_v12", "Trailing Wide",  Decimal("0.50"), Decimal("0.30"), Decimal("0.40"), Decimal("6.00"), Decimal("20.00")),
 ]
 
 
@@ -93,6 +108,38 @@ def seed_bots() -> int:
                             max_position_pct=Decimal("15.00"),
                             max_positions=5,
                             is_active=True,
+                        )
+                        session.add(bot)
+                        inserted += 1
+
+        # -----------------------------------------------------------------------
+        # Trailing-stop bots: 4 markets × 12 algorithms × 2 variants (_v11/_v12)
+        # Pooled only — trailing_stop=True enables the stateless peak-price SL.
+        # -----------------------------------------------------------------------
+        for market_key, market_display, initial_capital, currency in MARKETS:
+            for algo_key, algo_display in ALGORITHMS:
+                for suffix, variant_label, buy, sell, conf, sl, tp in TRAILING_VARIANTS:
+                    bot_id = f"{market_key.lower()}_{algo_key}{suffix}"
+                    display_name = f"{market_display} — {algo_display} ({variant_label})"
+
+                    existing = session.query(SimBot).filter(SimBot.id == bot_id).first()
+                    if existing is None:
+                        bot = SimBot(
+                            id=bot_id,
+                            market=market_key,
+                            algorithm=algo_key,
+                            display_name=display_name,
+                            initial_capital=initial_capital,
+                            currency=currency,
+                            buy_threshold=buy,
+                            sell_threshold=sell,
+                            min_confidence=conf,
+                            stop_loss=sl,
+                            take_profit=tp,
+                            max_position_pct=Decimal("15.00"),
+                            max_positions=5,
+                            is_active=True,
+                            trailing_stop=True,
                         )
                         session.add(bot)
                         inserted += 1

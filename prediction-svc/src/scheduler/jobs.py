@@ -325,6 +325,30 @@ def job_train_meta() -> None:
         log.error("job.train_meta.error", error=str(exc))
 
 
+def job_train_transformer() -> None:
+    """Mid-week transformer_nn refresh (fast train — intraday, all 4 markets).
+
+    The weekly Sunday train_* jobs also cover transformer_nn; this extra
+    Mon/Wed/Fri run keeps the small model close to the current regime.
+    """
+    from src.orchestrator.training import train_single_algorithm
+    try:
+        ok, session_id = train_single_algorithm("transformer_nn")
+        log.info("job.train_transformer.done", ok=ok, session=session_id)
+    except Exception as exc:
+        log.error("job.train_transformer.error", error=str(exc))
+
+
+def job_crawl_fundamentals() -> None:
+    """Weekly stock-fundamentals snapshot (yfinance) — crawl only, no pipeline."""
+    from src.crawlers.fundamentals import FundamentalsCrawler
+    try:
+        saved = FundamentalsCrawler().crawl()
+        log.info("job.crawl_fundamentals.done", saved=saved)
+    except Exception as exc:
+        log.error("job.crawl_fundamentals.error", error=str(exc))
+
+
 # Note: the database backup job lives in the Go API service
 # (api/pkg/server/backup_scheduler.go). The API owns the daily_backup schedule
 # and runs mysqldump itself, so the prediction service no longer performs backups.
@@ -350,4 +374,8 @@ JOB_FUNCTIONS = {
     "train_sp500": job_train_sp500,
     # Meta-stacking training (runs after per-market algo trains on Sunday)
     "train_meta": job_train_meta,
+    # Weekly fundamentals snapshot (yfinance) — feeds transformer_nn
+    "crawler_fundamentals": job_crawl_fundamentals,
+    # Mid-week transformer refresh (Mon/Wed/Fri)
+    "train_transformer": job_train_transformer,
 }

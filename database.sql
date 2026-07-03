@@ -406,6 +406,10 @@ CREATE INDEX IF NOT EXISTS idx_sim_bots_market ON sim_bots(market);
 CREATE INDEX IF NOT EXISTS idx_sim_bots_market_symbol ON sim_bots(market, symbol);
 -- Idempotent add for existing databases (schema is mounted only on first init)
 ALTER TABLE sim_bots ADD COLUMN IF NOT EXISTS symbol VARCHAR(30);
+-- trailing_stop: TRUE = SL is computed off the intraday peak price since entry
+-- (stateless — recomputed every step from *_intraday_prices MAX) instead of
+-- the fixed entry price. See _v11/_v12 pooled variants in seeder.py.
+ALTER TABLE sim_bots ADD COLUMN IF NOT EXISTS trailing_stop BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- sim_sessions: backtest and live simulation runs per bot
 CREATE TABLE IF NOT EXISTS sim_sessions (
@@ -1006,3 +1010,30 @@ ALTER TABLE gold_intraday_prices   ADD COLUMN IF NOT EXISTS low_price  NUMERIC(1
 -- ============================================================
 -- END OF SCHEMA
 -- ============================================================
+
+-- ============================================================
+-- STOCK FUNDAMENTALS (báo cáo tài chính — snapshot mới nhất per symbol)
+-- Nguồn: yfinance (Yahoo Finance) — chỉ NASDAQ / SP500 có dữ liệu.
+-- 1 row / (market_key, symbol); crawler upsert ON CONFLICT.
+-- Dùng bởi thuật toán transformer_nn làm static context features.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS stock_fundamentals (
+    id BIGSERIAL PRIMARY KEY,
+    market_key VARCHAR(16) NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    pe_ratio NUMERIC(20,4),
+    forward_pe NUMERIC(20,4),
+    price_to_book NUMERIC(20,4),
+    eps_ttm NUMERIC(20,4),
+    revenue_growth NUMERIC(12,6),
+    earnings_growth NUMERIC(12,6),
+    profit_margin NUMERIC(12,6),
+    debt_to_equity NUMERIC(20,4),
+    dividend_yield NUMERIC(12,6),
+    beta NUMERIC(12,6),
+    market_cap NUMERIC(30,2),
+    fetched_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_fundamentals_market_symbol UNIQUE (market_key, symbol)
+);
+CREATE INDEX IF NOT EXISTS idx_fundamentals_market ON stock_fundamentals (market_key);

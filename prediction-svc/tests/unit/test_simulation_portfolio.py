@@ -21,6 +21,7 @@ def make_portfolio(
     take_profit_pct: float = 8.0,
     max_position_pct: float = 15.0,
     max_positions: int = 5,
+    trailing_stop: bool = False,
 ) -> Portfolio:
     return Portfolio(
         initial_capital=initial_capital,
@@ -28,6 +29,7 @@ def make_portfolio(
         take_profit_pct=take_profit_pct,
         max_position_pct=max_position_pct,
         max_positions=max_positions,
+        trailing_stop=trailing_stop,
     )
 
 
@@ -255,6 +257,82 @@ class TestStopLossTakeProfit:
         assert len(trades) == 1
         assert trades[0].symbol == "VCB"
         assert "BID" in self.p.positions
+
+
+# ---------------------------------------------------------------------------
+# Trailing Stop
+# ---------------------------------------------------------------------------
+
+class TestTrailingStop:
+
+    def test_trailing_closes_below_peak_threshold_above_entry_threshold(self):
+        # entry=100, peak=130 → trailing stop (5%) = 123.5
+        # entry-anchored stop (5%) = 95, entry-anchored TP (8%) = 108
+        # price=105 is ABOVE both the entry-anchored SL and below TP, but
+        # BELOW the trailing (peak-anchored) stop → only the trailing branch
+        # closes this position.
+        p = make_portfolio(stop_loss_pct=5.0, take_profit_pct=8.0, trailing_stop=True)
+        p.buy("VCB", 100.0, TODAY)
+        trades = p.check_stop_loss_take_profit(
+            {"VCB": 105.0}, TODAY, peak_prices={"VCB": 130.0}
+        )
+        assert len(trades) == 1
+        assert trades[0].symbol == "VCB"
+        assert "VCB" not in p.positions
+
+    def test_non_trailing_does_not_close_same_scenario(self):
+        # Same prices/peak, but trailing_stop disabled — the peak is simply
+        # ignored and the classic entry-anchored SL/TP does not fire at 105
+        # (within -5%..+8% of the 100 entry price).
+        p = make_portfolio(stop_loss_pct=5.0, take_profit_pct=8.0, trailing_stop=False)
+        p.buy("VCB", 100.0, TODAY)
+        trades = p.check_stop_loss_take_profit(
+            {"VCB": 105.0}, TODAY, peak_prices={"VCB": 130.0}
+        )
+        assert len(trades) == 0
+        assert "VCB" in p.positions
+
+    def test_trailing_close_reason_is_trailing_stop(self):
+        p = make_portfolio(stop_loss_pct=5.0, take_profit_pct=8.0, trailing_stop=True)
+        p.buy("VCB", 100.0, TODAY)
+        trades = p.check_stop_loss_take_profit(
+            {"VCB": 105.0}, TODAY, peak_prices={"VCB": 130.0}
+        )
+        assert len(trades) == 1
+        assert trades[0].close_reason == "trailing_stop"
+
+    def test_trailing_take_profit_still_triggers(self):
+        # Small peak rise (105) then a sharp jump to 109 → TP (8%) fires
+        # before the peak has a chance to trail the stop above 109.
+        p = make_portfolio(stop_loss_pct=5.0, take_profit_pct=8.0, trailing_stop=True)
+        p.buy("VCB", 100.0, TODAY)
+        trades = p.check_stop_loss_take_profit(
+            {"VCB": 109.0}, TODAY, peak_prices={"VCB": 105.0}
+        )
+        assert len(trades) == 1
+        assert trades[0].close_reason == "take_profit"
+
+    def test_trailing_without_peak_entry_falls_back_to_entry_anchored(self):
+        # trailing_stop=True but no peak supplied for this symbol → behaves
+        # like the classic entry-anchored stop (backward compatible). price
+        # is within -5%..+8% of entry so neither SL nor TP fires.
+        p = make_portfolio(stop_loss_pct=5.0, take_profit_pct=8.0, trailing_stop=True)
+        p.buy("VCB", 100.0, TODAY)
+        trades = p.check_stop_loss_take_profit({"VCB": 101.0}, TODAY, peak_prices={})
+        assert len(trades) == 0
+        assert "VCB" in p.positions
+
+    def test_trailing_within_threshold_does_not_close(self):
+        # take_profit_pct raised to 50% so the entry-anchored TP branch inside
+        # the trailing path can't interfere — isolates the peak-threshold check.
+        p = make_portfolio(stop_loss_pct=5.0, take_profit_pct=50.0, trailing_stop=True)
+        p.buy("VCB", 100.0, TODAY)
+        # peak=130, trailing stop=123.5; price=125 is above it → no close.
+        trades = p.check_stop_loss_take_profit(
+            {"VCB": 125.0}, TODAY, peak_prices={"VCB": 130.0}
+        )
+        assert len(trades) == 0
+        assert "VCB" in p.positions
 
 
 # ---------------------------------------------------------------------------

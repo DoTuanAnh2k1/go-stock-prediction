@@ -37,6 +37,8 @@ DEFAULT_SCHEDULES = [
     ("train_crypto", "Training Crypto (Sunday 5AM)",         "0 0 5 * * 0", True),
     ("train_sp500",  "Training S&P 500 (Sunday 7AM)",        "0 0 7 * * 0", True),
     ("train_meta",   "Training Meta-Stack all markets (Sunday 8AM — runs after per-market trains)", "0 0 8 * * 0", True),
+    ("crawler_fundamentals", "Crawl stock fundamentals via yfinance (Saturday 6AM — feeds transformer_nn)", "0 0 6 * * 6", True),
+    ("train_transformer", "Train Transformer intraday refresh (Mon/Wed/Fri 2:30AM)", "0 30 2 * * 1,3,5", True),
     ("daily_prediction", "Predict all markets (every hour)", "0 0 */1 * * *", False),
     ("predict_nasdaq", "NASDAQ predict standalone (disabled — runs inside pipeline)",  "0 30 23 * * 1-5", False),
     ("predict_crypto", "Crypto predict standalone (disabled — runs inside pipeline)", "0 0 */6 * * *",   False),

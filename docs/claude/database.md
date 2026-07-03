@@ -25,7 +25,8 @@
 | `service_instances` | — | service-mgt; 4 dòng UP khi `SERVICE_MGT_ENABLED=true` |
 | `market_groups`, `market_group_markets`, `user_market_groups` | — | Flyway V1; quản lý bởi Java Auth Service |
 | `cli_handlers`, `commands`, `command_groups`, `command_group_commands`, `user_command_groups` | — | Flyway V3; Command RBAC |
-| `sim_bots` | — | Cột `symbol` nullable — NULL = pooled per-market; có giá trị = per-symbol (algo key với hậu tố `__ps`) |
+| `sim_bots` | — | Cột `symbol` nullable — NULL = pooled per-market; có giá trị = per-symbol (algo key với hậu tố `__ps`). Cột `trailing_stop BOOLEAN NOT NULL DEFAULT FALSE` — `TRUE` = SL tính theo đỉnh giá intraday kể từ lúc entry (stateless, `MAX(price)` trên `*_intraday_prices` mỗi step, KHÔNG lưu peak trong DB) thay vì entry price cố định; TP không đổi (vẫn entry-anchored). Hai variant pooled `_v11` ("Trailing Tight", sl=3%, tp=99% — gần như chỉ trail) và `_v12` ("Trailing Wide", sl=6%, tp=20%) seed cho mọi (market × algorithm) — 4×12×2=96 bot, chỉ pooled (không seed per-symbol). |
+| `stock_fundamentals` | — | Không hypertable; 1 row/(market_key, symbol) — snapshot báo cáo tài chính mới nhất (yfinance, upsert ON CONFLICT); unique `uq_fundamentals_market_symbol`; dùng bởi `transformer_nn` |
 
 ### Conventions quan trọng
 
@@ -58,6 +59,8 @@ Lưu trong bảng `cron_schedules`, chỉnh live qua `/api/schedules` hoặc Set
 | `train_crypto` | `0 0 5 * * 0` | bật | Training Crypto (Chủ nhật 5AM) |
 | `train_sp500` | `0 0 7 * * 0` | bật | Training S&P 500 (Chủ nhật 7AM) |
 | `train_meta` | `0 0 8 * * 0` | bật | Training Meta-Stack LightGBM classifier cho 4 markets (Chủ nhật 8AM) |
+| `crawler_fundamentals` | `0 0 6 * * 6` | bật | Crawl báo cáo tài chính yfinance → `stock_fundamentals` (Thứ Bảy 6AM) — feeds `transformer_nn` |
+| `train_transformer` | `0 30 2 * * 1,3,5` | bật | Refresh transformer_nn trên intraday bars (Thứ 2/4/6 2:30AM — giữa các lần train Chủ nhật) |
 | `simulation_daily` | `0 0 20 * * *` | bật | Bot trading (8PM); live-step theo giờ; NASDAQ/SP500 skip nếu is_intraday_open=False |
 | `daily_backup` | `0 0 3 * * *` | bật | Backup PostgreSQL lúc 3AM — **Go api-svc** chạy, không phải Python |
 | `gold_predict`, `predict_nasdaq`, `predict_crypto`, `predict_sp500` | — | **tắt** | Disabled — đã chạy trong pipeline |
@@ -74,7 +77,13 @@ Lưu trong bảng `cron_schedules`, chỉnh live qua `/api/schedules` hoặc Set
 
 ### Bot RL DQN
 
-`simulation/bot.py` nhánh rl_dqn: action policy trực tiếp (không threshold); SL/TP vẫn là hard guard. Observation = `build_enhanced_features()` + position_state. Seeder: **1 bot RL/market** (4 tổng). Checkpoint: `${RL_MODEL_DIR}/rl_dqn_{market}.pt`.
+`simulation/bot.py` nhánh rl_dqn: action policy trực tiếp (không threshold); SL/TP vẫn là hard guard. Observation = `build_enhanced_features()` + position_state. BUY chỉ thực thi khi softmax confidence ≥ `_RL_BUY_CONF_FLOOR` (0.38 — trên uniform 1/3, chống churn); SELL không gate. Seeder: **1 bot RL/market** (4 tổng). Checkpoint: `${RL_MODEL_DIR}/rl_dqn_{market}.pt`.
+
+**RL DQN v3 (training):** Dueling Double-DQN — LayerNorm input + static feature scaling (RSI/stoch/ROC về cùng scale với log-returns, tag `feat_scale` trong checkpoint; checkpoint MLP cũ vẫn load và nhận raw features). Prioritized replay (α=0.6, β=0.4) + 3-step return + Polyak soft target (τ=0.005). Reward = PnL chuẩn hóa theo rolling σ + shaping định hướng (±0.15·direction·return/σ) để Q(buy/sell|flat) mang tín hiệu hướng → predict() chính xác hơn. Walk-forward validation: window mới nhất mỗi series bị hold-out, giữ weights của epoch có greedy reward (RAW) tốt nhất. Fix alignment: `_make_windows` tail-align prices với feature rows (trước đây reward lệch 20 bước so với observation). predict(): độ lớn dự đoán tỷ lệ với softmax gap `p_buy − p_sell`; HOLD nghiêng theo phía trội thay vì luôn nghiêng lên.
+
+### Bot Conviction (transformer_nn)
+
+`simulation/bot.py` nhánh is_conviction (`base_key == "transformer_nn"`): KHÔNG dùng threshold %-giá (prediction hourly chỉ ±0.1–0.3%, không bao giờ chạm ngưỡng thang ngày như 0.5%) — quyết định bằng **P(up) từ direction head** (`TransformerPredictor.predict_direction_proba`, None = hold). BUY khi `p_up ≥ max(0.5 + buy_threshold/100, 0.52)`; SELL khi đang giữ và `p_up ≤ min(0.5 − sell_threshold/100, 0.48)` (floor/ceiling 0.52/0.48 validate bằng trade replay 28/6→2/7: +1.16%/+1.29% vs B&H +0.84%). Dữ liệu intraday khi có `now` (live-step), daily khi backtest — như RL. SL/TP (kể cả trailing _v11/_v12) vẫn là hard guard chạy trước.
 
 ### Bot Meta-Stack
 

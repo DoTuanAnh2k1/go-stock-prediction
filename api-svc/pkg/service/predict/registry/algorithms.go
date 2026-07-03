@@ -90,6 +90,20 @@ func init() {
 		},
 	})
 	Register(AlgorithmDef{
+		Key:         "transformer_nn",
+		DisplayName: "Transformer (PatchTST)",
+		Config: map[string]interface{}{
+			"description":   "Patch-based Transformer encoder over log-returns with fundamentals context",
+			"seq_len":       96,
+			"patch_len":     8,
+			"d_model":       64,
+			"n_heads":       4,
+			"n_layers":      2,
+			"learning_rate": 0.001,
+			"fundamentals":  "stock_fundamentals (yfinance, weekly)",
+		},
+	})
+	Register(AlgorithmDef{
 		Key:         "ensemble",
 		DisplayName: "Ensemble",
 		Config:      map[string]interface{}{},

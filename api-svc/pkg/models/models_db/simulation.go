@@ -23,6 +23,7 @@ type SimBot struct {
 	MaxPositionPct decimal.Decimal `gorm:"type:decimal(5,2);default:15.00" json:"max_position_pct"`
 	MaxPositions   int             `gorm:"default:5" json:"max_positions"`
 	IsActive       bool            `gorm:"default:true" json:"is_active"`
+	TrailingStop   bool            `gorm:"column:trailing_stop;default:false" json:"trailing_stop"`
 	CreatedAt      time.Time       `json:"created_at"`
 	UpdatedAt      time.Time       `json:"updated_at"`
 }

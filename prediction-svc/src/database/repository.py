@@ -23,12 +23,35 @@ from src.database.models import (
     SP500IntradayPrice,
     SP500Prediction,
     SP500Price,
+    StockFundamental,
     SyncLog,
     TrainingLog,
 )
 from src.utils.logger import get_logger
 
 log = get_logger("repository")
+
+
+def direction_verdict(pred_diff: Decimal, actual_diff: Decimal) -> bool | None:
+    """Direction-accuracy verdict for a matured prediction.
+
+    Returns None when the outcome is *unscorable* because the actual price never
+    moved from the entry price (``actual_diff == 0``). That happens when reconcile
+    runs before a fresh price bar exists — the market closed past the target hour,
+    or a crawl lag left the daily-live row frozen at the value captured when the
+    prediction was made. Scoring direction against zero movement would mark EVERY
+    algorithm wrong (``sign(actual_diff) == 0`` can never match ``sign(pred_diff)``),
+    so callers must leave the prediction pending instead of recording a false 'wrong'.
+
+    Once real movement is observed it returns True when the predicted direction
+    matches the actual direction, False otherwise (a flat prediction, ``pred_diff
+    == 0``, never counts as a correct directional call).
+    """
+    if actual_diff == 0:
+        return None
+    if pred_diff == 0:
+        return False
+    return (pred_diff > 0) == (actual_diff > 0)
 
 
 # ---------------------------------------------------------------------------
@@ -248,10 +271,12 @@ def backfill_direction_correct_gold() -> int:
         for pred in rows:
             pred_diff = Decimal(str(pred.predicted_price)) - Decimal(str(pred.current_price))
             actual_diff = Decimal(str(pred.actual_price)) - Decimal(str(pred.current_price))
-            if actual_diff == 0:
-                pred.direction_correct = (pred_diff == 0)
-            else:
-                pred.direction_correct = (pred_diff > 0) == (actual_diff > 0)
+            verdict = direction_verdict(pred_diff, actual_diff)
+            if verdict is None:
+                # Frozen/stale actual (== entry price): unscorable — leave direction_correct
+                # NULL instead of marking every algorithm wrong.
+                continue
+            pred.direction_correct = verdict
             updated += 1
         return updated
 
@@ -430,10 +455,12 @@ def backfill_direction_correct_nasdaq() -> int:
         for pred in rows:
             pred_diff = Decimal(str(pred.predicted_price)) - Decimal(str(pred.current_price))
             actual_diff = Decimal(str(pred.actual_price)) - Decimal(str(pred.current_price))
-            if actual_diff == 0:
-                pred.direction_correct = (pred_diff == 0)
-            else:
-                pred.direction_correct = (pred_diff > 0) == (actual_diff > 0)
+            verdict = direction_verdict(pred_diff, actual_diff)
+            if verdict is None:
+                # Frozen/stale actual (== entry price): unscorable — leave direction_correct
+                # NULL instead of marking every algorithm wrong.
+                continue
+            pred.direction_correct = verdict
             updated += 1
         return updated
 
@@ -617,10 +644,12 @@ def backfill_direction_correct_crypto() -> int:
         for pred in rows:
             pred_diff = Decimal(str(pred.predicted_price)) - Decimal(str(pred.current_price))
             actual_diff = Decimal(str(pred.actual_price)) - Decimal(str(pred.current_price))
-            if actual_diff == 0:
-                pred.direction_correct = (pred_diff == 0)
-            else:
-                pred.direction_correct = (pred_diff > 0) == (actual_diff > 0)
+            verdict = direction_verdict(pred_diff, actual_diff)
+            if verdict is None:
+                # Frozen/stale actual (== entry price): unscorable — leave direction_correct
+                # NULL instead of marking every algorithm wrong.
+                continue
+            pred.direction_correct = verdict
             updated += 1
         return updated
 
@@ -799,10 +828,12 @@ def backfill_direction_correct_sp500() -> int:
         for pred in rows:
             pred_diff = Decimal(str(pred.predicted_price)) - Decimal(str(pred.current_price))
             actual_diff = Decimal(str(pred.actual_price)) - Decimal(str(pred.current_price))
-            if actual_diff == 0:
-                pred.direction_correct = (pred_diff == 0)
-            else:
-                pred.direction_correct = (pred_diff > 0) == (actual_diff > 0)
+            verdict = direction_verdict(pred_diff, actual_diff)
+            if verdict is None:
+                # Frozen/stale actual (== entry price): unscorable — leave direction_correct
+                # NULL instead of marking every algorithm wrong.
+                continue
+            pred.direction_correct = verdict
             updated += 1
         return updated
 
@@ -943,6 +974,122 @@ def upsert_gold_intraday(record: GoldIntradayPrice) -> None:
             )
             session.add(new)
 
+
+
+# ---------------------------------------------------------------------------
+# Intraday as-of fetchers
+# ---------------------------------------------------------------------------
+
+def get_nasdaq_intraday_asc_as_of(
+    symbol: str, as_of: "datetime", limit: int = 400
+) -> "list[NasdaqIntradayPrice]":
+    """Return up to `limit` NASDAQ intraday bars with timestamp <= as_of, in ASC order."""
+    session = get_session()
+    try:
+        rows = (
+            session.query(NasdaqIntradayPrice)
+            .filter(
+                NasdaqIntradayPrice.symbol == symbol,
+                NasdaqIntradayPrice.timestamp <= as_of,
+            )
+            .order_by(NasdaqIntradayPrice.timestamp.desc())
+            .limit(limit)
+            .all()
+        )
+        return list(reversed(rows))
+    finally:
+        session.close()
+
+
+def get_sp500_intraday_asc_as_of(
+    symbol: str, as_of: "datetime", limit: int = 400
+) -> "list[SP500IntradayPrice]":
+    """Return up to `limit` S&P 500 intraday bars with timestamp <= as_of, in ASC order."""
+    session = get_session()
+    try:
+        rows = (
+            session.query(SP500IntradayPrice)
+            .filter(
+                SP500IntradayPrice.symbol == symbol,
+                SP500IntradayPrice.timestamp <= as_of,
+            )
+            .order_by(SP500IntradayPrice.timestamp.desc())
+            .limit(limit)
+            .all()
+        )
+        return list(reversed(rows))
+    finally:
+        session.close()
+
+
+def get_crypto_intraday_asc_as_of(
+    coin_id: str, as_of: "datetime", limit: int = 400
+) -> "list[CryptoIntradayPrice]":
+    """Return up to `limit` crypto intraday bars with timestamp <= as_of, in ASC order.
+
+    Note: CryptoIntradayPrice uses the `price` column (not `close_price`) as the
+    close/line-chart price.
+    """
+    session = get_session()
+    try:
+        rows = (
+            session.query(CryptoIntradayPrice)
+            .filter(
+                CryptoIntradayPrice.coin_id == coin_id,
+                CryptoIntradayPrice.timestamp <= as_of,
+            )
+            .order_by(CryptoIntradayPrice.timestamp.desc())
+            .limit(limit)
+            .all()
+        )
+        return list(reversed(rows))
+    finally:
+        session.close()
+
+
+def get_gold_intraday_asc_as_of(
+    source: str, as_of: "datetime", limit: int = 400
+) -> "list[GoldIntradayPrice]":
+    """Return up to `limit` gold intraday bars for the given source with timestamp <= as_of, in ASC order.
+
+    Aggregates across all product_types for the source; callers use sell_price
+    (or buy_price as fallback) as the close price for RL feature building.
+    Returns rows ordered ASC by timestamp; multiple rows may share the same
+    timestamp when multiple product_types exist — caller deduplication by taking
+    the last row per timestamp is recommended if needed.
+    """
+    session = get_session()
+    try:
+        rows = (
+            session.query(GoldIntradayPrice)
+            .filter(
+                GoldIntradayPrice.source == source,
+                GoldIntradayPrice.timestamp <= as_of,
+            )
+            .order_by(GoldIntradayPrice.timestamp.desc())
+            .limit(limit)
+            .all()
+        )
+        return list(reversed(rows))
+    finally:
+        session.close()
+
+
+def get_gold_intraday_sources(as_of: "datetime | None" = None) -> list[str]:
+    """Return distinct source values present in gold_intraday_prices.
+
+    Optionally filtered to sources that have at least one bar with
+    timestamp <= as_of.
+    """
+    session = get_session()
+    try:
+        q = session.query(GoldIntradayPrice.source).distinct()
+        if as_of is not None:
+            q = q.filter(GoldIntradayPrice.timestamp <= as_of)
+        rows = q.all()
+        return [r.source for r in rows]
+    finally:
+        session.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1176,6 +1323,64 @@ def increment_crawl_count(market_key: str) -> int:
             {"mk": market_key, "now": datetime.now()},
         ).fetchone()
         return int(row[0]) if row else 0
+
+
+# ---------------------------------------------------------------------------
+# Stock fundamentals (yfinance snapshots — transformer_nn static features)
+# ---------------------------------------------------------------------------
+
+FUNDAMENTAL_FIELDS = [
+    "pe_ratio", "forward_pe", "price_to_book", "eps_ttm",
+    "revenue_growth", "earnings_growth", "profit_margin",
+    "debt_to_equity", "dividend_yield", "beta", "market_cap",
+]
+
+
+def upsert_stock_fundamental(market_key: str, symbol: str, fields: dict) -> None:
+    """Upsert the latest fundamental snapshot for (market_key, symbol).
+
+    `fields` may contain any subset of FUNDAMENTAL_FIELDS; unknown keys are
+    ignored, missing keys are stored as NULL.
+    """
+    values = {k: fields.get(k) for k in FUNDAMENTAL_FIELDS}
+    cols = ", ".join(FUNDAMENTAL_FIELDS)
+    placeholders = ", ".join(f":{k}" for k in FUNDAMENTAL_FIELDS)
+    updates = ", ".join(f"{k} = :{k}" for k in FUNDAMENTAL_FIELDS)
+    with session_scope() as session:
+        session.execute(
+            text(f"""
+                INSERT INTO stock_fundamentals (market_key, symbol, {cols}, fetched_at)
+                VALUES (:mk, :sym, {placeholders}, :now)
+                ON CONFLICT (market_key, symbol) DO UPDATE
+                    SET {updates}, fetched_at = :now
+            """),
+            {"mk": market_key.upper(), "sym": symbol, "now": datetime.now(), **values},
+        )
+
+
+def get_fundamentals_map(market_key: str) -> dict[str, dict]:
+    """Return {symbol: {field: float | None}} for a market. Empty dict on error.
+
+    Values are converted to float (Numeric → float) so callers can feed them
+    straight into feature vectors.
+    """
+    try:
+        with session_scope() as session:
+            rows = (
+                session.query(StockFundamental)
+                .filter(StockFundamental.market_key == market_key.upper())
+                .all()
+            )
+            out: dict[str, dict] = {}
+            for r in rows:
+                out[r.symbol] = {
+                    k: (float(getattr(r, k)) if getattr(r, k) is not None else None)
+                    for k in FUNDAMENTAL_FIELDS
+                }
+            return out
+    except Exception as exc:
+        log.warning("fundamentals.map.error", market=market_key, error=str(exc))
+        return {}
 
 
 # ---------------------------------------------------------------------------

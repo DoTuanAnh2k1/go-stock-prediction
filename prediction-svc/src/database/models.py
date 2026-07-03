@@ -263,6 +263,7 @@ class SimBot(Base):
     max_position_pct = Column(Numeric(5, 2), default=Decimal("15.00"))
     max_positions = Column(Integer, default=5)
     is_active = Column(Boolean, default=True)
+    trailing_stop = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
@@ -409,6 +410,31 @@ class GoldIntradayPrice(Base):
     currency = Column(String(3), nullable=False)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class StockFundamental(Base):
+    """Latest fundamental snapshot per (market, symbol) — yfinance, weekly upsert.
+
+    Only NASDAQ / SP500 symbols have data; other markets have no rows.
+    Consumed by transformer_nn as static context features.
+    """
+    __tablename__ = "stock_fundamentals"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    market_key = Column(String(16), nullable=False)
+    symbol = Column(String(20), nullable=False)
+    pe_ratio = Column(Numeric(20, 4), nullable=True)
+    forward_pe = Column(Numeric(20, 4), nullable=True)
+    price_to_book = Column(Numeric(20, 4), nullable=True)
+    eps_ttm = Column(Numeric(20, 4), nullable=True)
+    revenue_growth = Column(Numeric(12, 6), nullable=True)
+    earnings_growth = Column(Numeric(12, 6), nullable=True)
+    profit_margin = Column(Numeric(12, 6), nullable=True)
+    debt_to_equity = Column(Numeric(20, 4), nullable=True)
+    dividend_yield = Column(Numeric(12, 6), nullable=True)
+    beta = Column(Numeric(12, 6), nullable=True)
+    market_cap = Column(Numeric(30, 2), nullable=True)
+    fetched_at = Column(DateTime, nullable=False, default=datetime.now)
 
 
 class PipelineReport(Base):

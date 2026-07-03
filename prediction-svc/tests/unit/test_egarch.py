@@ -77,17 +77,13 @@ class TestEGARCHPredictor:
         with pytest.raises(ValueError):
             self.algo.predict([100.0] * (MIN_DATA_POINTS - 1))
 
-    def test_predict_convergence_failure_uses_fallback(self):
-        """If _fit_and_predict raises, predict() must return a valid fallback result."""
+    def test_predict_convergence_failure_raises(self):
+        """Fail-loud policy: if _fit_and_predict raises, predict() re-raises
+        (no fake EMA result) — see test_fail_loud_policy.py."""
         prices = make_prices(200)
         with patch.object(self.algo, "_fit_and_predict", side_effect=RuntimeError("convergence failed")):
-            result = self.algo.predict(prices)
-        assert result is not None
-        assert result.algorithm_name == "egarch"
-        assert 0.0 <= result.confidence <= 1.0
-        current = prices[-1]
-        assert result.predicted_price >= current * 0.93 - 1e-9
-        assert result.predicted_price <= current * 1.07 + 1e-9
+            with pytest.raises(RuntimeError, match="convergence failed"):
+                self.algo.predict(prices)
 
     def test_ema_fallback_returns_valid_result(self):
         prices = make_prices(100)

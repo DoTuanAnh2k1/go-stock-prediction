@@ -26,13 +26,21 @@ torch = pytest.importorskip("torch", reason="PyTorch not installed — skipping 
 
 from src.algorithms.base import MARKET_MAX_CHANGE, PredictionResult, get_max_change_pct
 from src.algorithms.rl_dqn import (
+    ARCH_DUELING,
+    ARCH_MLP,
+    GAMMA,
     MIN_REPLAY,
     N_ACTIONS,
+    N_ENHANCED_FEATURES,
     N_POS_FEATURES,
+    N_STEP,
     RLDQNPredictor,
     _ReplayBuffer,
     _build_qnet,
     _checkpoint_path,
+    _make_windows,
+    _run_episode,
+    _scale_feature_matrix,
 )
 
 # ---------------------------------------------------------------------------
@@ -604,3 +612,175 @@ class TestPredictionResultFields:
         result = p.predict(make_prices(220))
         assert result.predicted_price > 0.0
         assert math.isfinite(result.predicted_price)
+
+
+# ---------------------------------------------------------------------------
+# 15. v3 — Dueling architecture + legacy MLP compat
+# ---------------------------------------------------------------------------
+
+class TestArchitectures:
+
+    def test_default_arch_is_dueling_and_has_correct_shape(self):
+        net = _build_qnet(40)
+        assert hasattr(net, "advantage"), "default arch should be dueling"
+        out = net(torch.randn(4, 40))
+        assert out.shape == (4, N_ACTIONS)
+
+    def test_mlp_arch_matches_legacy_state_dict_layout(self):
+        net = _build_qnet(40, arch=ARCH_MLP)
+        keys = set(net.state_dict().keys())
+        # Legacy checkpoints have Sequential keys net.0/net.2/net.4
+        assert "net.0.weight" in keys and "net.4.bias" in keys
+        out = net(torch.randn(2, 40))
+        assert out.shape == (2, N_ACTIONS)
+
+    def test_legacy_checkpoint_without_arch_tag_loads(self, tmp_path, monkeypatch):
+        """A pre-v3 checkpoint ({in_dim, state_dict} only) must load as MLP."""
+        monkeypatch.setenv("RL_MODEL_DIR", str(tmp_path))
+        in_dim = N_ENHANCED_FEATURES + N_POS_FEATURES
+        legacy_net = _build_qnet(in_dim, arch=ARCH_MLP)
+        os.makedirs(tmp_path, exist_ok=True)
+        torch.save(
+            {"in_dim": in_dim, "state_dict": legacy_net.state_dict()},
+            _checkpoint_path("GOLD"),
+        )
+
+        p = _fresh_predictor("GOLD")
+        obs = np.zeros(in_dim, dtype=np.float32)
+        action = p.act(obs)
+        assert action in {0, 1, 2}
+        assert p.is_trained() is True
+        assert p._arch == ARCH_MLP
+        assert p._feat_scale is False  # legacy nets get raw features
+
+    def test_v3_checkpoint_roundtrip_keeps_arch_and_scale(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("RL_MODEL_DIR", str(tmp_path))
+        monkeypatch.setattr("src.algorithms.rl_dqn.TRAIN_EPOCHS", 1)
+        monkeypatch.setattr("src.algorithms.rl_dqn.MIN_REPLAY", 10)
+        trainer = _fresh_predictor("GOLD")
+        trainer.train_batch([(make_prices(220), None)])
+
+        loader = _fresh_predictor("GOLD")
+        assert loader._try_load_checkpoint() is True
+        assert loader._arch == ARCH_DUELING
+        assert loader._feat_scale is True
+
+
+# ---------------------------------------------------------------------------
+# 16. v3 — Prioritized replay buffer
+# ---------------------------------------------------------------------------
+
+class TestPrioritizedReplay:
+
+    def _filled(self, n=50):
+        buf = _ReplayBuffer(100)
+        dummy = np.zeros(4, dtype=np.float32)
+        for i in range(n):
+            buf.push(dummy, i % 3, float(i), dummy, 0.97)
+        return buf
+
+    def test_sample_per_returns_batch_indices_weights(self):
+        buf = self._filled()
+        batch, idx, w = buf.sample_per(16)
+        assert len(batch) == 16 and len(idx) == 16 and len(w) == 16
+        assert all(0 <= int(i) < len(buf) for i in idx)
+        assert float(w.max()) == pytest.approx(1.0)
+        assert (w > 0).all()
+
+    def test_update_priorities_biases_sampling(self):
+        buf = self._filled(20)
+        # Give transition 0 a huge priority; it should dominate samples
+        buf.update_priorities([0], [1000.0])
+        _, idx, _ = buf.sample_per(10)
+        assert (idx == 0).sum() >= 1
+
+    def test_uniform_sample_api_still_works(self):
+        buf = self._filled(30)
+        batch = buf.sample(10)
+        assert len(batch) == 10
+
+
+# ---------------------------------------------------------------------------
+# 17. v3 — Feature scaling
+# ---------------------------------------------------------------------------
+
+class TestFeatureScaling:
+
+    def test_rsi_and_stoch_columns_rescaled(self):
+        mat = np.zeros((2, N_ENHANCED_FEATURES), dtype=np.float32)
+        mat[:, 17:20] = 50.0   # RSI + stoch at neutral 50
+        mat[:, 10:14] = 1.0    # MA ratios at parity
+        mat[:, 20] = 0.5       # bb %B mid
+        mat[:, 29] = 1.0       # vol ratio parity
+        out = _scale_feature_matrix(mat)
+        # Neutral values must map to ~0 so all features share scale
+        assert np.allclose(out[:, 17:20], 0.0)
+        assert np.allclose(out[:, 10:14], 0.0)
+        assert np.allclose(out[:, 20], 0.0)
+        assert np.allclose(out[:, 29], 0.0)
+
+    def test_non_canonical_width_passthrough(self):
+        mat = np.full((3, 14), 77.0, dtype=np.float32)
+        out = _scale_feature_matrix(mat)
+        assert np.allclose(out, 77.0)
+
+    def test_input_matrix_not_mutated(self):
+        mat = np.full((2, N_ENHANCED_FEATURES), 50.0, dtype=np.float32)
+        _ = _scale_feature_matrix(mat)
+        assert np.allclose(mat, 50.0)
+
+
+# ---------------------------------------------------------------------------
+# 18. v3 — Window alignment fix
+# ---------------------------------------------------------------------------
+
+class TestWindowAlignment:
+
+    def test_prices_tail_aligned_to_obs_rows(self):
+        """obs_matrix rows are as-of prices[j+offset] — windows must pair them."""
+        n_prices = 200
+        offset = 20  # build_enhanced_features starts at index 20
+        obs = np.arange((n_prices - offset) * 2, dtype=np.float32).reshape(-1, 2)
+        prices = np.arange(n_prices, dtype=np.float32)
+        wins = _make_windows(obs, prices, window=130, stride=35)
+        for w_mat, w_prices in wins:
+            assert len(w_mat) == len(w_prices)
+        # First window's first price must be prices[offset], not prices[0]
+        assert wins[0][1][0] == float(offset)
+
+    def test_equal_length_inputs_unchanged(self):
+        obs = np.zeros((100, 3), dtype=np.float32)
+        prices = np.arange(100, dtype=np.float32)
+        wins = _make_windows(obs, prices, window=130, stride=35)
+        assert len(wins) == 1
+        assert wins[0][1][0] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# 19. v3 — n-step transitions
+# ---------------------------------------------------------------------------
+
+class TestNStepTransitions:
+
+    def test_episode_pushes_nstep_discounts(self):
+        rng = np.random.default_rng(3)
+        n_steps, n_base = 40, 30
+        obs = rng.normal(0, 0.1, size=(n_steps, n_base)).astype(np.float32)
+        prices = np.cumprod(1 + rng.normal(0, 0.01, n_steps)).astype(np.float32) * 100
+        net = _build_qnet(n_base + N_POS_FEATURES)
+        buf = _ReplayBuffer(1000)
+
+        total, gs = _run_episode(obs, prices, net, buf, epsilon=0.0, global_step=0)
+        assert gs == n_steps - 1
+        assert math.isfinite(total)
+        assert len(buf) == n_steps - 1  # every raw step yields one transition
+
+        gamma_n = GAMMA ** N_STEP
+        discs = {round(float(entry[4]), 8) for entry in buf._data}
+        # Bootstrapped transitions carry γ^n; the terminal flush carries 0.0
+        assert round(gamma_n, 8) in discs
+        assert 0.0 in discs
+        for _, action, reward, _, disc in buf._data:
+            assert action in {0, 1, 2}
+            assert math.isfinite(reward)
+            assert 0.0 <= float(disc) <= gamma_n + 1e-9

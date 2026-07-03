@@ -109,13 +109,15 @@ prediction-svc/
 │   │   ├── xgboost_model.py            # XGBoost ~30 features; Optuna (≥200 pts, 30 trials, 120s)
 │   │   ├── random_forest.py            # RandomForest n_estimators=200, max_depth=8; không Optuna
 │   │   ├── ensemble.py                 # Accuracy-weighted ensemble 10 base models; fallback equal-weight
-│   │   └── rl_dqn.py                   # Deep Q-Network (MLP: in→128→64→3); checkpoint rl_dqn_{market}.pt; KHÔNG trong Ensemble
+│   │   ├── transformer_model.py        # Transformer #13 (PatchTST-lite): patch attention trên log-returns + static context từ stock_fundamentals; checkpoint transformer_{market}.pt; train_batch_labeled; KHÔNG trong Ensemble
+│   │   └── rl_dqn.py                   # Dueling Double-DQN v3 (LayerNorm→128→64→V/A heads; PER + 3-step return + Polyak; reward vol-normalized + directional shaping; walk-forward val chọn epoch tốt nhất; feature scaling tĩnh); checkpoint rl_dqn_{market}.pt tag arch/feat_scale — checkpoint MLP cũ vẫn load; KHÔNG trong Ensemble
 │   ├── crawlers/
 │   │   ├── base.py                     # Abstract BaseCrawler
 │   │   ├── gold.py                     # Yahoo Finance XAU + BTMC API + Phú Quý
 │   │   ├── nasdaq.py                   # Yahoo Finance — 15 NASDAQ symbols
 │   │   ├── crypto.py                   # CoinGecko — BTC/ETH/SOL
-│   │   └── sp500.py                    # Yahoo Finance — 16 S&P 500 symbols
+│   │   ├── sp500.py                    # Yahoo Finance — 16 S&P 500 symbols
+│   │   └── fundamentals.py             # yfinance — báo cáo tài chính NASDAQ+SP500 → stock_fundamentals (tuần)
 │   ├── scheduler/
 │   │   ├── manager.py                  # APScheduler + DB-backed CronSchedule; poll 60s; DEFAULT_SCHEDULES
 │   │   └── jobs.py                     # Định nghĩa tất cả jobs (_run_pipeline, train, reconcile)
