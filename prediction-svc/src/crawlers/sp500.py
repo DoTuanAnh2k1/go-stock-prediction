@@ -10,6 +10,7 @@ _VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 import requests
 
+from src.crawlers import sanity
 from src.crawlers.base import DEFAULT_HEADERS, BaseCrawler
 from src.database import repository as repo
 from src.database.models import SP500IntradayPrice
@@ -17,7 +18,7 @@ from src.utils.logger import get_logger
 
 log = get_logger("crawler.sp500")
 
-YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range={range}"
+YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range={range}&events=split"
 YAHOO_INTRADAY_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1h&range={range}"
 REQUEST_DELAY = 0.5  # 500ms
 BACKFILL_DELAY = 0.3  # 300ms — slightly faster for batch backfill
@@ -67,41 +68,85 @@ class SP500Crawler(BaseCrawler):
         log.info("sp500.crawl.start", symbols=len(SP500_SYMBOLS))
         saved = 0
         errors = 0
+        new_splits = 0
 
         for symbol in SP500_SYMBOLS:
             try:
-                rows = self._fetch(symbol, range_="2d")
+                rows, splits = self._fetch(symbol, range_="2d")
                 for row in rows:
                     repo.upsert_sp500_price(**row)
                     saved += 1
+                for sp in splits:
+                    sid = repo.record_split(
+                        "SP500", symbol, sp["split_date"],
+                        sp["numerator"], sp["denominator"],
+                    )
+                    if sid is not None:
+                        log.info(
+                            "crawl.split.detected",
+                            symbol=symbol,
+                            ratio=float(sp["numerator"]) / float(sp["denominator"]),
+                            split_date=str(sp["split_date"]),
+                        )
+                        new_splits += 1
             except Exception as exc:
                 log.warning("sp500.crawl.error", symbol=symbol, error=str(exc))
                 errors += 1
 
             time.sleep(REQUEST_DELAY)
 
-        log.info("sp500.crawl.done", saved=saved, errors=errors)
+        log.info("sp500.crawl.done", saved=saved, errors=errors, new_splits=new_splits)
+
+        if new_splits > 0:
+            try:
+                from src.orchestrator.splits import apply_pending_splits
+                apply_pending_splits()
+            except Exception as exc:
+                log.error("sp500.crawl.split_apply_error", error=str(exc))
+
         return saved
 
     def crawl_history(self, days: int = 180) -> int:
         log.info("sp500.history.start", symbols=len(SP500_SYMBOLS))
         saved = 0
         errors = 0
+        new_splits = 0
 
         for symbol in SP500_SYMBOLS:
             try:
-                rows = self._fetch(symbol, range_="1y")
+                rows, splits = self._fetch(symbol, range_="1y")
                 for row in rows:
                     repo.upsert_sp500_price(**row)
                     saved += 1
                 log.debug("sp500.history.symbol", symbol=symbol, rows=len(rows))
+                for sp in splits:
+                    sid = repo.record_split(
+                        "SP500", symbol, sp["split_date"],
+                        sp["numerator"], sp["denominator"],
+                    )
+                    if sid is not None:
+                        log.info(
+                            "crawl.split.detected",
+                            symbol=symbol,
+                            ratio=float(sp["numerator"]) / float(sp["denominator"]),
+                            split_date=str(sp["split_date"]),
+                        )
+                        new_splits += 1
             except Exception as exc:
                 log.warning("sp500.history.error", symbol=symbol, error=str(exc))
                 errors += 1
 
             time.sleep(REQUEST_DELAY)
 
-        log.info("sp500.history.done", saved=saved, errors=errors)
+        log.info("sp500.history.done", saved=saved, errors=errors, new_splits=new_splits)
+
+        if new_splits > 0:
+            try:
+                from src.orchestrator.splits import apply_pending_splits
+                apply_pending_splits()
+            except Exception as exc:
+                log.error("sp500.history.split_apply_error", error=str(exc))
+
         return saved
 
     def crawl_intraday(self) -> int:
@@ -206,9 +251,34 @@ class SP500Crawler(BaseCrawler):
                 volume=int(volumes[i] or 0) if i < len(volumes) else 0,
             ))
 
+        # Apply bilateral spike filter before returning.
+        if records:
+            close_vals = [float(r.close_price) for r in records]
+            mask = sanity.batch_outlier_mask(close_vals, "SP500")
+            filtered: list[SP500IntradayPrice] = []
+            for i, (rec, is_spike) in enumerate(zip(records, mask)):
+                if is_spike:
+                    log.warning(
+                        "crawl.sanity.spike_dropped",
+                        symbol=symbol,
+                        ts=str(rec.timestamp),
+                        price=float(rec.close_price),
+                    )
+                else:
+                    filtered.append(rec)
+            return filtered
+
         return records
 
-    def _fetch(self, symbol: str, range_: str = "2d") -> list[dict]:
+    def _fetch(self, symbol: str, range_: str = "2d") -> tuple[list[dict], list[dict]]:
+        """Fetch daily prices and split events for *symbol*.
+
+        Returns:
+            (rows, splits) where:
+            - rows: list of price dicts suitable for ``upsert_sp500_price(**row)``
+            - splits: list of dicts with keys split_date (datetime.date),
+              numerator (Decimal), denominator (Decimal)
+        """
         url = YAHOO_CHART.format(symbol=symbol, range=range_)
         resp = self._session.get(url, timeout=self._timeout)
         resp.raise_for_status()
@@ -216,7 +286,7 @@ class SP500Crawler(BaseCrawler):
 
         results = data.get("chart", {}).get("result", [])
         if not results:
-            return []
+            return [], []
 
         result = results[0]
         timestamps = result.get("timestamp", [])
@@ -246,4 +316,18 @@ class SP500Crawler(BaseCrawler):
                 currency="USD",
             ))
 
-        return rows
+        # Parse split events — Yahoo returns them as a dict keyed by unix timestamp
+        splits: list[dict] = []
+        split_events = result.get("events", {}).get("splits", {})
+        for _key, ev in split_events.items():
+            try:
+                ts = ev.get("date") or _key
+                split_dt = datetime.fromtimestamp(int(ts), tz=timezone.utc).astimezone(_VN_TZ).date()
+                num = Decimal(str(ev.get("numerator", 1)))
+                den = Decimal(str(ev.get("denominator", 1)))
+                if den > 0:
+                    splits.append({"split_date": split_dt, "numerator": num, "denominator": den})
+            except Exception as exc:
+                log.warning("sp500.split_parse.error", symbol=symbol, event=str(ev), error=str(exc))
+
+        return rows, splits

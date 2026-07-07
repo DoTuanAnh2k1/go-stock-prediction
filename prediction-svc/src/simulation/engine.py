@@ -166,8 +166,26 @@ def _get_simulation_dates(market: str, algorithm: str, start_date: date, end_dat
         return [r[0] for r in result if r[0] is not None]
 
 
+def _get_market_for_bot(bot) -> str | None:
+    """Extract the market key from a TradingBot instance (NASDAQ or SP500 → split-aware)."""
+    try:
+        return bot.config.market.upper()
+    except AttributeError:
+        return None
+
+
 def _restore_portfolio_state(bot, db_trades: list, initial_capital: float) -> None:
-    """Restore bot portfolio state from prior trades in the live session."""
+    """Restore bot portfolio state from prior trades in the live session.
+
+    Split-aware: for NASDAQ and SP500 bots, any position whose BUY trade predates
+    a recorded stock split will have its quantity multiplied and entry_price divided
+    by the cumulative split ratio.  Cash is NOT modified — it was computed from the
+    original trade_value at buy time, which is still valid.
+
+    Closed cross-split trades (SELL rows already recorded) are intentionally NOT
+    re-realized. Their PnL is recorded in split-unadjusted prices and stays as-is.
+    Only open positions (BUY with no matching SELL) get the split adjustment here.
+    """
     from src.simulation.portfolio import Position
 
     if not db_trades:
@@ -200,17 +218,53 @@ def _restore_portfolio_state(bot, db_trades: list, initial_capital: float) -> No
                 if not open_buys[symbol]:
                     del open_buys[symbol]
 
+    # --- Split adjustment for open positions -----------------------------------
+    # Fetch splits once per market (not per symbol) to avoid N+1 queries.
+    # Only NASDAQ and SP500 have splits; other markets return empty lists.
+    market = _get_market_for_bot(bot)
+    _split_eligible = market in ("NASDAQ", "SP500")
+
+    # Build cache: symbol → list of {split_date, ratio} sorted ASC
+    _splits_cache: dict[str, list[dict]] = {}
+    if _split_eligible:
+        from src.database import repository as _repo
+        for symbol in list(open_buys.keys()):
+            if symbol not in _splits_cache:
+                try:
+                    _splits_cache[symbol] = _repo.list_splits_for_symbol(market, symbol)
+                except Exception as exc:
+                    log.warning(
+                        "sim.restore.split_fetch_error",
+                        symbol=symbol, market=market, error=str(exc)
+                    )
+                    _splits_cache[symbol] = []
+
     # Restore positions: one per symbol (first open buy), refund duplicates to cash
     for symbol, buys in open_buys.items():
         if not buys:
             continue
         b = buys[0]  # first open buy
+        qty = b['quantity']
+        price = b['price']
+        entry_date = b['date']
+
+        # Apply any splits that occurred AFTER the entry date
+        if _split_eligible:
+            splits_for_sym = _splits_cache.get(symbol, [])
+            for sp in splits_for_sym:
+                # split_date is a datetime.date; only apply if split happened after entry
+                if sp["split_date"] > entry_date:
+                    r = sp["ratio"]
+                    if r > 0:
+                        qty *= r
+                        price /= r
+
         if symbol not in bot.portfolio.positions:
             bot.portfolio.positions[symbol] = Position(
                 symbol=symbol,
-                quantity=b['quantity'],
-                entry_price=b['price'],
-                entry_date=b['date'],
+                quantity=qty,
+                entry_price=price,
+                entry_date=entry_date,
                 entry_trade_id=b['id'],
                 entry_at=b.get('entry_at'),
             )

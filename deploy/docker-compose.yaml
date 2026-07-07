@@ -176,9 +176,11 @@ services:
       ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-https://localhost}"
       AUTH_GRPC_TARGET: "auth-svc:8120"
       INTERNAL_SECRET: "${INTERNAL_SECRET}"
+      DOCS_ROOT: "/repo"
     volumes:
       - backup_data:/backups
       - version_data:/versions
+      - ../:/repo:ro
     networks:
       - app-network
 

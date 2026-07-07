@@ -437,6 +437,28 @@ class StockFundamental(Base):
     fetched_at = Column(DateTime, nullable=False, default=datetime.now)
 
 
+class StockSplit(Base):
+    """Authoritative stock-split register for NASDAQ / SP500 symbols.
+
+    One row per (market_key, symbol, split_date).  ``applied_at`` is NULL until
+    ``apply_pending_splits()`` has back-adjusted the historical price tables.
+    """
+    __tablename__ = "stock_splits"
+    __table_args__ = (
+        UniqueConstraint("market_key", "symbol", "split_date", name="uq_stock_splits_sym_date"),
+    )
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    market_key = Column(String(20), nullable=False)         # 'NASDAQ' | 'SP500'
+    symbol = Column(String(20), nullable=False)
+    split_date = Column(Date, nullable=False)                # ex-date (ICT wallclock)
+    ratio = Column(Numeric(12, 6), nullable=False)           # numerator / denominator
+    numerator = Column(Numeric(12, 6), nullable=False)
+    denominator = Column(Numeric(12, 6), nullable=False)
+    applied_at = Column(DateTime, nullable=True)             # NULL = not yet applied
+    created_at = Column(DateTime, nullable=False, default=datetime.now)
+
+
 class PipelineReport(Base):
     """One row per pipeline run — records outcome of crawl→train→predict pipeline."""
     __tablename__ = "pipeline_reports"

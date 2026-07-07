@@ -25,6 +25,7 @@ import Settings from './pages/Settings';
 import Simulation from './pages/Simulation';
 import SimulationBot from './pages/SimulationBot';
 import Monitoring from './pages/Monitoring';
+import Docs from './pages/Docs';
 
 const TWEAK_DEFAULTS = {
   accent: '#5B8DEF',
@@ -115,6 +116,7 @@ function AppInner() {
             <Route path="/admin/market-groups" element={<ErrorBoundary><MarketGroups /></ErrorBoundary>} />
             <Route path="/admin/commands" element={<ErrorBoundary><Commands /></ErrorBoundary>} />
             <Route path="/admin/command-groups" element={<ErrorBoundary><CommandGroups /></ErrorBoundary>} />
+            <Route path="/admin/docs" element={<ErrorBoundary><Docs /></ErrorBoundary>} />
 
             {/* ── Legacy redirects (keep bookmarks working) ────── */}
             <Route path="/gold" element={<Navigate to="/markets/gold" replace />} />

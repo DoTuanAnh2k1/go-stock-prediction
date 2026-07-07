@@ -1037,3 +1037,24 @@ CREATE TABLE IF NOT EXISTS stock_fundamentals (
     CONSTRAINT uq_fundamentals_market_symbol UNIQUE (market_key, symbol)
 );
 CREATE INDEX IF NOT EXISTS idx_fundamentals_market ON stock_fundamentals (market_key);
+
+-- ============================================================
+-- STOCK SPLITS — authoritative ex-date register (NASDAQ / SP500 only)
+-- Source: Yahoo Finance chart API events.splits (returned per daily fetch).
+-- Crawler records new splits on detection; apply_pending_splits adjusts
+-- historical price rows once (idempotent via applied_at IS NOT NULL guard).
+-- Not a hypertable.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS stock_splits (
+    id            BIGSERIAL     PRIMARY KEY,
+    market_key    VARCHAR(20)   NOT NULL,           -- 'NASDAQ' | 'SP500'
+    symbol        VARCHAR(20)   NOT NULL,
+    split_date    DATE          NOT NULL,            -- ex-date (ICT wallclock)
+    ratio         NUMERIC(12,6) NOT NULL,            -- numerator/denominator  e.g. 4.0 for 4:1
+    numerator     NUMERIC(12,6) NOT NULL,
+    denominator   NUMERIC(12,6) NOT NULL,
+    applied_at    TIMESTAMP,                         -- NULL = history not yet adjusted
+    created_at    TIMESTAMP     NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_stock_splits_sym_date
+    ON stock_splits (market_key, symbol, split_date);

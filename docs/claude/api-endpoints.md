@@ -87,6 +87,13 @@ Pattern: `/api/{market}/{endpoint}` — market ∈ {gold, nasdaq, crypto, sp500}
 
 **Semantics monitoring:** `win_rate`/`profit_factor` chỉ tính SELL đã đóng — dễ gây hiểu nhầm. `return_pct` + `unrealized_pnl` + `open_positions` mới phản ánh thật. `profit_factor=null` (∞) khi 0 lệnh thua — sort null là cao nhất.
 
+## Docs (admin JWT)
+
+| Method | Path | Ghi chú |
+|--------|------|---------|
+| `GET` | `/api/docs` | Liệt kê mọi `*.md` dưới `DOCS_ROOT`; trả `{docs:[{path,title,group,order}]}`; group theo thư mục: Tổng quan / Kiến trúc & tham chiếu / Sự cố / Kế hoạch / Thiết kế (specs) / Khác. |
+| `GET` | `/api/docs/raw?path=<relpath>` | Trả `{path,title,content}` raw markdown. Chống path traversal (reject `..`, chỉ `.md`, phải nằm trong `DOCS_ROOT`); 404 nếu thiếu file; 413 nếu >2MB. |
+
 ## Schedules / Pipeline Reports / Backup / Dashboard
 
 | Method | Path | Ghi chú |
@@ -123,6 +130,7 @@ Tất cả đều wrap bằng `AdminRequired()` — yêu cầu role `admin` ho�
 | `POST` | `/api/trigger/simulation-backtest` | Background |
 | `POST` | `/api/trigger/simulation-live-step` | — |
 | `POST` | `/api/trigger/sim-reset` | Đóng live session cũ, tạo session mới |
+| `GET` | `/api/pipeline/stream` | SSE — `?market=gold\|nasdaq\|crypto\|sp500&token=<JWT>` (token qua query param vì EventSource không gửi được header); admin only; stream progress predict per-symbol/algo real-time (Settings page dùng). Điều kiện hạ tầng: accesslog middleware phải forward `http.Flusher` (statusRecorder có `Flush()`); gateway proxy phải stream body `text/event-stream` (không buffer) và bỏ timeout cho request `Accept: text/event-stream` |
 
 ## Trigger thủ công (curl)
 

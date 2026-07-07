@@ -368,6 +368,9 @@ export function Sidebar({ status, collapsed = false, onToggle }: {
           <NavLink to="/admin/command-groups" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
             <Icon name="cpu" size={17} /><span>{t.nav.commandGroups}</span>
           </NavLink>
+          <NavLink to="/admin/docs" className={({ isActive }) => `nav__item ${isActive ? 'active' : ''}`}>
+            <Icon name="book" size={17} /><span>{t.nav.docs}</span>
+          </NavLink>
         </div>
       )}
 
@@ -486,6 +489,7 @@ export function MobNav() {
       ? [
           { id: 'users', path: '/admin/users', label: t.nav.users, icon: 'user' },
           { id: 'market-groups', path: '/admin/market-groups', label: t.nav.marketGroups, icon: 'layers' },
+          { id: 'docs', path: '/admin/docs', label: t.nav.docs, icon: 'book' },
         ]
       : []),
   ] : [];

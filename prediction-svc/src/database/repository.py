@@ -24,9 +24,11 @@ from src.database.models import (
     SP500Prediction,
     SP500Price,
     StockFundamental,
+    StockSplit,
     SyncLog,
     TrainingLog,
 )
+from src.crawlers import sanity
 from src.utils.logger import get_logger
 
 log = get_logger("repository")
@@ -117,6 +119,35 @@ def upsert_gold_price(
     pass None — those columns remain NULL in the DB and candlestick toggle is
     disabled on the frontend for those rows.
     """
+    # --- Sanity check: reject transient bad ticks on the daily-live row ---
+    _sanity_key = f"GOLD:{source}:{product_type}"
+    _new_close = float(sell_price)
+    try:
+        with session_scope() as _ss:
+            _last_row = (
+                _ss.query(GoldPrice.sell_price)
+                .filter_by(source=source, product_type=product_type)
+                .order_by(GoldPrice.trading_date.desc())
+                .limit(1)
+                .first()
+            )
+        _last_close = float(_last_row.sell_price) if _last_row is not None else None
+    except Exception:
+        # If the DB lookup fails (e.g. not yet initialised), skip the guard
+        # and let the write proceed — bootstrap behaviour.
+        _last_close = None
+    _accept, _reason = sanity.check_update("GOLD", _sanity_key, _new_close, _last_close)
+    if not _accept:
+        log.warning(
+            "crawl.sanity.reject",
+            market="GOLD",
+            key=_sanity_key,
+            new=_new_close,
+            last=_last_close,
+            reason=_reason,
+        )
+        return
+
     with session_scope() as session:
         existing = (
             session.query(GoldPrice)
@@ -295,6 +326,33 @@ def upsert_nasdaq_price(
     volume: int,
     currency: str = "USD",
 ) -> None:
+    # --- Sanity check: reject transient bad ticks on the daily-live row ---
+    _sanity_key = f"NASDAQ:{symbol}"
+    _new_close = float(close_price)
+    try:
+        with session_scope() as _ss:
+            _last_row = (
+                _ss.query(NasdaqPrice.close_price)
+                .filter(NasdaqPrice.symbol == symbol, NasdaqPrice.deleted_at.is_(None))
+                .order_by(NasdaqPrice.trading_date.desc())
+                .limit(1)
+                .first()
+            )
+        _last_close = float(_last_row.close_price) if _last_row is not None else None
+    except Exception:
+        _last_close = None
+    _accept, _reason = sanity.check_update("NASDAQ", _sanity_key, _new_close, _last_close)
+    if not _accept:
+        log.warning(
+            "crawl.sanity.reject",
+            market="NASDAQ",
+            key=_sanity_key,
+            new=_new_close,
+            last=_last_close,
+            reason=_reason,
+        )
+        return
+
     with session_scope() as session:
         existing = (
             session.query(NasdaqPrice)
@@ -490,6 +548,33 @@ def upsert_crypto_price(
     a non-None value — avoiding accidental NULL-clobbering during plain close
     refreshes.
     """
+    # --- Sanity check: reject transient bad ticks on the daily-live row ---
+    _sanity_key = f"CRYPTO:{coin_id}"
+    _new_close = float(close_price)
+    try:
+        with session_scope() as _ss:
+            _last_row = (
+                _ss.query(CryptoPrice.close_price)
+                .filter(CryptoPrice.coin_id == coin_id, CryptoPrice.deleted_at.is_(None))
+                .order_by(CryptoPrice.trading_date.desc())
+                .limit(1)
+                .first()
+            )
+        _last_close = float(_last_row.close_price) if _last_row is not None else None
+    except Exception:
+        _last_close = None
+    _accept, _reason = sanity.check_update("CRYPTO", _sanity_key, _new_close, _last_close)
+    if not _accept:
+        log.warning(
+            "crawl.sanity.reject",
+            market="CRYPTO",
+            key=_sanity_key,
+            new=_new_close,
+            last=_last_close,
+            reason=_reason,
+        )
+        return
+
     with session_scope() as session:
         existing = (
             session.query(CryptoPrice)
@@ -668,6 +753,33 @@ def upsert_sp500_price(
     volume: int,
     currency: str = "USD",
 ) -> None:
+    # --- Sanity check: reject transient bad ticks on the daily-live row ---
+    _sanity_key = f"SP500:{symbol}"
+    _new_close = float(close_price)
+    try:
+        with session_scope() as _ss:
+            _last_row = (
+                _ss.query(SP500Price.close_price)
+                .filter(SP500Price.symbol == symbol, SP500Price.deleted_at.is_(None))
+                .order_by(SP500Price.trading_date.desc())
+                .limit(1)
+                .first()
+            )
+        _last_close = float(_last_row.close_price) if _last_row is not None else None
+    except Exception:
+        _last_close = None
+    _accept, _reason = sanity.check_update("SP500", _sanity_key, _new_close, _last_close)
+    if not _accept:
+        log.warning(
+            "crawl.sanity.reject",
+            market="SP500",
+            key=_sanity_key,
+            new=_new_close,
+            last=_last_close,
+            reason=_reason,
+        )
+        return
+
     with session_scope() as session:
         existing = (
             session.query(SP500Price)
@@ -1513,3 +1625,110 @@ def update_session_kpis(session_id: int) -> None:
         win_rate=round(win_rate, 4) if win_rate is not None else None,
         max_drawdown_pct=round(max_drawdown_pct, 4) if max_drawdown_pct is not None else None,
     )
+
+
+# ---------------------------------------------------------------------------
+# Stock splits
+# ---------------------------------------------------------------------------
+
+def record_split(
+    market_key: str,
+    symbol: str,
+    split_date,          # datetime.date
+    numerator: Decimal,
+    denominator: Decimal,
+) -> int | None:
+    """Insert a new split row.  Returns the new row id on first insert, None if already recorded.
+
+    ratio = numerator / denominator (e.g. 4:1 forward split → 4.0).
+    Uses INSERT ... ON CONFLICT DO NOTHING so duplicate crawler runs are idempotent.
+    """
+    if denominator == 0:
+        log.warning("split.record.zero_denominator", symbol=symbol, market=market_key)
+        return None
+    ratio = Decimal(str(numerator)) / Decimal(str(denominator))
+    with session_scope() as session:
+        row = session.execute(
+            text("""
+                INSERT INTO stock_splits
+                    (market_key, symbol, split_date, ratio, numerator, denominator, created_at)
+                VALUES
+                    (:mk, :sym, :sd, :ratio, :num, :den, :now)
+                ON CONFLICT (market_key, symbol, split_date) DO NOTHING
+                RETURNING id
+            """),
+            {
+                "mk": market_key.upper(),
+                "sym": symbol,
+                "sd": split_date,
+                "ratio": ratio,
+                "num": numerator,
+                "den": denominator,
+                "now": datetime.now(),
+            },
+        ).fetchone()
+        return int(row[0]) if row else None
+
+
+def list_unapplied_splits() -> list[dict]:
+    """Return all split rows where applied_at IS NULL, ordered by split_date ASC."""
+    session = get_session()
+    try:
+        rows = (
+            session.query(StockSplit)
+            .filter(StockSplit.applied_at.is_(None))
+            .order_by(StockSplit.split_date.asc())
+            .all()
+        )
+        return [
+            {
+                "id": r.id,
+                "market_key": r.market_key,
+                "symbol": r.symbol,
+                "split_date": r.split_date,
+                "ratio": float(r.ratio),
+                "numerator": float(r.numerator),
+                "denominator": float(r.denominator),
+            }
+            for r in rows
+        ]
+    finally:
+        session.close()
+
+
+def list_splits_for_symbol(market_key: str, symbol: str) -> list[dict]:
+    """Return all recorded splits for (market_key, symbol) in ascending split_date order.
+
+    Includes both applied and unapplied rows — callers filter by split_date relative
+    to position entry_date.  Designed to be called once per symbol on restore; the
+    small result set makes in-Python filtering fast.
+    """
+    session = get_session()
+    try:
+        rows = (
+            session.query(StockSplit)
+            .filter(
+                StockSplit.market_key == market_key.upper(),
+                StockSplit.symbol == symbol,
+            )
+            .order_by(StockSplit.split_date.asc())
+            .all()
+        )
+        return [
+            {
+                "id": r.id,
+                "split_date": r.split_date,
+                "ratio": float(r.ratio),
+            }
+            for r in rows
+        ]
+    finally:
+        session.close()
+
+
+def mark_split_applied(split_id: int) -> None:
+    """Set applied_at = NOW() for the given split row."""
+    with session_scope() as session:
+        session.query(StockSplit).filter(StockSplit.id == split_id).update(
+            {"applied_at": datetime.now()}
+        )

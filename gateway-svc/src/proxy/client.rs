@@ -116,6 +116,17 @@ impl ProxyClient {
             builder = builder.body(body_bytes.to_vec());
         }
 
+        // SSE connections are long-lived; the client-level timeout would kill
+        // them mid-stream, so lift it for requests that ask for an event stream.
+        let wants_sse = headers
+            .get("accept")
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.contains("text/event-stream"))
+            .unwrap_or(false);
+        if wants_sse {
+            builder = builder.timeout(Duration::from_secs(24 * 3600));
+        }
+
         let response = builder
             .send()
             .await
@@ -131,10 +142,11 @@ impl ProxyClient {
         let status = response.status();
         let resp_headers = response.headers().clone();
 
-        let body_bytes = response
-            .bytes()
-            .await
-            .map_err(|e| ProxyError::RequestFailed(format!("Failed to read response: {}", e)))?;
+        let is_sse = resp_headers
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.starts_with("text/event-stream"))
+            .unwrap_or(false);
 
         let mut builder = Response::builder().status(status);
 
@@ -146,8 +158,19 @@ impl ProxyClient {
             builder = builder.header(key, value);
         }
 
+        // SSE bodies are unbounded — forward chunks as they arrive instead of
+        // buffering to completion (which would stall the stream until timeout).
+        let body = if is_sse {
+            Body::from_stream(response.bytes_stream())
+        } else {
+            let body_bytes = response.bytes().await.map_err(|e| {
+                ProxyError::RequestFailed(format!("Failed to read response: {}", e))
+            })?;
+            Body::from(body_bytes)
+        };
+
         builder
-            .body(Body::from(body_bytes))
+            .body(body)
             .map_err(|e| ProxyError::RequestFailed(format!("Failed to build response: {}", e)))
     }
 }

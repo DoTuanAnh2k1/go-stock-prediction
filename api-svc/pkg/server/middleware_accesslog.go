@@ -20,6 +20,14 @@ func (sr *statusRecorder) WriteHeader(code int) {
 	sr.ResponseWriter.WriteHeader(code)
 }
 
+// Flush forwards to the underlying writer so SSE handlers still see an
+// http.Flusher after wrapping (api_pipeline_stream.go asserts w.(http.Flusher)).
+func (sr *statusRecorder) Flush() {
+	if f, ok := sr.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // clientIP returns the first hop from X-Forwarded-For when present,
 // falling back to the RemoteAddr host portion.
 func clientIP(r *http.Request) string {

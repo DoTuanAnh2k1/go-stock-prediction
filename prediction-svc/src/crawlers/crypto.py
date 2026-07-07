@@ -30,6 +30,7 @@ _VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 import requests
 
+from src.crawlers import sanity
 from src.crawlers.base import DEFAULT_HEADERS, BaseCrawler
 from src.database import repository as repo
 from src.database.models import CryptoIntradayPrice
@@ -246,7 +247,23 @@ class CryptoCrawler(BaseCrawler):
                         Decimal(str(rows[-1][4])),          # close = last candle
                     )
 
+                # Apply bilateral spike filter on the close-price sequence.
+                price_vals = [float(p) for _, p in prices_data]
+                spike_mask = sanity.batch_outlier_mask(price_vals, "CRYPTO")
+
                 for i, (ts_ms, price) in enumerate(prices_data):
+                    if spike_mask[i]:
+                        dt_spike = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).astimezone(_VN_TZ).replace(
+                            minute=0, second=0, microsecond=0, tzinfo=None
+                        )
+                        log.warning(
+                            "crawl.sanity.spike_dropped",
+                            symbol=coin_id,
+                            ts=str(dt_spike),
+                            price=float(price),
+                        )
+                        continue
+
                     dt = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).astimezone(_VN_TZ).replace(
                         minute=0, second=0, microsecond=0, tzinfo=None
                     )

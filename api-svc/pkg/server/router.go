@@ -192,6 +192,10 @@ func addHandler() *http.ServeMux {
 	// Pipeline SSE stream (auth via ?token= query param, admin only)
 	mux.HandleFunc("GET /api/pipeline/stream", StreamPipelinePredictHandler)
 
+	// Docs APIs (admin only — serve project markdown files from DOCS_ROOT)
+	mux.HandleFunc("GET /api/docs/raw", AdminRequired(GetDocHandler))
+	mux.HandleFunc("GET /api/docs", AdminRequired(ListDocsHandler))
+
 	return mux
 }
 
@@ -308,4 +312,6 @@ func logRegisteredRoutes() {
 	logger.Logger.Info("  GET  /api/monitoring/overview")
 	logger.Logger.Info("  GET  /api/monitoring/bots")
 	logger.Logger.Info("  GET  /api/pipeline-reports          [auth]")
+	logger.Logger.Info("  GET  /api/docs                      [admin]")
+	logger.Logger.Info("  GET  /api/docs/raw                  [admin]")
 }

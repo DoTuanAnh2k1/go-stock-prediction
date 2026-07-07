@@ -16,6 +16,7 @@ export const translations: Record<Lang, Translations> = {
       marketGroups: 'Nhóm thị trường',
       commands: 'Lệnh',
       commandGroups: 'Nhóm lệnh',
+      docs: 'Tài liệu',
     },
     // Market sub-items
     marketSubs: {
@@ -68,6 +69,7 @@ export const translations: Record<Lang, Translations> = {
       '/monitoring': ['Giám sát dữ liệu', 'DATA PIPELINE · MONITORING'],
       '/admin/commands': ['Lệnh CLI', 'ADMIN · COMMANDS'],
       '/admin/command-groups': ['Nhóm lệnh CLI', 'ADMIN · COMMAND GROUPS'],
+      '/admin/docs': ['Tài liệu kỹ thuật', 'ADMIN · DOCS'],
     },
     // Sidebar footer
     footer: {
@@ -792,6 +794,7 @@ export const translations: Record<Lang, Translations> = {
       marketGroups: 'Market Groups',
       commands: 'Commands',
       commandGroups: 'Command Groups',
+      docs: 'Docs',
     },
     marketSubs: {
       overview: 'Overview',
@@ -839,6 +842,7 @@ export const translations: Record<Lang, Translations> = {
       '/monitoring': ['Data Pipeline', 'DATA PIPELINE · MONITORING'],
       '/admin/commands': ['CLI Commands', 'ADMIN · COMMANDS'],
       '/admin/command-groups': ['CLI Command Groups', 'ADMIN · COMMAND GROUPS'],
+      '/admin/docs': ['Technical Docs', 'ADMIN · DOCS'],
     },
     footer: {
       liveData: 'Live data',
@@ -1543,6 +1547,7 @@ export interface Translations {
     marketGroups: string;
     commands: string;
     commandGroups: string;
+    docs: string;
   };
   marketSubs: {
     overview: string;

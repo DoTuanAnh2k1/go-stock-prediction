@@ -11,6 +11,7 @@ _VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 import requests
 from bs4 import BeautifulSoup
 
+from src.crawlers import sanity
 from src.crawlers.base import DEFAULT_HEADERS, USER_AGENT, BaseCrawler
 from src.database import repository as repo
 from src.database.models import GoldIntradayPrice
@@ -222,18 +223,48 @@ class GoldCrawler(BaseCrawler):
         lows = quote.get("low", [])
         closes = quote.get("close", [])
 
-        saved = 0
+        # First pass: collect valid bars (non-None close).
+        bars: list[tuple] = []  # (ts, close, open, high, low)
         for i, ts in enumerate(timestamps):
             close = closes[i] if i < len(closes) else None
             if close is None:
+                continue
+            bars.append((
+                ts,
+                close,
+                opens[i] if i < len(opens) else None,
+                highs[i] if i < len(highs) else None,
+                lows[i] if i < len(lows) else None,
+            ))
+
+        # Apply bilateral spike filter on the close-price sequence.
+        if bars:
+            close_vals = [float(b[1]) for b in bars]
+            spike_mask = sanity.batch_outlier_mask(close_vals, "GOLD")
+        else:
+            spike_mask = []
+
+        # Second pass: build records and upsert, skipping flagged spikes.
+        saved = 0
+        for j, (ts, close, open_raw, high_raw, low_raw) in enumerate(bars):
+            if spike_mask and spike_mask[j]:
+                dt_spike = datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(_VN_TZ).replace(
+                    minute=0, second=0, microsecond=0, tzinfo=None
+                )
+                log.warning(
+                    "crawl.sanity.spike_dropped",
+                    symbol="XAU",
+                    ts=str(dt_spike),
+                    price=float(close),
+                )
                 continue
 
             dt = datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(_VN_TZ).replace(
                 minute=0, second=0, microsecond=0, tzinfo=None
             )
-            open_price = Decimal(str(opens[i] or 0)) if i < len(opens) else Decimal(0)
-            high_price = Decimal(str(highs[i] or 0)) if i < len(highs) else Decimal(0)
-            low_price = Decimal(str(lows[i] or 0)) if i < len(lows) else Decimal(0)
+            open_price = Decimal(str(open_raw or 0)) if open_raw is not None else Decimal(0)
+            high_price = Decimal(str(high_raw or 0)) if high_raw is not None else Decimal(0)
+            low_price = Decimal(str(low_raw or 0)) if low_raw is not None else Decimal(0)
             close_price = Decimal(str(close))
 
             # Save USD bar using buy/sell = close (spot); attach OHLC from

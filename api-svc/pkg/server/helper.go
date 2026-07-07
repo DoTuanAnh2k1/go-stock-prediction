@@ -211,6 +211,7 @@ var validAlgorithms = map[string]bool{
 	"random_forest":  true,
 	"rl_dqn":         true,
 	"ensemble":       true,
+	"transformer_nn": true,
 	// meta_stack is a simulation bot tactic (not a prediction algorithm), but is
 	// a valid /trigger/train target: prediction-svc intercepts it to train the
 	// meta-stacking models. Kept out of the predict registry intentionally.

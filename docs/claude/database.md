@@ -27,6 +27,7 @@
 | `cli_handlers`, `commands`, `command_groups`, `command_group_commands`, `user_command_groups` | — | Flyway V3; Command RBAC |
 | `sim_bots` | — | Cột `symbol` nullable — NULL = pooled per-market; có giá trị = per-symbol (algo key với hậu tố `__ps`). Cột `trailing_stop BOOLEAN NOT NULL DEFAULT FALSE` — `TRUE` = SL tính theo đỉnh giá intraday kể từ lúc entry (stateless, `MAX(price)` trên `*_intraday_prices` mỗi step, KHÔNG lưu peak trong DB) thay vì entry price cố định; TP không đổi (vẫn entry-anchored). Hai variant pooled `_v11` ("Trailing Tight", sl=3%, tp=99% — gần như chỉ trail) và `_v12` ("Trailing Wide", sl=6%, tp=20%) seed cho mọi (market × algorithm) — 4×12×2=96 bot, chỉ pooled (không seed per-symbol). |
 | `stock_fundamentals` | — | Không hypertable; 1 row/(market_key, symbol) — snapshot báo cáo tài chính mới nhất (yfinance, upsert ON CONFLICT); unique `uq_fundamentals_market_symbol`; dùng bởi `transformer_nn` |
+| `stock_splits` | — | Không hypertable; cột: `id, market_key, symbol, split_date, ratio, numerator, denominator, applied_at, created_at`; unique `uq_stock_splits_sym_date (market_key, symbol, split_date)`; `applied_at NULL` = chưa apply history adjustment; chỉ NASDAQ/SP500 |
 
 ### Conventions quan trọng
 
@@ -36,6 +37,7 @@
 - **sim_portfolio_snapshots — upsert theo giờ:** `INSERT ... ON CONFLICT (session_id, snapshot_at) DO UPDATE` — 1 row/session/giờ. `CREATE UNIQUE INDEX` phải TÁCH RIÊNG khỏi DML transaction (Timescale sẽ rollback cả block nếu gộp)
 - **RBAC:** `flyway-database-postgresql` (Flyway 10.x) để nhận diện PG16
 - **sim_bots.symbol:** `idx_sim_bots_market_symbol`; GORM `Symbol *string`; Python `symbol`
+- **stock_splits.applied_at:** NULL = chưa chỉnh intraday; non-NULL = đã apply (hoặc non-cliff, không cần chỉnh). Source of truth idempotent — `record_split` dùng INSERT ON CONFLICT DO NOTHING.
 
 ## Cron Schedules
 

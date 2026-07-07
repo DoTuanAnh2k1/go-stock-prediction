@@ -49,8 +49,10 @@ api-svc/pkg/server/backup_scheduler.go            # StartBackupScheduler(store) 
 api-svc/pkg/server/api_simulation.go              # GET /api/simulation/leaderboard, bots, trades, chart; PUT config; POST toggle/run
 api-svc/pkg/server/api_monitoring.go              # GET /api/monitoring/overview, /api/monitoring/bots
 api-svc/pkg/server/api_pipeline_reports.go        # GET /api/pipeline-reports
+api-svc/pkg/server/api_pipeline_stream.go         # GET /api/pipeline/stream — SSE stream progress predict; auth ?token= query param; proxy gRPC Stream{Gold,Nasdaq,Crypto,SP500}Predict
+api-svc/pkg/server/api_docs.go                    # GET /api/docs (list *.md), GET /api/docs/raw?path= (content) — serve markdown cho tab Tài liệu; admin only; đọc từ DOCS_ROOT; chống path traversal
 api-svc/pkg/server/middleware_jwt.go              # JWTMiddleware (non-blocking), AuthRequired(), MarketRequired("KEY"), AdminRequired()
-api-svc/pkg/server/middleware_accesslog.go        # AccessLogMiddleware — log một dòng/request
+api-svc/pkg/server/middleware_accesslog.go        # AccessLogMiddleware — log một dòng/request; statusRecorder forward http.Flusher (bắt buộc cho SSE)
 api-svc/pkg/server/helper.go                      # requireGRPCClient(), ResponseError(), ResponseSuccess()
 api-svc/pkg/service/predict/registry/registry.go   # AlgorithmDef struct, Register(), All()
 api-svc/pkg/service/predict/registry/algorithms.go # FILE DUY NHẤT cần sửa khi thêm/bỏ thuật toán trong metadata registry
@@ -77,6 +79,7 @@ web-svc/src/pages/Users.tsx            # Trang quản lý user (admin only)
 web-svc/src/pages/MarketGroups.tsx     # Trang quản lý market groups (admin only)
 web-svc/src/pages/Monitoring.tsx       # Data Pipeline — bảng bots dùng server-side paging /api/monitoring/bots
 web-svc/src/pages/Settings.tsx         # Cài đặt — tab Lịch cron + tab Báo cáo
+web-svc/src/pages/Docs.tsx             # Tab Tài liệu — reading room render markdown (react-markdown + highlight.js); gọi GET /api/docs + GET /api/docs/raw; admin-only
 ```
 
 ## Python Prediction Service
@@ -117,13 +120,15 @@ prediction-svc/
 │   │   ├── nasdaq.py                   # Yahoo Finance — 15 NASDAQ symbols
 │   │   ├── crypto.py                   # CoinGecko — BTC/ETH/SOL
 │   │   ├── sp500.py                    # Yahoo Finance — 16 S&P 500 symbols
-│   │   └── fundamentals.py             # yfinance — báo cáo tài chính NASDAQ+SP500 → stock_fundamentals (tuần)
+│   │   ├── fundamentals.py             # yfinance — báo cáo tài chính NASDAQ+SP500 → stock_fundamentals (tuần)
+│   │   └── sanity.py                   # Crawl sanity guard: check_update() persistence-confirmed daily gate + batch_outlier_mask() bilateral intraday spike filter
 │   ├── scheduler/
 │   │   ├── manager.py                  # APScheduler + DB-backed CronSchedule; poll 60s; DEFAULT_SCHEDULES
 │   │   └── jobs.py                     # Định nghĩa tất cả jobs (_run_pipeline, train, reconcile)
 │   ├── orchestrator/
 │   │   ├── runner.py                   # run_for_market(key); target = now+1h; is_intraday_open guard NASDAQ/SP500
-│   │   └── training.py                 # reconcile_predictions(only_market=None); train_for_market(); train_meta_for_market(); train_meta_all()
+│   │   ├── training.py                 # reconcile_predictions(only_market=None); train_for_market(); train_meta_for_market(); train_meta_all()
+│   │   └── splits.py                   # apply_pending_splits(); _apply_one_split() — phát hiện boundary từ data, chỉnh intraday NASDAQ/SP500; idempotent
 │   ├── simulation/
 │   │   ├── bot.py                      # Bot step logic: is_rl → _step_rl, is_meta → _step_meta, còn lại → _step_threshold
 │   │   ├── meta_stack.py               # MetaStackModel: LightGBM classifier + calibration isotonic → P(up); fallback reliability-weighted vote; KHÔNG thuộc algorithms/

@@ -10,6 +10,7 @@ _VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 import requests
 
+from src.crawlers import sanity
 from src.crawlers.base import DEFAULT_HEADERS, BaseCrawler
 from src.database import repository as repo
 from src.database.models import NasdaqIntradayPrice
@@ -17,7 +18,7 @@ from src.utils.logger import get_logger
 
 log = get_logger("crawler.nasdaq")
 
-YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range={range}"
+YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range={range}&events=split"
 YAHOO_INTRADAY_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1h&range={range}"
 REQUEST_DELAY = 0.5  # 500ms
 BACKFILL_DELAY = 0.3  # 300ms — slightly faster for batch backfill
@@ -57,41 +58,88 @@ class NasdaqCrawler(BaseCrawler):
         log.info("nasdaq.crawl.start", symbols=len(NASDAQ_SYMBOLS))
         saved = 0
         errors = 0
+        new_splits = 0
 
         for symbol in NASDAQ_SYMBOLS:
             try:
-                rows = self._fetch(symbol, range_="2d")
+                rows, splits = self._fetch(symbol, range_="2d")
                 for row in rows:
                     repo.upsert_nasdaq_price(**row)
                     saved += 1
+                for sp in splits:
+                    sid = repo.record_split(
+                        "NASDAQ", symbol, sp["split_date"],
+                        sp["numerator"], sp["denominator"],
+                    )
+                    if sid is not None:
+                        log.info(
+                            "crawl.split.detected",
+                            symbol=symbol,
+                            ratio=float(sp["numerator"]) / float(sp["denominator"]),
+                            split_date=str(sp["split_date"]),
+                        )
+                        new_splits += 1
             except Exception as exc:
                 log.warning("nasdaq.crawl.error", symbol=symbol, error=str(exc))
                 errors += 1
 
             time.sleep(REQUEST_DELAY)
 
-        log.info("nasdaq.crawl.done", saved=saved, errors=errors)
+        log.info("nasdaq.crawl.done", saved=saved, errors=errors, new_splits=new_splits)
+
+        # Apply any newly-recorded (or previously-missed) splits once, after all
+        # symbols have been crawled. This is idempotent — already-applied splits
+        # are never returned by list_unapplied_splits().
+        if new_splits > 0:
+            try:
+                from src.orchestrator.splits import apply_pending_splits
+                apply_pending_splits()
+            except Exception as exc:
+                log.error("nasdaq.crawl.split_apply_error", error=str(exc))
+
         return saved
 
     def crawl_history(self, days: int = 180) -> int:
         log.info("nasdaq.history.start", symbols=len(NASDAQ_SYMBOLS))
         saved = 0
         errors = 0
+        new_splits = 0
 
         for symbol in NASDAQ_SYMBOLS:
             try:
-                rows = self._fetch(symbol, range_="6mo")
+                rows, splits = self._fetch(symbol, range_="6mo")
                 for row in rows:
                     repo.upsert_nasdaq_price(**row)
                     saved += 1
                 log.debug("nasdaq.history.symbol", symbol=symbol, rows=len(rows))
+                for sp in splits:
+                    sid = repo.record_split(
+                        "NASDAQ", symbol, sp["split_date"],
+                        sp["numerator"], sp["denominator"],
+                    )
+                    if sid is not None:
+                        log.info(
+                            "crawl.split.detected",
+                            symbol=symbol,
+                            ratio=float(sp["numerator"]) / float(sp["denominator"]),
+                            split_date=str(sp["split_date"]),
+                        )
+                        new_splits += 1
             except Exception as exc:
                 log.warning("nasdaq.history.error", symbol=symbol, error=str(exc))
                 errors += 1
 
             time.sleep(REQUEST_DELAY)
 
-        log.info("nasdaq.history.done", saved=saved, errors=errors)
+        log.info("nasdaq.history.done", saved=saved, errors=errors, new_splits=new_splits)
+
+        if new_splits > 0:
+            try:
+                from src.orchestrator.splits import apply_pending_splits
+                apply_pending_splits()
+            except Exception as exc:
+                log.error("nasdaq.history.split_apply_error", error=str(exc))
+
         return saved
 
     def crawl_intraday(self) -> int:
@@ -196,9 +244,34 @@ class NasdaqCrawler(BaseCrawler):
                 volume=int(volumes[i] or 0) if i < len(volumes) else 0,
             ))
 
+        # Apply bilateral spike filter before returning.
+        if records:
+            close_vals = [float(r.close_price) for r in records]
+            mask = sanity.batch_outlier_mask(close_vals, "NASDAQ")
+            filtered: list[NasdaqIntradayPrice] = []
+            for i, (rec, is_spike) in enumerate(zip(records, mask)):
+                if is_spike:
+                    log.warning(
+                        "crawl.sanity.spike_dropped",
+                        symbol=symbol,
+                        ts=str(rec.timestamp),
+                        price=float(rec.close_price),
+                    )
+                else:
+                    filtered.append(rec)
+            return filtered
+
         return records
 
-    def _fetch(self, symbol: str, range_: str = "2d") -> list[dict]:
+    def _fetch(self, symbol: str, range_: str = "2d") -> tuple[list[dict], list[dict]]:
+        """Fetch daily prices and split events for *symbol*.
+
+        Returns:
+            (rows, splits) where:
+            - rows: list of price dicts suitable for ``upsert_nasdaq_price(**row)``
+            - splits: list of dicts with keys split_date (datetime.date),
+              numerator (Decimal), denominator (Decimal)
+        """
         url = YAHOO_CHART.format(symbol=symbol, range=range_)
         resp = self._session.get(url, timeout=self._timeout)
         resp.raise_for_status()
@@ -206,7 +279,7 @@ class NasdaqCrawler(BaseCrawler):
 
         results = data.get("chart", {}).get("result", [])
         if not results:
-            return []
+            return [], []
 
         result = results[0]
         timestamps = result.get("timestamp", [])
@@ -236,4 +309,18 @@ class NasdaqCrawler(BaseCrawler):
                 currency="USD",
             ))
 
-        return rows
+        # Parse split events — Yahoo returns them as a dict keyed by unix timestamp
+        splits: list[dict] = []
+        split_events = result.get("events", {}).get("splits", {})
+        for _key, ev in split_events.items():
+            try:
+                ts = ev.get("date") or _key
+                split_dt = datetime.fromtimestamp(int(ts), tz=timezone.utc).astimezone(_VN_TZ).date()
+                num = Decimal(str(ev.get("numerator", 1)))
+                den = Decimal(str(ev.get("denominator", 1)))
+                if den > 0:
+                    splits.append({"split_date": split_dt, "numerator": num, "denominator": den})
+            except Exception as exc:
+                log.warning("nasdaq.split_parse.error", symbol=symbol, event=str(ev), error=str(exc))
+
+        return rows, splits

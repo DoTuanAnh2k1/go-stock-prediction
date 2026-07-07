@@ -1,0 +1,559 @@
+/* ============================================================
+   Docs — Technical Reading Room
+   3-column layout: Index | Reading | TOC Rail
+   ============================================================ */
+
+/* ── Root layout ──────────────────────────────────────────── */
+.docs-root {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* ── Index column (left) ──────────────────────────────────── */
+.docs-index {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--bg-2);
+  overflow: hidden;
+}
+
+.docs-index__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.docs-index__search svg {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.docs-index__search input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.docs-index__search input::placeholder {
+  color: var(--text-3);
+}
+
+.docs-index__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0 16px;
+}
+
+.docs-index__group-heading {
+  padding: 10px 14px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  font-family: var(--font-ui);
+}
+
+.docs-index__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  padding: 7px 14px 7px 16px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  color: var(--text-2);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  line-height: 1.4;
+  border-left: 2px solid transparent;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  position: relative;
+}
+
+.docs-index__item:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.docs-index__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.docs-index__item.active {
+  color: var(--text);
+  background: var(--accent-bg);
+  border-left-color: var(--accent);
+  font-weight: 500;
+}
+
+.docs-index__item-title {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Reading column (center) ──────────────────────────────── */
+.docs-reader {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 32px 80px;
+  background: var(--bg);
+}
+
+.docs-reader__inner {
+  width: 100%;
+  max-width: 720px;
+}
+
+/* ── Doc header ───────────────────────────────────────────── */
+.docs-header {
+  margin-bottom: 32px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.docs-header__path {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  letter-spacing: 0.02em;
+  margin-bottom: 10px;
+  word-break: break-all;
+}
+
+.docs-header__chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.docs-header__chip {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  font-family: var(--font-ui);
+  border-radius: 2px;
+}
+
+.docs-header__title {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Charter', Georgia, serif;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.18;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+
+.docs-header__meta {
+  font-size: 12px;
+  color: var(--text-3);
+  font-family: var(--font-ui);
+}
+
+/* ── Markdown body ────────────────────────────────────────── */
+.docs-body {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Charter', Georgia, serif;
+  font-size: 16.5px;
+  line-height: 1.75;
+  color: var(--text);
+}
+
+.docs-body p {
+  margin: 0 0 1.1em;
+}
+
+.docs-body h2 {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Charter', Georgia, serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text);
+  margin: 2em 0 0.6em;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.docs-body h3 {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Charter', Georgia, serif;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--text);
+  margin: 1.6em 0 0.5em;
+  padding-left: 10px;
+  border-left: 3px solid var(--accent);
+}
+
+.docs-body h4 {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Charter', Georgia, serif;
+  font-size: 15px;
+  font-weight: 700;
+  margin: 1.4em 0 0.4em;
+  color: var(--text);
+}
+
+.docs-body ul,
+.docs-body ol {
+  padding-left: 1.6em;
+  margin: 0 0 1em;
+}
+
+.docs-body li {
+  margin-bottom: 0.3em;
+}
+
+/* Inline code */
+.docs-body code {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* Code blocks */
+.docs-body pre {
+  margin: 1.2em 0;
+  border-radius: 4px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  background: var(--surface) !important;
+}
+
+.docs-body pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  color: inherit;
+  font-weight: 400;
+  display: block;
+  padding: 16px 20px;
+  line-height: 1.6;
+}
+
+/* hljs theme adaptation — override hljs background to match theme */
+.docs-body .hljs {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+}
+
+/* Tables — wrap so wide tables scroll instead of crushing columns */
+.docs-table-wrap {
+  margin: 1.3em 0;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+}
+
+.docs-body table {
+  width: 100%;
+  min-width: max-content;      /* grow to content; the wrap scrolls when wider */
+  border-collapse: collapse;
+  margin: 0;
+  font-size: 14px;
+  font-family: var(--font-ui);
+}
+
+.docs-body th {
+  text-align: left;
+  padding: 8px 14px;
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-strong);
+  white-space: nowrap;         /* headers stay on one line */
+}
+
+.docs-body td {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  max-width: 460px;            /* cap long cells so they wrap, not stretch endlessly */
+  overflow-wrap: anywhere;
+}
+
+.docs-body tr:last-child td {
+  border-bottom: none;
+}
+
+.docs-body tr:nth-child(even) td {
+  background: var(--surface-2);
+}
+
+/* Blockquote */
+.docs-body blockquote {
+  border-left: 3px solid var(--accent);
+  margin: 1em 0;
+  padding: 2px 0 2px 16px;
+  color: var(--text-2);
+}
+
+/* Links */
+.docs-body a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.docs-body a:hover {
+  color: var(--accent-2);
+}
+
+/* Horizontal rule */
+.docs-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2em 0;
+}
+
+/* Strikethrough */
+.docs-body del {
+  color: var(--text-3);
+}
+
+/* Task list checkboxes */
+.docs-body input[type="checkbox"] {
+  accent-color: var(--accent);
+  margin-right: 6px;
+}
+
+/* ── TOC Rail (left, sits between index and reader) ───────── */
+.docs-toc {
+  width: 210px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--bg-2);
+  overflow: hidden;
+}
+
+.docs-toc__inner {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 0 40px;
+  position: relative;
+}
+
+.docs-toc__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding: 0 16px 10px;
+  display: block;
+}
+
+.docs-toc__item {
+  display: block;
+  padding: 5px 16px;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  color: var(--text-3);
+  text-decoration: none;
+  cursor: pointer;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  line-height: 1.4;
+  transition: color 0.15s;
+  border-left: 2px solid transparent;
+  position: relative;
+}
+
+.docs-toc__item:hover {
+  color: var(--text-2);
+}
+
+.docs-toc__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.docs-toc__item--h3 {
+  padding-left: 26px;
+  font-size: 11.5px;
+}
+
+.docs-toc__item.active {
+  color: var(--accent);
+  font-weight: 500;
+  border-left-color: var(--accent);
+}
+
+/* ── Empty / loading states ───────────────────────────────── */
+.docs-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: var(--text-3);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  padding: 60px 32px;
+  text-align: center;
+}
+
+.docs-empty__icon {
+  opacity: 0.4;
+  margin-bottom: 4px;
+}
+
+.docs-empty__title {
+  font-size: 16px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+/* ── Skeleton loader ──────────────────────────────────────── */
+.docs-skeleton {
+  padding: 40px 0;
+}
+
+.docs-skel-line {
+  height: 14px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  margin-bottom: 12px;
+  animation: docs-pulse 1.6s ease-in-out infinite;
+}
+
+.docs-skel-line--title {
+  height: 28px;
+  width: 60%;
+  margin-bottom: 20px;
+}
+
+.docs-skel-line--short {
+  width: 40%;
+}
+
+@keyframes docs-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* ── Mobile index drawer ──────────────────────────────────── */
+.docs-mobile-bar {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+  flex-shrink: 0;
+}
+
+.docs-mobile-bar select {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.docs-mobile-bar__label {
+  font-size: 12px;
+  color: var(--text-3);
+  white-space: nowrap;
+  font-family: var(--font-ui);
+}
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .docs-toc {
+    display: none;
+  }
+}
+
+@media (max-width: 800px) {
+  .docs-root {
+    flex-direction: column;
+    overflow: auto;
+  }
+
+  .docs-index {
+    display: none;
+  }
+
+  .docs-mobile-bar {
+    display: flex;
+  }
+
+  .docs-reader {
+    overflow-y: visible;
+    padding: 20px 16px 60px;
+    align-items: stretch;
+  }
+
+  .docs-reader__inner {
+    max-width: 100%;
+  }
+
+  .docs-header__title {
+    font-size: 22px;
+  }
+
+  .docs-body {
+    font-size: 15px;
+  }
+}
+
+/* ── Reduced motion ───────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .docs-skel-line {
+    animation: none;
+    opacity: 0.6;
+  }
+
+  .docs-toc__item {
+    transition: none;
+  }
+
+  .docs-index__item {
+    transition: none;
+  }
+}

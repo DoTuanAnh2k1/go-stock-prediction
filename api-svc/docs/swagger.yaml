@@ -297,6 +297,26 @@ definitions:
       size_human:
         type: string
     type: object
+  pkg_server.DocContent:
+    properties:
+      content:
+        type: string
+      path:
+        type: string
+      title:
+        type: string
+    type: object
+  pkg_server.DocEntry:
+    properties:
+      group:
+        type: string
+      order:
+        type: integer
+      path:
+        type: string
+      title:
+        type: string
+    type: object
   pkg_server.HealthStatus:
     properties:
       server_name:
@@ -2445,6 +2465,76 @@ paths:
       summary: Get dashboard statistics
       tags:
       - Dashboard
+  /api/docs:
+    get:
+      description: Walks DOCS_ROOT and returns metadata for every *.md file found.
+        Requires admin role.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: docs array
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/pkg_server.DocEntry'
+              type: array
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: List project documentation files
+      tags:
+      - Docs
+  /api/docs/raw:
+    get:
+      description: Returns the raw Markdown content of a single file from DOCS_ROOT.
+        Requires admin role.
+      parameters:
+      - description: Relative path to the markdown file (e.g. docs/claude/database.md)
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/pkg_server.DocContent'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/pkg_server.ResponseFailure'
+      security:
+      - BearerAuth: []
+      summary: Get raw content of a documentation file
+      tags:
+      - Docs
   /api/gold/chart:
     get:
       description: Returns chronologically ordered labels and buy/sell price arrays

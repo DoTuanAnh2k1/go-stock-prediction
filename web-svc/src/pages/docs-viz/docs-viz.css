@@ -1,0 +1,1237 @@
+/* ============================================================
+   docs-viz — Mermaid diagrams + animated visualisations
+   ============================================================ */
+
+/* ── Mermaid block ─────────────────────────────────────────── */
+.docs-mermaid {
+  position: relative;
+  margin: 1.4em 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  text-align: center;
+}
+
+/* Fullscreen trigger — absolute top-right of the outer wrapper */
+.docs-mermaid__fullscreen-btn {
+  position: absolute !important;
+  top: 6px;
+  right: 6px;
+  z-index: 4;
+}
+
+/* Inner pane — flex column */
+.docs-mermaid__pane {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.docs-mermaid__pane--fullscreen {
+  height: 100%;
+  flex: 1 1 auto;
+}
+
+/* ── Toolbar (zoom controls) ──────────────────────────────── */
+.docs-mermaid__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+
+.docs-mermaid__tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  border-radius: 3px;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  user-select: none;
+}
+
+.docs-mermaid__tool-btn:hover {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.docs-mermaid__tool-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── Zoomable viewport ────────────────────────────────────── */
+.docs-mermaid__zoom-area {
+  overflow: hidden;
+  cursor: default;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 12px;
+  min-height: 80px;
+}
+
+.docs-mermaid__zoom-area--grab {
+  cursor: grab;
+}
+
+.docs-mermaid__zoom-area--grab:active {
+  cursor: grabbing;
+}
+
+.docs-mermaid__svg {
+  display: inline-block;
+  max-width: 100%;
+  will-change: transform;
+  /* transition only when NOT dragging — skipped if reduced-motion inline style is none */
+  transition: transform 0.12s ease;
+}
+
+.docs-mermaid__svg svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ── Fullscreen overlay ───────────────────────────────────── */
+.docs-mermaid__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.docs-mermaid__overlay-inner {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 100%;
+  max-width: 1100px;
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Fullscreen pane fills the inner box */
+.docs-mermaid__overlay-inner .docs-mermaid__pane {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.docs-mermaid__overlay-inner .docs-mermaid__zoom-area {
+  flex: 1 1 auto;
+  min-height: 200px;
+  max-height: calc(100vh - 120px);
+}
+
+.docs-mermaid__overlay-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 14px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.docs-mermaid__overlay-close:hover {
+  background: var(--down-bg, var(--surface-3));
+  color: var(--down);
+  border-color: var(--down);
+}
+
+.docs-mermaid__overlay-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── Viz animation frame ───────────────────────────────────── */
+.docs-viz {
+  margin: 1.4em 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  display: block;
+}
+
+.docs-viz--fallback {
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.docs-viz__fallback-msg {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.docs-viz__fallback-msg code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.docs-viz__canvas {
+  position: relative;
+  padding: 8px 4px 4px;
+}
+
+.docs-viz__caption {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-3);
+  padding: 6px 16px 10px;
+  text-align: center;
+  border-top: 1px solid var(--border);
+  line-height: 1.4;
+}
+
+/* Play / Stop button — top-right of canvas */
+.docs-viz__play-btn {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  line-height: 1;
+}
+
+.docs-viz__play-btn:hover {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.docs-viz__play-btn--stop {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.docs-viz__play-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── Market selector (data-driven viz) ────────────────────── */
+.docs-viz__market-select {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.docs-viz__market-select label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.docs-viz__market-select select {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  border-radius: 3px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.docs-viz__market-select select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── Data status badge ────────────────────────────────────── */
+.docs-viz__data-badge {
+  position: absolute;
+  bottom: 6px;
+  right: 10px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: var(--text-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 7px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.docs-viz__data-badge--live {
+  color: var(--up);
+  border-color: var(--up);
+}
+
+/* ── Concept badge (non-data-driven) ──────────────────────── */
+.docs-viz__concept-badge {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 2;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: var(--text-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 7px;
+  pointer-events: none;
+  letter-spacing: 0.03em;
+}
+
+/* ── Loading overlay for data-driven viz ──────────────────── */
+.docs-viz__loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  z-index: 5;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-3);
+  border-radius: 4px;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 800px) {
+  .docs-mermaid {
+    padding: 0;
+  }
+
+  .docs-viz__canvas {
+    padding-top: 36px; /* more room for button */
+  }
+
+  .docs-mermaid__overlay {
+    padding: 8px;
+  }
+
+  .docs-mermaid__overlay-inner {
+    max-height: calc(100vh - 16px);
+  }
+}
+
+/* ── Reduced motion ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .docs-viz__play-btn,
+  .docs-mermaid__tool-btn,
+  .docs-mermaid__overlay-close {
+    transition: none;
+  }
+
+  .docs-mermaid__svg {
+    transition: none;
+  }
+}
+
+/* ============================================================
+   trace-viz — step-by-step worked example components
+   (Voting + SlidingWindow)
+   ============================================================ */
+
+.trace-viz {
+  font-family: var(--font-ui);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+}
+
+/* ── Top bar: market selector + badge ── */
+.trace-viz__topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  flex-wrap: wrap;
+}
+
+/* ── Formula bar ── */
+.trace-viz__formula {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.trace-viz__formula-label {
+  font-size: 11px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.trace-viz__formula-code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 8px;
+  color: var(--text-1);
+  letter-spacing: 0.01em;
+}
+
+.trace-viz__formula-note {
+  font-size: 11px;
+  color: var(--text-3);
+  font-style: italic;
+}
+
+/* ── Intro message ── */
+.trace-viz__intro {
+  padding: 12px 16px;
+  font-size: 12px;
+  color: var(--text-3);
+  border-bottom: 1px dashed var(--border);
+  line-height: 1.5;
+}
+
+/* ── Table ── */
+.trace-viz__table-wrap {
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+.trace-viz__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: 440px;
+}
+
+.trace-viz__table th {
+  text-align: left;
+  padding: 5px 10px;
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-weight: 600;
+  font-size: 11px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.trace-viz__table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.trace-viz__row--active td {
+  background: var(--accent-bg, oklch(0.95 0.02 250));
+  color: var(--text-1);
+  font-weight: 500;
+}
+
+.trace-viz__row--done td {
+  background: var(--surface);
+  color: var(--text-2);
+  opacity: 0.85;
+}
+
+.trace-viz__row--pending td {
+  background: var(--surface);
+  color: var(--text-3);
+  opacity: 0.4;
+}
+
+.trace-viz__cell--up {
+  color: var(--up) !important;
+  font-weight: 600;
+}
+
+.trace-viz__cell--down {
+  color: var(--down) !important;
+  font-weight: 600;
+}
+
+.trace-viz__cell--contrib {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* Flash highlight on actively-computed cell */
+.trace-viz__cell--flash {
+  background: var(--accent-bg, oklch(0.92 0.03 250));
+  color: var(--accent);
+  font-weight: 700;
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+/* ── Accumulator panel ── */
+.trace-viz__accumulator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.trace-viz__acc-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.trace-viz__acc-label {
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.03em;
+}
+
+.trace-viz__acc-value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--text-1);
+  font-weight: 600;
+}
+
+.trace-viz__acc-sep {
+  font-size: 18px;
+  color: var(--text-3);
+  font-weight: 300;
+  align-self: center;
+  margin-top: 10px;
+}
+
+/* ── Gauge in accumulator ── */
+.trace-viz__gauge-wrap {
+  margin-left: auto;
+}
+
+/* ── Sum trace table ── */
+.trace-viz__sum-trace {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Result box ── */
+.trace-viz__result {
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.trace-viz__result-equation {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-1);
+  margin-bottom: 6px;
+  line-height: 1.6;
+}
+
+.trace-viz__result-interp {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+/* ── Controls bar ── */
+.trace-viz__controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--surface);
+  flex-wrap: wrap;
+}
+
+.trace-viz__ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  border-radius: 3px;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  user-select: none;
+}
+
+.trace-viz__ctrl-btn:hover:not(:disabled) {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.trace-viz__ctrl-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.trace-viz__ctrl-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.trace-viz__ctrl-btn--active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.trace-viz__progress {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+/* ── Chart ── */
+.trace-viz__chart-wrap {
+  padding: 6px 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.trace-viz__chart-note {
+  font-size: 10px;
+  color: var(--text-3);
+  margin: 2px 0 6px;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* ── Screen-reader only ── */
+.trace-viz__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .trace-viz__table {
+    font-size: 11px;
+  }
+
+  .trace-viz__table th,
+  .trace-viz__table td {
+    padding: 4px 6px;
+  }
+
+  .trace-viz__formula-code {
+    font-size: 11px;
+  }
+
+  .trace-viz__controls {
+    gap: 4px;
+  }
+
+  .trace-viz__ctrl-btn {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+
+  .trace-viz__progress {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 4px;
+  }
+
+  .trace-viz__accumulator {
+    gap: 8px;
+  }
+
+  .trace-viz__gauge-wrap {
+    margin-left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+}
+
+/* ── Reduced motion overrides for trace-viz ── */
+@media (prefers-reduced-motion: reduce) {
+  .trace-viz__ctrl-btn,
+  .trace-viz__table td {
+    transition: none;
+  }
+}
+
+/* ============================================================
+   algo-predict — INPUT → MECHANISM → OUTPUT animation
+   ============================================================ */
+
+.algo-predict {
+  font-family: var(--font-ui);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Missing arg state ── */
+.algo-predict--missing {
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.algo-predict__missing-hint {
+  font-size: 12px;
+  color: var(--text-3);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.algo-predict__missing-hint code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+/* ── Algo tag chip ── */
+.algo-predict__algo-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--accent-bg, oklch(0.94 0.02 250));
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 3px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
+/* ── Phase strip ── */
+.algo-predict__phases {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.algo-predict__phase-step {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-3);
+  transition: color 0.2s;
+}
+
+.algo-predict__phase-step--active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.algo-predict__phase-step--done {
+  color: var(--up);
+}
+
+.algo-predict__phase-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--surface-3);
+  color: var(--text-3);
+  transition: background 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+
+.algo-predict__phase-step--active .algo-predict__phase-num {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.algo-predict__phase-step--done .algo-predict__phase-num {
+  background: var(--up);
+  color: var(--bg);
+}
+
+.algo-predict__phase-arrow {
+  color: var(--text-3);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* ── 3-panel body ── */
+.algo-predict__body {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ── Individual panel ── */
+.algo-predict__panel {
+  flex: 1 1 180px;
+  min-width: 150px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+.algo-predict__panel--highlight {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-bg, oklch(0.94 0.02 250));
+}
+
+.algo-predict__panel-header {
+  padding: 7px 10px 5px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.algo-predict__panel-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-3);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.algo-predict__panel-sub {
+  font-size: 10px;
+  color: var(--text-3);
+  font-style: italic;
+}
+
+.algo-predict__panel-note {
+  padding: 4px 10px 6px;
+  font-size: 9px;
+  color: var(--text-3);
+  font-style: italic;
+  border-top: 1px dashed var(--border);
+  margin-top: auto;
+  line-height: 1.4;
+}
+
+/* ── Panel: Input ── */
+.algo-predict__spark-wrap {
+  padding: 8px 8px 4px;
+  flex: 1 1 auto;
+}
+
+.algo-predict__price-range {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+.algo-predict__panel-loading {
+  padding: 24px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+/* ── Connector between panels ── */
+.algo-predict__connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  gap: 2px;
+  align-self: center;
+}
+
+.algo-predict__connector-line {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  transition: background 0.3s;
+}
+
+.algo-predict__connector-line--active {
+  background: var(--accent);
+}
+
+.algo-predict__connector-arrow {
+  font-size: 12px;
+  color: var(--text-3);
+  transition: color 0.3s;
+  line-height: 1;
+}
+
+.algo-predict__connector-arrow--active {
+  color: var(--accent);
+}
+
+/* ── Panel: Mechanism ── */
+.algo-predict__mech {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+}
+
+.algo-predict__mech-box {
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.25s, background 0.25s;
+}
+
+.algo-predict__mech-box--active {
+  border-color: var(--accent);
+  background: var(--accent-bg, oklch(0.96 0.01 250));
+}
+
+.algo-predict__mech-box--done {
+  border-color: var(--up);
+  background: var(--up-bg, oklch(0.95 0.02 145));
+}
+
+.algo-predict__mech-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.algo-predict__mech-sublabel {
+  font-size: 10px;
+  color: var(--text-3);
+  line-height: 1.4;
+}
+
+/* Progress bar for non-neural families */
+.algo-predict__mech-bar-wrap {
+  position: relative;
+  height: 6px;
+  background: var(--surface-3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.algo-predict__mech-bar {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.35s ease;
+}
+
+.algo-predict__mech-bar-label {
+  font-size: 9px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  margin-top: 2px;
+  display: block;
+  text-align: right;
+}
+
+/* ── Token stream (neural family) ── */
+.algo-predict__token-stream {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+}
+
+.algo-predict__token {
+  font-size: 9px;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.algo-predict__token--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+  box-shadow: 0 0 4px var(--accent);
+}
+
+.algo-predict__token--pending {
+  color: var(--text-3);
+  opacity: 0.4;
+}
+
+.algo-predict__token-arrow {
+  font-size: 12px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.algo-predict__token-box {
+  font-size: 10px;
+  padding: 3px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 3px;
+  color: var(--text-3);
+  background: var(--surface);
+  white-space: nowrap;
+  transition: border-color 0.25s, background 0.25s, color 0.25s;
+  font-family: var(--font-ui);
+}
+
+.algo-predict__token-box--ready {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-bg, oklch(0.96 0.01 250));
+}
+
+/* ── Panel: Output ── */
+.algo-predict__output-pending {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px;
+  font-size: 24px;
+  color: var(--text-3);
+}
+
+.algo-predict__output-pending-note {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.algo-predict__output-card {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.algo-predict__output-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+
+.algo-predict__output-row:last-child {
+  border-bottom: none;
+}
+
+.algo-predict__output-lbl {
+  font-size: 10px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.algo-predict__output-val {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.algo-predict__output-pred {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.algo-predict__output-pred--up {
+  color: var(--up);
+}
+
+.algo-predict__output-pred--down {
+  color: var(--down);
+}
+
+.algo-predict__output-delta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.algo-predict__output-delta--up {
+  color: var(--up);
+}
+
+.algo-predict__output-delta--down {
+  color: var(--down);
+}
+
+.algo-predict__output-pct {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.algo-predict__output-dir {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.algo-predict__output-dir--up {
+  color: var(--up);
+}
+
+.algo-predict__output-dir--down {
+  color: var(--down);
+}
+
+.algo-predict__output-conf {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.algo-predict__conf-bar-wrap {
+  display: inline-block;
+  width: 48px;
+  height: 5px;
+  background: var(--surface-3);
+  border-radius: 3px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.algo-predict__conf-bar {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+/* ── Responsive ── */
+@media (max-width: 680px) {
+  .algo-predict__body {
+    flex-direction: column;
+    padding: 8px;
+  }
+
+  .algo-predict__connector {
+    flex-direction: row;
+    width: auto;
+    height: 20px;
+    align-self: stretch;
+    justify-content: center;
+  }
+
+  .algo-predict__connector-line {
+    width: 40px;
+    height: 1px;
+  }
+
+  .algo-predict__phases {
+    font-size: 10px;
+    gap: 4px;
+  }
+}
+
+/* ── Reduced motion overrides for algo-predict ── */
+@media (prefers-reduced-motion: reduce) {
+  .algo-predict__panel,
+  .algo-predict__mech-box,
+  .algo-predict__token,
+  .algo-predict__token-box,
+  .algo-predict__mech-bar,
+  .algo-predict__conf-bar,
+  .algo-predict__connector-line,
+  .algo-predict__connector-arrow {
+    transition: none;
+  }
+}

@@ -95,6 +95,7 @@ LOG_FORMAT=console                       # console = màu ANSI; json = log aggre
 # Backup & RL
 BACKUP_DIR=/backups                      # mount vào api-svc
 RL_MODEL_DIR=/models                     # mount vào prediction-svc; file: rl_dqn_{market}.pt
+DOCS_ROOT=/repo                          # mount vào api-svc; repo root read-only; phục vụ tab Docs
 
 # CLI Service
 INTERNAL_SECRET=change-me-in-production # Header X-Internal-Secret cho /api/command-handlers/upsert
@@ -109,6 +110,12 @@ REGISTRY_GRPC_TARGET=service-mgt:8121
 PER_SYMBOL_ENABLED=false
 PER_SYMBOL_MIN_POINTS=80
 PER_SYMBOL_WORKERS=0                     # 0 = os.cpu_count()
+
+# Crawl sanity guard (optional — có default trong code)
+CRAWL_MAX_TICK_DEVIATION_GOLD=0.30       # ngưỡng lệch 1-lần cho daily-live gate
+CRAWL_MAX_TICK_DEVIATION_NASDAQ=0.40
+CRAWL_MAX_TICK_DEVIATION_SP500=0.40
+CRAWL_MAX_TICK_DEVIATION_CRYPTO=0.80
 ```
 
 ## Ports
@@ -135,7 +142,7 @@ PER_SYMBOL_WORKERS=0                     # 0 = os.cpu_count()
 | `service-mgt` | Go | `db` | gRPC :8121; build context = `../service-mgt` |
 | `prediction-svc` | Python | `db`, `service-mgt` | gRPC :8119; build context = repo root; volume `rl_models:/models` |
 | `auth-svc` | Java | `db`, `service-mgt` | gRPC :8120; Flyway migrations; seeds super_admin |
-| `api-svc` | Go | `db`, `prediction-svc`, `auth-svc`, `service-mgt` | HTTP :8118; build context = repo root (copy service-mgt/); volume `backup_data:/backups` |
+| `api-svc` | Go | `db`, `prediction-svc`, `auth-svc`, `service-mgt` | HTTP :8118; build context = repo root (copy service-mgt/); volume `backup_data:/backups`; bind-mount `../:/repo:ro` (DOCS_ROOT) |
 | `gateway-svc` | Rust | `api-svc`, `web-svc`, `service-mgt` | expose :80/:443; bind-mount `./gateway-svc/certs` |
 | `web-svc` | React/nginx | `api-svc` | port 3000 (qua gateway); không tích hợp service-mgt |
 | `cli-svc` | Go | `gateway-svc` | SSH :2345; build context = `../cli-svc`; KHÔNG tích hợp service-mgt |
@@ -167,6 +174,9 @@ PER_SYMBOL_WORKERS=0                     # 0 = os.cpu_count()
 - **Shared feature builder:** `features.py` — `build_basic_features()` (14 features), `build_enhanced_features()` (~30 features). Pandas-ta nếu có, numpy fallback. `MIN_DATA_POINTS = 80`.
 - **Optuna:** LightGBM và XGBoost dùng Optuna khi data ≥ 200 và optuna cài (`[ml]` extras). Max 30 trials, timeout 120s. RandomForest không dùng Optuna.
 - **Tactic meta-stacking (simulation):** `meta_stack` là CHIẾN THUẬT giao dịch (tầng `simulation/`) — KHÔNG phải thuật toán dự đoán thứ 13, KHÔNG đăng ký vào `algorithms/registry.py` hay `algorithms.go`. `MetaStackModel` (`simulation/meta_stack.py`): đọc tất cả dự đoán các algo + direction accuracy rolling từng algo → LightGBM binary classifier + calibration isotonic → P(up) đã hiệu chỉnh → quyết định + size theo conviction. Fallback reliability-weighted vote khi thiếu checkpoint. `bot.py` nhánh `is_meta` (base_key == "meta_stack") → `_step_meta`. Bot pooled: `meta_stack` (1/market, 4 tổng); per-symbol: `meta_stack__ps` (gate `PER_SYMBOL_ENABLED`). Checkpoint: `${RL_MODEL_DIR}/meta_{market}.pkl` (pooled) / `meta_{market}_{symbol}.pkl` (per-symbol). Training: `train_meta_for_market()` + `train_meta_all()` trong `orchestrator/training.py`; cron `train_meta` (Chủ nhật 8AM); trigger tay: `POST /api/trigger/train` body `{"algorithm":"meta_stack"}`.
+- **Crawl sanity guard** (`crawlers/sanity.py`): lọc tick giá rác ở tầng ingest, **không chặn** biến động thật/split. Hai hàm: (1) `check_update(market, key, new_price, last_price)` — "persistence confirmation" 2 nhịp cho daily-live upsert (`upsert_{gold,nasdaq,crypto,sp500}_price` trong `repository.py`): giá lệch ngoài ngưỡng market-aware bị GIỮ pending, chỉ chấp nhận khi crawl kế tiếp xác nhận lại cùng mức; reject → log `crawl.sanity.reject`, giữ giá cũ. (2) `batch_outlier_mask(prices, market)` — so sánh hai phía với bar liền kề trong chuỗi intraday, chỉ flag spike cô lập (lệch cả bar trước lẫn bar sau); điểm biên split không bị flag; log `crawl.sanity.spike_dropped`. Ngưỡng lệch 1-lần: GOLD 0.30, NASDAQ/SP500 0.40, CRYPTO 0.80 — override bằng env `CRAWL_MAX_TICK_DEVIATION_<MARKET>`. Giới hạn đã biết: `crawl_history`/backfill đi qua `check_update` — split thật trong batch lịch sử bị bỏ 1 lần rồi tự lành ở crawl live kế tiếp; `batch_outlier_mask` KHÔNG áp cho backfill historical.
+- **Docs viewer (api-svc):** `GET /api/docs` và `GET /api/docs/raw` phục vụ file markdown từ `DOCS_ROOT` (mount read-only `../:/repo:ro`) cho tab Tài liệu trên web dashboard. Chỉ admin. Chống path traversal (reject `..`, chỉ `.md`, kiểm tra prefix `DOCS_ROOT`). Giới hạn 2MB/file.
+- **Stock split handling** (chỉ NASDAQ/SP500 — gold/crypto không có split): Crawler (`nasdaq.py`/`sp500.py`) fetch `&events=split` từ Yahoo chart API, parse `events.splits` (numerator/denominator/ex-date) → `repo.record_split(...)` (INSERT ON CONFLICT DO NOTHING, idempotent). Sau khi crawl xong toàn bộ symbol, gọi `apply_pending_splits()` nếu có split mới. History adjustment (`orchestrator/splits.py`): CHỈ chỉnh bảng INTRADAY (`nasdaq_intraday_prices`/`sp500_intraday_prices`) — KHÔNG chỉnh daily (Yahoo daily đã split-adjust sẵn) và KHÔNG chỉnh predictions. Boundary phát hiện từ data (điểm consecutive close rớt ~ratio) chứ không dùng ex-date, vì intraday lưu lẫn scale (bar cũ backfill unadjusted, bar mới crawl adjusted). Chia mọi bar trước boundary cho ratio → chuỗi liên tục ở scale post-split. Idempotent (`applied_at` + sau adjust hết cliff). Non-cliff → mark applied, không đụng giá. Log `crawl.split.detected`, `split.applied`. Simulation split-aware: `engine.py` `_restore_portfolio_state` — bot NASDAQ/SP500 khi tái dựng vị thế mở, mỗi split có `split_date > entry_date`: quantity × ratio, entry_price / ratio (dồn nhiều split); fix bug "lỗ ảo -74%" do giữ vị thế qua split. KHÔNG mutate trade lịch sử. Bảng `stock_splits`: `(market_key, symbol, split_date)` unique; `applied_at NULL` = chưa apply. Repo methods: `record_split`, `list_unapplied_splits`, `list_splits_for_symbol`, `mark_split_applied`.
 
 ## Hướng dẫn mở rộng
 

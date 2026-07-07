@@ -1074,6 +1074,113 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/docs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Walks DOCS_ROOT and returns metadata for every *.md file found. Requires admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Docs"
+                ],
+                "summary": "List project documentation files",
+                "responses": {
+                    "200": {
+                        "description": "docs array",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/pkg_server.DocEntry"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/docs/raw": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the raw Markdown content of a single file from DOCS_ROOT. Requires admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Docs"
+                ],
+                "summary": "Get raw content of a documentation file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Relative path to the markdown file (e.g. docs/claude/database.md)",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.DocContent"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.ResponseFailure"
+                        }
+                    }
+                }
+            }
+        },
         "/api/gold/chart": {
             "get": {
                 "description": "Returns chronologically ordered labels and buy/sell price arrays suitable for charting. When days=1, returns hourly intraday data; otherwise returns daily data.",
@@ -5473,6 +5580,37 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "size_human": {
+                    "type": "string"
+                }
+            }
+        },
+        "pkg_server.DocContent": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "pkg_server.DocEntry": {
+            "type": "object",
+            "properties": {
+                "group": {
+                    "type": "string"
+                },
+                "order": {
+                    "type": "integer"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "title": {
                     "type": "string"
                 }
             }
