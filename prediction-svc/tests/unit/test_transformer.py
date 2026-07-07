@@ -20,6 +20,7 @@ from src.algorithms.transformer_model import (
     SEQ_LEN,
     TransformerPredictor,
     _build_model,
+    _direction_targets,
     _normalize_symbol,
     _raw_fund_vector,
     _tf_checkpoint_path,
@@ -317,3 +318,37 @@ class TestCrawlerExtraction:
             "revenue_growth", "earnings_growth", "profit_margin",
             "debt_to_equity", "dividend_yield", "beta", "market_cap",
         }
+
+
+# ---------------------------------------------------------------------------
+# Direction-label threshold (regression guard for the down-bias bug)
+# ---------------------------------------------------------------------------
+
+def test_direction_targets_use_raw_return_sign_not_mean():
+    """The direction head must be labelled on raw-return sign (ret > 0), which
+    the system scores, NOT on standardized sign (ret > mean). In an up-drifting
+    market r_mean > 0, so a small POSITIVE return that is still below the mean
+    must label UP (1), not DOWN — the old (y_std > 0) threshold got this wrong.
+    """
+    r_mean, r_std = 0.001, 0.01  # positive drift
+    # raw returns: +0.0005 (positive but below mean), -0.0005 (negative)
+    raw = np.array([0.0005, -0.0005, 0.0, 0.002])
+    y_std = (raw - r_mean) / r_std
+
+    labels = np.asarray(_direction_targets(y_std, r_mean, r_std))
+
+    # label must equal raw-return-positive, element by element
+    assert labels[0] == True   # +0.0005 > 0  → UP  (old code wrongly said DOWN)
+    assert labels[1] == False  # -0.0005 < 0  → DOWN
+    assert labels[2] == False  # exactly 0    → not > 0
+    assert labels[3] == True   # +0.002 > 0   → UP
+    # exactly equivalent to thresholding raw returns at zero
+    assert np.array_equal(labels, raw > 0)
+
+
+def test_direction_targets_zero_mean_reduces_to_zero_threshold():
+    """With no drift (r_mean = 0) the correct threshold is plain sign(ret)."""
+    r_mean, r_std = 0.0, 0.02
+    y_std = np.array([-1.0, 0.0, 1.0])
+    labels = np.asarray(_direction_targets(y_std, r_mean, r_std))
+    assert np.array_equal(labels, np.array([False, False, True]))

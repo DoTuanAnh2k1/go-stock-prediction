@@ -86,6 +86,22 @@ _DEFAULT_MODEL_DIR = "/models"
 _fund_cache: dict[str, tuple[float, dict]] = {}
 
 
+def _direction_targets(y_std, r_mean: float, r_std: float):
+    """Binary 'next return is positive' labels for the direction head.
+
+    y_std holds *standardized* returns ((ret - r_mean) / r_std), so the raw
+    return is positive exactly when y_std > -r_mean / r_std. Thresholding at 0
+    instead would ask 'return above the mean' — a different question from the
+    one the system scores (direction_correct := actual > current, i.e. ret > 0).
+    In up-drifting markets (r_mean > 0) that mismatch biased the head toward
+    'down', dragging live direction accuracy below chance. Works on numpy
+    arrays and torch tensors alike (comparison only). Returns a bool mask;
+    callers apply .float().
+    """
+    thresh = (-r_mean / r_std) if r_std else 0.0
+    return y_std > thresh
+
+
 def _get_model_dir() -> str:
     env = os.environ.get("RL_MODEL_DIR")
     if env:
@@ -444,8 +460,10 @@ class TransformerPredictor(PredictionAlgorithm):
         patience = 0
         n = len(Xtr_t)
 
-        ytr_dir = (ytr_t > 0).float()
-        yva_dir = (yva_t > 0).float()
+        # Label on raw-return sign (ret > 0), the metric the system scores —
+        # NOT standardized sign (ret > mean). See _direction_targets.
+        ytr_dir = _direction_targets(ytr_t, self._r_mean, self._r_std).float()
+        yva_dir = _direction_targets(yva_t, self._r_mean, self._r_std).float()
 
         for epoch in range(EPOCHS):
             model.train()
@@ -474,9 +492,9 @@ class TransformerPredictor(PredictionAlgorithm):
                     val_loss += DIR_LOSS_WEIGHT * float(
                         F.binary_cross_entropy_with_logits(val_logit, yva_dir).item()
                     )
-                    dir_acc = float(((val_logit > 0) == (yva_t > 0)).float().mean().item())
+                    dir_acc = float(((val_logit > 0) == yva_dir.bool()).float().mean().item())
                 else:
-                    dir_acc = float(((val_pred > 0) == (yva_t > 0)).float().mean().item())
+                    dir_acc = float(((val_pred > 0) == yva_dir.bool()).float().mean().item())
 
             if val_loss < best_val - 1e-6:
                 best_val = val_loss
@@ -507,7 +525,7 @@ class TransformerPredictor(PredictionAlgorithm):
         with torch.no_grad():
             val_pred, val_logit = _forward(model, Xva_t, Fva_t)
             dir_src = val_logit if val_logit is not None else val_pred
-            final_dir = float(((dir_src > 0) == (yva_t > 0)).float().mean().item())
+            final_dir = float(((dir_src > 0) == yva_dir.bool()).float().mean().item())
         log.info(
             "transformer.train.done",
             market=self._market_key, series=len(usable),
@@ -656,7 +674,7 @@ class TransformerPredictor(PredictionAlgorithm):
 
         model = _build_model()
         optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
-        y_dir = (y_t > 0).float()
+        y_dir = _direction_targets(y_t, r_mean, r_std).float()  # raw-return sign
         model.train()
         for _ in range(QUICK_EPOCHS):
             pred, logit = _forward(model, X_t, f_t)
