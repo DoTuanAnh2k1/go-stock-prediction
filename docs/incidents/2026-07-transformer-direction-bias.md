@@ -55,3 +55,23 @@ học hồi quy-về-trung-bình, nên trong uptrend chúng dự đoán ngược
 Edge THẬT (khiêm tốn) duy nhất: `ema`/`moving_average` (momentum) trên GOLD & CRYPTO.
 Trên NASDAQ/SP500 mẫu lớn, gần như mọi thuật toán 47–53% = không edge — đúng bản chất
 thị trường thanh khoản cao ở khung dự đoán giờ-kế-tiếp.
+
+## Regenerate out-of-sample (2026-07-07, sau fix)
+
+Theo yêu cầu: xóa toàn bộ prediction `transformer_nn` (backup ở bảng `bak_tf_*`),
+train lại model đã sửa trên **intraday ≤ 28/6**, walk-forward predict +1h theo từng
+bar intraday **29/6 → nay** (mirror regime production, không leakage), chấm trực tiếp.
+
+| Market | dir_acc (fixed, OOS) | n scored | trước fix (buggy) |
+|--------|------|------|------|
+| GOLD      | **0.541** | 109 | 0.632 (n=38, chỉ do GOLD rơi) |
+| CRYPTO    | **0.540** | 176 | 0.361 |
+| NASDAQ100 | **0.489** | 726 | 0.459 |
+| SP500     | **0.456** | 487 | 0.344 |
+
+Hết kẹt "giảm" 95% (pred_up giờ biến thiên theo market, không còn constant), hết dưới-chance
+bệnh lý. Kết luận không đổi: transformer đã sửa chỉ ~coin-flip, nhích trên chance ở GOLD/CRYPTO
+(~54%), quanh/dưới 50% ở NASDAQ/SP500 — không phải máy in tiền, nhưng không còn gây hại.
+
+Checkpoint production sau đó được retrain lại trên TOÀN BỘ data (backtest đã tạm ghi đè bằng
+bản ≤28/6). Bảng backup `bak_tf_gold/nasdaq/crypto/sp500` giữ lại để phòng hờ — có thể `DROP` khi yên tâm.
