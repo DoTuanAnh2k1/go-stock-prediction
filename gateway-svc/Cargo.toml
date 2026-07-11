@@ -29,6 +29,8 @@ dotenv = "0.15.0"
 bytes = "1.10.1"
 tonic = "0.12"
 prost = "0.13"
+kube = { version = "0.95", default-features = false, features = ["client", "runtime", "rustls-tls"] }
+k8s-openapi = { version = "0.23", features = ["v1_30"] }
 
 [build-dependencies]
 tonic-build = "0.12"
