@@ -8,6 +8,17 @@
 
 **Tech Stack:** Rust, axum 0.8, reqwest, tokio, serde_yaml, **kube 0.95 + k8s-openapi 0.23** (thêm mới).
 
+## ✅ Trạng thái: ĐÃ HIỆN THỰC + VERIFY (2026-07-11)
+
+Tất cả 10 task xong, 23 unit test pass, tích hợp trên kind ckad:
+- **Happy path:** `set image` màu idle → `bluegreen.rollout.start` → `flip` (active đổi màu, traffic 100% sang candidate) → phân tích 60s với tải thật → `promote` (patch màu còn lại = image mới). Xác nhận **không ping-pong** sau promote.
+- **Bad deploy:** idle set image lỗi (`web-svc:nope`, ImagePullBackOff) → candidate không Ready → **KHÔNG flip**, active giữ nguyên, `curl /` = 200 (service không gián đoạn).
+- **Rollback (fail-rate):** unit-tested trong `decide()` (early rollback khi fail rate vượt ngưỡng).
+- 2 bug tìm+fix khi tích hợp: (1) edge bị consume khi candidate còn mid-rollout → mất trigger; (2) promote patch màu còn lại bị tick sau nhận diện là candidate mới → ping-pong. Xem commit `fix(gateway): bluegreen controller edge-consume + ping-pong`.
+- Build: Dockerfile `rust:1.90-slim-bookworm` (dep `home@0.5.12` cần rustc 1.88; bookworm glibc khớp runtime). reqwest `default-features=false` (rustls, bỏ openssl thừa).
+
+Giới hạn đã biết (để tương lai): controller loop tuần tự → trong lúc 1 app rollout (60s) các app khác không được tick; chưa test rollback tích hợp với candidate Ready-nhưng-lỗi (cần image trả 5xx).
+
 ## Global Constraints
 
 - Rust edition 2021; crate name `gateway`; binary `gateway`.
