@@ -260,15 +260,23 @@ const DATA = {
         "⚠️ 2 Deployment phải có <b>selector KHÔNG overlap</b> (mỗi cái gồm <code>color</code>) — nếu chỉ <code>app=web-svc</code> chung, chúng tranh pod. Và selector Deployment IMMUTABLE nên phải TẠO MỚI blue/green (không sửa được deploy web-svc đơn thành blue).",
         "Verify bằng <code>kubectl get endpoints web-svc</code> — IP đổi sang pod set màu mới; đối chiếu với <code>get pods -l color=green -o wide</code>.",
         "Ưu điểm blue/green: rollback = lật selector về màu cũ (tức thì); nhược: tốn 2× tài nguyên khi cả 2 màu cùng chạy.",
-        "⚠️ <b>Bẫy patch↔apply:</b> <code>color</code> thêm bằng <code>kubectl patch</code> thì <code>kubectl apply</code> manifest gốc KHÔNG xoá được (apply chỉ quản key trong last-applied) ⇒ selector kẹt <code>{app, color:green}</code>, pod không màu ⇒ Endpoints RỖNG (frontend down). Phải xoá tay: <code>kubectl patch svc web-svc --type=json -p '[{\"op\":\"remove\",\"path\":\"/spec/selector/color\"}]'</code>."
+        "⚠️ <b>Bẫy patch↔apply:</b> <code>color</code> thêm bằng <code>kubectl patch</code> thì <code>kubectl apply</code> manifest gốc KHÔNG xoá được (apply chỉ quản key trong last-applied) ⇒ selector kẹt <code>{app, color:green}</code>, pod không màu ⇒ Endpoints RỖNG (frontend down). Phải xoá tay: <code>kubectl patch svc web-svc --type=json -p '[{\"op\":\"remove\",\"path\":\"/spec/selector/color\"}]'</code>.",
+        "<b>━━ NÂNG CAO: tự động hoá blue/green trong gateway Rust</b> (bỏ <code>kubectl patch</code> tay). Bản chất = canary/progressive delivery tự viết (mini-Flagger): gateway watch Deployment (kube-rs, edge-triggered khi <code>set image</code> màu idle), lật 100% traffic NỘI BỘ (route giữa 2 Service/màu), đo success-rate 60s, tự <b>promote</b> (patch màu còn lại) hoặc <b>rollback</b>. Khác cách tay: KHÔNG đụng selector Service (né bẫy patch↔apply); gateway giữ <code>active</code> trong bộ nhớ + persist ConfigMap <code>gateway-bluegreen-state</code>.",
+        "State machine gateway: Stable → Flip → Analyzing 60s (rollback SỚM nếu fail rate vượt ngưỡng) → Promote/Rollback. Fail = HTTP≥500/proxy error (4xx=success); ngưỡng success 99%, min 20 req. RBAC: SA <code>gateway-svc</code> get/list/watch/patch deployments + configmaps.",
+        "2 bug tìm khi tích hợp: (1) edge bị consume khi candidate còn mid-rollout → mất trigger; (2) promote patch màu còn lại → tick sau tưởng candidate mới → <b>ping-pong</b> (fix: cập nhật <code>last_seen[old]</code> sau patch). Code <code>gateway-svc/src/bluegreen/</code>; spec+plan ở <code>docs/specs|plans/2026-07-11-gateway-bluegreen-*</code>."
       ],
       commands:[
         {cmd:"kubectl delete deploy web-svc -n stock\nkubectl apply -f deploy/k8s/ckad-labs/day_2/web-bluegreen.yaml", note:"xóa web-svc đơn, tạo blue+green", out:"deployment.apps/web-svc-blue created\ndeployment.apps/web-svc-green created\n→ blue 2/2, green 2/2 Running"},
         {cmd:"kubectl get pods -n stock -l app=web-svc -L color", note:"4 pod, 2 màu", out:"web-svc-blue-...   1/1 Running  blue   (2)\nweb-svc-green-...  1/1 Running  green  (2)"},
         {cmd:"kubectl patch svc web-svc -n stock -p '{\"spec\":{\"selector\":{\"app\":\"web-svc\",\"color\":\"blue\"}}}'\nkubectl get endpoints web-svc -n stock", note:"trỏ Service sang BLUE", out:"service/web-svc patched\nendpoints = 10.244.1.46 10.244.2.44   ← đúng 2 IP pod blue\ncurl http://web-svc:3000/ = 200"},
-        {cmd:"# FLIP sang GREEN (poller đo gián đoạn xuyên suốt)\nkubectl patch svc web-svc -n stock -p '{\"spec\":{\"selector\":{\"app\":\"web-svc\",\"color\":\"green\"}}}'", note:"lật selector color=green", out:"service/web-svc patched\n[poller] RESULT ok=2033 fail=0   → zero-downtime ✅\nendpoints = 10.244.1.45 10.244.2.45   ← đã đổi sang 2 IP pod green"}
+        {cmd:"# FLIP sang GREEN (poller đo gián đoạn xuyên suốt)\nkubectl patch svc web-svc -n stock -p '{\"spec\":{\"selector\":{\"app\":\"web-svc\",\"color\":\"green\"}}}'", note:"lật selector color=green", out:"service/web-svc patched\n[poller] RESULT ok=2033 fail=0   → zero-downtime ✅\nendpoints = 10.244.1.45 10.244.2.45   ← đã đổi sang 2 IP pod green"},
+        {cmd:"# ━━ NÂNG CAO (gateway tự động, bỏ patch tay) ━━\nkubectl logs -n stock deploy/gateway-svc | grep bluegreen", note:"controller đã bật khi gateway start", out:"Loaded 2 route(s), 2 bluegreen app(s)\nbluegreen controller started (2 app(s))\nbluegreen.controller.ready app=web-svc active=green blue=web-svc:dev green=web-svc:dev"},
+        {cmd:"# HAPPY PATH: set image màu IDLE → gateway TỰ flip→analyze→promote\nkubectl set image deploy/web-svc-green web-svc=web-svc:v2 -n stock", note:"web-svc rollout tự động (không patch selector)", out:"bluegreen.rollout.start app=web-svc from=green to=blue\nbluegreen.flip app=web-svc color=blue            ← traffic 100% sang candidate\nbluegreen.promote app=web-svc total=... fail=0    ← 60s sau, patch màu còn lại (KHÔNG ping-pong)"},
+        {cmd:"kubectl set image deploy/api-svc-blue api-svc=api-svc:v2 -n stock", note:"api-svc cũng tự động (app thứ 2)", out:"bluegreen.rollout.start app=api-svc from=\"green\" to=\"blue\" image=Some(\"api-svc:v2\")\nbluegreen.flip         app=api-svc color=\"blue\"\nbluegreen.promote      app=api-svc total=1019 fail=0"},
+        {cmd:"# ROLLBACK THẬT: candidate Ready-nhưng-503 (readiness /healthz=200, / =503)\nkubectl patch deploy web-svc-blue -n stock --type=strategic -p '{...nginx:1.27-alpine + 503 conf + /healthz readiness...}'", note:"gateway đo fail → tự rollback", out:"bluegreen.flip     app=web-svc color=\"blue\"\nbluegreen.rollback app=web-svc total=155 fail=39   ← 25% fail > 1% → lật về green (~6s)"},
+        {cmd:"kubectl set image deploy/web-svc-blue web-svc=web-svc:nope -n stock", note:"BAD deploy: candidate không Ready", out:"# controller: image đổi nhưng deployment_ready=false → KHÔNG flip\n# active giữ nguyên · curl / = 200 (service KHÔNG gián đoạn)"}
       ],
-      tool:"# lật selector + in endpoints trước/sau:\n./e2e-test.sh bluegreen web-svc color green\n./e2e-test.sh bluegreen web-svc color blue    # lật ngược (rollback tức thì)"
+      tool:"# --- cách TAY (patch selector) ---\n./e2e-test.sh bluegreen web-svc color green\n./e2e-test.sh bluegreen web-svc color blue    # lật ngược (rollback tức thì)\n# --- cách TỰ ĐỘNG (gateway) — quan sát controller ---\nkubectl logs -n stock deploy/gateway-svc | grep bluegreen\nkubectl get cm gateway-bluegreen-state -n stock -o yaml   # màu active per app"
     },
     {
       id:"2.3", title:"Scale & HPA", domain:"App Deployment (20%)", duration:"~45m", status:"done",
@@ -330,35 +338,6 @@ const DATA = {
       ],
       tool:"# render 2 overlay + khẳng định image tag + replica khác nhau (KHÔNG apply):\n./e2e-test.sh kustomize-diff kustomize/overlays/dev kustomize/overlays/prod"
     },
-    {
-      id:"2.5", title:"Gateway Blue/Green Automation", domain:"Ngoài CKAD — feature", duration:"~1 ngày", status:"done",
-      request:"Tự động hoá blue/green THẲNG trong gateway Rust tự viết (bỏ kubectl patch tay của lab 2.2): set image màu idle → gateway tự phát hiện, lật 100% traffic nội bộ, đo success-rate 60s, tự promote (patch màu còn lại) hoặc rollback. Áp dụng web-svc (/) + api-svc (/api).",
-      steps:[
-        "Code Rust <code>gateway-svc/src/bluegreen/</code> (config · state · analysis/decide · k8s/kube-rs · controller) + sửa router/proxy/main — 23 unit test pass.",
-        "Manifest: <code>deploy/k8s/{web,api}-svc/bluegreen.yaml</code> (2 Deployment + 2 Service/màu) + <code>gateway-svc/rbac.yaml</code> (SA + Role + state ConfigMap).",
-        "Config <code>gateway-svc/config.yaml</code> khối <code>bluegreen</code>: prefix <code>/</code>→web-svc, <code>/api</code>→api-svc, default_active green.",
-        "Build image (rust:1.90-slim-bookworm) → <code>kind load</code> → apply rbac + blue/green → restart gateway (log 'bluegreen controller started').",
-        "Trigger: <code>kubectl set image deploy/&lt;app&gt;-&lt;idle&gt; ...</code> → controller tự flip → analyze → promote/rollback (xem log <code>bluegreen.*</code>)."
-      ],
-      knowledge:[
-        "<b>Bản chất = canary/progressive delivery tự viết (mini-Flagger)</b>, KHÔNG phải blue/green thuần: lật 100% + auto-verify + auto-promote/rollback. Production dùng Flagger/Argo Rollouts làm sẵn việc này.",
-        "Gateway kiêm 2 vai: <b>data-plane</b> (route giữa 2 Service/màu theo <code>active</code> trong bộ nhớ; đo success-rate per-màu từ request nó proxy) + <b>control-plane</b> (kube-rs: watch Deployment, patch image).",
-        "<b>Edge-triggered</b>: phản ứng SỰ KIỆN đổi image màu idle; seed <code>last_seen</code> lúc boot để gateway restart không kích rollout giả. Chỉ consume edge khi idle Ready (else mất trigger lúc candidate còn mid-rollout).",
-        "State machine: Stable → Flip (đổi active, reset counter, persist CM) → Analyzing 60s (<b>rollback SỚM</b> nếu fail rate vượt ngưỡng, không đợi hết window) → Promote (patch màu còn lại = image mới) / Rollback (lật active về cũ).",
-        "Fail = HTTP ≥500 hoặc proxy error; 4xx = success. Ngưỡng: window 60s, success 99%, min 20 req, extend ×3 khi traffic thấp.",
-        "State persist ở ConfigMap <code>gateway-bluegreen-state</code> (sống sót gateway restart). RBAC: SA <code>gateway-svc</code> — get/list/watch/patch deployments + get/patch configmaps.",
-        "⚠️ 2 bug tìm khi tích hợp: (1) edge bị consume khi candidate còn mid-rollout → mất trigger; (2) promote patch màu còn lại → tick sau tưởng candidate mới → <b>ping-pong</b> lật qua lại (fix: cập nhật <code>last_seen[old]</code> sau patch)."
-      ],
-      commands:[
-        {cmd:"docker build -t gateway-svc:dev -f deploy/gateway-svc.Dockerfile gateway-svc\nkind load docker-image gateway-svc:dev --name ckad\nkubectl rollout restart deploy/gateway-svc -n stock", note:"build + load + restart (rust 1.90 bookworm — glibc khớp runtime)", out:"gateway-svc:dev 174MB → loaded\nLoaded 2 route(s), 2 bluegreen app(s)\nbluegreen controller started (2 app(s))\nbluegreen.controller.ready app=web-svc active=green blue=web-svc:dev green=web-svc:dev"},
-        {cmd:"kubectl apply -f deploy/k8s/gateway-svc/rbac.yaml\nkubectl apply -f deploy/k8s/web-svc/bluegreen.yaml -f deploy/k8s/api-svc/bluegreen.yaml", note:"RBAC + blue/green (2 màu/app, cùng image = steady state)", out:"serviceaccount/gateway-svc created · role/rolebinding created\nconfigmap/gateway-bluegreen-state created\nweb-svc-blue/green, api-svc-blue/green created (2/2 mỗi cái)"},
-        {cmd:"# HAPPY PATH: set image màu IDLE\nkubectl set image deploy/web-svc-green web-svc=web-svc:v2 -n stock", note:"gateway tự flip → analyze 60s → promote", out:"bluegreen.rollout.start app=web-svc from=green to=blue\nbluegreen.flip app=web-svc color=blue        ← traffic 100% sang candidate\nbluegreen.promote app=web-svc total=... fail=0  ← 60s sau, patch màu còn lại (KHÔNG ping-pong)"},
-        {cmd:"kubectl set image deploy/api-svc-blue api-svc=api-svc:v2 -n stock", note:"api-svc rollout (app thứ 2)", out:"bluegreen.rollout.start app=api-svc from=\"green\" to=\"blue\" image=Some(\"api-svc:v2\")\nbluegreen.flip         app=api-svc color=\"blue\"\nbluegreen.promote      app=api-svc total=1019 fail=0"},
-        {cmd:"# ROLLBACK THẬT: candidate Ready-nhưng-503 (readiness /healthz=200, / =503)\nkubectl patch deploy web-svc-blue -n stock --type=strategic -p '{...nginx:1.27-alpine + 503 conf + /healthz readiness...}'", note:"flip → traffic / trả 503 → fail cao → tự rollback", out:"bluegreen.rollout.start app=web-svc to=\"blue\" image=Some(\"nginx:1.27-alpine\")\nbluegreen.flip         app=web-svc color=\"blue\"\nbluegreen.rollback     app=web-svc total=155 fail=39   ← 25% fail > 1% → lật về green (~6s)"},
-        {cmd:"kubectl set image deploy/web-svc-blue web-svc=web-svc:nope -n stock", note:"BAD deploy: candidate không Ready", out:"# controller: image đổi nhưng deployment_ready=false → KHÔNG flip\n# active giữ nguyên · curl / = 200 (service KHÔNG gián đoạn)"}
-      ],
-      tool:"# quan sát controller:\nkubectl logs -n stock deploy/gateway-svc | grep bluegreen\nkubectl get cm gateway-bluegreen-state -n stock -o yaml   # màu active per app\n# spec + plan (log/command đầy đủ):\n#   docs/specs/2026-07-11-gateway-bluegreen-automation-design.md\n#   docs/plans/2026-07-11-gateway-bluegreen-automation.md"
-    }
   ]
 };
 
