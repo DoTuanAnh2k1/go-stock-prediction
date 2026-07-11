@@ -271,37 +271,64 @@ const DATA = {
       tool:"# lật selector + in endpoints trước/sau:\n./e2e-test.sh bluegreen web-svc color green\n./e2e-test.sh bluegreen web-svc color blue    # lật ngược (rollback tức thì)"
     },
     {
-      id:"2.3", title:"Scale & HPA", domain:"App Deployment (20%)", duration:"~45m", status:"planned",
-      request:"Scale tay lên 10 replica; cấu hình HPA target 50% CPU; sinh tải để thấy HPA scale up rồi scale down.",
+      id:"2.3", title:"Scale & HPA", domain:"App Deployment (20%)", duration:"~45m", status:"done",
+      request:"Scale tay cpu-burn 1→10 (obj 1, làm TRƯỚC khi có HPA) rồi HPA declarative 50% CPU (obj 2). Sinh tải thật: scale-up theo bậc 1→4→8→10 rồi scale-down về 1 sau cửa sổ 300s. App = registry.k8s.io/hpa-example (mỗi GET chạy vòng sqrt đốt CPU); nginx web-svc quá rẻ CPU không kích được HPA.",
+      steps:[
+        "Manual scale (obj 1) khi CHƯA có HPA: <code>kubectl scale deploy/cpu-burn --replicas=10 -n stock</code> → 10/10; verify <code>get pods -o wide</code> (chỉ 2 worker, control-plane taint) + <code>get rs</code> (CÙNG 1 RS, không tạo RS mới). Rồi scale về 1.",
+        "HPA declarative (obj 2): <code>kubectl apply -f deploy/k8s/ckad-labs/day_2/cpu-burn-hpa.yaml</code> (autoscaling/v2, cpu 50% theo request); verify TARGETS <code>&lt;unknown&gt;</code>→<code>1%/50%</code>, <code>ScalingActive=True</code>.",
+        "Sinh tải 2 terminal (loadgen + watch-hpa đều BLOCK): <code>NS=stock ./e2e-test.sh loadgen cpu-burn 80 30 150 /</code> ở tab B, <code>./e2e-test.sh watch-hpa cpu-burn</code> mở TRƯỚC ở tab A.",
+        "Scale-UP: <code>describe hpa</code> Events <code>New size 4→8→10</code> (~15s/bậc); <code>top pods</code> 194–491m.",
+        "Scale-DOWN: tải dừng → CPU về 1% NGAY nhưng REPLICAS giữ 10 tới ~5 phút (window 300s) → <code>New size 1</code>.",
+        "Cleanup: <code>kubectl delete hpa cpu-burn -n stock</code>; cpu-burn về baseline 1/1 (manifest đã commit để re-apply)."
+      ],
       knowledge:[
-        "<code>kubectl scale deploy/web --replicas=10</code> — scale thủ công.",
-        "HPA cần <code>resources.requests.cpu</code> trên container (tính % theo request) VÀ <b>metrics-server</b> (đã cài trên cluster ckad kèm <code>--kubelet-insecure-tls</code>).",
-        "HPA poll metrics ~15s; scale up nhanh, scale down có cooldown (stabilization window).",
-        "<b>Đường đi tải:</b> pod client → DNS <code>web-svc:3000</code> → ClusterIP → kube-proxy (iptables, <code>sessionAffinity=None</code>) DNAT NGẪU NHIÊN theo CONNECTION → 1 pod Ready. Sinh tải qua Service ⇒ trải đều mọi pod (loadgen chạy IN-CLUSTER, không port-forward vốn ghim 1 pod).",
-        "<b>Verify tải trải đều bằng ACCESS LOG</b> (<code>kubectl logs pod | grep -c 'GET /'</code> → 9670/9579/9796 ≈ đều), KHÔNG bằng <code>kubectl top</code>: metrics-server resolution 15s + smoothing ⇒ top point-in-time cho số lệch (36m/1m/1m) là ARTIFACT, không phải load lệch.",
-        "⚠️ nginx static RẤT rẻ CPU (~275 req/s ≈ vài mili-core) ⇒ khó đẩy CPU tới 50% kích HPA trên web-svc. Demo HPA scale thật cần endpoint NẶNG CPU (vòng lặp tính) hoặc tải cực lớn."
+        "<code>kubectl scale deploy/X --replicas=10</code> = scale tay. <b>HPA SỞ HỮU <code>.spec.replicas</code> sau khi attach</b> ⇒ scale tay khi đã có HPA bị kéo về theo recommendation (idle→min=1) — nhưng do window 300s nên KHÔNG tức thì (~5 phút). Vì vậy demo obj-1 làm TRƯỚC khi tạo HPA.",
+        "Scale tay chỉ đổi số replica ⇒ <b>CÙNG 1 ReplicaSet</b> scale 1→10 (không sinh RS mới như khi đổi image ở 2.1).",
+        "HPA % cần <code>resources.requests.cpu</code> — <b>utilization = usage / REQUEST (100m), KHÔNG phải limit (500m)</b>. Thiếu request ⇒ <code>TARGETS &lt;unknown&gt;/50%</code>, <code>ScalingActive=False reason=FailedGetResourceMetric</code>, không scale. Cần <b>metrics-server</b> (kind cài kèm <code>--kubelet-insecure-tls</code>; <code>kubectl top pods</code> trả data = HPA đọc được PodMetrics).",
+        "<b>Scale-UP KHÔNG nhảy 1→10 một nhịp:</b> policy scaleUp mặc định cap ở max(+4 pod, ×2)/window ⇒ 1→4→8→10 qua ~3 chu kỳ sync (~15s) dù metric ratio (~500%/50%) tính desired=10. Utilization đọc ~500% vì pod tải chạm limit 500m = 500% của request 100m.",
+        "<b>Scale-DOWN chậm bất đối xứng:</b> <code>scaleDown.stabilizationWindowSeconds</code> mặc định <b>300s</b> — giữ đỉnh 5 phút rồi mới hạ về minReplicas. scaleUp stab=0s (nhanh) / scaleDown stab=300s (chậm). Đo thật: CPU về 1% lúc ~20:51 nhưng tới ~20:55:40 mới <code>New size 1</code>.",
+        "<code>--cpu-percent</code> đã <b>DEPRECATED</b> (kubectl mới) → dùng <code>--cpu=50%</code>. Imperative tương đương: <code>kubectl autoscale deploy/cpu-burn --cpu=50% --min=1 --max=10 -n stock</code>. Khuyến nghị declarative (commit <code>cpu-burn-hpa.yaml</code> giống 2.1/2.2).",
+        "Tải qua Service ClusterIP (loadgen chạy IN-CLUSTER, không port-forward vốn ghim 1 pod) ⇒ kube-proxy trải đều mọi pod Ready = đúng cho HPA (average utilization). ⚠️ <code>kubectl top</code> là ảnh point-in-time đã smoothing 15s — xem xu hướng, đừng chấp số lẻ. control-plane có taint NoSchedule ⇒ 10 pod chỉ lên 2 worker; image registry.k8s.io public ⇒ node chưa cache vẫn PULL được (không ImagePullBackOff)."
       ],
       commands:[
-        {cmd:"kubectl scale deploy/web --replicas=10 -n stock", note:"scale tay"},
-        {cmd:"kubectl autoscale deploy/web --min=2 --max=10 --cpu-percent=50 -n stock", note:"tạo HPA"},
-        {cmd:"kubectl get hpa web -n stock -w", note:"theo dõi REPLICAS/TARGETS"}
+        {cmd:"kubectl scale deploy/cpu-burn --replicas=10 -n stock\nkubectl get deploy cpu-burn -n stock", note:"obj 1 — scale tay (CHƯA có HPA)", out:"deployment.apps/cpu-burn scaled\nNAME       READY   UP-TO-DATE   AVAILABLE\ncpu-burn   10/10   10           10"},
+        {cmd:"kubectl get rs -n stock -l app=cpu-burn", note:"CÙNG 1 RS scale 1→10 (không RS mới)", out:"NAME                 DESIRED   CURRENT   READY\ncpu-burn-64f94747b   10        10        10\n# 10 pod chỉ trên ckad-worker + ckad-worker2 (control-plane NoSchedule)"},
+        {cmd:"kubectl scale deploy/cpu-burn --replicas=1 -n stock", note:"reset trước khi tạo HPA", out:"deployment.apps/cpu-burn scaled  → 1/1"},
+        {cmd:"kubectl apply -f deploy/k8s/ckad-labs/day_2/cpu-burn-hpa.yaml\nkubectl get hpa cpu-burn -n stock", note:"obj 2 — HPA declarative autoscaling/v2, cpu 50%", out:"horizontalpodautoscaler.autoscaling/cpu-burn created\nTARGETS cpu: <unknown>/50%   ← ~15s đầu metrics chưa về\nTARGETS cpu: 1%/50%          ← idle 1m/100m ≈ 1%\n# conditions: ScalingActive=True ValidMetricFound"},
+        {cmd:"NS=stock ./e2e-test.sh loadgen cpu-burn 80 30 150 /\nkubectl top pods -n stock -l app=cpu-burn", note:"30 luồng x150s qua Service; CPU/pod tăng", out:"CPU(cores): 426m 274m 327m 491m 412m 312m 329m 327m 194m 297m\n# = 194–491% của REQUEST 100m (không phải limit 500m)"},
+        {cmd:"kubectl describe hpa cpu-burn -n stock   # Events", note:"scale-UP theo BẬC (không 1→10)", out:"SuccessfulRescale  New size: 4    reason: cpu utilization above target\nSuccessfulRescale  New size: 8    (~15s sau)\nSuccessfulRescale  New size: 10   (~15s sau) ← chạm maxReplicas"},
+        {cmd:"# sau khi tải dừng — theo dõi scale-DOWN\nkubectl describe hpa cpu-burn -n stock   # Events", note:"giữ 10 tới ~5 phút (window 300s) rồi về 1", out:"# CPU về 1%/50% NGAY nhưng REPLICAS giữ 10 tới ~20:55:40\nSuccessfulRescale  New size: 1  reason: All metrics below target"},
+        {cmd:"kubectl delete hpa cpu-burn -n stock", note:"cleanup (manifest đã commit để re-apply)", out:"horizontalpodautoscaler.autoscaling \"cpu-burn\" deleted\n→ cpu-burn về baseline 1/1"}
       ],
-      tool:"# tab 1: sinh tải 20 luồng x 120s\n./e2e-test.sh loadgen web 80 20 120 /\n# tab 2: xem HPA scale\n./e2e-test.sh watch-hpa web"
+      tool:"# tab A (mở TRƯỚC): xem HPA scale REPLICAS/TARGETS\n./e2e-test.sh watch-hpa cpu-burn\n# tab B: sinh tải 30 luồng x150s qua Service ClusterIP\nNS=stock ./e2e-test.sh loadgen cpu-burn 80 30 150 /"
     },
     {
-      id:"2.4", title:"Kustomize Overlay", domain:"App Deployment (20%)", duration:"~45m", status:"planned",
-      request:"Cấu trúc base + overlay; patch image tag và số replica cho môi trường mà không nhân đôi manifest.",
+      id:"2.4", title:"Kustomize Overlay", domain:"App Deployment (20%)", duration:"~45m", status:"done",
+      request:"Base cô lập web-kz (namespace-agnostic, tái dùng image web-svc:dev) + overlays dev/prod patch image tag và số replica mà KHÔNG nhân đôi manifest. Chỉ có kubectl-embedded Kustomize (v5.8.1), không binary rời.",
+      steps:[
+        "Tạo <code>kustomize/base/</code> (deployment.yaml + service.yaml + kustomization.yaml, app=web-kz, KHÔNG hardcode namespace).",
+        "Tạo overlays: <code>overlays/dev</code> (namePrefix dev-, replicas 1, images newTag dev) + <code>overlays/prod</code> (prod-, replicas 5, images newTag v2).",
+        "Render đối chiếu: <code>kubectl kustomize overlays/dev</code> vs <code>overlays/prod</code> → khác image tag + replicas, overlay chỉ chứa DELTA.",
+        "Harness: <code>./e2e-test.sh kustomize-diff kustomize/overlays/dev kustomize/overlays/prod</code> → PASS.",
+        "(bonus) <code>kubectl apply -k overlays/prod</code> → 5/5 web-svc:v2, cô lập khỏi web-svc thật; rồi <code>kubectl delete -k</code> dọn sạch."
+      ],
       knowledge:[
-        "<code>kustomization.yaml</code>: base chứa manifest gốc, overlay <code>patchesStrategicMerge</code>/<code>images</code>/<code>replicas</code>.",
-        "<code>kubectl kustomize overlays/prod</code> render ra YAML cuối; <code>kubectl apply -k</code> apply thẳng.",
-        "DRY: đổi image/replica theo môi trường bằng patch, không copy cả file.",
-        "Liên hệ: có thể dùng để tách 'production sạch' vs 'bài lab' của các Deployment trong repo này."
+        "<code>kustomization.yaml</code> (<code>apiVersion: kustomize.config.k8s.io/v1beta1</code>): base gom <code>resources:</code>; overlay dùng <b><code>images: [{name,newTag}]</code></b> (match theo IMAGE NAME) + <b><code>replicas: [{name,count}]</code></b> (match theo DEPLOYMENT NAME, TRƯỚC namePrefix) + <code>namespace:</code>/<code>namePrefix:</code>.",
+        "<code>kubectl kustomize &lt;dir&gt;</code> render YAML; <code>kubectl apply -k &lt;dir&gt;</code> apply thẳng. Máy này KHÔNG có binary <code>kustomize</code> rời (<code>which kustomize</code> = not found) — chỉ có bản nhúng trong kubectl (<b>v5.8.1</b>).",
+        "<b>DRY = mục tiêu 'without duplicating manifests':</b> overlay CHỈ chứa delta, KHÔNG chép lại Deployment/Service.",
+        "<b>Base KHÔNG nên hardcode <code>metadata.namespace</code></b> (mùi kustomize) — để overlay set qua <code>namespace:</code>. (Kiểm chứng: overlay <code>namespace:</code> override được cả base có hardcode, nhưng idiomatic là base namespace-agnostic.)",
+        "Tag phải <code>kind load</code> TRƯỚC khi apply: <code>web-svc:v2</code> có sẵn từ lab 2.1 ⇒ <code>apply -k</code> chạy ngay; patch sang tag chưa load ⇒ pod <code>ImagePullBackOff</code> (render vẫn đúng, chỉ apply-chạy mới cần image thật).",
+        "<b>Base cô lập <code>app=web-kz</code></b> thay vì trỏ thẳng <code>deploy/k8s/web-svc/</code>: tránh <code>apply -k</code> làm bẩn Endpoints của frontend prod (selector overlap app=web-svc)."
       ],
       commands:[
-        {cmd:"kubectl kustomize deploy/k8s/overlays/prod", note:"xem YAML render"},
-        {cmd:"kubectl apply -k deploy/k8s/overlays/prod", note:"apply overlay"}
+        {cmd:"which kustomize\nkubectl version --client | grep -i kustomize", note:"chỉ có bản nhúng trong kubectl", out:"kustomize not found\nKustomize Version: v5.8.1"},
+        {cmd:"kubectl kustomize kustomize/overlays/dev", note:"render dev — overlay chỉ chứa delta", out:"kind: Deployment\nname: dev-web-kz   namespace: stock\nreplicas: 1\nimage: web-svc:dev"},
+        {cmd:"kubectl kustomize kustomize/overlays/prod | grep -E 'name:|replicas:|image:'", note:"render prod — patch tag + replicas", out:"name: prod-web-kz\nreplicas: 5\nimage: web-svc:v2"},
+        {cmd:"./e2e-test.sh kustomize-diff kustomize/overlays/dev kustomize/overlays/prod", note:"harness khẳng định 2 overlay khác nhau", out:"dev  -> image=web-svc:dev replicas=1\nprod -> image=web-svc:v2 replicas=5\nPASS ✅ image tag VÀ replica count khác nhau — overlay patch không nhân đôi manifest"},
+        {cmd:"kubectl apply -k kustomize/overlays/prod\nkubectl rollout status deploy/prod-web-kz -n stock", note:"bonus — apply thật + cô lập khỏi web-svc", out:"service/prod-web-kz created\ndeployment.apps/prod-web-kz created\ndeployment \"prod-web-kz\" successfully rolled out\n→ 5/5 image web-svc:v2 · web-svc thật GIỮ NGUYÊN 3/3"},
+        {cmd:"kubectl delete -k kustomize/overlays/prod", note:"dọn sạch", out:"service \"prod-web-kz\" deleted\ndeployment.apps \"prod-web-kz\" deleted"}
       ],
-      tool:"# kiểm tra render khớp mong đợi trước khi apply:\nkubectl kustomize deploy/k8s/overlays/prod | grep -E 'image:|replicas:'"
+      tool:"# render 2 overlay + khẳng định image tag + replica khác nhau (KHÔNG apply):\n./e2e-test.sh kustomize-diff kustomize/overlays/dev kustomize/overlays/prod"
     },
     {
       id:"2.5", title:"Gateway Blue/Green Automation", domain:"Ngoài CKAD — feature", duration:"~1 ngày", status:"done",
