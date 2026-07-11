@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+mod bluegreen;
 mod config;
 mod middleware;
 mod models;
