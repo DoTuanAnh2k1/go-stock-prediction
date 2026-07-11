@@ -1,0 +1,18 @@
+# =============================================================================
+# service-mgt — env không nhạy cảm (Go registry gRPC :8121).
+# LƯU Ý: các service khác mặc định SERVICE_MGT_ENABLED=false nên KHÔNG gọi tới
+# service-mgt (dùng static fallback). Deploy ở đây chủ yếu để đủ bộ / tập luyện;
+# muốn bật thật thì đổi SERVICE_MGT_ENABLED=true ở mọi service.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-mgt-config
+  namespace: stock
+data:
+  GRPC_PORT: "8121"
+  POSTGRES_HOST: "db"
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: postgres
+  POSTGRES_DB: go_stock_prediction
+  LOG_FORMAT: console

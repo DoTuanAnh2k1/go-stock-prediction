@@ -1,0 +1,65 @@
+# =============================================================================
+# db — TimescaleDB (PostgreSQL 16) dưới dạng StatefulSet.
+# PVC sinh tự động từ volumeClaimTemplates (data-db-0) — KHÔNG khai báo PVC rời.
+#
+# LƯU Ý schema init: tạo ConfigMap db-schema từ database.sql TRƯỚC khi apply
+# (1 lần, chạy từ repo root — file quá lớn nên không đặt static yaml):
+#   kubectl create configmap db-schema -n stock \
+#     --from-file=01-schema.sql=database.sql
+# =============================================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: db
+  namespace: stock
+spec:
+  serviceName: db            # trỏ tới Headless Service (db/service.yaml)
+  replicas: 1
+  selector:
+    matchLabels: { app: db }
+  template:
+    metadata:
+      labels: { app: db }
+    spec:
+      containers:
+        - name: db
+          image: timescale/timescaledb:latest-pg16
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef: { name: db-secret }
+          env:
+            - name: PGTZ
+              value: Asia/Ho_Chi_Minh
+            # PGDATA để subdir con: PVC mount thẳng /var/lib/postgresql/data đôi khi
+            # vướng lost+found khiến initdb báo "not empty" — trỏ vào subdir cho chắc.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          resources:
+            requests: { cpu: "100m", memory: "256Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres", "-d", "go_stock_prediction"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: schema
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: schema
+          configMap:
+            name: db-schema
+  # volumeClaimTemplates: STS tự tạo 1 PVC riêng cho mỗi pod (data-db-0).
+  # Đây là điểm khác cốt lõi so với Deployment.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+        # storageClassName bỏ trống => dùng StorageClass mặc định của kind (standard)

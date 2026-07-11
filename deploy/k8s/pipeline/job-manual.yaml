@@ -1,0 +1,37 @@
+# =============================================================================
+# Job THỦ CÔNG — Cách 2 (k8s-native). Chạy pipeline 1 market NGAY khi apply.
+# KHÔNG apply cùng lúc với các CronJob (file này để chạy tay khi cần).
+#
+# Đổi market: sửa đối số cuối trong command (gold|nasdaq|crypto|sp500).
+#
+# Chạy:     kubectl apply -f deploy/k8s/pipeline/job-manual.yaml
+# Xem log:  kubectl logs -n stock -l job-name=pipeline-manual -f
+# Chạy lại: ttlSecondsAfterFinished tự xóa sau 5' -> apply lại được; hoặc xóa tay:
+#           kubectl delete job pipeline-manual -n stock
+#
+# Cách nhanh khác (không cần file này) — tạo Job tức thời TỪ CronJob:
+#   kubectl create job manual-gold --from=cronjob/pipeline-gold -n stock
+# =============================================================================
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pipeline-manual
+  namespace: stock
+  labels: { app: pipeline, run: manual }
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: pipeline
+          image: prediction-svc:dev
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "src.jobs_cli", "gold"]   # <-- ĐỔI MARKET Ở ĐÂY
+          envFrom:
+            - configMapRef: { name: prediction-config }
+            - secretRef:    { name: prediction-secret }
+          resources:
+            requests: { cpu: "250m", memory: "512Mi" }
+            limits:   { cpu: "1500m", memory: "2Gi" }

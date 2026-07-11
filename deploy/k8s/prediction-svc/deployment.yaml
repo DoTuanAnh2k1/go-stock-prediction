@@ -1,0 +1,42 @@
+# =============================================================================
+# prediction-svc — Python gRPC (:8119). Crawling + 13 thuật toán ML + scheduler.
+#
+# Build & load image (repo root, vì Dockerfile lấy proto từ api-svc/):
+#   docker build -t prediction-svc:dev -f deploy/prediction-svc.Dockerfile .
+#   kind load docker-image prediction-svc:dev --name ckad
+#
+# Yêu cầu: DB Ready trước (SQLAlchemy connect lúc khởi động).
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prediction-svc
+  namespace: stock
+  labels: { app: prediction-svc }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: prediction-svc }
+  template:
+    metadata:
+      labels: { app: prediction-svc }
+    spec:
+      containers:
+        - name: prediction-svc
+          image: prediction-svc:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8119
+          envFrom:
+            - configMapRef: { name: prediction-config }
+            - secretRef:    { name: prediction-secret }
+          resources:
+            requests: { cpu: "250m", memory: "512Mi" }
+            limits:   { cpu: "1500m", memory: "2Gi" }   # torch/ML nặng RAM
+          volumeMounts:
+            - name: models
+              mountPath: /models
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: rl-models

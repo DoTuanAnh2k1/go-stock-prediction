@@ -1,0 +1,35 @@
+# =============================================================================
+# CronJob pipeline NASDAQ — Cách 2 (k8s-native).
+# `python -m src.jobs_cli nasdaq`. Ngoài giờ phiên Mỹ pipeline tự skip (is_market_open).
+# =============================================================================
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pipeline-nasdaq
+  namespace: stock
+  labels: { app: pipeline, market: nasdaq }
+spec:
+  schedule: "15 * * * 1-5"              # phút 15 mỗi giờ, T2-T6
+  timeZone: "Asia/Ho_Chi_Minh"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: pipeline
+              image: prediction-svc:dev
+              imagePullPolicy: IfNotPresent
+              command: ["python", "-m", "src.jobs_cli", "nasdaq"]
+              envFrom:
+                - configMapRef: { name: prediction-config }
+                - secretRef:    { name: prediction-secret }
+              resources:
+                requests: { cpu: "250m", memory: "512Mi" }
+                limits:   { cpu: "1500m", memory: "2Gi" }

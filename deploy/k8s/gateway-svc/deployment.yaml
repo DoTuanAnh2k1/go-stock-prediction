@@ -1,0 +1,51 @@
+# =============================================================================
+# gateway-svc — Rust Axum reverse proxy (:80/:443). Điểm vào của hệ thống.
+# Routing: /api -> api-svc:8118, / -> web-svc:3000, /swagger -> 404.
+#
+# Build & load image:
+#   docker build -t gateway-svc:dev -f deploy/gateway-svc.Dockerfile gateway-svc
+#   kind load docker-image gateway-svc:dev --name ckad
+#
+# TLS: docker-entrypoint.sh tự sinh self-signed cert vào /etc/gateway/certs nếu
+# chưa có => dùng emptyDir (không cần PVC, cert tạo lại mỗi lần khởi động).
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway-svc
+  namespace: stock
+  labels: { app: gateway-svc }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: gateway-svc }
+  template:
+    metadata:
+      labels: { app: gateway-svc }
+    spec:
+      containers:
+        - name: gateway-svc
+          image: gateway-svc:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http,  containerPort: 80 }
+            - { name: https, containerPort: 443 }
+          envFrom:
+            - configMapRef: { name: gateway-config }
+          resources:
+            requests: { cpu: "50m", memory: "32Mi" }
+            limits:   { cpu: "250m", memory: "128Mi" }
+          readinessProbe:
+            httpGet: { path: /readyz, port: 80 }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 80 }
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          volumeMounts:
+            - name: certs
+              mountPath: /etc/gateway/certs
+      volumes:
+        - name: certs
+          emptyDir: {}

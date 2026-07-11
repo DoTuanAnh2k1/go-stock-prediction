@@ -1,0 +1,16 @@
+# =============================================================================
+# cli-svc — NodePort SSH :2345 (expose trực tiếp, KHÔNG qua gateway).
+#   ssh -p <nodePort> user@<node-ip>   (hoặc port-forward)
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: cli-svc
+  namespace: stock
+spec:
+  type: NodePort
+  selector: { app: cli-svc }
+  ports:
+    - port: 2345
+      targetPort: 2345
+      nodePort: 32345

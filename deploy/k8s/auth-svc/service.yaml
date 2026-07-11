@@ -1,0 +1,13 @@
+# =============================================================================
+# auth-svc — ClusterIP gRPC :8120 (api-svc gọi qua AUTH_GRPC_TARGET).
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-svc
+  namespace: stock
+spec:
+  selector: { app: auth-svc }
+  ports:
+    - port: 8120
+      targetPort: 8120

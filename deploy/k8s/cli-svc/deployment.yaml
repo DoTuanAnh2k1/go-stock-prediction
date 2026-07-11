@@ -1,0 +1,60 @@
+# =============================================================================
+# cli-svc — Go SSH server (wish + bubbletea) :2345. RBAC lệnh client-side.
+#
+# Build & load image:
+#   docker build -t cli-svc:dev -f deploy/cli-svc.Dockerfile cli-svc
+#   kind load docker-image cli-svc:dev --name ckad
+#
+# Image chạy non-root (USER cli, uid/gid 10001). SSH host key ghi vào
+# /etc/cli-svc/keys => fsGroup 10001 để process ghi được vào emptyDir.
+# emptyDir: host key sinh lại mỗi lần restart (đủ cho lab; muốn cố định thì đổi PVC).
+# Yêu cầu: gateway-svc chạy trước (cli-svc upsert catalog qua gateway lúc boot).
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cli-svc
+  namespace: stock
+  labels: { app: cli-svc }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: cli-svc }
+  template:
+    metadata:
+      labels: { app: cli-svc }
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001        # emptyDir group-owned 10001 => user cli ghi được host key
+      # emptyDir mount đè lên /etc/cli-svc/keys (đã chown cli:cli trong image) bằng dir
+      # root-owned => app (uid 10001) không chmod được. initContainer chạy root chown lại.
+      initContainers:
+        - name: fix-keys-perms
+          image: cli-svc:dev
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "chown -R 10001:10001 /etc/cli-svc/keys"]
+          securityContext:
+            runAsUser: 0        # override pod-level 10001 để chown được
+          volumeMounts:
+            - name: keys
+              mountPath: /etc/cli-svc/keys
+      containers:
+        - name: cli-svc
+          image: cli-svc:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 2345
+          envFrom:
+            - configMapRef: { name: cli-config }
+            - secretRef:    { name: cli-secret }
+          resources:
+            requests: { cpu: "20m", memory: "32Mi" }
+            limits:   { cpu: "150m", memory: "96Mi" }
+          volumeMounts:
+            - name: keys
+              mountPath: /etc/cli-svc/keys
+      volumes:
+        - name: keys
+          emptyDir: {}

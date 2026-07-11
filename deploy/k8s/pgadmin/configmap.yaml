@@ -1,0 +1,10 @@
+# =============================================================================
+# pgadmin — email đăng nhập (không nhạy cảm). Tùy chọn, chỉ để quản trị DB.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgadmin-config
+  namespace: stock
+data:
+  PGADMIN_DEFAULT_EMAIL: admin@local.dev

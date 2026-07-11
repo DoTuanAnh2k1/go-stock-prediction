@@ -1,0 +1,13 @@
+# =============================================================================
+# service-mgt — ClusterIP gRPC :8121 (REGISTRY_GRPC_TARGET).
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-mgt
+  namespace: stock
+spec:
+  selector: { app: service-mgt }
+  ports:
+    - port: 8121
+      targetPort: 8121

@@ -1,0 +1,13 @@
+# =============================================================================
+# cli-svc — env không nhạy cảm (Go SSH TUI :2345).
+# API_BASE_URL trỏ vào gateway (cli-svc gọi API qua gateway, không gọi thẳng api-svc).
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cli-config
+  namespace: stock
+data:
+  API_BASE_URL: "http://gateway-svc/api"
+  SSH_LISTEN_ADDR: ":2345"
+  SSH_HOST_KEY_PATH: "/etc/cli-svc/keys/host_key"

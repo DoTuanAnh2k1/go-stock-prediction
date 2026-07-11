@@ -1,0 +1,35 @@
+# =============================================================================
+# CronJob pipeline SP500 — Cách 2 (k8s-native).
+# `python -m src.jobs_cli sp500`. Ngoài giờ phiên Mỹ pipeline tự skip.
+# =============================================================================
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pipeline-sp500
+  namespace: stock
+  labels: { app: pipeline, market: sp500 }
+spec:
+  schedule: "0,30 * * * 1-5"            # phút 0 và 30, T2-T6
+  timeZone: "Asia/Ho_Chi_Minh"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: pipeline
+              image: prediction-svc:dev
+              imagePullPolicy: IfNotPresent
+              command: ["python", "-m", "src.jobs_cli", "sp500"]
+              envFrom:
+                - configMapRef: { name: prediction-config }
+                - secretRef:    { name: prediction-secret }
+              resources:
+                requests: { cpu: "250m", memory: "512Mi" }
+                limits:   { cpu: "1500m", memory: "2Gi" }

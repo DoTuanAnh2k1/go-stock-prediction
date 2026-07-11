@@ -1,0 +1,13 @@
+# =============================================================================
+# web-svc — ClusterIP :3000 (gateway route "/" -> web-svc:3000).
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-svc
+  namespace: stock
+spec:
+  selector: { app: web-svc }
+  ports:
+    - port: 3000
+      targetPort: 3000

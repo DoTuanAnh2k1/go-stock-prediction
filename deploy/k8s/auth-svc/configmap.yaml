@@ -1,0 +1,17 @@
+# =============================================================================
+# auth-svc — env không nhạy cảm (Java Spring Boot gRPC :8120).
+# Lưu ý: auth-svc dùng tiền tố DB_* (khác api/prediction dùng POSTGRES_*).
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-config
+  namespace: stock
+data:
+  DB_HOST: "db"
+  DB_PORT: "5432"
+  DB_NAME: go_stock_prediction
+  DB_USER: postgres
+  GRPC_PORT: "8120"
+  SERVICE_MGT_ENABLED: "false"
+  REGISTRY_GRPC_TARGET: "service-mgt:8121"

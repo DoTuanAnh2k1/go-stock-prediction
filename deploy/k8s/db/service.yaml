@@ -1,0 +1,17 @@
+# =============================================================================
+# db — Headless Service (clusterIP: None) — BẮT BUỘC cho StatefulSet.
+# Cho DNS ổn định theo pod: db-0.db.<ns>.svc.cluster.local
+# Tên "db" vẫn resolve được → api-svc giữ nguyên POSTGRES_HOST: db
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  namespace: stock
+  labels: { app: db }
+spec:
+  clusterIP: None
+  selector: { app: db }
+  ports:
+    - port: 5432
+      targetPort: 5432

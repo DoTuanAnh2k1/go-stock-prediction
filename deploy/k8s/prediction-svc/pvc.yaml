@@ -1,0 +1,15 @@
+# =============================================================================
+# prediction-svc — PVC lưu model RL/meta (RL_MODEL_DIR=/models).
+# Chỉ prediction-svc ghi => RWO đủ (khác version_data cần RWX nên bị bỏ).
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rl-models
+  namespace: stock
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+  # storageClassName bỏ trống => StorageClass mặc định của kind (standard)

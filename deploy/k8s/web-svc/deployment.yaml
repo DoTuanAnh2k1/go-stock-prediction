@@ -1,0 +1,32 @@
+# =============================================================================
+# web-svc — React + Vite build, phục vụ static qua Nginx (:3000).
+#
+# Build & load image:
+#   docker build -t web-svc:dev -f deploy/web-svc.Dockerfile web-svc
+#   kind load docker-image web-svc:dev --name ckad
+#
+# Không cần env (gọi API tương đối qua gateway). Truy cập qua gateway-svc, không expose trực tiếp.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-svc
+  namespace: stock
+  labels: { app: web-svc }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: web-svc }
+  template:
+    metadata:
+      labels: { app: web-svc }
+    spec:
+      containers:
+        - name: web-svc
+          image: web-svc:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          resources:
+            requests: { cpu: "20m", memory: "32Mi" }
+            limits:   { cpu: "200m", memory: "128Mi" }

@@ -1,0 +1,35 @@
+# =============================================================================
+# CronJob pipeline CRYPTO — Cách 2 (k8s-native). CRYPTO 24/7.
+# `python -m src.jobs_cli crypto` — Pod tự chạy pipeline rồi exit.
+# =============================================================================
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pipeline-crypto
+  namespace: stock
+  labels: { app: pipeline, market: crypto }
+spec:
+  schedule: "0 * * * *"                 # mỗi giờ phút 0
+  timeZone: "Asia/Ho_Chi_Minh"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: pipeline
+              image: prediction-svc:dev
+              imagePullPolicy: IfNotPresent
+              command: ["python", "-m", "src.jobs_cli", "crypto"]
+              envFrom:
+                - configMapRef: { name: prediction-config }
+                - secretRef:    { name: prediction-secret }
+              resources:
+                requests: { cpu: "250m", memory: "512Mi" }
+                limits:   { cpu: "1500m", memory: "2Gi" }

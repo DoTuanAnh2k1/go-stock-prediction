@@ -1,0 +1,35 @@
+# =============================================================================
+# service-mgt — Go registry/discovery gRPC :8121.
+#
+# Build & load image:
+#   docker build -t service-mgt:dev -f deploy/service-mgt.Dockerfile service-mgt
+#   kind load docker-image service-mgt:dev --name ckad
+#
+# Yêu cầu: DB Ready trước (write-through Postgres).
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-mgt
+  namespace: stock
+  labels: { app: service-mgt }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: service-mgt }
+  template:
+    metadata:
+      labels: { app: service-mgt }
+    spec:
+      containers:
+        - name: service-mgt
+          image: service-mgt:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8121
+          envFrom:
+            - configMapRef: { name: service-mgt-config }
+            - secretRef:    { name: service-mgt-secret }
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits:   { cpu: "250m", memory: "128Mi" }

@@ -1,0 +1,36 @@
+# =============================================================================
+# auth-svc — Java Spring Boot 3, gRPC :8120. Auth/RBAC + Flyway V1–V3.
+# Seeds chon/super_admin lúc khởi động.
+#
+# Build & load image:
+#   docker build -t auth-svc:dev -f deploy/auth-svc.Dockerfile auth-svc
+#   kind load docker-image auth-svc:dev --name ckad
+#
+# Yêu cầu: DB Ready trước (Flyway migrate lúc boot).
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-svc
+  namespace: stock
+  labels: { app: auth-svc }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: auth-svc }
+  template:
+    metadata:
+      labels: { app: auth-svc }
+    spec:
+      containers:
+        - name: auth-svc
+          image: auth-svc:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8120
+          envFrom:
+            - configMapRef: { name: auth-config }
+            - secretRef:    { name: auth-secret }
+          resources:
+            requests: { cpu: "200m", memory: "384Mi" }
+            limits:   { cpu: "1000m", memory: "768Mi" }   # JVM
