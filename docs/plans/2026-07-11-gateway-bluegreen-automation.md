@@ -17,7 +17,43 @@ Tất cả 10 task xong, 23 unit test pass, tích hợp trên kind ckad:
 - 2 bug tìm+fix khi tích hợp: (1) edge bị consume khi candidate còn mid-rollout → mất trigger; (2) promote patch màu còn lại bị tick sau nhận diện là candidate mới → ping-pong. Xem commit `fix(gateway): bluegreen controller edge-consume + ping-pong`.
 - Build: Dockerfile `rust:1.90-slim-bookworm` (dep `home@0.5.12` cần rustc 1.88; bookworm glibc khớp runtime). reqwest `default-features=false` (rustls, bỏ openssl thừa).
 
-Giới hạn đã biết (để tương lai): controller loop tuần tự → trong lúc 1 app rollout (60s) các app khác không được tick; chưa test rollback tích hợp với candidate Ready-nhưng-lỗi (cần image trả 5xx).
+Giới hạn đã biết (để tương lai): controller loop tuần tự → trong lúc 1 app rollout (60s) các app khác không được tick.
+
+### Log + command tích hợp (kind ckad, 2026-07-11)
+
+**Happy path — web-svc:**
+```bash
+kubectl set image deploy/web-svc-green web-svc=web-svc:v2 -n stock   # set image màu idle
+# controller tự: rollout.start -> flip -> analyze 60s (có tải) -> promote (patch màu còn lại)
+#   bluegreen.rollout.start app=web-svc from=green to=blue ... (khi test blue là idle)
+#   bluegreen.flip app=web-svc color=blue
+#   bluegreen.promote app=web-svc total=... fail=0   -> blue.img tự patch = web-svc:v2
+```
+
+**Happy path — api-svc:**
+```
+bluegreen.rollout.start app=api-svc from="green" to="blue" image=Some("api-svc:v2")
+bluegreen.flip         app=api-svc color="blue"
+bluegreen.promote      app=api-svc total=1019 fail=0        # sau 60s, 0 lỗi -> promote
+```
+
+**Rollback thật — candidate Ready-nhưng-503** (readiness `/healthz`=200, `/`=503):
+```bash
+kubectl create configmap web-bad-conf -n stock --from-literal=default.conf='server { listen 3000; location = /healthz { return 200 "ok"; } location / { return 503 "bad"; } }'
+kubectl patch deploy web-svc-blue -n stock --type=strategic -p '{"spec":{"template":{"spec":{"containers":[{"name":"web-svc","image":"nginx:1.27-alpine","readinessProbe":{"httpGet":{"path":"/healthz","port":3000}},"volumeMounts":[{"name":"conf","mountPath":"/etc/nginx/conf.d"}]}],"volumes":[{"name":"conf","configMap":{"name":"web-bad-conf"}}]}}}}'
+# controller: flip sang blue -> traffic / trả 503 -> fail rate cao -> EARLY rollback
+```
+```
+bluegreen.rollout.start app=web-svc from="green" to="blue" image=Some("nginx:1.27-alpine")
+bluegreen.flip         app=web-svc color="blue"
+bluegreen.rollback     app=web-svc total=155 fail=39        # 25% fail > ngưỡng 1% -> lật về green (~6s)
+```
+
+**Bad deploy — candidate không Ready** (ImagePullBackOff):
+```bash
+kubectl set image deploy/web-svc-blue web-svc=web-svc:nope -n stock
+# controller phát hiện image đổi nhưng deployment_ready=false -> KHÔNG flip; active giữ nguyên; curl / = 200
+```
 
 ## Global Constraints
 
