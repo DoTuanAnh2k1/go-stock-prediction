@@ -1,7 +1,7 @@
 use crate::bluegreen::config::BgAppConfig;
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Color {
     Blue,
     Green,
