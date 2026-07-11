@@ -7,6 +7,7 @@ use crate::middleware::{
     rate_limit::apply_rate_limit,
     request_id::request_id_middleware,
 };
+use crate::bluegreen::state::BlueGreenState;
 use crate::proxy::ProxyClient;
 use crate::router::PathRouter;
 use crate::routes::{
@@ -21,10 +22,12 @@ pub fn create_routes(
     proxy_client: Arc<ProxyClient>,
     router: Arc<PathRouter>,
     config: Arc<AppConfig>,
+    bg: Option<Arc<BlueGreenState>>,
 ) -> Router {
     let state = Arc::new(AppState {
         proxy_client,
         router,
+        bg,
     });
 
     let health_routes = Router::new()

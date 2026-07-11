@@ -72,7 +72,7 @@ async fn main() {
 
     let config = Arc::new(config);
 
-    let path_router = Arc::new(PathRouter::from_config(&config.routes));
+    let path_router = Arc::new(PathRouter::from_config(&config.routes, &[]));
     info!("Loaded {} route(s)", config.routes.len());
 
     let proxy_client = match ProxyClient::new(&config).await {
@@ -83,7 +83,7 @@ async fn main() {
         }
     };
 
-    let app = create_routes(proxy_client, path_router, Arc::clone(&config));
+    let app = create_routes(proxy_client, path_router, Arc::clone(&config), None);
 
     let http_addr: SocketAddr = format!("{}:{}", config.server.host, config.server.http_port)
         .parse()
