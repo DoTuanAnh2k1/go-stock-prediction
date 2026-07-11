@@ -72,8 +72,31 @@ async fn main() {
 
     let config = Arc::new(config);
 
-    let path_router = Arc::new(PathRouter::from_config(&config.routes, &[]));
-    info!("Loaded {} route(s)", config.routes.len());
+    // Blue/green: build shared state + resolved apps (None if disabled).
+    let (bg_state, bg_apps) = match bluegreen::build_state(&config.bluegreen) {
+        Some((s, a)) => (Some(s), a),
+        None => (None, Vec::new()),
+    };
+
+    let path_router = Arc::new(PathRouter::from_config(&config.routes, &bg_apps));
+    info!(
+        "Loaded {} route(s), {} bluegreen app(s)",
+        config.routes.len(),
+        bg_apps.len()
+    );
+
+    // Spawn the bluegreen rollout controller if enabled and a k8s client is available.
+    if let (Some(state), Some(bgcfg)) = (bg_state.clone(), config.bluegreen.clone()) {
+        match bluegreen::k8s::client().await {
+            Ok(k) => {
+                let st = state.clone();
+                let cfg = Arc::new(bgcfg);
+                tokio::spawn(async move { bluegreen::controller::run(k, st, cfg).await });
+                info!("bluegreen controller started ({} app(s))", state.app_count());
+            }
+            Err(e) => error!("bluegreen: k8s client init failed, controller disabled: {}", e),
+        }
+    }
 
     let proxy_client = match ProxyClient::new(&config).await {
         Ok(c) => Arc::new(c),
@@ -83,7 +106,7 @@ async fn main() {
         }
     };
 
-    let app = create_routes(proxy_client, path_router, Arc::clone(&config), None);
+    let app = create_routes(proxy_client, path_router, Arc::clone(&config), bg_state);
 
     let http_addr: SocketAddr = format!("{}:{}", config.server.host, config.server.http_port)
         .parse()
