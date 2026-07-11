@@ -23,6 +23,7 @@ spec:
     metadata:
       labels: { app: gateway-svc }
     spec:
+      serviceAccountName: gateway-svc   # RBAC cho blue/green controller (rbac.yaml)
       containers:
         - name: gateway-svc
           image: gateway-svc:dev
