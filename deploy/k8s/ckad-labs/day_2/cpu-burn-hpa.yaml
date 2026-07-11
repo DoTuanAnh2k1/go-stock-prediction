@@ -1,0 +1,39 @@
+# =============================================================================
+# Lab 2.3 — HPA declarative (autoscaling/v2) cho cpu-burn.
+# CKAD domain: Application Deployment (20%)
+#
+# Nguồn sự thật declarative (thay cho lệnh imperative trong comment cpu-burn.yaml)
+# — commit vào git giống 2.1/2.2 để apply lại được sau khi rebuild cluster.
+# Sinh ra bằng:
+#   kubectl autoscale deploy/cpu-burn --cpu=50% --min=1 --max=10 -n stock \
+#     --dry-run=client -o yaml
+#
+# LƯU Ý:
+#   - averageUtilization tính theo resources.requests.cpu (100m), KHÔNG theo limit
+#     (500m). Nên khi tải đẩy pod tới limit => utilization đọc ~500% => HPA nhắm max.
+#   - HPA đọc metric qua metrics-server (đã cài --kubelet-insecure-tls trên kind).
+#     requests.cpu BẮT BUỘC có, nếu không TARGETS = <unknown>/50% và không scale.
+#   - Không set spec.behavior => dùng default: scaleUp stabilization 0s (nhanh),
+#     scaleDown stabilization 300s (giữ đỉnh 5 phút trước khi hạ về minReplicas).
+#
+# Apply:  kubectl apply -f deploy/k8s/ckad-labs/day_2/cpu-burn-hpa.yaml
+# =============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cpu-burn
+  namespace: stock
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cpu-burn
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50   # 50% của REQUEST (100m) = 50m avg/pod

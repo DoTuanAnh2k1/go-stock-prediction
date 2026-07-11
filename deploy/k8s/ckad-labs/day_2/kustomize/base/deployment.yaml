@@ -1,0 +1,35 @@
+# =============================================================================
+# Lab 2.4 — BASE Deployment cho demo Kustomize base/overlay.
+# App cô lập "web-kz" (label app=web-kz) — KHÔNG đụng web-svc thật (app=web-svc)
+# nên overlay apply -k không làm bẩn Endpoints của frontend prod.
+# Tái dùng image web-svc:dev (đã kind-load) để overlay có cái patch tag thật.
+#
+# QUY TẮC BASE: KHÔNG hardcode metadata.namespace và để overlay set qua `namespace:`
+# (base namespace-agnostic). replicas ở base là mặc định — overlay override.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-kz
+  labels: { app: web-kz }
+spec:
+  replicas: 2                       # base default; overlay patch bằng `replicas:`
+  selector:
+    matchLabels: { app: web-kz }
+  template:
+    metadata:
+      labels: { app: web-kz }
+    spec:
+      containers:
+        - name: web
+          image: web-svc:dev        # overlay patch TAG bằng `images:` (match image NAME=web-svc)
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet: { path: /, port: 3000 }
+            initialDelaySeconds: 2
+            periodSeconds: 3
+          resources:
+            requests: { cpu: "20m", memory: "32Mi" }
+            limits:   { cpu: "200m", memory: "128Mi" }

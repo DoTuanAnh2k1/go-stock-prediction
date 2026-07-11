@@ -1,0 +1,13 @@
+# Lab 2.4 — OVERLAY prod. Chỉ chứa DELTA: image tag v2 + 5 replica.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: stock
+namePrefix: prod-            # prod-web-kz
+resources:
+  - ../../base
+images:
+  - name: web-svc           # web-svc:dev -> web-svc:v2 (v2 đã kind-load ở lab 2.1)
+    newTag: v2
+replicas:
+  - name: web-kz
+    count: 5

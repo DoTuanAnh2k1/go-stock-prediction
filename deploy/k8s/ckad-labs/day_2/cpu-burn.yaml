@@ -1,0 +1,53 @@
+# =============================================================================
+# Lab 2.3 — app demo CPU-burn để HPA scale THẬT theo CPU.
+# CKAD domain: Application Deployment (20%)
+#
+# Image chuẩn của k8s: registry.k8s.io/hpa-example (Apache+PHP). Mỗi GET / chạy
+# vòng lặp sqrt() đốt CPU => bắn tải là CPU tăng vọt => HPA có cái để scale.
+# (nginx static của web-svc quá rẻ CPU nên không kích được HPA — xem lab 2.3 notes.)
+#
+# BẮT BUỘC `resources.requests.cpu` để HPA tính % theo request.
+#
+# Setup:
+#   kubectl apply -f deploy/k8s/ckad-labs/day_2/cpu-burn.yaml
+#   # HPA declarative (khuyến nghị — commit vào git): cpu-burn-hpa.yaml
+#   kubectl apply -f deploy/k8s/ckad-labs/day_2/cpu-burn-hpa.yaml
+#   # hoặc imperative (kubectl mới dùng --cpu=50%, KHÔNG phải --cpu-percent đã deprecated):
+#   kubectl autoscale deploy/cpu-burn --cpu=50% --min=1 --max=10 -n stock
+#   # bắn tải: ./e2e-test.sh loadgen cpu-burn 80 30 120
+#   # xem scale: ./e2e-test.sh watch-hpa cpu-burn
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-burn
+  namespace: stock
+  labels: { app: cpu-burn }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: cpu-burn }
+  template:
+    metadata:
+      labels: { app: cpu-burn }
+    spec:
+      containers:
+        - name: cpu-burn
+          image: registry.k8s.io/hpa-example
+          ports:
+            - containerPort: 80
+          resources:
+            requests: { cpu: "100m", memory: "64Mi" }   # HPA % tính theo request này
+            limits:   { cpu: "500m", memory: "128Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cpu-burn
+  namespace: stock
+  labels: { app: cpu-burn }
+spec:
+  selector: { app: cpu-burn }
+  ports:
+    - port: 80
+      targetPort: 80

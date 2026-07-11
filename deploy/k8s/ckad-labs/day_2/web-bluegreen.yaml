@@ -1,0 +1,82 @@
+# =============================================================================
+# Lab 2.2 — Blue/Green Switch trên Service web-svc (frontend thật).
+# CKAD domain: Application Deployment (20%)
+#
+# 2 Deployment chạy SONG SONG, phân biệt bằng label `color`:
+#   - web-svc-blue  (web-svc:dev = "v1")
+#   - web-svc-green (web-svc:v2  = "v2")
+# Selector của mỗi Deployment gồm `color` => KHÔNG overlap nhau (an toàn).
+# Service `web-svc` lật traffic bằng cách đổi selector color blue<->green.
+#
+# QUAN TRỌNG: phải XÓA Deployment web-svc đơn (selector {app: web-svc}) trước khi
+# apply, vì selector đó overlap với pod blue/green (đều có app=web-svc).
+#
+# Setup:
+#   kubectl delete deploy web-svc -n stock
+#   kubectl apply -f deploy/k8s/ckad-labs/day_2/web-bluegreen.yaml
+#   kubectl patch svc web-svc -n stock -p '{"spec":{"selector":{"app":"web-svc","color":"blue"}}}'
+# Flip:
+#   kubectl patch svc web-svc -n stock -p '{"spec":{"selector":{"app":"web-svc","color":"green"}}}'
+#   # hoặc: ./e2e-test.sh bluegreen web-svc color green
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-svc-blue
+  namespace: stock
+  labels: { app: web-svc, color: blue }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: web-svc, color: blue }
+  template:
+    metadata:
+      labels: { app: web-svc, color: blue }
+    spec:
+      containers:
+        - name: web-svc
+          image: web-svc:dev            # BLUE = v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet: { path: /, port: 3000 }
+            initialDelaySeconds: 2
+            periodSeconds: 3
+          lifecycle:
+            preStop:
+              exec: { command: ["sh", "-c", "sleep 5"] }
+          resources:
+            requests: { cpu: "20m", memory: "32Mi" }
+            limits:   { cpu: "200m", memory: "128Mi" }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-svc-green
+  namespace: stock
+  labels: { app: web-svc, color: green }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: web-svc, color: green }
+  template:
+    metadata:
+      labels: { app: web-svc, color: green }
+    spec:
+      containers:
+        - name: web-svc
+          image: web-svc:v2             # GREEN = v2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet: { path: /, port: 3000 }
+            initialDelaySeconds: 2
+            periodSeconds: 3
+          lifecycle:
+            preStop:
+              exec: { command: ["sh", "-c", "sleep 5"] }
+          resources:
+            requests: { cpu: "20m", memory: "32Mi" }
+            limits:   { cpu: "200m", memory: "128Mi" }

@@ -1,0 +1,13 @@
+# Lab 2.4 — OVERLAY dev. Chỉ chứa DELTA so với base (không chép lại Deployment/Service).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: stock
+namePrefix: dev-              # dev-web-kz — tách tên khỏi prod, không đụng web-svc thật
+resources:
+  - ../../base
+images:
+  - name: web-svc            # match IMAGE NAME trong base (web-svc:dev)
+    newTag: dev              # dev giữ tag dev
+replicas:
+  - name: web-kz             # match DEPLOYMENT NAME trong base (trước namePrefix)
+    count: 1

@@ -20,10 +20,15 @@
 #         Lab 2.3 — sinh tải song song để đẩy CPU => kích HPA scale up.
 #   watch-hpa <hpa>
 #         Lab 2.3 — theo dõi HPA (REPLICAS/TARGETS) realtime.
+#   kustomize-diff <overlayA> <overlayB>
+#         Lab 2.4 — render 2 overlay (kubectl kustomize, KHÔNG apply) và khẳng định
+#         image tag + replica count KHÁC nhau => chứng minh overlay patch mà không
+#         nhân đôi manifest.
 #
 # Ví dụ:
 #   ./e2e-test.sh zero-downtime web 80 web nginx:1.27 /
 #   NS=stock ./e2e-test.sh loadgen web 80 20 120 /
+#   ./e2e-test.sh kustomize-diff kustomize/overlays/dev kustomize/overlays/prod
 # =============================================================================
 set -euo pipefail
 
@@ -47,24 +52,30 @@ _pf_close() { [ -n "${PF_PID:-}" ] && kill "$PF_PID" 2>/dev/null || true; }
 
 cmd_zero_downtime() {
   local svc="${1:?svc}" port="${2:?port}" deploy="${3:?deploy}" image="${4:?newimage}" path="${5:-/}"
-  _pf_open "$svc" "$port"
-  local okf badf; okf=$(mktemp); badf=$(mktemp)
-  echo "[zero-downtime] poll http://localhost:$LPORT$path mỗi 0.2s trong lúc update..."
-  ( while true; do
-      if curl -fsS -m 2 "http://localhost:$LPORT$path" >/dev/null 2>&1; then echo x >>"$okf"; else echo x >>"$badf"; fi
-      sleep 0.2
-    done ) & local poll=$!
+  local dur="${DUR:-60}"
+  # QUAN TRỌNG: poll TỪ TRONG cluster hitting Service ClusterIP (kube-proxy
+  # load-balance tới pod Ready). KHÔNG dùng `port-forward svc` để đo downtime —
+  # port-forward GHIM vào 1 pod, pod đó bị rolling update giết ⇒ báo lỗi giả.
+  kubectl delete pod e2e-poller -n "$NS" --ignore-not-found >/dev/null 2>&1
+  echo "[zero-downtime] khởi động poller trong cluster (${dur}s) hitting http://$svc:$port$path ..."
+  kubectl run e2e-poller --image=curlimages/curl:latest --restart=Never -n "$NS" -- \
+    sh -c "o=0;f=0;end=\$(( \$(date +%s) + $dur ));
+           while [ \$(date +%s) -lt \$end ]; do
+             if curl -fsS -m 2 \"http://$svc:$port$path\" >/dev/null 2>&1; then o=\$((o+1)); else f=\$((f+1)); fi
+           done; echo \"RESULT ok=\$o fail=\$f\"" >/dev/null
+  kubectl wait --for=condition=Ready pod/e2e-poller -n "$NS" --timeout=60s >/dev/null
 
   echo "[zero-downtime] kubectl set image deploy/$deploy *=$image"
   kubectl set image -n "$NS" "deploy/$deploy" "*=$image"
   kubectl rollout status -n "$NS" "deploy/$deploy" --timeout=180s
-  sleep 2
 
-  kill "$poll" 2>/dev/null || true
-  local ok bad; ok=$(wc -l <"$okf" | tr -d ' '); bad=$(wc -l <"$badf" | tr -d ' ')
-  echo "[zero-downtime] KẾT QUẢ: OK=$ok  FAIL=$bad"
-  if [ "$bad" -eq 0 ]; then echo "PASS ✅ rolling update KHÔNG rớt request"; else echo "FAIL ❌ có $bad request lỗi khi update (kiểm tra maxUnavailable/readinessProbe)"; fi
-  rm -f "$okf" "$badf"
+  echo "[zero-downtime] chờ poller kết thúc..."
+  kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/e2e-poller -n "$NS" --timeout=120s >/dev/null || true
+  local res; res=$(kubectl logs e2e-poller -n "$NS" 2>/dev/null | grep RESULT || echo "RESULT ok=? fail=?")
+  local bad; bad=$(echo "$res" | sed -n 's/.*fail=\([0-9]*\).*/\1/p')
+  echo "[zero-downtime] KẾT QUẢ (đo từ trong cluster): $res"
+  if [ "${bad:-1}" = "0" ]; then echo "PASS ✅ rolling update KHÔNG rớt request"; else echo "WARN ❌ có $bad request lỗi (kiểm tra maxUnavailable/readinessProbe)"; fi
+  kubectl delete pod e2e-poller -n "$NS" --ignore-not-found >/dev/null 2>&1
 }
 
 cmd_rollback() {
@@ -86,17 +97,21 @@ cmd_bluegreen() {
 
 cmd_loadgen() {
   local svc="${1:?svc}" port="${2:?port}" conc="${3:-10}" secs="${4:-60}" path="${5:-/}"
-  _pf_open "$svc" "$port"
-  echo "[loadgen] $conc luồng x ${secs}s vào http://localhost:$LPORT$path (đẩy CPU cho HPA)"
-  local endf; endf=$(mktemp); date -d "+$secs seconds" +%s >"$endf" 2>/dev/null || echo "0" >"$endf"
-  local pids=()
-  for i in $(seq 1 "$conc"); do
-    ( end=$(cat "$endf"); while [ "$(date +%s)" -lt "$end" ]; do curl -fsS -m 2 "http://localhost:$LPORT$path" >/dev/null 2>&1 || true; done ) &
-    pids+=($!)
-  done
-  echo "[loadgen] đang chạy... (mở tab khác: ./e2e-test.sh watch-hpa <hpa>)"
-  for p in "${pids[@]}"; do wait "$p" 2>/dev/null || true; done
-  rm -f "$endf"; echo "[loadgen] xong."
+  # Load TỪ TRONG cluster hitting Service ClusterIP => kube-proxy trải đều qua TẤT CẢ
+  # pod Ready (khác port-forward chỉ ghim 1 pod). Đúng cho HPA (CPU trung bình mọi pod).
+  kubectl delete pod e2e-load -n "$NS" --ignore-not-found >/dev/null 2>&1
+  echo "[loadgen] $conc luồng x ${secs}s → http://$svc:$port$path (pod e2e-load, qua Service)"
+  kubectl run e2e-load --image=curlimages/curl:latest --restart=Never -n "$NS" -- \
+    sh -c "end=\$(( \$(date +%s) + $secs ));
+      i=0; while [ \$i -lt $conc ]; do
+        ( while [ \$(date +%s) -lt \$end ]; do curl -s -o /dev/null \"http://$svc:$port$path\"; done ) &
+        i=\$((i+1)); done; wait; echo LOAD_DONE" >/dev/null
+  echo "[loadgen] đang chạy trong cluster. Theo dõi ở TAB KHÁC:"
+  echo "    kubectl top pods -n $NS -l app=$svc     # CPU từng pod backend tăng"
+  echo "    ./e2e-test.sh watch-hpa <hpa>           # HPA REPLICAS/TARGETS"
+  kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/e2e-load -n "$NS" --timeout=$((secs+60))s >/dev/null 2>&1 || true
+  kubectl delete pod e2e-load -n "$NS" --ignore-not-found >/dev/null 2>&1
+  echo "[loadgen] xong."
 }
 
 cmd_watch_hpa() {
@@ -104,14 +119,35 @@ cmd_watch_hpa() {
   kubectl get hpa -n "$NS" "$hpa" -w
 }
 
+cmd_kustomize_diff() {
+  local a="${1:?overlayA dir}" b="${2:?overlayB dir}"
+  echo "[kustomize-diff] render '$a' vs '$b' (chỉ render, KHÔNG apply)"
+  local ra rb; ra=$(kubectl kustomize "$a") || die "kubectl kustomize '$a' lỗi"
+  rb=$(kubectl kustomize "$b") || die "kubectl kustomize '$b' lỗi"
+  # Deployment đầu tiên: lấy image container + replicas
+  local ia ib pa pb
+  ia=$(printf '%s\n' "$ra" | awk '/^ *- image:/{print $3; exit} /^ *image:/{print $2; exit}')
+  ib=$(printf '%s\n' "$rb" | awk '/^ *- image:/{print $3; exit} /^ *image:/{print $2; exit}')
+  pa=$(printf '%s\n' "$ra" | awk '/^ *replicas:/{print $2; exit}')
+  pb=$(printf '%s\n' "$rb" | awk '/^ *replicas:/{print $2; exit}')
+  echo "  $a  -> image=$ia replicas=$pa"
+  echo "  $b  -> image=$ib replicas=$pb"
+  if [ -n "$ia" ] && [ -n "$pa" ] && [ "$ia" != "$ib" ] && [ "$pa" != "$pb" ]; then
+    echo "PASS ✅ image tag VÀ replica count khác nhau — overlay patch không nhân đôi manifest"
+  else
+    echo "WARN ❌ overlay không khác như mong đợi (image $ia/$ib, replicas $pa/$pb)"; exit 1
+  fi
+}
+
 main() {
   local sub="${1:-}"; shift || true
   case "$sub" in
-    zero-downtime) cmd_zero_downtime "$@";;
-    rollback)      cmd_rollback "$@";;
-    bluegreen)     cmd_bluegreen "$@";;
-    loadgen)       cmd_loadgen "$@";;
-    watch-hpa)     cmd_watch_hpa "$@";;
+    zero-downtime)  cmd_zero_downtime "$@";;
+    rollback)       cmd_rollback "$@";;
+    bluegreen)      cmd_bluegreen "$@";;
+    loadgen)        cmd_loadgen "$@";;
+    watch-hpa)      cmd_watch_hpa "$@";;
+    kustomize-diff) cmd_kustomize_diff "$@";;
     *) grep -E '^#( |=)' "$0" | sed 's/^# \{0,1\}//'; exit 1;;
   esac
 }
