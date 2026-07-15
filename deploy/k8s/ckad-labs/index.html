@@ -102,6 +102,8 @@ const DATA = {
   "Day 1 — Pod design & imperative": [
     {
       id:"1.1", title:"The 60-Second Pod", domain:"App Design & Build (20%)", duration:"~45m", status:"ref",
+      prep:["Không cần chuẩn bị — drill imperative thuần."],
+      cleanup:["<code>kubectl delete pod web</code>"],
       request:"Tạo Pod bằng lệnh (imperative) có labels + env + resources, export YAML bằng --dry-run, verify không cần mở editor (đường exam-speed).",
       steps:[
         "Sinh manifest imperative: <code>kubectl run web --image=nginx --restart=Never --labels=app=web,tier=frontend --env=ENV=dev --dry-run=client -o yaml > pod.yaml</code>.",
@@ -123,6 +125,8 @@ const DATA = {
     },
     {
       id:"1.2", title:"Init + Sidecar Pattern", domain:"App Design & Build (20%)", duration:"~60m", status:"done",
+      prep:["⚠️ api-svc đã là blue/green → label <code>app=api-svc</code> OVERLAP. Demo vào ns riêng, hoặc apply-xem-rồi-xóa NGAY."],
+      cleanup:["<code>kubectl delete deploy api-svc -n stock</code> — xóa ngay kẻo lẫn blue/green."],
       request:"Dựng Pod nhiều container (initContainer + app + sidecar), chia data qua emptyDir, đọc log app QUA sidecar. Nhúng thẳng vào Deployment api-svc thật.",
       steps:[
         "Apply Deployment api-svc (đã nhúng init+sidecar): <code>kubectl apply -f deploy/k8s/api-svc/deployment.yaml</code>.",
@@ -147,6 +151,8 @@ const DATA = {
     },
     {
       id:"1.3", title:"Jobs & CronJobs", domain:"App Design & Build (20%)", duration:"~45m", status:"done",
+      prep:["4 CronJob pipeline chạy sẵn: <code>kubectl get cronjob,job -n stock</code> (job hậu-tố-số = CronJob tự đẻ theo lịch)."],
+      cleanup:["<code>kubectl delete job verify-crypto -n stock</code>"],
       request:"Job run-to-completion (backoffLimit) + CronJob theo lịch; phân biệt với Deployment. Chuyển pipeline crawl 4 market sang k8s-native (Cách 2).",
       steps:[
         "Sửa code: thêm entrypoint run-once <code>src/jobs_cli.py</code> + disable crawler trong <code>DEFAULT_SCHEDULES</code> (manager.py).",
@@ -178,6 +184,8 @@ const DATA = {
     },
     {
       id:"1.4", title:"Label & Annotation Drill", domain:"App Design & Build (20%)", duration:"~30m", status:"done",
+      prep:["Không cần — Pod nháp <code>demo-*</code> tạo ngay trong stock (coi stock là sandbox)."],
+      cleanup:["<code>kubectl delete deploy demo-dep -n stock; kubectl delete pod -n stock -l 'app in (demo,quarantine)'</code>"],
       request:"Gán/sửa label hàng loạt, query bằng selector, dùng --overwrite. Thực hành thẳng trên ns stock (Pod nháp demo-*), cuối roll back.",
       steps:[
         "Tạo Pod nháp trong stock: <code>kubectl run demo-web --image=api-svc:dev --labels=... --command -- sleep 3600</code>.",
@@ -211,6 +219,8 @@ const DATA = {
   "Day 2 — Deployments & rollouts": [
     {
       id:"2.1", title:"Rolling Update & Rollback", domain:"App Deployment (20%)", duration:"~45m", status:"done",
+      prep:["App nginx demo: <code>kubectl apply -f deploy/k8s/ckad-labs/day_2/web.yaml</code> (4 replica, maxUnavailable=0, preStop) nếu chưa có."],
+      cleanup:["<code>kubectl delete -f deploy/k8s/ckad-labs/day_2/web.yaml</code>"],
       request:"Rolling update + rollback áp dụng THẲNG trên web-svc (frontend thật) trong ns stock — scale 3, thêm readinessProbe/preStop. Chứng minh zero-downtime + bad deploy không sập service. (day_2/web.yaml = app nginx demo dùng rút bài học đo lường ở Kiến thức.)",
       steps:[
         "Chuẩn bị app: nâng <code>deploy/k8s/web-svc/deployment.yaml</code> (replicas 3, maxUnavailable=0, readinessProbe, preStop) rồi <code>kubectl apply</code> → chờ 3/3 Running.",
@@ -245,6 +255,8 @@ const DATA = {
     },
     {
       id:"2.2", title:"Blue/Green Switch", domain:"App Deployment (20%)", duration:"~45m", status:"done",
+      prep:["blue/green + gateway controller chạy sẵn. Kiểm: <code>kubectl get cm gateway-bluegreen-state -n stock -o jsonpath='{.data}'</code> (màu active per app)."],
+      cleanup:["Cách TAY: xóa key color kẹt <code>kubectl patch svc web-svc --type=json -p '[{\"op\":\"remove\",\"path\":\"/spec/selector/color\"}]'</code>.","Cách TỰ ĐỘNG: state persist ở ConfigMap → không cần dọn."],
       request:"Blue/green trên Service web-svc THẬT (frontend): 2 Deployment web-svc-blue (v1) + web-svc-green (v2) chạy song song, lật traffic bằng đổi selector color của MỘT Service. Chứng minh switch tức thời + zero-downtime.",
       steps:[
         "Tạo 2 Deployment phân biệt bằng label <code>color</code> (blue=web-svc:dev, green=web-svc:v2), <b>selector mỗi Deployment gồm color</b> để KHÔNG overlap: <code>deploy/k8s/ckad-labs/day_2/web-bluegreen.yaml</code>.",
@@ -280,6 +292,8 @@ const DATA = {
     },
     {
       id:"2.3", title:"Scale & HPA", domain:"App Deployment (20%)", duration:"~45m", status:"done",
+      prep:["cpu-burn (1/1) + metrics-server sẵn, CHƯA có HPA. Kiểm: <code>kubectl get deploy cpu-burn -n stock; kubectl get deploy metrics-server -n kube-system</code>."],
+      cleanup:["<code>kubectl delete hpa cpu-burn -n stock</code> (cpu-burn về 1/1)."],
       request:"Scale tay cpu-burn 1→10 (obj 1, làm TRƯỚC khi có HPA) rồi HPA declarative 50% CPU (obj 2). Sinh tải thật: scale-up theo bậc 1→4→8→10 rồi scale-down về 1 sau cửa sổ 300s. App = registry.k8s.io/hpa-example (mỗi GET chạy vòng sqrt đốt CPU); nginx web-svc quá rẻ CPU không kích được HPA.",
       steps:[
         "Manual scale (obj 1) khi CHƯA có HPA: <code>kubectl scale deploy/cpu-burn --replicas=10 -n stock</code> → 10/10; verify <code>get pods -o wide</code> (chỉ 2 worker, control-plane taint) + <code>get rs</code> (CÙNG 1 RS, không tạo RS mới). Rồi scale về 1.",
@@ -312,6 +326,8 @@ const DATA = {
     },
     {
       id:"2.4", title:"Kustomize Overlay", domain:"App Deployment (20%)", duration:"~45m", status:"done",
+      prep:["Overlays sẵn: <code>deploy/k8s/ckad-labs/day_2/kustomize/{base,overlays/dev,overlays/prod}</code>."],
+      cleanup:["Không apply thì không cần dọn (nếu <code>apply -k</code>: <code>kubectl delete -k &lt;overlay&gt;</code>)."],
       request:"Base cô lập web-kz (namespace-agnostic, tái dùng image web-svc:dev) + overlays dev/prod patch image tag và số replica mà KHÔNG nhân đôi manifest. Chỉ có kubectl-embedded Kustomize (v5.8.1), không binary rời.",
       steps:[
         "Tạo <code>kustomize/base/</code> (deployment.yaml + service.yaml + kustomization.yaml, app=web-kz, KHÔNG hardcode namespace).",
@@ -397,10 +413,14 @@ function sectionsOf(l){
     {id:"know", label:"Kiến thức", icon:"✦", title:"Kiến thức cần biết",
       html:`<div class="body"><ul class="know">${l.knowledge.map(k=>`<li>${k}</li>`).join("")}</ul></div>`}
   ];
+  if(l.prep && l.prep.length) s.push({id:"prep", label:"Chuẩn bị", icon:"⚑", title:"Chuẩn bị (prereq)",
+      html:`<div class="body"><ul class="know">${l.prep.map(k=>`<li>${k}</li>`).join("")}</ul></div>`});
   if(l.steps && l.steps.length) s.push({id:"steps", label:"Các bước", icon:"◷", title:"Các bước chạy",
       html:`<ol class="steps">${l.steps.map(x=>`<li>${x}</li>`).join("")}</ol>`});
   s.push({id:"cmds", label:"Lệnh", icon:"$", title:"Lệnh execute + output từng lệnh",
       html:`<div class="cmds">${cmdBlock(l.commands)}</div>`});
+  if(l.cleanup && l.cleanup.length) s.push({id:"cleanup", label:"Dọn dẹp", icon:"✕", title:"Dọn dẹp (cleanup)",
+      html:`<div class="body"><ul class="know">${l.cleanup.map(k=>`<li>${k}</li>`).join("")}</ul></div>`});
   if(l.tool) s.push({id:"tool", label:"Tool test", icon:"⚙", title:"Tool test (giả lập end-to-end)",
       html:`<pre class="out tool">${esc(l.tool)}</pre>`});
   return s;
