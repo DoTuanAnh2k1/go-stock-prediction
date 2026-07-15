@@ -22,6 +22,21 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          # initContainer wait-db: chờ DB Ready trước khi pipeline connect (như api-svc).
+          # Image timescaledb (đã có sẵn trong cluster) vì prediction-svc không có pg_isready.
+          initContainers:
+            - name: wait-db
+              image: timescale/timescaledb:latest-pg16
+              imagePullPolicy: IfNotPresent
+              command:
+                - sh
+                - -c
+                - |
+                  echo "waiting for db:5432 ..."
+                  until pg_isready -h db -p 5432 -U postgres; do
+                    echo "db not ready, retry in 2s"; sleep 2
+                  done
+                  echo "db is ready"
           containers:
             - name: pipeline
               image: prediction-svc:dev

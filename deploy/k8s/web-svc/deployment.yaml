@@ -14,7 +14,12 @@ metadata:
   namespace: stock
   labels: { app: web-svc }
 spec:
-  replicas: 1
+  replicas: 3                    # ≥2 để rolling update zero-downtime (Lab 2.1)
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0          # không bao giờ giảm dưới số replica mong muốn
   selector:
     matchLabels: { app: web-svc }
   template:
@@ -27,6 +32,16 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
+          readinessProbe:
+            httpGet: { path: /, port: 3000 }   # Service chỉ route pod đã sẵn sàng
+            initialDelaySeconds: 2
+            periodSeconds: 3
+          # preStop: giữ pod phục vụ thêm 5s trong lúc bị gỡ khỏi Endpoints -> tránh
+          # termination race, zero-dropped-connection khi rolling update.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
           resources:
             requests: { cpu: "20m", memory: "32Mi" }
             limits:   { cpu: "200m", memory: "128Mi" }
