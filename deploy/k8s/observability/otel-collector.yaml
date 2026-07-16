@@ -1,0 +1,103 @@
+# =============================================================================
+# OpenTelemetry Collector (contrib) — nhận OTLP từ 6 service app
+# (grpc :4317, http :4318), batch, rồi export sang Tempo + debug (stdout).
+#
+# Các service set env:
+#   OTEL_EXPORTER_OTLP_ENDPOINT = http://otel-collector.observability:4317
+#   OTEL_EXPORTER_OTLP_PROTOCOL = grpc
+#
+# Apply (SAU tempo.yaml vì exporter trỏ tới tempo:4317):
+#   kubectl apply -f deploy/k8s/observability/otel-collector.yaml
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: observability
+  labels: { app: otel-collector }
+data:
+  otel-collector.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      batch:
+        timeout: 5s
+        send_batch_size: 512
+
+    exporters:
+      # Gửi trace sang Tempo (OTLP/gRPC). tls insecure vì in-cluster plaintext.
+      otlp/tempo:
+        endpoint: tempo.observability:4317
+        tls:
+          insecure: true
+      # In trace ra stdout để debug nhanh (kubectl logs).
+      debug:
+        verbosity: normal
+
+    service:
+      telemetry:
+        logs:
+          level: info
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlp/tempo, debug]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: observability
+  labels: { app: otel-collector }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: otel-collector }
+  template:
+    metadata:
+      labels: { app: otel-collector }
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.109.0
+          imagePullPolicy: IfNotPresent
+          args: ["--config=/etc/otel/otel-collector.yaml"]
+          ports:
+            - { name: otlp-grpc, containerPort: 4317 }
+            - { name: otlp-http, containerPort: 4318 }
+          readinessProbe:
+            # Collector expose health check ext mặc định không bật; dùng port OTLP TCP.
+            tcpSocket: { port: 4317 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 4317 }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: { cpu: "50m", memory: "96Mi" }
+            limits:   { cpu: "500m", memory: "256Mi" }
+          volumeMounts:
+            - { name: config, mountPath: /etc/otel }
+      volumes:
+        - name: config
+          configMap: { name: otel-collector-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: observability
+  labels: { app: otel-collector }
+spec:
+  selector: { app: otel-collector }
+  ports:
+    - { name: otlp-grpc, port: 4317, targetPort: 4317 }
+    - { name: otlp-http, port: 4318, targetPort: 4318 }

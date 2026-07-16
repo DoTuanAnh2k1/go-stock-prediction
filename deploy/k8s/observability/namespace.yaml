@@ -1,0 +1,12 @@
+# =============================================================================
+# Namespace observability — chứa OTel Collector, Tempo, Prometheus, Grafana.
+# Apply file này TRƯỚC các thành phần observability khác.
+#   kubectl apply -f deploy/k8s/observability/namespace.yaml
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    app.kubernetes.io/part-of: go-stock-prediction
+    app.kubernetes.io/component: observability
