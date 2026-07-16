@@ -280,12 +280,12 @@ deploy/
     ├── observability/           # ns observability: namespace.yaml, otel-collector.yaml, prometheus.yaml, tempo.yaml, grafana.yaml
     ├── minio/                   # ns stock: minio.yaml (Deployment+PVC+Service, bucket models)
     ├── pipeline/                # CronJob: cronjob-gold/nasdaq/crypto/sp500.yaml (crawler); cronjob-train.yaml (train_*+train_meta); cronjob-weekly.yaml (fundamentals+train_transformer+daily_reconcile); cronjob-backup.yaml (pg_dump+PVC backup-data); cronjob-simulation.yaml
-    ├── api-svc/                 # Deployment, Service, ConfigMap (api-config)
-    ├── auth-svc/                # Deployment, Service, ConfigMap
-    ├── prediction-svc/          # Deployment (replicas=2), Service, ConfigMap (prediction-config: SCHEDULER_ENABLED=false, MODEL_STORE_BACKEND=s3)
-    ├── gateway-svc/             # Deployment, Service (LoadBalancer :80/:443)
-    ├── cli-svc/                 # Deployment, Service
-    ├── service-mgt/             # Deployment, Service
+    ├── api-svc/                 # bluegreen.yaml (pod 4-container: init wait-db + api + nginx ambassador :18118 + log-sidecar; ConfigMap api-svc-nginx; Service api-svc-{blue,green} targetPort 18118); deployment.yaml (biến thể single 4-container); service.yaml; ConfigMap api-config
+    ├── auth-svc/                # Deployment 4-container (init wait-db + auth + nginx grpc :18120 + log-sidecar; ConfigMap auth-svc-nginx), Service (grpc targetPort 18120, mgmt 9464 thẳng), ConfigMap
+    ├── prediction-svc/          # Deployment (replicas=2) 4-container (init wait-db + prediction + nginx grpc :18119 + log-sidecar; fsGroup 2000; ConfigMap prediction-svc-nginx), Service (targetPort 18119), ConfigMap (prediction-config: SCHEDULER_ENABLED=false, MODEL_STORE_BACKEND=s3)
+    ├── gateway-svc/             # Deployment, Service (LoadBalancer :80/:443) — KHÔNG áp ambassador (bản thân là proxy)
+    ├── cli-svc/                 # Deployment 4-container (init wait-db + fix-keys-perms + cli + nginx stream TCP :12345 + log-sidecar; ConfigMap cli-svc-nginx; nginx runAsUser 0), Service NodePort (targetPort 12345)
+    ├── service-mgt/             # Deployment 4-container (init wait-db + service-mgt + nginx grpc :18121 + log-sidecar; fsGroup 2000; ConfigMap service-mgt-nginx), Service (targetPort 18121)
     ├── web-svc/                 # Deployment, Service
     ├── db/                      # StatefulSet TimescaleDB
     └── pgadmin/                 # Deployment pgAdmin

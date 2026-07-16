@@ -9,5 +9,7 @@ metadata:
 spec:
   selector: { app: service-mgt }
   ports:
+    # targetPort trỏ vào ambassador nginx (:18121) — nginx grpc_pass về app :8121.
+    # Service port giữ 8121 nên client (REGISTRY_GRPC_TARGET=service-mgt:8121) không đổi.
     - port: 8121
-      targetPort: 8121
+      targetPort: 18121

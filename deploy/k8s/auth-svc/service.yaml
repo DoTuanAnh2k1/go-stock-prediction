@@ -9,9 +9,11 @@ metadata:
 spec:
   selector: { app: auth-svc }
   ports:
+    # grpc targetPort → ambassador nginx (:18120) → grpc_pass app :8120.
+    # Service port giữ 8120 nên api-svc (AUTH_GRPC_TARGET=auth-svc:8120) không đổi.
     - name: grpc
       port: 8120
-      targetPort: 8120
-    - name: mgmt              # Actuator HTTP: /actuator/prometheus + /actuator/health
+      targetPort: 18120
+    - name: mgmt              # Actuator HTTP: /actuator/prometheus + /actuator/health — KHÔNG qua nginx
       port: 9464
       targetPort: 9464

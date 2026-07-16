@@ -1,8 +1,45 @@
 # =============================================================================
 # api-svc blue/green — 2 Deployment + 2 Service (per màu). Gateway route "/api"
-# tới màu active. 2 màu chung DB (api-svc không migration → an toàn). container
-# name = "api-svc". initContainer wait-db chờ DB Ready trước khi connect.
+# tới Service màu active (backend: http://api-svc-<color>:8118). 2 màu chung DB
+# (api-svc không migration → an toàn).
+#
+# Multi-container pod (pattern 4-container — CKAD), áp cho CẢ hai màu:
+#   init  wait-db     — chờ DB Ready (pg_isready).
+#   app   api-svc     — HTTP :8118; tee log ra /var/log/app cho sidecar.
+#   amb   nginx       — ambassador :18118 → localhost:8118 (Service màu trỏ vào đây;
+#                       proxy_buffering off để KHÔNG vỡ SSE /api/pipeline/stream).
+#   side  log-sidecar — tail -f log app qua emptyDir chung.
+# Service api-svc-<color> targetPort → 18118 nên gateway đi XUYÊN nginx.
 # =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-svc-nginx
+  namespace: stock
+data:
+  nginx.conf: |
+    worker_processes 1;
+    error_log /dev/stderr warn;
+    events { worker_connections 1024; }
+    http {
+      access_log /dev/stdout;
+      server {
+        listen 18118;
+        location / {
+          proxy_pass http://127.0.0.1:8118;
+          proxy_http_version 1.1;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header Connection "";
+          # SSE (/api/pipeline/stream): stream ngay, không buffer
+          proxy_buffering off;
+          proxy_cache off;
+          proxy_read_timeout 3600s;
+        }
+      }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,6 +61,9 @@ spec:
         prometheus.io/port: "8118"
         prometheus.io/path: "/metrics"
     spec:
+      # fsGroup: app chạy USER appuser (non-root) → ghi được emptyDir "logs".
+      securityContext:
+        fsGroup: 2000
       initContainers:
         - name: wait-db
           image: timescale/timescaledb:latest-pg16
@@ -33,6 +73,7 @@ spec:
         - name: api-svc
           image: api-svc:dev
           imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "set -o pipefail; ./api-server 2>&1 | tee /var/log/app/api.log"]
           ports: [{ containerPort: 8118 }]
           envFrom:
             - configMapRef: { name: api-config }
@@ -54,9 +95,31 @@ spec:
           volumeMounts:
             - { name: backups, mountPath: /backups }
             - { name: repo, mountPath: /repo }
+            - { name: logs, mountPath: /var/log/app }
+        - name: nginx
+          image: nginx:1.27-alpine
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http-proxy, containerPort: 18118 }]
+          volumeMounts:
+            - { name: nginx-conf, mountPath: /etc/nginx/nginx.conf, subPath: nginx.conf }
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits:   { cpu: "100m", memory: "64Mi" }
+        - name: log-sidecar
+          image: api-svc:dev
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "until [ -f /var/log/app/api.log ]; do sleep 1; done; tail -f /var/log/app/api.log"]
+          volumeMounts:
+            - { name: logs, mountPath: /var/log/app }
+          resources:
+            requests: { cpu: "20m", memory: "32Mi" }
+            limits:   { cpu: "100m", memory: "64Mi" }
       volumes:
         - { name: backups, emptyDir: {} }
         - { name: repo, emptyDir: {} }
+        - { name: logs, emptyDir: {} }
+        - name: nginx-conf
+          configMap: { name: api-svc-nginx }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -79,6 +142,8 @@ spec:
         prometheus.io/port: "8118"
         prometheus.io/path: "/metrics"
     spec:
+      securityContext:
+        fsGroup: 2000
       initContainers:
         - name: wait-db
           image: timescale/timescaledb:latest-pg16
@@ -88,6 +153,7 @@ spec:
         - name: api-svc
           image: api-svc:dev
           imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "set -o pipefail; ./api-server 2>&1 | tee /var/log/app/api.log"]
           ports: [{ containerPort: 8118 }]
           envFrom:
             - configMapRef: { name: api-config }
@@ -109,9 +175,31 @@ spec:
           volumeMounts:
             - { name: backups, mountPath: /backups }
             - { name: repo, mountPath: /repo }
+            - { name: logs, mountPath: /var/log/app }
+        - name: nginx
+          image: nginx:1.27-alpine
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http-proxy, containerPort: 18118 }]
+          volumeMounts:
+            - { name: nginx-conf, mountPath: /etc/nginx/nginx.conf, subPath: nginx.conf }
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits:   { cpu: "100m", memory: "64Mi" }
+        - name: log-sidecar
+          image: api-svc:dev
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "until [ -f /var/log/app/api.log ]; do sleep 1; done; tail -f /var/log/app/api.log"]
+          volumeMounts:
+            - { name: logs, mountPath: /var/log/app }
+          resources:
+            requests: { cpu: "20m", memory: "32Mi" }
+            limits:   { cpu: "100m", memory: "64Mi" }
       volumes:
         - { name: backups, emptyDir: {} }
         - { name: repo, emptyDir: {} }
+        - { name: logs, emptyDir: {} }
+        - name: nginx-conf
+          configMap: { name: api-svc-nginx }
 ---
 apiVersion: v1
 kind: Service
@@ -121,7 +209,8 @@ metadata:
   labels: { app: api-svc, color: blue }
 spec:
   selector: { app: api-svc, color: blue }
-  ports: [{ port: 8118, targetPort: 8118 }]
+  # targetPort → ambassador nginx (:18118) → proxy_pass app :8118.
+  ports: [{ port: 8118, targetPort: 18118 }]
 ---
 apiVersion: v1
 kind: Service
@@ -131,4 +220,4 @@ metadata:
   labels: { app: api-svc, color: green }
 spec:
   selector: { app: api-svc, color: green }
-  ports: [{ port: 8118, targetPort: 8118 }]
+  ports: [{ port: 8118, targetPort: 18118 }]

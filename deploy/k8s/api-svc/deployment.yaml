@@ -14,7 +14,39 @@
 #
 # Yêu cầu: DB chạy trong ns stock; ConfigMap api-config + Secret api-secret đã apply.
 # auth-svc / prediction-svc CHƯA cần — gRPC client dial lazy nên api-svc vẫn lên.
+#
+# Ambassador nginx (pattern 4-container): Service targetPort → nginx :18118 →
+# proxy_pass localhost:8118. proxy_buffering off để KHÔNG vỡ SSE /api/pipeline/stream.
 # =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-svc-nginx
+  namespace: stock
+data:
+  nginx.conf: |
+    worker_processes 1;
+    error_log /dev/stderr warn;
+    events { worker_connections 1024; }
+    http {
+      access_log /dev/stdout;
+      server {
+        listen 18118;
+        location / {
+          proxy_pass http://127.0.0.1:8118;
+          proxy_http_version 1.1;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header Connection "";
+          # SSE (/api/pipeline/stream): stream ngay, không buffer
+          proxy_buffering off;
+          proxy_cache off;
+          proxy_read_timeout 3600s;
+        }
+      }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -98,6 +130,20 @@ spec:
             - name: logs
               mountPath: /var/log/app
 
+        # ---- Ambassador nginx: reverse-proxy HTTP :18118 → localhost:8118 (Service trỏ vào đây) ----
+        - name: nginx
+          image: nginx:1.27-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http-proxy, containerPort: 18118 }
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits:   { cpu: "100m", memory: "64Mi" }
+
       volumes:
         - name: backups
           emptyDir: {}
@@ -105,3 +151,5 @@ spec:
           emptyDir: {}      # DOCS_ROOT — rỗng cũng được, tab Docs không dùng trong lab
         - name: logs
           emptyDir: {}      # chia sẻ giữa app "api" và "log-sidecar"
+        - name: nginx-conf
+          configMap: { name: api-svc-nginx }

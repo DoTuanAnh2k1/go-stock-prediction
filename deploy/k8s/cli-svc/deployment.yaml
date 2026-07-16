@@ -5,11 +5,33 @@
 #   docker build -t cli-svc:dev -f deploy/cli-svc.Dockerfile cli-svc
 #   kind load docker-image cli-svc:dev --name ckad
 #
-# Image chạy non-root (USER cli, uid/gid 10001). SSH host key ghi vào
-# /etc/cli-svc/keys => fsGroup 10001 để process ghi được vào emptyDir.
-# emptyDir: host key sinh lại mỗi lần restart (đủ cho lab; muốn cố định thì đổi PVC).
-# Yêu cầu: gateway-svc chạy trước (cli-svc upsert catalog qua gateway lúc boot).
+# Multi-container pod (pattern 4-container — CKAD):
+#   init  wait-db         — chờ DB Ready (đồng nhất pattern; cli-svc không dùng DB trực tiếp).
+#   init  fix-keys-perms  — chown emptyDir host-key về 10001 (chạy root).
+#   app   cli-svc         — SSH :2345; tee log ra /var/log/app cho sidecar.
+#   amb   nginx           — ambassador stream TCP :12345 → localhost:2345 (Service SSH trỏ vào).
+#   side  log-sidecar     — tail -f log app qua emptyDir chung.
+# Image chạy non-root (USER cli, uid/gid 10001); pod ép runAsUser 10001. nginx cần ghi
+# pid/temp nên override runAsUser 0 riêng cho container nginx.
 # =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cli-svc-nginx
+  namespace: stock
+data:
+  # Ambassador nginx dạng L4 stream: SSH là TCP thuần nên proxy_pass TCP (không http).
+  nginx.conf: |
+    worker_processes 1;
+    error_log /dev/stderr warn;
+    events { worker_connections 1024; }
+    stream {
+      server {
+        listen 12345;
+        proxy_pass 127.0.0.1:2345;
+      }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -32,10 +54,22 @@ spec:
       securityContext:
         runAsUser: 10001
         runAsGroup: 10001
-        fsGroup: 10001        # emptyDir group-owned 10001 => user cli ghi được host key
-      # emptyDir mount đè lên /etc/cli-svc/keys (đã chown cli:cli trong image) bằng dir
-      # root-owned => app (uid 10001) không chmod được. initContainer chạy root chown lại.
+        fsGroup: 10001        # emptyDir group-owned 10001 => user cli ghi host key + log
       initContainers:
+        # ---- wait-db: đồng nhất pattern "init đợi db lên" ----
+        - name: wait-db
+          image: timescale/timescaledb:latest-pg16
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              echo "waiting for db:5432 ..."
+              until pg_isready -h db -p 5432 -U postgres; do
+                echo "db not ready, retry in 2s"; sleep 2
+              done
+              echo "db is ready"
+        # ---- fix-keys-perms: emptyDir đè /etc/cli-svc/keys root-owned => chown về 10001 ----
         - name: fix-keys-perms
           image: cli-svc:dev
           imagePullPolicy: IfNotPresent
@@ -46,9 +80,11 @@ spec:
             - name: keys
               mountPath: /etc/cli-svc/keys
       containers:
+        # ---- App: SSH :2345; tee log cho sidecar ----
         - name: cli-svc
           image: cli-svc:dev
           imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "set -o pipefail; /usr/local/bin/cli-svc 2>&1 | tee /var/log/app/cli.log"]
           ports:
             - { name: ssh, containerPort: 2345 }
             - { name: metrics, containerPort: 9464 }
@@ -61,6 +97,38 @@ spec:
           volumeMounts:
             - name: keys
               mountPath: /etc/cli-svc/keys
+            - name: logs
+              mountPath: /var/log/app
+        # ---- Ambassador nginx (stream TCP): :12345 → localhost:2345. Chạy root để ghi pid/temp ----
+        - name: nginx
+          image: nginx:1.27-alpine
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0        # override pod-level 10001: nginx cần ghi /run/nginx.pid
+          ports:
+            - { name: ssh-proxy, containerPort: 12345 }
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits:   { cpu: "100m", memory: "64Mi" }
+        # ---- Sidecar: xem log app qua emptyDir chung ----
+        - name: log-sidecar
+          image: cli-svc:dev
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "until [ -f /var/log/app/cli.log ]; do sleep 1; done; tail -f /var/log/app/cli.log"]
+          volumeMounts:
+            - name: logs
+              mountPath: /var/log/app
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits:   { cpu: "50m", memory: "64Mi" }
       volumes:
         - name: keys
           emptyDir: {}
+        - name: logs
+          emptyDir: {}                 # chia sẻ giữa app "cli-svc" và "log-sidecar"
+        - name: nginx-conf
+          configMap: { name: cli-svc-nginx }
