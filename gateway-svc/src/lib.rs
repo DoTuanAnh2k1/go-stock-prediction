@@ -5,6 +5,7 @@ pub mod models;
 pub mod proxy;
 pub mod router;
 pub mod routes;
+pub mod telemetry;
 pub mod version;
 
 pub use config::AppConfig;

@@ -2,6 +2,7 @@ package client
 
 import (
 	"go-stock-prediction/pkg/logger"
+	"go-stock-prediction/pkg/telemetry"
 	pb "go-stock-prediction/proto/prediction"
 
 	"google.golang.org/grpc"
@@ -19,7 +20,12 @@ var (
 func Init(target string) {
 	logger.Logger.Infof("gRPC client: connecting to prediction service at %s", target)
 
-	c, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	c, err := grpc.NewClient(target,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		// Injects the current trace context into outbound RPC metadata so the
+		// span chains into the Python prediction service.
+		telemetry.GRPCClientDialOption(),
+	)
 	if err != nil {
 		logger.Logger.Fatalf("gRPC client: failed to connect to %s: %v", target, err)
 		return

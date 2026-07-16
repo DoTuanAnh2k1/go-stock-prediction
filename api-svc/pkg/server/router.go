@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"go-stock-prediction/pkg/logger"
+	"go-stock-prediction/pkg/telemetry"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
@@ -19,6 +20,9 @@ func addHandler() *http.ServeMux {
 	mux.HandleFunc("/health", HealthCheckHandler)
 	mux.HandleFunc("/health/simple", SimpleHealthHandler)
 	mux.HandleFunc("/health/ready", ReadyHandler)
+
+	// Prometheus metrics (default runtime collectors + HTTP request series)
+	mux.Handle("GET /metrics", telemetry.MetricsHandler())
 
 	// ===========================================
 	// API ROUTES (JSON responses)

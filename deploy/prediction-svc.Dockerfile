@@ -58,9 +58,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python dependencies (split for layer caching)
+# Install Python dependencies (split for layer caching).
+# observability = OTel tracing + prometheus-client (factor 14); s3 = boto3 for MinIO
+# model_store (factor 4/6/8). --timeout/--retries: torch is ~2-3GB from PyPI and the
+# host network (ISP NXDOMAIN hijack) can stall mid-download.
 COPY prediction-svc/pyproject.toml pyproject.toml
-RUN pip install --no-cache-dir -e ".[dev,ml]"
+# BuildKit cache mount: wheel đã tải (torch ~2GB) giữ lại giữa các lần build → mạng
+# rớt giữa chừng thì retry chỉ tải phần thiếu, không tải lại từ đầu. KHÔNG --no-cache-dir.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --timeout 120 --retries 10 -e ".[dev,ml,observability,s3]"
 
 # Copy pre-generated proto stubs (committed to repo alongside prediction.proto)
 # To regenerate: python -m grpc_tools.protoc -Iapi-svc/proto --python_out=prediction-svc/src/proto

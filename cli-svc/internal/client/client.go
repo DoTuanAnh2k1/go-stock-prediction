@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"go-stock-prediction/cli-svc/internal/telemetry"
 )
 
 // HTTPClient is the interface the shell/handlers depend on. It is small on
@@ -51,11 +53,16 @@ type Client struct {
 	hc      *http.Client
 }
 
-// New returns a Client targeting baseURL (e.g. http://gateway-svc/api).
+// New returns a Client targeting baseURL (e.g. http://gateway-svc/api). The HTTP
+// transport is wrapped with otelhttp so outbound requests to the gateway/API
+// propagate the current trace context (W3C traceparent header).
 func New(baseURL string) *Client {
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
-		hc:      &http.Client{Timeout: 30 * time.Second},
+		hc: &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: telemetry.NewHTTPTransport(nil),
+		},
 	}
 }
 

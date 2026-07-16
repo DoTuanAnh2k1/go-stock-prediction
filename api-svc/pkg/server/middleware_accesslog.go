@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go-stock-prediction/pkg/logger"
+	"go-stock-prediction/pkg/telemetry"
 )
 
 // statusRecorder wraps http.ResponseWriter to capture the written status code.
@@ -51,6 +52,7 @@ var noopPaths = map[string]bool{
 	"/health":        true,
 	"/health/simple": true,
 	"/health/ready":  true,
+	"/metrics":       true,
 }
 
 // AccessLogMiddleware logs one line per completed HTTP request.
@@ -67,8 +69,18 @@ func AccessLogMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(rec, r)
 
-		dur := time.Since(start).Milliseconds()
+		elapsed := time.Since(start)
+		dur := elapsed.Milliseconds()
 		ip := clientIP(r)
+
+		// Prometheus metrics. Use the matched route pattern (r.Pattern, Go 1.23+)
+		// as the label so path variables like {id} do not explode cardinality;
+		// fall back to the raw path when no pattern matched (404s).
+		route := r.Pattern
+		if route == "" {
+			route = r.URL.Path
+		}
+		telemetry.ObserveHTTP(r.Method, route, rec.status, elapsed)
 
 		user := "-"
 		if claims := getClaims(r); claims != nil {

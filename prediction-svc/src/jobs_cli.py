@@ -1,15 +1,22 @@
 """Run-once CLI entrypoint cho k8s Job/CronJob (Cách 2 — k8s-native).
 
-Chạy pipeline MỘT market (crawl → [train mỗi lần thứ 10] → predict → reconcile)
+Chạy MỘT job (crawl pipeline HOẶC train/reconcile/fundamentals/transformer/meta…)
 đúng một lượt rồi THOÁT — KHÔNG khởi động gRPC server, KHÔNG APScheduler.
 Pod của Job/CronJob dùng entrypoint này là "worker" tự làm việc thật, khác với
 việc gọi trigger endpoint (Cách 1). Xem deploy/k8s/pipeline/.
 
-Tái dùng nguyên các job_crawl_* trong src.scheduler.jobs (không nhân đôi logic).
+Tái dùng nguyên các job_* trong src.scheduler.jobs (không nhân đôi logic) — đây
+chính là cách "unify" scheduler: mọi lịch chạy (k8s CronJob lẫn cron container ở
+docker-compose) đều gọi vào cùng JOB_FUNCTIONS, thay cho APScheduler in-app.
 Init tối thiểu giống main.py: config → timezone (ICT) → logger → DB.
 
 Dùng:
-    python -m src.jobs_cli <market>        # market: gold | nasdaq | crypto | sp500
+    python -m src.jobs_cli <market>        # alias: gold | nasdaq | crypto | sp500  → crawler_<market>
+    python -m src.jobs_cli <job_key>       # bất kỳ key trong JOB_FUNCTIONS:
+                                           #   train_gold, train_nasdaq, train_crypto, train_sp500,
+                                           #   train_meta, crawler_fundamentals, train_transformer,
+                                           #   daily_reconcile, ...
+    python -m src.jobs_cli --list          # in ra mọi job_key hợp lệ
 
 Exit code:
     0 = chạy xong (Job Complete)
@@ -22,7 +29,21 @@ import os
 import sys
 import time
 
-# Tên market (CLI, khớp quy ước gold/nasdaq/crypto/sp500) -> job_key trong JOB_FUNCTIONS
+# Timezone (ICT-at-rest): set TZ TRƯỚC mọi project import, để bất kỳ datetime.now()
+# nào (kể cả lúc import) đều theo giờ container — mirror main.py.
+os.environ.setdefault("TZ", "Asia/Ho_Chi_Minh")
+try:
+    time.tzset()
+except AttributeError:
+    pass  # Windows không có tzset
+
+from src.config import get_settings
+from src.database.connection import init_db
+from src.scheduler.jobs import JOB_FUNCTIONS
+from src.utils.logger import get_logger, init_logger
+
+# Alias thân thiện (khớp quy ước gold/nasdaq/crypto/sp500) -> job_key trong JOB_FUNCTIONS.
+# Ngoài alias, chấp nhận trực tiếp bất kỳ job_key nào có trong JOB_FUNCTIONS.
 _MARKET_JOB = {
     "gold": "crawler_gold",
     "nasdaq": "crawler_nasdaq",
@@ -31,41 +52,44 @@ _MARKET_JOB = {
 }
 
 
+def _resolve_job_key(arg: str) -> str | None:
+    """Map CLI arg -> job_key. Ưu tiên alias market; sau đó nhận key trực tiếp."""
+    if arg in _MARKET_JOB:
+        return _MARKET_JOB[arg]
+    if arg in JOB_FUNCTIONS:
+        return arg
+    return None
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 1 or argv[0] not in _MARKET_JOB:
-        sys.stderr.write(f"usage: python -m src.jobs_cli <{'|'.join(_MARKET_JOB)}>\n")
+    if len(argv) == 1 and argv[0] in ("--list", "-l"):
+        keys = sorted(set(_MARKET_JOB) | set(JOB_FUNCTIONS))
+        sys.stdout.write("valid jobs:\n  " + "\n  ".join(keys) + "\n")
+        return 0
+
+    if len(argv) != 1 or _resolve_job_key(argv[0]) is None:
+        valid = sorted(set(_MARKET_JOB) | set(JOB_FUNCTIONS))
+        sys.stderr.write(
+            "usage: python -m src.jobs_cli <job_key|gold|nasdaq|crypto|sp500>\n"
+            "valid: " + ", ".join(valid) + "\n"
+        )
         return 2
-    market = argv[0]
 
-    # 1. Config
-    from src.config import get_settings
+    arg = argv[0]
+    job_key = _resolve_job_key(arg)
+
     cfg = get_settings()
-
-    # 2. Timezone (ICT-at-rest — mirror main.py: luôn datetime.now theo giờ container)
-    os.environ.setdefault("TZ", "Asia/Ho_Chi_Minh")
-    try:
-        time.tzset()
-    except AttributeError:
-        pass  # Windows
-
-    # 3. Logger
-    from src.utils.logger import get_logger, init_logger
     init_logger(cfg.log_level)
     log = get_logger("jobs_cli")
+    init_db()  # chỉ cần DB cho job — KHÔNG gRPC, KHÔNG scheduler
 
-    # 4. DB (KHÔNG gRPC, KHÔNG scheduler — chỉ cần DB cho pipeline)
-    from src.database.connection import init_db
-    init_db()
-
-    job_key = _MARKET_JOB[market]
-    log.info("jobs_cli.start", market=market, job_key=job_key)
+    log.info("jobs_cli.start", arg=arg, job_key=job_key)
     try:
-        from src.scheduler.jobs import JOB_FUNCTIONS
-        JOB_FUNCTIONS[job_key]()   # = job_crawl_<market>: _run_pipeline + intraday
-        log.info("jobs_cli.done", market=market)
+        JOB_FUNCTIONS[job_key]()  # job_crawl_* (pipeline) hoặc job_train_* / job_*
+        log.info("jobs_cli.done", job_key=job_key)
         return 0
     except Exception as exc:
-        log.error("jobs_cli.error", market=market, error=str(exc))
+        log.error("jobs_cli.error", job_key=job_key, error=str(exc))
         return 1
 
 

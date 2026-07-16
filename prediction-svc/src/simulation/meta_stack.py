@@ -37,6 +37,7 @@ from typing import Optional
 
 import numpy as np
 
+from src.storage.model_store import get_store
 from src.utils.logger import get_logger
 
 log = get_logger("simulation.meta_stack")
@@ -219,7 +220,7 @@ class MetaStackModel:
         return meta_checkpoint_path(self.market, self.symbol)
 
     def save(self) -> bool:
-        """Pickle checkpoint to disk. Returns True on success."""
+        """Pickle checkpoint to disk (and upload to S3 if backend=s3). Returns True on success."""
         if self._calibrated_model is None:
             return False
         path = self.checkpoint_path()
@@ -228,14 +229,18 @@ class MetaStackModel:
             with open(path, "wb") as fh:
                 pickle.dump({"calibrated_model": self._calibrated_model}, fh)
             log.info("meta.checkpoint.saved", path=path, market=self.market, symbol=self.symbol)
+            # Upload to S3/MinIO (no-op for local backend).
+            get_store().upload_if_remote(path)
             return True
         except Exception as exc:
             log.warning("meta.checkpoint.save.failed", path=path, error=str(exc))
             return False
 
     def load(self) -> bool:
-        """Load checkpoint from disk. Returns True on success, False if absent."""
+        """Load checkpoint from disk (downloading from S3 if backend=s3 and file missing). Returns True on success, False if absent."""
         path = self.checkpoint_path()
+        # Ensure local (downloads from S3 if backend=s3 and file missing locally).
+        path = get_store().ensure_local(path)
         if not os.path.exists(path):
             return False
         try:

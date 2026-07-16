@@ -1,7 +1,6 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing::{error, info};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod bluegreen;
 mod config;
@@ -11,6 +10,7 @@ mod proxy;
 mod registry;
 mod router;
 mod routes;
+mod telemetry;
 mod version;
 
 use config::AppConfig;
@@ -25,11 +25,17 @@ async fn main() {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    init_tracing();
+    // Telemetry (factor 14): console tracing + OTLP exporter. Guard flushes
+    // buffered spans on shutdown. Keep it alive for the whole process.
+    let mut telemetry_guard = telemetry::init();
+    telemetry::metrics::init();
 
     version::stamp();
 
     info!("Starting go-stock-prediction gateway");
+
+    // Admin server (:9100) — Prometheus /metrics, NOT part of the public proxy.
+    spawn_admin_server();
 
     let mut config = match AppConfig::load() {
         Ok(c) => c,
@@ -167,27 +173,36 @@ async fn main() {
             error!("Server error: {}", e);
         }
     }
+
+    // Flush any buffered spans to the collector before exit.
+    telemetry_guard.shutdown();
 }
 
-fn init_tracing() {
-    let log_level =
-        std::env::var("RUST_LOG").unwrap_or_else(|_| "info,gateway=debug".to_string());
-    let format = std::env::var("LOG_FORMAT").unwrap_or_else(|_| "console".to_string());
+/// Spawn the admin HTTP server on :9100 exposing Prometheus `/metrics`.
+///
+/// Deliberately a SEPARATE listener from the public :80/:443 proxy — it is not
+/// in the route table and cannot be reached through the proxy handler. The
+/// admin port is bindable via `ADMIN_PORT` (default 9100).
+fn spawn_admin_server() {
+    let admin_port: u16 = std::env::var("ADMIN_PORT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(9100);
 
-    if format == "json" {
-        tracing_subscriber::registry()
-            .with(tracing_subscriber::EnvFilter::new(log_level))
-            .with(tracing_subscriber::fmt::layer().json())
-            .init();
-    } else {
-        tracing_subscriber::registry()
-            .with(tracing_subscriber::EnvFilter::new(log_level))
-            .with(
-                tracing_subscriber::fmt::layer()
-                    .with_ansi(true) // force colors even without a TTY (Docker)
-                    .with_target(false) // hide the long module target for readability
-                    .compact(),
-            )
-            .init();
-    }
+    let admin_router = axum::Router::new()
+        .route("/metrics", axum::routing::get(telemetry::metrics::metrics_handler))
+        .route("/healthz", axum::routing::get(|| async { "ok" }));
+
+    tokio::spawn(async move {
+        let addr: SocketAddr = ([0, 0, 0, 0], admin_port).into();
+        match tokio::net::TcpListener::bind(addr).await {
+            Ok(listener) => {
+                info!("Admin server (/metrics) listening on http://{}", addr);
+                if let Err(e) = axum::serve(listener, admin_router).await {
+                    error!("Admin server error: {}", e);
+                }
+            }
+            Err(e) => error!("Failed to bind admin server {}: {}", addr, e),
+        }
+    });
 }

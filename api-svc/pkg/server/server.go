@@ -5,6 +5,8 @@ import (
 	"go-stock-prediction/pkg/logger"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func StartHTTPServer() {
@@ -14,7 +16,13 @@ func StartHTTPServer() {
 	// Get server config
 	serverAddr := config.GetServerConfig().Host + ":" + config.GetServerConfig().Port
 
-	handler := CORSMiddleware(JWTMiddleware(AccessLogMiddleware(mux)))
+	// otelhttp wraps the whole chain: it extracts the incoming W3C trace context
+	// (traceparent header, e.g. from the gateway) and starts a server span for
+	// every request so the trace continues into the outbound gRPC calls.
+	handler := otelhttp.NewHandler(
+		CORSMiddleware(JWTMiddleware(AccessLogMiddleware(mux))),
+		"api-svc",
+	)
 
 	// Create HTTP server with proper configuration
 	server := &http.Server{

@@ -15,6 +15,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
@@ -22,8 +24,13 @@ import (
 	"go-stock-prediction/service-mgt/internal/grpcserver"
 	"go-stock-prediction/service-mgt/internal/registry"
 	"go-stock-prediction/service-mgt/internal/store"
+	"go-stock-prediction/service-mgt/internal/telemetry"
 	registrypb "go-stock-prediction/service-mgt/proto/registry"
 )
+
+// metricsAddr is the auxiliary HTTP port that serves GET /metrics for Prometheus
+// scraping. service-mgt is gRPC-only, so metrics live on their own port.
+const metricsAddr = ":9464"
 
 func main() {
 	loc, err := time.LoadLocation("Asia/Ho_Chi_Minh")
@@ -37,6 +44,13 @@ func main() {
 	log.Logger = logger
 
 	cfg := config.Load()
+
+	// OpenTelemetry tracing (OTLP/gRPC → collector). No-op when
+	// OTEL_EXPORTER_OTLP_ENDPOINT is unset (e.g. Docker Compose).
+	telemetry.InitTracing("service-mgt")
+
+	// Auxiliary Prometheus metrics endpoint (gRPC-only service → separate port).
+	telemetry.StartMetricsServer(metricsAddr)
 
 	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
 	if err != nil {
@@ -60,8 +74,15 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msgf("service-mgt: listen :%s failed", cfg.GRPCPort)
 	}
-	grpcSrv := grpc.NewServer()
+	// otelgrpc server handler extracts the incoming trace context from RPC
+	// metadata and starts a server span per RPC.
+	grpcSrv := grpc.NewServer(telemetry.GRPCServerOption())
 	registrypb.RegisterRegistryServer(grpcSrv, grpcserver.New(core))
+
+	// Standard gRPC health service so the k8s native `grpc:` probe works.
+	healthSrv := health.NewServer()
+	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	healthpb.RegisterHealthServer(grpcSrv, healthSrv)
 	go func() {
 		logger.Info().Msgf("service-mgt: gRPC registry listening on :%s", cfg.GRPCPort)
 		if err := grpcSrv.Serve(lis); err != nil {
@@ -75,5 +96,6 @@ func main() {
 	logger.Info().Msgf("service-mgt: received %v, shutting down", s)
 	close(stop)
 	grpcSrv.GracefulStop()
+	telemetry.ShutdownTracing()
 	logger.Info().Msg("service-mgt: stopped")
 }

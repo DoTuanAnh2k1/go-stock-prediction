@@ -104,12 +104,21 @@ impl ProxyClient {
             if matches!(
                 name.as_str(),
                 "host" | "connection" | "content-length" | "transfer-encoding"
+                // W3C trace headers are (re)written from our own span context
+                // below, so drop any inbound copies to avoid duplicates.
+                    | "traceparent" | "tracestate"
             ) {
                 continue;
             }
             if let Ok(v) = value.to_str() {
                 builder = builder.header(key.as_str(), v);
             }
+        }
+
+        // EDGE service: inject the current span's W3C trace context so api-svc
+        // joins the same trace (gateway → api-svc → auth/prediction).
+        for (k, v) in crate::telemetry::traceparent_headers() {
+            builder = builder.header(k, v);
         }
 
         if !body_bytes.is_empty() {
