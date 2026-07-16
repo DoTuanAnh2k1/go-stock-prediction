@@ -16,3 +16,9 @@ data:
   POSTGRES_USER: postgres
   POSTGRES_DB: go_stock_prediction
   LOG_FORMAT: console
+  # ---- OpenTelemetry tracing (OTLP/gRPC → collector in ns observability) ----
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability:4317"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  OTEL_SERVICE_NAME: "service-mgt"
+  OTEL_TRACES_SAMPLER: "parentbased_always_on"
+  OTEL_RESOURCE_ATTRIBUTES: "service.namespace=stock,deployment.environment=kind"

@@ -22,6 +22,15 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          # dnsConfig ndots:1 — mạng hotspot/ISP hijack NXDOMAIN: với ndots:5 mặc định,
+          # tên external (vd api.coingecko.com, 2 dots) bị nối search-domain rác
+          # (tailf643c3.ts.net / DHCP rò từ resolv.conf host) → ISP trả IP parking
+          # (125.235.4.59) → crawl connect treo 30s → saved=0. ndots:1 ép query FQDN
+          # trước → IP thật. Tên in-cluster 1 nhãn (db) 0 dots vẫn expand bình thường.
+          dnsConfig:
+            options:
+              - name: ndots
+                value: "1"
           # initContainer wait-db: chờ DB Ready trước khi pipeline connect (như api-svc).
           # Image timescaledb (đã có sẵn trong cluster) vì prediction-svc không có pg_isready.
           initContainers:

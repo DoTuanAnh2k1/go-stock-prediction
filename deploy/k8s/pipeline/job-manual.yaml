@@ -24,6 +24,12 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      # dnsConfig ndots:1 — bỏ search-domain rác để tránh DNS hijack NXDOMAIN của
+      # mạng hotspot/ISP (xem cronjob-*.yaml). Không có dòng này thì crawl timeout saved=0.
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
       # initContainer wait-db: chờ DB Ready trước khi pipeline connect (như api-svc).
       # Image timescaledb (đã có sẵn trong cluster) vì prediction-svc không có pg_isready.
       initContainers:

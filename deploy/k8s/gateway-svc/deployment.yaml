@@ -22,6 +22,11 @@ spec:
   template:
     metadata:
       labels: { app: gateway-svc }
+      annotations:
+        # Prometheus scrapes /metrics on the admin port :9100 (kubernetes_sd).
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+        prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: gateway-svc   # RBAC cho blue/green controller (rbac.yaml)
       containers:
@@ -29,8 +34,9 @@ spec:
           image: gateway-svc:dev
           imagePullPolicy: IfNotPresent
           ports:
-            - { name: http,  containerPort: 80 }
-            - { name: https, containerPort: 443 }
+            - { name: http,    containerPort: 80 }
+            - { name: https,   containerPort: 443 }
+            - { name: metrics, containerPort: 9100 }
           envFrom:
             - configMapRef: { name: gateway-config }
           resources:

@@ -23,3 +23,15 @@ data:
   PER_SYMBOL_ENABLED: "false"
   PER_SYMBOL_MIN_POINTS: "80"
   PER_SYMBOL_WORKERS: "0"
+  # ---- Factor 10: Scheduler disabled — k8s CronJob manifests drive scheduling ----
+  SCHEDULER_ENABLED: "false"
+  # ---- Factor 4/6/8: Stateless — checkpoints stored in MinIO ----
+  MODEL_STORE_BACKEND: "s3"
+  S3_ENDPOINT: "http://minio.stock:9000"
+  S3_BUCKET: "models"
+  # ---- Factor 14: OpenTelemetry tracing ----
+  OTEL_SERVICE_NAME: "prediction-svc"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability:4317"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  OTEL_TRACES_SAMPLER: "parentbased_always_on"
+  OTEL_RESOURCE_ATTRIBUTES: "service.namespace=stock,deployment.environment=kind"

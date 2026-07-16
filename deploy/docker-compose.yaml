@@ -17,12 +17,19 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../database.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - backup_data:/backups          # ofelia daily-backup ghi pg_dump vào đây (parity với k8s daily-backup CronJob)
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123}
       POSTGRES_DB: ${POSTGRES_DB:-go_stock_prediction}
       PGTZ: Asia/Ho_Chi_Minh
+    # Ofelia daily_backup (thay BackupScheduler in-app của api-svc). $$ = escape để
+    # compose KHÔNG nội suy — sh trong container db mới đánh giá $ lúc chạy.
+    labels:
+      ofelia.enabled: "true"
+      ofelia.job-exec.daily-backup.schedule: "0 0 3 * * *"
+      ofelia.job-exec.daily-backup.command: 'sh -c "PGPASSWORD=$$POSTGRES_PASSWORD pg_dump -h localhost -U $$POSTGRES_USER -d $$POSTGRES_DB | gzip > /backups/backup_$$(date +%Y%m%d_%H%M%S).sql.gz; ls -1t /backups/backup_*.sql.gz | tail -n +11 | xargs -r rm -f"'
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d go_stock_prediction"]
       interval: 10s
@@ -70,11 +77,42 @@ services:
       PER_SYMBOL_ENABLED: "${PER_SYMBOL_ENABLED:-false}"
       PER_SYMBOL_MIN_POINTS: "${PER_SYMBOL_MIN_POINTS:-80}"
       PER_SYMBOL_WORKERS: "${PER_SYMBOL_WORKERS:-0}"
+      # Parity với k8s: KHÔNG chạy APScheduler in-app. Mọi lịch do ofelia
+      # (cron container) gọi `python -m src.jobs_cli <job>` — xem labels bên dưới.
+      SCHEDULER_ENABLED: "${SCHEDULER_ENABLED:-false}"
     volumes:
       - rl_models:/models
       - version_data:/versions
     networks:
       - app-network
+    # Ofelia job-exec: cron container exec vào prediction-svc chạy jobs_cli (dùng
+    # cùng JOB_FUNCTIONS như k8s CronJob). Cron 6-field = giống DEFAULT_SCHEDULES.
+    labels:
+      ofelia.enabled: "true"
+      ofelia.job-exec.crawler-gold.schedule: "0 0 * * * *"
+      ofelia.job-exec.crawler-gold.command: "python -m src.jobs_cli gold"
+      ofelia.job-exec.crawler-nasdaq.schedule: "0 15,45 * * * *"
+      ofelia.job-exec.crawler-nasdaq.command: "python -m src.jobs_cli nasdaq"
+      ofelia.job-exec.crawler-crypto.schedule: "0 0 * * * *"
+      ofelia.job-exec.crawler-crypto.command: "python -m src.jobs_cli crypto"
+      ofelia.job-exec.crawler-sp500.schedule: "0 0,30 * * * *"
+      ofelia.job-exec.crawler-sp500.command: "python -m src.jobs_cli sp500"
+      ofelia.job-exec.train-gold.schedule: "0 0 3 * * 0"
+      ofelia.job-exec.train-gold.command: "python -m src.jobs_cli train_gold"
+      ofelia.job-exec.train-nasdaq.schedule: "0 0 4 * * 0"
+      ofelia.job-exec.train-nasdaq.command: "python -m src.jobs_cli train_nasdaq"
+      ofelia.job-exec.train-crypto.schedule: "0 0 5 * * 0"
+      ofelia.job-exec.train-crypto.command: "python -m src.jobs_cli train_crypto"
+      ofelia.job-exec.train-sp500.schedule: "0 0 7 * * 0"
+      ofelia.job-exec.train-sp500.command: "python -m src.jobs_cli train_sp500"
+      ofelia.job-exec.train-meta.schedule: "0 0 8 * * 0"
+      ofelia.job-exec.train-meta.command: "python -m src.jobs_cli train_meta"
+      ofelia.job-exec.crawler-fundamentals.schedule: "0 0 6 * * 6"
+      ofelia.job-exec.crawler-fundamentals.command: "python -m src.jobs_cli crawler_fundamentals"
+      ofelia.job-exec.train-transformer.schedule: "0 30 2 * * 1,3,5"
+      ofelia.job-exec.train-transformer.command: "python -m src.jobs_cli train_transformer"
+      ofelia.job-exec.daily-reconcile.schedule: "0 0 6 * * *"
+      ofelia.job-exec.daily-reconcile.command: "python -m src.jobs_cli daily_reconcile"
 
   # Auth Service (Java gRPC)
   auth-svc:
@@ -173,6 +211,9 @@ services:
       ADMIN_PASSWORD: "${ADMIN_PASSWORD}"
       JWT_SECRET: "${JWT_SECRET}"
       BACKUP_DIR: "/backups"
+      # Parity với k8s: KHÔNG chạy BackupScheduler in-app. Backup do ofelia gọi
+      # pg_dump trên container db (xem labels service db).
+      BACKUP_SCHEDULER_ENABLED: "${BACKUP_SCHEDULER_ENABLED:-false}"
       ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-https://localhost}"
       AUTH_GRPC_TARGET: "auth-svc:8120"
       INTERNAL_SECRET: "${INTERNAL_SECRET}"
@@ -269,6 +310,24 @@ services:
       # Named volume (not a bind mount): docker seeds it with the image's
       # cli:cli ownership so wish can chmod/persist the generated SSH host key.
       - cli_keys:/etc/cli-svc/keys
+    networks:
+      - app-network
+
+  # Ofelia — container-native cron. Thay APScheduler in-app của prediction-svc và
+  # BackupScheduler của api-svc để ĐỒNG BỘ (parity) cơ chế lịch với k8s CronJob:
+  # cùng gọi `python -m src.jobs_cli <job>` / pg_dump. Đọc labels ofelia.* trên các
+  # container qua Docker socket (read-only). Lịch định nghĩa ở labels service db +
+  # prediction-svc. Xem factor 10 (dev/prod parity) trong spec 15-factor.
+  ofelia:
+    image: mcuadros/ofelia:latest
+    container_name: ofelia
+    depends_on:
+      - prediction-svc
+      - db
+    restart: unless-stopped
+    command: daemon --docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - app-network
 

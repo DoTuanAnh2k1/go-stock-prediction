@@ -19,6 +19,10 @@ spec:
   template:
     metadata:
       labels: { app: api-svc, color: blue }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8118"
+        prometheus.io/path: "/metrics"
     spec:
       initContainers:
         - name: wait-db
@@ -70,6 +74,10 @@ spec:
   template:
     metadata:
       labels: { app: api-svc, color: green }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8118"
+        prometheus.io/path: "/metrics"
     spec:
       initContainers:
         - name: wait-db

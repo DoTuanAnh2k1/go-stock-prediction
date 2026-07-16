@@ -28,6 +28,11 @@ spec:
   template:
     metadata:
       labels: { app: api-svc }
+      # Prometheus scrapes /metrics on the app port (8118) via pod annotations.
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8118"
+        prometheus.io/path: "/metrics"
     spec:
       # fsGroup=2000: chown emptyDir "logs" về group 2000 (group-writable) + thêm 2000
       # làm supplemental group cho mọi container. Image chạy appuser (uid 100, gid 101)

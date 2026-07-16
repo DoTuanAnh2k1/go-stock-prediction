@@ -9,5 +9,9 @@ metadata:
 spec:
   selector: { app: auth-svc }
   ports:
-    - port: 8120
+    - name: grpc
+      port: 8120
       targetPort: 8120
+    - name: mgmt              # Actuator HTTP: /actuator/prometheus + /actuator/health
+      port: 9464
+      targetPort: 9464

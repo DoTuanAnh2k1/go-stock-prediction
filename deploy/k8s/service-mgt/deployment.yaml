@@ -20,6 +20,11 @@ spec:
   template:
     metadata:
       labels: { app: service-mgt }
+      # Metrics live on the auxiliary HTTP port 9464 (service is gRPC-only).
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: "/metrics"
     spec:
       # ---- initContainer wait-db: chờ DB Ready (pg_isready) rồi write-through mới chạy ----
       # Giống api-svc, nhưng image service-mgt (Go) không có pg_isready nên dùng image
@@ -42,10 +47,21 @@ spec:
           image: service-mgt:dev
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 8121
+            - { name: grpc, containerPort: 8121 }
+            - { name: metrics, containerPort: 9464 }
           envFrom:
             - configMapRef: { name: service-mgt-config }
             - secretRef:    { name: service-mgt-secret }
+          # Native gRPC health probes (k8s ≥1.24). The gRPC server responds on
+          # :8121; the kubelet dials the standard grpc.health.v1 service.
+          readinessProbe:
+            grpc: { port: 8121 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            grpc: { port: 8121 }
+            initialDelaySeconds: 15
+            periodSeconds: 20
           resources:
             requests: { cpu: "50m", memory: "64Mi" }
             limits:   { cpu: "250m", memory: "128Mi" }

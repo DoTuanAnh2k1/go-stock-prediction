@@ -23,6 +23,11 @@ spec:
   template:
     metadata:
       labels: { app: cli-svc }
+      # Metrics live on the auxiliary HTTP port 9464 (main listener is SSH).
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: "/metrics"
     spec:
       securityContext:
         runAsUser: 10001
@@ -45,7 +50,8 @@ spec:
           image: cli-svc:dev
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 2345
+            - { name: ssh, containerPort: 2345 }
+            - { name: metrics, containerPort: 9464 }
           envFrom:
             - configMapRef: { name: cli-config }
             - secretRef:    { name: cli-secret }
