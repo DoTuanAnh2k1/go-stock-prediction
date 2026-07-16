@@ -29,6 +29,18 @@
 | `stock_fundamentals` | — | Không hypertable; 1 row/(market_key, symbol) — snapshot báo cáo tài chính mới nhất (yfinance, upsert ON CONFLICT); unique `uq_fundamentals_market_symbol`; dùng bởi `transformer_nn` |
 | `stock_splits` | — | Không hypertable; cột: `id, market_key, symbol, split_date, ratio, numerator, denominator, applied_at, created_at`; unique `uq_stock_splits_sym_date (market_key, symbol, split_date)`; `applied_at NULL` = chưa apply history adjustment; chỉ NASDAQ/SP500 |
 
+### Volumes & Storage (k8s)
+
+| Volume / PVC | ns | Mount | Ghi chú |
+|---|---|---|---|
+| `postgres_data` (PVC) | stock | `/var/lib/postgresql/data` (db pod) | TimescaleDB data |
+| `backup-data` (PVC, 2Gi) | stock | `/backups` (daily-backup CronJob) | pg_dump files; retention 10 file; k8s dùng PVC (persistent), compose dùng Docker volume `backup_data` |
+| `rl_models` / `emptyDir` | stock | `/models` (prediction-svc) | compose: Docker volume `rl_models` (persistent); k8s: `emptyDir` (ephemeral cache) + checkpoint thật ở MinIO |
+| MinIO PVC | stock | `/data` (minio pod) | Object storage bucket `models`; dùng khi `MODEL_STORE_BACKEND=s3` |
+| Tempo PVC | observability | `/var/tempo` (tempo pod) | Traces storage |
+
+**prediction-svc k8s replicas=2:** stateless được vì checkpoint ở MinIO (`MODEL_STORE_BACKEND=s3`); `/models` là `emptyDir` (cache ephemeral, per-pod). Khi pod restart, `ensure_local()` tự download lại từ S3.
+
 ### Conventions quan trọng
 
 - **ORM column:** Cột volume của `crypto_prices` là `volume24h` (Go `Volume24h`, Python `volume24h`)
@@ -41,32 +53,38 @@
 
 ## Cron Schedules
 
-Lưu trong bảng `cron_schedules`, chỉnh live qua `/api/schedules` hoặc Settings page — **không cần restart**.
+Lưu trong bảng `cron_schedules` (reference/display). Chỉnh live qua `/api/schedules` hoặc Settings page — **không cần restart** khi APScheduler in-app đang chạy.
 
-**Nguồn sự thật:** `DEFAULT_SCHEDULES` trong `prediction-svc/src/scheduler/manager.py` — upsert mỗi lần Python khởi động (ghi đè DB nếu khác code). Go `seedCronSchedules()` chỉ insert-if-not-exists.
+**Nguồn sự thật cron expression:** `DEFAULT_SCHEDULES` trong `prediction-svc/src/scheduler/manager.py`. k8s CronJob và ofelia labels mirror giá trị này.
 
-**Ngoại lệ `daily_backup`:** Nguồn sự thật là `backup_scheduler.go` (Go, insert-if-not-exists). Chỉnh được live qua API; Go poll 60s.
+**Hai chế độ thực thi (factor 10 — scheduler unification):**
+- **Compose** (default `SCHEDULER_ENABLED:-false`, `BACKUP_SCHEDULER_ENABLED:-false`): APScheduler in-app và BackupScheduler tắt. Mọi lịch do `ofelia` container chạy (`python -m src.jobs_cli <job>` trên prediction-svc; pg_dump trên db). Có thể bật lại bằng cách set `=true` trong `.env` (hành vi cũ — APScheduler in-app).
+- **k8s** (`SCHEDULER_ENABLED=false`, `BACKUP_SCHEDULER_ENABLED=false`): APScheduler và BackupScheduler tắt. Mọi lịch do k8s CronJob (`deploy/k8s/pipeline/`) nắm — chạy `python -m src.jobs_cli <job_key>` hoặc pg_dump trực tiếp.
+
+**`daily_backup` k8s:** CronJob riêng (`cronjob-backup.yaml`) pg_dump trực tiếp → PVC `backup-data` (2Gi, ns `stock`). Khác với compose (ofelia label trên `db`). api-svc không liên quan khi `BACKUP_SCHEDULER_ENABLED=false`.
 
 ### Danh sách jobs hiện tại
 
-| Job Key | Schedule mặc định | Enabled | Công việc |
-|---------|-------------------|---------|-----------|
-| `daily_reconcile` | `0 0 6 * * *` | bật | Reconcile tất cả markets (catch-all) |
-| `crawler_gold` | `0 0 * * * *` | bật | Pipeline Gold: crawl → train/10 → predict → reconcile → report |
-| `crawler_nasdaq` | `0 15 * * * 1-5` | bật | Pipeline NASDAQ (phút 15, T2-T6) |
-| `crawler_sp500` | `0 0,30 * * * 1-5` | bật | Pipeline S&P 500 (phút 0 và 30, T2-T6) |
-| `crawler_crypto` | `0 0 * * * *` | bật | Pipeline Crypto (mỗi giờ phút 0) |
-| `train_gold` | `0 0 3 * * 0` | bật | Training Gold (Chủ nhật 3AM) |
-| `train_nasdaq` | `0 0 4 * * 0` | bật | Training NASDAQ (Chủ nhật 4AM) |
-| `train_crypto` | `0 0 5 * * 0` | bật | Training Crypto (Chủ nhật 5AM) |
-| `train_sp500` | `0 0 7 * * 0` | bật | Training S&P 500 (Chủ nhật 7AM) |
-| `train_meta` | `0 0 8 * * 0` | bật | Training Meta-Stack LightGBM classifier cho 4 markets (Chủ nhật 8AM) |
-| `crawler_fundamentals` | `0 0 6 * * 6` | bật | Crawl báo cáo tài chính yfinance → `stock_fundamentals` (Thứ Bảy 6AM) — feeds `transformer_nn` |
-| `train_transformer` | `0 30 2 * * 1,3,5` | bật | Refresh transformer_nn trên intraday bars (Thứ 2/4/6 2:30AM — giữa các lần train Chủ nhật) |
-| `simulation_daily` | `0 0 20 * * *` | bật | Bot trading (8PM); live-step theo giờ; NASDAQ/SP500 skip nếu is_intraday_open=False |
-| `daily_backup` | `0 0 3 * * *` | bật | Backup PostgreSQL lúc 3AM — **Go api-svc** chạy, không phải Python |
-| `gold_predict`, `predict_nasdaq`, `predict_crypto`, `predict_sp500` | — | **tắt** | Disabled — đã chạy trong pipeline |
-| `weekly_training`, `daily_prediction` | — | **tắt** | Disabled — thay bằng per-market jobs |
+k8s runner = CronJob file trong `deploy/k8s/pipeline/`. Compose runner = `ofelia` label hoặc in-app APScheduler (khi `SCHEDULER_ENABLED=true`).
+
+| Job Key | Schedule mặc định | Enabled | Công việc | k8s CronJob |
+|---------|-------------------|---------|-----------|-------------|
+| `daily_reconcile` | `0 0 6 * * *` | bật | Reconcile tất cả markets (catch-all) | `cronjob-weekly.yaml` |
+| `crawler_gold` | `0 0 * * * *` | bật | Pipeline Gold: crawl → train/10 → predict → reconcile → report | `cronjob-gold.yaml` |
+| `crawler_nasdaq` | `0 15 * * * 1-5` | bật | Pipeline NASDAQ (phút 15, T2-T6) | `cronjob-nasdaq.yaml` |
+| `crawler_sp500` | `0 0,30 * * * 1-5` | bật | Pipeline S&P 500 (phút 0 và 30, T2-T6) | `cronjob-sp500.yaml` |
+| `crawler_crypto` | `0 0 * * * *` | bật | Pipeline Crypto (mỗi giờ phút 0) | `cronjob-crypto.yaml` |
+| `train_gold` | `0 0 3 * * 0` | bật | Training Gold (Chủ nhật 3AM) | `cronjob-train.yaml` |
+| `train_nasdaq` | `0 0 4 * * 0` | bật | Training NASDAQ (Chủ nhật 4AM) | `cronjob-train.yaml` |
+| `train_crypto` | `0 0 5 * * 0` | bật | Training Crypto (Chủ nhật 5AM) | `cronjob-train.yaml` |
+| `train_sp500` | `0 0 7 * * 0` | bật | Training S&P 500 (Chủ nhật 7AM) | `cronjob-train.yaml` |
+| `train_meta` | `0 0 8 * * 0` | bật | Training Meta-Stack LightGBM classifier cho 4 markets (Chủ nhật 8AM) | `cronjob-train.yaml` |
+| `crawler_fundamentals` | `0 0 6 * * 6` | bật | Crawl báo cáo tài chính yfinance → `stock_fundamentals` (Thứ Bảy 6AM) — feeds `transformer_nn` | `cronjob-weekly.yaml` |
+| `train_transformer` | `0 30 2 * * 1,3,5` | bật | Refresh transformer_nn trên intraday bars (Thứ 2/4/6 2:30AM — giữa các lần train Chủ nhật) | `cronjob-weekly.yaml` |
+| `simulation_daily` | `0 0 20 * * *` | bật | Bot trading (8PM); live-step theo giờ; NASDAQ/SP500 skip nếu is_intraday_open=False | `cronjob-simulation.yaml` |
+| `daily_backup` | `0 0 3 * * *` | bật | Backup PostgreSQL lúc 3AM; k8s: pg_dump → PVC `backup-data`; compose: ofelia label trên `db` | `cronjob-backup.yaml` |
+| `gold_predict`, `predict_nasdaq`, `predict_crypto`, `predict_sp500` | — | **tắt** | Disabled — đã chạy trong pipeline | — |
+| `weekly_training`, `daily_prediction` | — | **tắt** | Disabled — thay bằng per-market jobs | — |
 
 ### Pipeline logic (_run_pipeline trong jobs.py)
 

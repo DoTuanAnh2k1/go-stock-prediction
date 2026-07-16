@@ -4,7 +4,8 @@
 
 ```
 api-svc/cmd/main.go                         # API Backend entry point — config → timezone → logger → repository → grpcclient → backup_scheduler → server
-api-svc/pkg/config/                         # Load .env, trả về config struct toàn cục (bao gồm GRPCConfig)
+api-svc/pkg/config/                         # Load .env, trả về config struct toàn cục (bao gồm GRPCConfig, BackupSchedulerEnabled)
+api-svc/pkg/telemetry/                      # OTel tracing (tracing.go), Prometheus metrics (metrics.go), sampler (sampler.go) — factor 14
 api-svc/pkg/grpc/client/client.go           # gRPC client singleton — API Backend dùng để gọi Python Prediction Service
 api-svc/pkg/grpc/authclient/client.go       # gRPC client singleton — API Backend dùng để gọi Java Auth Service
 api-svc/proto/prediction/prediction.proto   # gRPC service definitions (shared với Python service)
@@ -45,7 +46,7 @@ api-svc/pkg/server/api_users.go                   # CRUD /api/users — quản l
 api-svc/pkg/server/api_market_groups.go           # CRUD /api/market-groups (admin only)
 api-svc/pkg/server/api_schedules.go               # GET /api/schedules, PUT /api/schedules/{key}
 api-svc/pkg/server/api_backup.go                  # GET/POST/DELETE /api/backups; runBackup(ctx) dùng chung
-api-svc/pkg/server/backup_scheduler.go            # StartBackupScheduler(store) — poll DB 60s, seed daily_backup
+api-svc/pkg/server/backup_scheduler.go            # StartBackupScheduler(store) — poll DB 60s, seed daily_backup; guard BACKUP_SCHEDULER_ENABLED
 api-svc/pkg/server/api_simulation.go              # GET /api/simulation/leaderboard, bots, trades, chart; PUT config; POST toggle/run
 api-svc/pkg/server/api_monitoring.go              # GET /api/monitoring/overview, /api/monitoring/bots
 api-svc/pkg/server/api_pipeline_reports.go        # GET /api/pipeline-reports
@@ -89,7 +90,7 @@ prediction-svc/
 ├── deploy/prediction-svc.Dockerfile    # Multi-stage: proto-builder → python:3.12-slim; build context = repo root
 ├── pyproject.toml                      # Dependencies: torch, statsmodels, lightgbm, xgboost, grpcio, APScheduler, SQLAlchemy, pandas-ta; optuna [ml]
 ├── src/
-│   ├── main.py                         # Entry point — config → timezone → logger → DB → gRPC → scheduler → registry_client → signal wait
+│   ├── main.py                         # Entry point — config → timezone → logger → DB → gRPC → scheduler (skip nếu SCHEDULER_ENABLED=false) → registry_client → signal wait
 │   ├── config.py                       # Pydantic Settings (env vars; service_mgt_enabled, registry_grpc_target)
 │   ├── registry_client.py              # RegistryClient — register/heartbeat daemon thread; re-register khi NOT_FOUND
 │   ├── database/
@@ -122,9 +123,15 @@ prediction-svc/
 │   │   ├── sp500.py                    # Yahoo Finance — 16 S&P 500 symbols
 │   │   ├── fundamentals.py             # yfinance — báo cáo tài chính NASDAQ+SP500 → stock_fundamentals (tuần)
 │   │   └── sanity.py                   # Crawl sanity guard: check_update() persistence-confirmed daily gate + batch_outlier_mask() bilateral intraday spike filter
+│   ├── storage/
+│   │   └── model_store.py              # ModelStore abstraction: backend local|s3; ensure_local()/upload_if_remote(); singleton get_store(); wire vào rl_dqn/transformer/meta_stack
+│   ├── telemetry/
+│   │   ├── tracing.py                  # OTel SDK tracing setup — OTLP/gRPC exporter → otel-collector.observability:4317
+│   │   └── metrics.py                  # Prometheus client — HTTP metrics server :9464
 │   ├── scheduler/
-│   │   ├── manager.py                  # APScheduler + DB-backed CronSchedule; poll 60s; DEFAULT_SCHEDULES
-│   │   └── jobs.py                     # Định nghĩa tất cả jobs (_run_pipeline, train, reconcile)
+│   │   ├── manager.py                  # APScheduler + DB-backed CronSchedule; poll 60s; DEFAULT_SCHEDULES; guard SCHEDULER_ENABLED
+│   │   └── jobs.py                     # Định nghĩa tất cả jobs (_run_pipeline, train, reconcile); JOB_FUNCTIONS dict (dùng bởi jobs_cli.py)
+│   ├── jobs_cli.py                     # CLI entrypoint cho k8s Job/CronJob: `python -m src.jobs_cli <job_key|gold|nasdaq|crypto|sp500>`; --list; exit 0/1/2; KHÔNG gRPC KHÔNG scheduler
 │   ├── orchestrator/
 │   │   ├── runner.py                   # run_for_market(key); target = now+1h; is_intraday_open guard NASDAQ/SP500
 │   │   ├── training.py                 # reconcile_predictions(only_market=None); train_for_market(); train_meta_for_market(); train_meta_all()
@@ -158,7 +165,7 @@ auth-svc/                               # Spring Boot 3 Java Auth Service — gR
 │                                       # GrpcLoggingInterceptor (@GrpcGlobalServerInterceptor) — log 1 dòng/RPC
 │                                       # RegistryClient — @EventListener register, @Scheduled(10s) heartbeat, @PreDestroy deregister
 ├── src/main/proto/
-│   ├── auth.proto                      # Bản Java (đồng bộ với api-svc/proto/auth/auth.proto)
+│   ├── auth.proto                      # KHÔNG SỬA TAY — generated bởi `make proto-auth-sync` (copy từ api-svc/proto/auth/auth.proto)
 │   └── registry.proto                  # Copy của service-mgt/proto/registry/registry.proto
 └── src/main/resources/
     ├── application.yml                 # spring.output.ansi.enabled: always; cấu hình service-mgt
@@ -260,7 +267,7 @@ service-mgt/                                # Go Service Registry — gRPC :8121
 
 ```
 deploy/
-├── docker-compose.yaml          # Toàn bộ stack
+├── docker-compose.yaml          # Toàn bộ stack; thêm service ofelia (container-native cron); SCHEDULER_ENABLED=false + BACKUP_SCHEDULER_ENABLED=false trên các service liên quan
 ├── docker-compose.test.yml      # Test stack
 ├── api-svc.Dockerfile           # Go API Backend (build context = repo root)
 ├── auth-svc.Dockerfile          # Java Auth Service
@@ -268,5 +275,18 @@ deploy/
 ├── web-svc.Dockerfile           # React Frontend
 ├── gateway-svc.Dockerfile       # Rust Gateway
 ├── cli-svc.Dockerfile           # Go CLI (build context = ../cli-svc riêng)
-└── service-mgt.Dockerfile       # Go Service Registry (build context = ../service-mgt)
+├── service-mgt.Dockerfile       # Go Service Registry (build context = ../service-mgt)
+└── k8s/
+    ├── observability/           # ns observability: namespace.yaml, otel-collector.yaml, prometheus.yaml, tempo.yaml, grafana.yaml
+    ├── minio/                   # ns stock: minio.yaml (Deployment+PVC+Service, bucket models)
+    ├── pipeline/                # CronJob: cronjob-gold/nasdaq/crypto/sp500.yaml (crawler); cronjob-train.yaml (train_*+train_meta); cronjob-weekly.yaml (fundamentals+train_transformer+daily_reconcile); cronjob-backup.yaml (pg_dump+PVC backup-data); cronjob-simulation.yaml
+    ├── api-svc/                 # Deployment, Service, ConfigMap (api-config)
+    ├── auth-svc/                # Deployment, Service, ConfigMap
+    ├── prediction-svc/          # Deployment (replicas=2), Service, ConfigMap (prediction-config: SCHEDULER_ENABLED=false, MODEL_STORE_BACKEND=s3)
+    ├── gateway-svc/             # Deployment, Service (LoadBalancer :80/:443)
+    ├── cli-svc/                 # Deployment, Service
+    ├── service-mgt/             # Deployment, Service
+    ├── web-svc/                 # Deployment, Service
+    ├── db/                      # StatefulSet TimescaleDB
+    └── pgadmin/                 # Deployment pgAdmin
 ```

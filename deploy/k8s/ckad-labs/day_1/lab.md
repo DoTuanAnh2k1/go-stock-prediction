@@ -180,8 +180,13 @@ Cuối cùng xóa `demo-*` là roll back xong.
 
 ```bash
 # --- setup: Pod nháp NGAY trong stock (coi stock là sandbox) ---
+# Cách A (imperative — exam-speed):
 kubectl run demo-web --image=api-svc:dev -n stock --labels="app=demo,tier=frontend,env=dev" --command -- sleep 3600
 kubectl run demo-api --image=api-svc:dev -n stock --labels="app=demo,tier=backend,env=prod" --command -- sleep 3600
+# Cách B (declarative — cùng object, tái lập được):
+#   kubectl apply -f lab-1.4-demo.yaml    # dựng demo-web + demo-api + demo-dep
+#   kubectl delete -f lab-1.4-demo.yaml   # roll back sạch
+# (Phần drill label/annotate/query bên dưới VẪN imperative — đó là nội dung bài.)
 
 # --- QUERY bằng selector ---
 kubectl get pods -n stock -l app=demo --show-labels    # xem hết label

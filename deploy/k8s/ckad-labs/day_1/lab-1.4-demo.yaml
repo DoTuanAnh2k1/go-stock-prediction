@@ -1,0 +1,68 @@
+# Lab 1.4 — Label & Annotation Drill (setup dạng khai báo)
+# Tương đương phần `kubectl run` / `kubectl create deployment` nhưng apply được:
+#   kubectl apply -f lab-1.4-demo.yaml
+# Roll back:
+#   kubectl delete -f lab-1.4-demo.yaml
+# LƯU Ý: chỉ dựng object NHÁP (demo-*). Phần drill (kubectl label/annotate/query)
+# vẫn chạy imperative như trong lab.md — đó mới là nội dung bài học.
+---
+# ⟺ kubectl run demo-web --image=api-svc:dev -n stock \
+#      --labels="app=demo,tier=frontend,env=dev" --command -- sleep 3600
+apiVersion: v1
+kind: Pod
+metadata:
+  name: demo-web
+  namespace: stock
+  labels:
+    app: demo
+    tier: frontend
+    env: dev
+spec:
+  containers:
+    - name: demo-web
+      image: api-svc:dev
+      command: ["sleep", "3600"]
+  restartPolicy: Always
+---
+# ⟺ kubectl run demo-api --image=api-svc:dev -n stock \
+#      --labels="app=demo,tier=backend,env=prod" --command -- sleep 3600
+apiVersion: v1
+kind: Pod
+metadata:
+  name: demo-api
+  namespace: stock
+  labels:
+    app: demo
+    tier: backend
+    env: prod
+spec:
+  containers:
+    - name: demo-api
+      image: api-svc:dev
+      command: ["sleep", "3600"]
+  restartPolicy: Always
+---
+# ⟺ kubectl create deployment demo-dep --image=api-svc:dev -n stock -- sleep 3600
+# replicas: 1 để giữ nguyên bước drill `kubectl scale deployment demo-dep --replicas=3`.
+# (Muốn bỏ bước scale thì đổi replicas: 3.)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-dep
+  namespace: stock
+  labels:
+    app: demo-dep
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-dep
+  template:
+    metadata:
+      labels:
+        app: demo-dep
+    spec:
+      containers:
+        - name: demo-dep
+          image: api-svc:dev
+          command: ["sleep", "3600"]

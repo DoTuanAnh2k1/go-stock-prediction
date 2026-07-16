@@ -184,11 +184,11 @@ const DATA = {
     },
     {
       id:"1.4", title:"Label & Annotation Drill", domain:"App Design & Build (20%)", duration:"~30m", status:"done",
-      prep:["Không cần — Pod nháp <code>demo-*</code> tạo ngay trong stock (coi stock là sandbox)."],
-      cleanup:["<code>kubectl delete deploy demo-dep -n stock; kubectl delete pod -n stock -l 'app in (demo,quarantine)'</code>"],
-      request:"Gán/sửa label hàng loạt, query bằng selector, dùng --overwrite. Thực hành thẳng trên ns stock (Pod nháp demo-*), cuối roll back.",
+      prep:["Setup Pod nháp <code>demo-*</code> trong stock (coi stock là sandbox) — chọn 1 trong 2: <b>imperative</b> <code>kubectl run</code> (bên dưới) HOẶC <b>declarative</b> <code>kubectl apply -f deploy/k8s/ckad-labs/day_1/lab-1.4-demo.yaml</code> (dựng demo-web + demo-api + demo-dep)."],
+      cleanup:["<code>kubectl delete deploy demo-dep -n stock; kubectl delete pod -n stock -l 'app in (demo,quarantine)'</code> — hoặc nếu setup bằng manifest: <code>kubectl delete -f deploy/k8s/ckad-labs/day_1/lab-1.4-demo.yaml</code> (+ xóa pod quarantine nếu đã tách)."],
+      request:"Gán/sửa label hàng loạt, query bằng selector, dùng --overwrite. Thực hành thẳng trên ns stock (Pod nháp demo-*), cuối roll back. Setup object dựng được cả imperative (kubectl run) lẫn declarative (kubectl apply -f lab-1.4-demo.yaml); riêng phần DRILL (label/annotate/query) giữ imperative — đó là nội dung bài.",
       steps:[
-        "Tạo Pod nháp trong stock: <code>kubectl run demo-web --image=api-svc:dev --labels=... --command -- sleep 3600</code>.",
+        "Tạo Pod nháp trong stock — <b>imperative</b>: <code>kubectl run demo-web --image=api-svc:dev --labels=... --command -- sleep 3600</code>; HOẶC <b>declarative</b>: <code>kubectl apply -f deploy/k8s/ckad-labs/day_1/lab-1.4-demo.yaml</code>.",
         "Query selector: <code>-l</code>, <code>-L</code> (cột), set-based <code>'env in (prod)'</code>, <code>--show-labels</code>.",
         "Label CRUD: thêm / sửa (<code>--overwrite</code>) / xóa (<code>key-</code>) / hàng loạt (<code>-l</code>).",
         "Tách Pod khỏi RS: relabel <code>app=</code> → RS đẻ Pod bù; Pod tách vẫn Running.",
@@ -200,10 +200,12 @@ const DATA = {
         "<code>-L app,tier</code> (hoa) = hiện label thành CỘT; <code>--show-labels</code> = xem hết.",
         "Sửa label đã tồn tại BẮT BUỘC <code>--overwrite</code> (thiếu ⇒ lỗi 'already has a value'). Xóa bằng hậu tố <code>key-</code>.",
         "⚠️ <code>.spec.selector</code> của Deployment/StatefulSet là IMMUTABLE.",
-        "Kỹ thuật: đổi label <code>app=</code> của 1 Pod ⇒ tách khỏi RS ⇒ RS đẻ Pod mới bù; Pod tách vẫn sống để debug."
+        "Kỹ thuật: đổi label <code>app=</code> của 1 Pod ⇒ tách khỏi RS ⇒ RS đẻ Pod mới bù; Pod tách vẫn sống để debug.",
+        "Setup object dựng được cả 2 chiều: <code>kubectl run</code>/<code>create deployment</code> (imperative, exam-speed) HOẶC <code>kubectl apply -f lab-1.4-demo.yaml</code> (declarative, tái lập). Nhưng chính DRILL (label/annotate/query/--overwrite) VẪN imperative — đó mới là kỹ năng của lab, không nên biến thành sửa YAML."
       ],
       commands:[
-        {cmd:"kubectl run demo-web --image=api-svc:dev -n stock \\\n  --labels=app=demo,tier=frontend,env=dev --command -- sleep 3600", note:"Pod nháp trong stock", out:"pod/demo-web created"},
+        {cmd:"kubectl run demo-web --image=api-svc:dev -n stock \\\n  --labels=app=demo,tier=frontend,env=dev --command -- sleep 3600", note:"Pod nháp trong stock (imperative)", out:"pod/demo-web created"},
+        {cmd:"# hoặc DECLARATIVE — cùng object, apply được:\nkubectl apply -f deploy/k8s/ckad-labs/day_1/lab-1.4-demo.yaml", note:"dựng demo-web + demo-api + demo-dep", out:"pod/demo-web created\npod/demo-api created\ndeployment.apps/demo-dep created"},
         {cmd:"kubectl get pods -n stock -l app=demo -L tier,env", note:"label thành cột", out:"NAME       READY   STATUS    TIER       ENV\ndemo-api   1/1     Running   backend    prod\ndemo-web   1/1     Running   frontend   dev"},
         {cmd:"kubectl get pods -n stock -l 'app=demo,env in (prod)'", note:"set-based + AND", out:"NAME       READY   STATUS\ndemo-api   1/1     Running"},
         {cmd:"kubectl label pod demo-web tier=backend -n stock", note:"thiếu --overwrite ⇒ LỖI", out:"error: 'tier' already has a value (frontend), and --overwrite is false"},
