@@ -66,6 +66,11 @@ data:
 
       # Scrape mọi pod có annotation prometheus.io/scrape=true trên toàn cluster.
       - job_name: kubernetes-pods
+        # honor_labels: giữ nhãn GỐC của metric khi trùng với nhãn relabel đặt.
+        # Cần cho kube-state-metrics (metric mang sẵn namespace/pod của OBJECT) —
+        # nếu không, relabel đè bằng ns/pod của pod-scraper → nhãn thật thành
+        # exported_namespace/exported_pod, join theo namespace/pod hỏng.
+        honor_labels: true
         kubernetes_sd_configs:
           - role: pod
         relabel_configs:

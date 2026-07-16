@@ -239,6 +239,28 @@ data:
           "targets": [
             { "refId": "A", "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100", "legendFormat": "{{instance}}" }
           ]
+        },
+        {
+          "id": 5,
+          "title": "% CPU per pod (của limit) — ns stock",
+          "type": "timeseries",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "gridPos": { "h": 9, "w": 12, "x": 0, "y": 17 },
+          "fieldConfig": { "defaults": { "unit": "percent", "min": 0 }, "overrides": [] },
+          "targets": [
+            { "refId": "A", "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"stock\",container!=\"\",container!=\"POD\"}[2m])) by (pod) / sum(kube_pod_container_resource_limits{namespace=\"stock\",resource=\"cpu\"}) by (pod) * 100", "legendFormat": "{{pod}}" }
+          ]
+        },
+        {
+          "id": 6,
+          "title": "% RAM per pod (của limit) — ns stock",
+          "type": "timeseries",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "gridPos": { "h": 9, "w": 12, "x": 12, "y": 17 },
+          "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
+          "targets": [
+            { "refId": "A", "expr": "sum(container_memory_working_set_bytes{namespace=\"stock\",container!=\"\",container!=\"POD\"}) by (pod) / sum(kube_pod_container_resource_limits{namespace=\"stock\",resource=\"memory\"}) by (pod) * 100", "legendFormat": "{{pod}}" }
+          ]
         }
       ]
     }
