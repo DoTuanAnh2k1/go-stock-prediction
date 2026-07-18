@@ -56,6 +56,13 @@ metadata:
   labels: { app: api-svc }
 spec:
   replicas: {{ .Values.replicas.api }}
+  # Lab 2.2 — Blue/Green kiểu 1 Deployment: maxSurge=100% bung đủ bộ green song song blue,
+  # maxUnavailable=0 giữ blue tới khi green Ready => cutover blue/green-style; `rollout undo` = rollback.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 100%
+      maxUnavailable: 0
   selector:
     matchLabels: { app: api-svc }
   template:

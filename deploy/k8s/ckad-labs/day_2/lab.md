@@ -126,7 +126,29 @@ nhìn thấy được thì phải rebuild image có thay đổi. Cơ chế rollo
 - Run two Deployments (blue and green)
 - Route traffic via single Service selector flip
 
-### ✅ Đã thực hiện (2026-07-11) — trên Service `web-svc` thật
+### ✅ Lời giải (mentor yêu cầu) — 1 Deployment, KHÔNG tạo 2 blue/green riêng
+
+> ⚠️ Đề gốc ghi *"Run two Deployments (blue and green)"* + *"single Service selector flip"* —
+> đó là blue/green KINH ĐIỂN (2 môi trường + lật selector). Nhưng mentor yêu cầu **chỉ dùng
+> 1 Deployment**. Với 1 Deployment thì KHÔNG có 2 bộ nhãn để "lật selector" giữa blue↔green,
+> nên bản 1-Deployment thực chất là **rolling update cấu hình blue/green-style**
+> (`maxSurge:100% maxUnavailable:0`): bung nguyên bộ GREEN song song BLUE, green Ready hết rồi
+> mới gỡ blue → cutover zero-downtime; `rollout undo` = rollback. KHÔNG phải blue/green "thật"
+> (không gate/test green trước, không lật tức thì) nhưng thỏa ràng buộc "1 Deployment".
+
+Áp trong Helm (default, `bluegreen.enabled=false`): `deploy/helm/stock/templates/web-svc-deployment.yaml`
++ `api-svc-deployment.yaml` đã đặt `strategy.rollingUpdate.maxSurge:100% maxUnavailable:0`.
+
+```bash
+kubectl -n stock set image deploy/web-svc web-svc=web-svc:v2   # cutover: green lên đủ rồi gỡ blue
+kubectl -n stock rollout status deploy/web-svc                 # AVAILABLE giữ nguyên = zero-downtime
+kubectl -n stock rollout undo deploy/web-svc                   # rollback tức thì
+```
+
+Kiểm chứng đã chạy thật (ns nháp, 4 replica): set image → **8 pod** (4 blue Ready + 4 green surge),
+`AVAILABLE` giữ **4**; green Ready → blue gỡ (RS cũ 0, RS mới 4/4); `rollout undo` về blue sạch.
+
+### 🔬 Biến thể nâng cao (blue/green "thật", 2 Deployment) — giữ tham khảo
 
 Manifest: `deploy/k8s/ckad-labs/day_2/web-bluegreen.yaml` — 2 Deployment:
 `web-svc-blue` (web-svc:dev) + `web-svc-green` (web-svc:v2), mỗi cái selector gồm

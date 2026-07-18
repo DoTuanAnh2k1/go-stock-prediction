@@ -2,7 +2,7 @@
 # =============================================================================
 # CKAD — Day 2 — Deployments & rollouts. Chạy TRỌN 4 lab, in lệnh + OUTPUT THẬT.
 #   2.1 Rolling Update & Rollback   (app demo 'web' nginx, cô lập)
-#   2.2 Blue/Green Switch           (app demo 'bg' cô lập — KHÔNG đụng web-svc thật)
+#   2.2 Blue/Green Switch           (1 Deployment 'bg', maxSurge:100% — KHÔNG đụng web-svc thật)
 #   2.3 Scale & HPA                 (app 'cpu-burn' hpa-example)
 #   2.4 Kustomize Overlay           (app 'web-kz' cô lập)
 #
@@ -77,18 +77,23 @@ run kubectl get pods -n "$NS" -l app=web
 
 # =============================================================================
 lab_2_2(){
-title "LAB 2.2 — Blue/Green Switch (app cô lập 'bg' — web-svc THẬT không bị đụng)"
+title "LAB 2.2 — Blue/Green Switch, kiểu 1 DEPLOYMENT (mentor yêu cầu; app cô lập 'bg')"
+note "Đề gốc là 2 Deployment + lật selector (blue/green thật). Mentor yêu cầu CHỈ 1 Deployment"
+note "=> RollingUpdate maxSurge=100%/maxUnavailable=0: bung GREEN song song BLUE rồi gỡ BLUE. web-svc thật KHÔNG bị đụng."
 
-note "setup) 2 Deployment bg-blue(color=blue, web-svc:dev) + bg-green(color=green, web-svc:v2) + Service bg→blue"
+note "setup) 1 Deployment 'bg' (4 replica, RollingUpdate maxSurge=100% maxUnavailable=0, web-svc:dev = BLUE) + Service bg"
 kubectl apply -f - >/dev/null <<'EOF'
 apiVersion: apps/v1
 kind: Deployment
-metadata: { name: bg-blue, namespace: stock, labels: { app: bg, color: blue } }
+metadata: { name: bg, namespace: stock, labels: { app: bg } }
 spec:
-  replicas: 2
-  selector: { matchLabels: { app: bg, color: blue } }
+  replicas: 4
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 100%, maxUnavailable: 0 }
+  selector: { matchLabels: { app: bg } }
   template:
-    metadata: { labels: { app: bg, color: blue } }
+    metadata: { labels: { app: bg } }
     spec:
       containers:
         - name: web
@@ -96,41 +101,37 @@ spec:
           imagePullPolicy: IfNotPresent
           ports: [ { containerPort: 3000 } ]
           readinessProbe: { httpGet: { path: /, port: 3000 }, initialDelaySeconds: 2, periodSeconds: 3 }
----
-apiVersion: apps/v1
-kind: Deployment
-metadata: { name: bg-green, namespace: stock, labels: { app: bg, color: green } }
-spec:
-  replicas: 2
-  selector: { matchLabels: { app: bg, color: green } }
-  template:
-    metadata: { labels: { app: bg, color: green } }
-    spec:
-      containers:
-        - name: web
-          image: web-svc:v2
-          imagePullPolicy: IfNotPresent
-          ports: [ { containerPort: 3000 } ]
-          readinessProbe: { httpGet: { path: /, port: 3000 }, initialDelaySeconds: 2, periodSeconds: 3 }
+          # preStop sleep 5: pod phục vụ thêm 5s khi đang bị gỡ endpoint -> tránh termination race
+          # (SIGTERM tới nginx TRƯỚC khi kube-proxy gỡ endpoint) => 0 request rớt khi cutover.
+          lifecycle: { preStop: { exec: { command: ["sh", "-c", "sleep 5"] } } }
 ---
 apiVersion: v1
 kind: Service
 metadata: { name: bg, namespace: stock, labels: { app: bg } }
 spec:
-  selector: { app: bg, color: blue }
+  selector: { app: bg }
   ports: [ { port: 3000, targetPort: 3000 } ]
 EOF
-run kubectl get deploy -n "$NS" -l app=bg
-note "   chờ cả 2 màu Ready..."
-kubectl rollout status deploy/bg-blue -n "$NS" --timeout=120s || true
-kubectl rollout status deploy/bg-green -n "$NS" --timeout=120s || true
+kubectl rollout status deploy/bg -n "$NS" --timeout=120s || true
+run kubectl get deploy bg -n "$NS"
 
-note "1) Service bg đang trỏ BLUE — endpoints = 2 IP pod blue"
-run kubectl get endpoints bg -n "$NS" -o wide
+note "1) SURGE nhìn thấy được — set image tới image LỖI để 'đóng băng' surge cho dễ quan sát:"
+note "   maxSurge=100% bung nguyên bộ GREEN (4) song song BLUE (4) = 8 pod; maxUnavailable=0 giữ AVAILABLE=4"
+run kubectl set image deploy/bg web=web-svc:nope -n "$NS"
+kubectl rollout status deploy/bg -n "$NS" --timeout=12s || printf '%s   ↑ kẹt (green chưa Ready) = đúng, để quan sát surge%s\n' "$D" "$X"
+runsh "kubectl get pods -n $NS -l app=bg -o custom-columns='POD:.metadata.name,IMAGE:.spec.containers[0].image,READY:.status.containerStatuses[0].ready' --no-headers"
+run kubectl get deploy bg -n "$NS"
+note "   → 4 BLUE Ready phục vụ 100% + 4 GREEN surge (chưa Ready); AVAILABLE giữ 4"
 
-note "2) FLIP selector color=green (switch tức thời; green đã Ready sẵn nên zero-downtime)"
-run bash "$E2E" bluegreen bg color green
-note "   → Endpoints đổi sang 2 IP pod green. Selector Deployment IMMUTABLE nên phải 2 Deployment; rollback = lật lại color=blue."
+note "2) CUTOVER thật blue→green (web-svc:v2) + đo zero-downtime bằng poller TRONG cluster"
+run bash "$E2E" zero-downtime bg 3000 bg web-svc:v2 /
+note "   RS sau cutover: web-svc:dev(blue)→0, web-svc:nope→0, web-svc:v2(green)→4/4"
+runsh "kubectl get rs -n $NS -l app=bg -o custom-columns='RS:.metadata.name,IMAGE:.spec.template.spec.containers[0].image,DESIRED:.spec.replicas,READY:.status.readyReplicas' --no-headers"
+
+note "3) ROLLBACK về BLUE — rollout undo --to-revision=1 (tức thì; KHÔNG lật selector vì chỉ 1 Deployment)"
+run bash "$E2E" rollback bg 1
+runsh "kubectl get deploy bg -n $NS -o jsonpath='{.spec.template.spec.containers[0].image}'; echo '  <- da ve blue'"
+note "   Khác 2.1: 2.1 maxSurge=1 (thay dần từng pod); 2.2 maxSurge=100% (bung cả loạt = blue/green-style)."
 }
 
 # =============================================================================
@@ -218,10 +219,10 @@ run kubectl delete -k "$DIR/kustomize/overlays/prod"
 
 # =============================================================================
 cleanup(){
-  [ "${KEEP:-0}" = "1" ] && { printf '\n%sKEEP=1 → giữ lại object (web, bg-*, web-kz, HPA...).%s\n' "$D" "$X"; return; }
+  [ "${KEEP:-0}" = "1" ] && { printf '\n%sKEEP=1 → giữ lại object (web, bg, web-kz, HPA...).%s\n' "$D" "$X"; return; }
   title "DỌN DẸP (roll back — web-svc thật + cpu-burn giữ nguyên)"
   run kubectl delete -f "$DIR/web.yaml" --ignore-not-found
-  run kubectl delete deploy bg-blue bg-green -n "$NS" --ignore-not-found
+  run kubectl delete deploy bg -n "$NS" --ignore-not-found
   run kubectl delete svc bg -n "$NS" --ignore-not-found
   run kubectl delete -k "$DIR/kustomize/overlays/prod" --ignore-not-found
   run kubectl delete pod e2e-poller e2e-load -n "$NS" --ignore-not-found
