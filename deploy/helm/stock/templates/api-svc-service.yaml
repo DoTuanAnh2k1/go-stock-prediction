@@ -1,0 +1,15 @@
+# =============================================================================
+# api-svc — ClusterIP Service, expose :8118 trong cluster.
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-svc
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector: { app: api-svc }
+  ports:
+    # targetPort → ambassador nginx (:18118) → proxy_pass app :8118. Service port giữ 8118
+    # nên gateway-svc (proxy /api → api-svc:8118) không đổi.
+    - port: 8118
+      targetPort: 18118

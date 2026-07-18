@@ -1,0 +1,43 @@
+{{- if .Values.pgadmin.enabled }}
+# =============================================================================
+# pgadmin — PostgreSQL web UI (dpage/pgadmin4). Public image, không cần kind load.
+# Truy cập qua port-forward:
+#   kubectl port-forward -n stock svc/pgadmin 8081:80
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgadmin
+  namespace: {{ .Release.Namespace }}
+  labels: { app: pgadmin }
+spec:
+  replicas: {{ .Values.replicas.pgadmin }}
+  selector:
+    matchLabels: { app: pgadmin }
+  template:
+    metadata:
+      labels: { app: pgadmin }
+    spec:
+      tolerations:                          # HA: cho phép chạy trên node control-plane (dùng cả 3 node)
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      topologySpreadConstraints:            # HA: rải pod đều các node (kubernetes.io/hostname)
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule     # hard: ép mỗi pod khác node
+          matchLabelKeys: [pod-template-hash]  # spread theo từng ReplicaSet → rollout không kẹt
+          labelSelector:
+            matchLabels: { app: pgadmin }
+      containers:
+        - name: pgadmin
+          image: dpage/pgadmin4:latest
+          ports:
+            - containerPort: 80
+          envFrom:
+            - configMapRef: { name: pgadmin-config }
+            - secretRef:    { name: pgadmin-secret }
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits:   { cpu: "300m", memory: "384Mi" }
+{{- end }}

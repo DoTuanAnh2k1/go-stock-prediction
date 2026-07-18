@@ -1,0 +1,60 @@
+{{- if not .Values.bluegreen.enabled }}
+# =============================================================================
+# web-svc — React + Vite build, phục vụ static qua Nginx (:3000).
+#
+# Build & load image:
+#   docker build -t web-svc:dev -f deploy/web-svc.Dockerfile web-svc
+#   kind load docker-image web-svc:dev --name ckad
+#
+# Không cần env (gọi API tương đối qua gateway). Truy cập qua gateway-svc, không expose trực tiếp.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-svc
+  namespace: {{ .Release.Namespace }}
+  labels: { app: web-svc }
+spec:
+  replicas: {{ .Values.replicas.web }}                    # ≥2 để rolling update zero-downtime (Lab 2.1)
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0          # không bao giờ giảm dưới số replica mong muốn
+  selector:
+    matchLabels: { app: web-svc }
+  template:
+    metadata:
+      labels: { app: web-svc }
+    spec:
+      tolerations:                          # HA: cho phép chạy trên node control-plane (dùng cả 3 node)
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      topologySpreadConstraints:            # HA: rải pod đều các node (kubernetes.io/hostname)
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule     # hard: ép mỗi pod khác node
+          matchLabelKeys: [pod-template-hash]  # spread theo từng ReplicaSet → rollout không kẹt
+          labelSelector:
+            matchLabels: { app: web-svc }
+      containers:
+        - name: web-svc
+          image: "{{ .Values.images.webSvc }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet: { path: /, port: 3000 }   # Service chỉ route pod đã sẵn sàng
+            initialDelaySeconds: 2
+            periodSeconds: 3
+          # preStop: giữ pod phục vụ thêm 5s trong lúc bị gỡ khỏi Endpoints -> tránh
+          # termination race, zero-dropped-connection khi rolling update.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          resources:
+            requests: { cpu: "20m", memory: "32Mi" }
+            limits:   { cpu: "200m", memory: "128Mi" }
+{{- end }}

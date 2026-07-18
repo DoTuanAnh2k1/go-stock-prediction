@@ -1,0 +1,7 @@
+apiVersion: v2
+name: stock
+description: Go stock prediction — app stack (ns stock). Port 1-1 từ deploy/k8s/ sang Helm.
+type: application
+# version = phiên bản chart; appVersion = phiên bản ứng dụng (image tag mặc định *:dev cho kind).
+version: 0.1.0
+appVersion: "dev"

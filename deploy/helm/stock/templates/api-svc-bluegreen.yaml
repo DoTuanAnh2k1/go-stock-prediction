@@ -1,0 +1,247 @@
+{{- if .Values.bluegreen.enabled }}
+# =============================================================================
+# api-svc blue/green — 2 Deployment + 2 Service (per màu). Gateway route "/api"
+# tới Service màu active (backend: http://api-svc-<color>:8118). 2 màu chung DB
+# (api-svc không migration → an toàn).
+#
+# Multi-container pod (pattern 4-container — CKAD), áp cho CẢ hai màu:
+#   init  wait-db     — chờ DB Ready (pg_isready).
+#   app   api-svc     — HTTP :8118; tee log ra /var/log/app cho sidecar.
+#   amb   nginx       — ambassador :18118 → localhost:8118 (Service màu trỏ vào đây;
+#                       proxy_buffering off để KHÔNG vỡ SSE /api/pipeline/stream).
+#   side  log-sidecar — tail -f log app qua emptyDir chung.
+# Service api-svc-<color> targetPort → 18118 nên gateway đi XUYÊN nginx.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-svc-nginx
+  namespace: {{ .Release.Namespace }}
+data:
+  nginx.conf: |
+    worker_processes 1;
+    error_log /dev/stderr warn;
+    events { worker_connections 1024; }
+    http {
+      access_log /dev/stdout;
+      server {
+        listen 18118;
+        location / {
+          proxy_pass http://127.0.0.1:8118;
+          proxy_http_version 1.1;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header Connection "";
+          # SSE (/api/pipeline/stream): stream ngay, không buffer
+          proxy_buffering off;
+          proxy_cache off;
+          proxy_read_timeout 3600s;
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-svc-blue
+  namespace: {{ .Release.Namespace }}
+  labels: { app: api-svc, color: blue }
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: { app: api-svc, color: blue }
+  template:
+    metadata:
+      labels: { app: api-svc, color: blue }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8118"
+        prometheus.io/path: "/metrics"
+    spec:
+      tolerations:                          # HA: cho phép chạy trên node control-plane (dùng cả 3 node)
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      topologySpreadConstraints:            # HA: rải pod đều các node (kubernetes.io/hostname)
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule     # hard: ép mỗi pod khác node
+          matchLabelKeys: [pod-template-hash]  # spread theo từng ReplicaSet → rollout không kẹt
+          labelSelector:
+            matchLabels: { app: api-svc }
+      # fsGroup: app chạy USER appuser (non-root) → ghi được emptyDir "logs".
+      securityContext:
+        fsGroup: 2000
+      initContainers:
+        - name: wait-db
+          image: timescale/timescaledb:latest-pg16
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "until pg_isready -h db -p 5432 -U postgres; do echo 'db not ready'; sleep 2; done"]
+      containers:
+        - name: api-svc
+          image: "{{ .Values.images.apiSvc }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "set -o pipefail; ./api-server 2>&1 | tee /var/log/app/api.log"]
+          ports: [{ containerPort: 8118 }]
+          envFrom:
+            - configMapRef: { name: api-config }
+            - secretRef:    { name: api-secret }
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 8118 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/simple, port: 8118 }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          lifecycle:
+            preStop:
+              exec: { command: ["sh", "-c", "sleep 5"] }
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "256Mi" }
+          volumeMounts:
+            - { name: backups, mountPath: /backups }
+            - { name: repo, mountPath: /repo }
+            - { name: logs, mountPath: /var/log/app }
+        - name: nginx
+          image: nginx:1.27-alpine
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http-proxy, containerPort: 18118 }]
+          volumeMounts:
+            - { name: nginx-conf, mountPath: /etc/nginx/nginx.conf, subPath: nginx.conf }
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits:   { cpu: "100m", memory: "64Mi" }
+        - name: log-sidecar
+          image: "{{ .Values.images.apiSvc }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "until [ -f /var/log/app/api.log ]; do sleep 1; done; tail -f /var/log/app/api.log"]
+          volumeMounts:
+            - { name: logs, mountPath: /var/log/app }
+          resources:
+            requests: { cpu: "20m", memory: "32Mi" }
+            limits:   { cpu: "100m", memory: "64Mi" }
+      volumes:
+        - { name: backups, emptyDir: {} }
+        - { name: repo, emptyDir: {} }
+        - { name: logs, emptyDir: {} }
+        - name: nginx-conf
+          configMap: { name: api-svc-nginx }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-svc-green
+  namespace: {{ .Release.Namespace }}
+  labels: { app: api-svc, color: green }
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: { app: api-svc, color: green }
+  template:
+    metadata:
+      labels: { app: api-svc, color: green }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8118"
+        prometheus.io/path: "/metrics"
+    spec:
+      tolerations:                          # HA: cho phép chạy trên node control-plane (dùng cả 3 node)
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      topologySpreadConstraints:            # HA: rải pod đều các node (kubernetes.io/hostname)
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule     # hard: ép mỗi pod khác node
+          matchLabelKeys: [pod-template-hash]  # spread theo từng ReplicaSet → rollout không kẹt
+          labelSelector:
+            matchLabels: { app: api-svc }
+      securityContext:
+        fsGroup: 2000
+      initContainers:
+        - name: wait-db
+          image: timescale/timescaledb:latest-pg16
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "until pg_isready -h db -p 5432 -U postgres; do echo 'db not ready'; sleep 2; done"]
+      containers:
+        - name: api-svc
+          image: "{{ .Values.images.apiSvc }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "set -o pipefail; ./api-server 2>&1 | tee /var/log/app/api.log"]
+          ports: [{ containerPort: 8118 }]
+          envFrom:
+            - configMapRef: { name: api-config }
+            - secretRef:    { name: api-secret }
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 8118 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/simple, port: 8118 }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          lifecycle:
+            preStop:
+              exec: { command: ["sh", "-c", "sleep 5"] }
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "256Mi" }
+          volumeMounts:
+            - { name: backups, mountPath: /backups }
+            - { name: repo, mountPath: /repo }
+            - { name: logs, mountPath: /var/log/app }
+        - name: nginx
+          image: nginx:1.27-alpine
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http-proxy, containerPort: 18118 }]
+          volumeMounts:
+            - { name: nginx-conf, mountPath: /etc/nginx/nginx.conf, subPath: nginx.conf }
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits:   { cpu: "100m", memory: "64Mi" }
+        - name: log-sidecar
+          image: "{{ .Values.images.apiSvc }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "until [ -f /var/log/app/api.log ]; do sleep 1; done; tail -f /var/log/app/api.log"]
+          volumeMounts:
+            - { name: logs, mountPath: /var/log/app }
+          resources:
+            requests: { cpu: "20m", memory: "32Mi" }
+            limits:   { cpu: "100m", memory: "64Mi" }
+      volumes:
+        - { name: backups, emptyDir: {} }
+        - { name: repo, emptyDir: {} }
+        - { name: logs, emptyDir: {} }
+        - name: nginx-conf
+          configMap: { name: api-svc-nginx }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-svc-blue
+  namespace: {{ .Release.Namespace }}
+  labels: { app: api-svc, color: blue }
+spec:
+  selector: { app: api-svc, color: blue }
+  # targetPort → ambassador nginx (:18118) → proxy_pass app :8118.
+  ports: [{ port: 8118, targetPort: 18118 }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-svc-green
+  namespace: {{ .Release.Namespace }}
+  labels: { app: api-svc, color: green }
+spec:
+  selector: { app: api-svc, color: green }
+  ports: [{ port: 8118, targetPort: 18118 }]
+{{- end }}

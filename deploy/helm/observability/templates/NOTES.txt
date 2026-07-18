@@ -1,0 +1,8 @@
+observability đã cài vào namespace {{ .Release.Namespace }} (release: {{ .Release.Name }}).
+
+Grafana:    kubectl port-forward -n {{ .Release.Namespace }} svc/grafana 3000:3000
+Prometheus: kubectl port-forward -n {{ .Release.Namespace }} svc/prometheus 9090:9090
+Tempo:      datasource sẵn trong Grafana (Prometheus + Tempo)
+
+App ở ns stock gửi OTLP/gRPC tới otel-collector.{{ .Release.Namespace }}:4317.
+Sửa về sau: helm upgrade {{ .Release.Name }} deploy/helm/observability -n {{ .Release.Namespace }}

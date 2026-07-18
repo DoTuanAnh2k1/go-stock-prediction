@@ -1,0 +1,197 @@
+# =============================================================================
+# CronJob TRAINING — Cách 2 (k8s-native), thay cho APScheduler in-app.
+# Mỗi job chạy `python -m src.jobs_cli <job_key>` → gọi JOB_FUNCTIONS[job_key]
+# (job_train_*) rồi exit. Checkpoint ghi ra MinIO vì prediction-config đặt
+# MODEL_STORE_BACKEND=s3 (Phase B). Lịch mirror DEFAULT_SCHEDULES (Chủ nhật).
+#
+# job_key hợp lệ: python -m src.jobs_cli --list
+# =============================================================================
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: train-gold
+  namespace: {{ .Release.Namespace }}
+  labels: { app: pipeline, kind: train, market: gold }
+spec:
+  schedule: "0 3 * * 0"              # Chủ nhật 3AM ICT
+  timeZone: "Asia/Ho_Chi_Minh"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          dnsConfig: { options: [ { name: ndots, value: "1" } ] }
+          initContainers:
+            - name: wait-db
+              image: timescale/timescaledb:latest-pg16
+              imagePullPolicy: IfNotPresent
+              command: ["sh","-c","until pg_isready -h db -p 5432 -U postgres; do echo 'db not ready'; sleep 2; done"]
+          containers:
+            - name: train
+              image: "{{ .Values.images.predictionSvc }}:{{ .Values.global.imageTag }}"
+              imagePullPolicy: IfNotPresent
+              command: ["python","-m","src.jobs_cli","train_gold"]
+              envFrom:
+                - configMapRef: { name: prediction-config }
+                - secretRef:    { name: prediction-secret }
+              resources:
+                requests: { cpu: "250m", memory: "512Mi" }
+                limits:   { cpu: "2000m", memory: "2Gi" }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: train-nasdaq
+  namespace: {{ .Release.Namespace }}
+  labels: { app: pipeline, kind: train, market: nasdaq }
+spec:
+  schedule: "0 4 * * 0"              # Chủ nhật 4AM ICT
+  timeZone: "Asia/Ho_Chi_Minh"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          dnsConfig: { options: [ { name: ndots, value: "1" } ] }
+          initContainers:
+            - name: wait-db
+              image: timescale/timescaledb:latest-pg16
+              imagePullPolicy: IfNotPresent
+              command: ["sh","-c","until pg_isready -h db -p 5432 -U postgres; do echo 'db not ready'; sleep 2; done"]
+          containers:
+            - name: train
+              image: "{{ .Values.images.predictionSvc }}:{{ .Values.global.imageTag }}"
+              imagePullPolicy: IfNotPresent
+              command: ["python","-m","src.jobs_cli","train_nasdaq"]
+              envFrom:
+                - configMapRef: { name: prediction-config }
+                - secretRef:    { name: prediction-secret }
+              resources:
+                requests: { cpu: "250m", memory: "512Mi" }
+                limits:   { cpu: "2000m", memory: "2Gi" }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: train-crypto
+  namespace: {{ .Release.Namespace }}
+  labels: { app: pipeline, kind: train, market: crypto }
+spec:
+  schedule: "0 5 * * 0"              # Chủ nhật 5AM ICT
+  timeZone: "Asia/Ho_Chi_Minh"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          dnsConfig: { options: [ { name: ndots, value: "1" } ] }
+          initContainers:
+            - name: wait-db
+              image: timescale/timescaledb:latest-pg16
+              imagePullPolicy: IfNotPresent
+              command: ["sh","-c","until pg_isready -h db -p 5432 -U postgres; do echo 'db not ready'; sleep 2; done"]
+          containers:
+            - name: train
+              image: "{{ .Values.images.predictionSvc }}:{{ .Values.global.imageTag }}"
+              imagePullPolicy: IfNotPresent
+              command: ["python","-m","src.jobs_cli","train_crypto"]
+              envFrom:
+                - configMapRef: { name: prediction-config }
+                - secretRef:    { name: prediction-secret }
+              resources:
+                requests: { cpu: "250m", memory: "512Mi" }
+                limits:   { cpu: "2000m", memory: "2Gi" }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: train-sp500
+  namespace: {{ .Release.Namespace }}
+  labels: { app: pipeline, kind: train, market: sp500 }
+spec:
+  schedule: "0 7 * * 0"              # Chủ nhật 7AM ICT
+  timeZone: "Asia/Ho_Chi_Minh"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          dnsConfig: { options: [ { name: ndots, value: "1" } ] }
+          initContainers:
+            - name: wait-db
+              image: timescale/timescaledb:latest-pg16
+              imagePullPolicy: IfNotPresent
+              command: ["sh","-c","until pg_isready -h db -p 5432 -U postgres; do echo 'db not ready'; sleep 2; done"]
+          containers:
+            - name: train
+              image: "{{ .Values.images.predictionSvc }}:{{ .Values.global.imageTag }}"
+              imagePullPolicy: IfNotPresent
+              command: ["python","-m","src.jobs_cli","train_sp500"]
+              envFrom:
+                - configMapRef: { name: prediction-config }
+                - secretRef:    { name: prediction-secret }
+              resources:
+                requests: { cpu: "250m", memory: "512Mi" }
+                limits:   { cpu: "2000m", memory: "2Gi" }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: train-meta
+  namespace: {{ .Release.Namespace }}
+  labels: { app: pipeline, kind: train, market: all }
+spec:
+  schedule: "0 8 * * 0"              # Chủ nhật 8AM ICT — sau per-market trains
+  timeZone: "Asia/Ho_Chi_Minh"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          dnsConfig: { options: [ { name: ndots, value: "1" } ] }
+          initContainers:
+            - name: wait-db
+              image: timescale/timescaledb:latest-pg16
+              imagePullPolicy: IfNotPresent
+              command: ["sh","-c","until pg_isready -h db -p 5432 -U postgres; do echo 'db not ready'; sleep 2; done"]
+          containers:
+            - name: train
+              image: "{{ .Values.images.predictionSvc }}:{{ .Values.global.imageTag }}"
+              imagePullPolicy: IfNotPresent
+              command: ["python","-m","src.jobs_cli","train_meta"]
+              envFrom:
+                - configMapRef: { name: prediction-config }
+                - secretRef:    { name: prediction-secret }
+              resources:
+                requests: { cpu: "250m", memory: "512Mi" }
+                limits:   { cpu: "2000m", memory: "2Gi" }

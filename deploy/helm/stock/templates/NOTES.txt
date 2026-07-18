@@ -1,0 +1,22 @@
+stock đã cài vào namespace {{ .Release.Namespace }} (release: {{ .Release.Name }}).
+
+PRE-REQ (một lần, TRƯỚC helm install — chart KHÔNG quản db-schema):
+  kubectl create namespace {{ .Release.Namespace }}
+  kubectl create configmap db-schema -n {{ .Release.Namespace }} \
+    --from-file=01-schema.sql=database.sql
+  # (image *:dev phải đã build + kind load vào cluster)
+
+Truy cập:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/gateway-svc 8443:443
+    https://localhost:8443           (web, self-signed => -k)
+    https://localhost:8443/api/...   (api)
+{{- if .Values.pgadmin.enabled }}
+  kubectl port-forward -n {{ .Release.Namespace }} svc/pgadmin 8081:80     (pgAdmin)
+{{- end }}
+  kubectl port-forward -n {{ .Release.Namespace }} svc/cli-svc 2345:2345   (ssh -p 2345 user@localhost)
+
+Login: chon / Ch1nch2n@ (super_admin) hoặc admin / admin123
+
+Chỉnh sửa về sau:
+  helm upgrade {{ .Release.Name }} deploy/helm/stock -n {{ .Release.Namespace }}
+  helm upgrade {{ .Release.Name }} deploy/helm/stock -n {{ .Release.Namespace }} --set global.imageTag=v2

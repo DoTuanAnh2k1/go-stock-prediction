@@ -1,0 +1,20 @@
+# =============================================================================
+# values.yaml — chart "observability" (ns observability).
+# Toàn bộ component là image bên thứ ba pin sẵn tag → gần như không cần param hoá.
+# Cài: helm install observability deploy/helm/observability -n observability --create-namespace
+# Sửa: helm upgrade observability deploy/helm/observability -n observability
+# =============================================================================
+
+# Bật/tắt từng thành phần (mặc định bật hết).
+grafana:
+  enabled: true
+prometheus:
+  enabled: true
+tempo:
+  enabled: true
+otelCollector:
+  enabled: true
+nodeExporter:
+  enabled: true
+kubeStateMetrics:
+  enabled: true

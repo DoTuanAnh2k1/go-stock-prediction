@@ -276,17 +276,47 @@ deploy/
 ├── gateway-svc.Dockerfile       # Rust Gateway
 ├── cli-svc.Dockerfile           # Go CLI (build context = ../cli-svc riêng)
 ├── service-mgt.Dockerfile       # Go Service Registry (build context = ../service-mgt)
+├── helm/
+│   ├── README.md                # Hướng dẫn deploy Helm (helm install / helm upgrade)
+│   ├── stock/                   # Chart ns stock — app stack đầy đủ
+│   │   ├── Chart.yaml
+│   │   ├── values.yaml          # global.imageTag (default dev); replicas.*; secrets.*; pgadmin.enabled (default true); bluegreen.enabled (default false); manualJob.enabled (default false)
+│   │   └── templates/           # 46 template .yaml PHẲNG — tên `<svc>-<resource>.yaml`, mỗi resource 1 file, giữ nguyên comment (KHÔNG có thư mục con; KHÔNG có namespace.yaml — dùng `-n stock`)
+│   │       ├── db-{statefulset,service,secret}.yaml                    # StatefulSet TimescaleDB
+│   │       ├── service-mgt-{deployment,service,configmap,secret}.yaml  # Deployment 4-container (init wait-db + app + nginx grpc :18121 + log-sidecar; fsGroup 2000); Service targetPort 18121
+│   │       ├── prediction-svc-{deployment,service,configmap,secret,pvc}.yaml  # Deployment replicas=2 4-container (nginx grpc :18119; fsGroup 2000); ConfigMap SCHEDULER_ENABLED=false, MODEL_STORE_BACKEND=s3
+│   │       ├── auth-svc-{deployment,service,configmap,secret}.yaml     # Deployment 4-container (nginx grpc :18120); Service targetPort 18120, mgmt 9464 thẳng
+│   │       ├── api-svc-{deployment,service,configmap,secret}.yaml + api-svc-bluegreen.yaml  # single 4-container; bluegreen gated `bluegreen.enabled` (2 màu + Service api-svc-{blue,green} targetPort 18118; nginx proxy_buffering off cho SSE)
+│   │       ├── gateway-svc-{deployment,service,rbac,configmap}.yaml    # Service LoadBalancer :80/:443; KHÔNG áp ambassador
+│   │       ├── web-svc-{deployment,service}.yaml + web-svc-bluegreen.yaml  # bluegreen gated `bluegreen.enabled`
+│   │       ├── cli-svc-{deployment,service,configmap,secret}.yaml      # Deployment 4-container (init fix-keys-perms + nginx stream TCP :12345; nginx runAsUser 0); Service NodePort targetPort 12345
+│   │       ├── pgadmin-{deployment,service,configmap,secret}.yaml      # gated `pgadmin.enabled`
+│   │       ├── minio.yaml                                              # Secret+PVC+Deployment+Service+createbucket Job (ns stock; bucket models)
+│   │       ├── cronjob-{gold,nasdaq,crypto,sp500}.yaml                 # crawler pipeline
+│   │       ├── cronjob-train.yaml (train_*+train_meta), cronjob-weekly.yaml (fundamentals+train_transformer+daily_reconcile)
+│   │       ├── cronjob-backup.yaml (pg_dump+PVC backup-data), cronjob-simulation.yaml
+│   │       ├── job-manual.yaml                                         # gated `manualJob.enabled`
+│   │       └── NOTES.txt
+│   └── observability/           # Chart ns observability — vòng đời độc lập (helm upgrade stock không đụng)
+│       ├── Chart.yaml
+│       ├── values.yaml
+│       └── templates/           # 6 template: otel-collector.yaml, prometheus.yaml, tempo.yaml, grafana.yaml, node-exporter.yaml, kube-state-metrics.yaml
 └── k8s/
-    ├── observability/           # ns observability: namespace.yaml, otel-collector.yaml, prometheus.yaml, tempo.yaml, grafana.yaml
-    ├── minio/                   # ns stock: minio.yaml (Deployment+PVC+Service, bucket models)
-    ├── pipeline/                # CronJob: cronjob-gold/nasdaq/crypto/sp500.yaml (crawler); cronjob-train.yaml (train_*+train_meta); cronjob-weekly.yaml (fundamentals+train_transformer+daily_reconcile); cronjob-backup.yaml (pg_dump+PVC backup-data); cronjob-simulation.yaml
-    ├── api-svc/                 # bluegreen.yaml (pod 4-container: init wait-db + api + nginx ambassador :18118 + log-sidecar; ConfigMap api-svc-nginx; Service api-svc-{blue,green} targetPort 18118); deployment.yaml (biến thể single 4-container); service.yaml; ConfigMap api-config
-    ├── auth-svc/                # Deployment 4-container (init wait-db + auth + nginx grpc :18120 + log-sidecar; ConfigMap auth-svc-nginx), Service (grpc targetPort 18120, mgmt 9464 thẳng), ConfigMap
-    ├── prediction-svc/          # Deployment (replicas=2) 4-container (init wait-db + prediction + nginx grpc :18119 + log-sidecar; fsGroup 2000; ConfigMap prediction-svc-nginx), Service (targetPort 18119), ConfigMap (prediction-config: SCHEDULER_ENABLED=false, MODEL_STORE_BACKEND=s3)
-    ├── gateway-svc/             # Deployment, Service (LoadBalancer :80/:443) — KHÔNG áp ambassador (bản thân là proxy)
-    ├── cli-svc/                 # Deployment 4-container (init wait-db + fix-keys-perms + cli + nginx stream TCP :12345 + log-sidecar; ConfigMap cli-svc-nginx; nginx runAsUser 0), Service NodePort (targetPort 12345)
-    ├── service-mgt/             # Deployment 4-container (init wait-db + service-mgt + nginx grpc :18121 + log-sidecar; fsGroup 2000; ConfigMap service-mgt-nginx), Service (targetPort 18121)
-    ├── web-svc/                 # Deployment, Service
-    ├── db/                      # StatefulSet TimescaleDB
-    └── pgadmin/                 # Deployment pgAdmin
+    └── ckad-labs/               # Manifest thô lưu trữ cho CKAD lab — KHÔNG dùng để deploy stack chính
 ```
+
+**Deploy k8s (Helm):**
+
+```bash
+# Lần đầu — tạo namespace + ConfigMap schema (ngoài Helm quản lý), rồi install
+kubectl create namespace stock
+kubectl create configmap db-schema -n stock --from-file=01-schema.sql=database.sql
+helm install stock deploy/helm/stock -n stock
+helm install observability deploy/helm/observability -n observability --create-namespace
+
+# Cập nhật (image mới, thay đổi values...)
+helm upgrade stock deploy/helm/stock -n stock [--set global.imageTag=v2]
+helm upgrade observability deploy/helm/observability -n observability
+```
+
+Lưu ý: db-schema ConfigMap KHÔNG do Helm quản lý (tạo thủ công trước `helm install`). `bluegreen.enabled=false` theo mặc định — api-svc/web-svc chạy biến thể single; bật `=true` cho CKAD blue-green demo.

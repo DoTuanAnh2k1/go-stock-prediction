@@ -1,0 +1,19 @@
+# =============================================================================
+# cli-svc — env không nhạy cảm (Go SSH TUI :2345).
+# API_BASE_URL trỏ vào gateway (cli-svc gọi API qua gateway, không gọi thẳng api-svc).
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cli-config
+  namespace: {{ .Release.Namespace }}
+data:
+  API_BASE_URL: "http://gateway-svc/api"
+  SSH_LISTEN_ADDR: ":2345"
+  SSH_HOST_KEY_PATH: "/etc/cli-svc/keys/host_key"
+  # ---- OpenTelemetry tracing (OTLP/gRPC → collector in ns observability) ----
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability:4317"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  OTEL_SERVICE_NAME: "cli-svc"
+  OTEL_TRACES_SAMPLER: "parentbased_always_on"
+  OTEL_RESOURCE_ATTRIBUTES: "service.namespace=stock,deployment.environment=kind"

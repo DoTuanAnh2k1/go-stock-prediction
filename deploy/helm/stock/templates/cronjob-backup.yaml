@@ -1,0 +1,75 @@
+# =============================================================================
+# CronJob daily_backup — pattern k8s-native (pg_dump trực tiếp), thay cho
+# BackupScheduler in-app của api-svc (api-config BACKUP_SCHEDULER_ENABLED=false).
+# Lý do làm CronJob riêng thay vì gọi api-svc: api-svc scale replicas=2 →
+# scheduler in-app sẽ chạy ĐÔI. Dedicated Job = 1 lần chạy duy nhất, đúng factor 6.
+#
+# Ghi ra PVC backup-data (persistent, khác api-svc /backups vốn là emptyDir).
+# Retention: giữ 10 file mới nhất (mirror runBackup của Go).
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-data
+  namespace: {{ .Release.Namespace }}
+  labels: { app: pipeline, kind: backup }
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: daily-backup
+  namespace: {{ .Release.Namespace }}
+  labels: { app: pipeline, kind: backup }
+spec:
+  schedule: "0 3 * * *"             # 3AM ICT mỗi ngày (mirror daily_backup)
+  timeZone: "Asia/Ho_Chi_Minh"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          initContainers:
+            - name: wait-db
+              image: timescale/timescaledb:latest-pg16
+              imagePullPolicy: IfNotPresent
+              command: ["sh","-c","until pg_isready -h db -p 5432 -U postgres; do echo 'db not ready'; sleep 2; done"]
+          containers:
+            - name: backup
+              image: timescale/timescaledb:latest-pg16
+              imagePullPolicy: IfNotPresent
+              envFrom:
+                - secretRef: { name: db-secret }   # POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB
+              command:
+                - sh
+                - -c
+                - |
+                  set -e
+                  export PGPASSWORD="$POSTGRES_PASSWORD"
+                  ts=$(date +%Y%m%d_%H%M%S)
+                  out="/backups/backup_${ts}.sql.gz"
+                  echo "pg_dump -> $out"
+                  pg_dump -h db -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" | gzip > "$out"
+                  echo "backup done: $(ls -lh "$out" | awk '{print $5}')"
+                  # retention: giữ 10 file mới nhất
+                  ls -1t /backups/backup_*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
+                  echo "retained: $(ls -1 /backups/backup_*.sql.gz 2>/dev/null | wc -l) file(s)"
+              volumeMounts:
+                - { name: backups, mountPath: /backups }
+              resources:
+                requests: { cpu: "100m", memory: "128Mi" }
+                limits:   { cpu: "500m", memory: "512Mi" }
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: backup-data

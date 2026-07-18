@@ -1,0 +1,168 @@
+{{- if not .Values.bluegreen.enabled }}
+# =============================================================================
+# api-svc — Go HTTP backend (:8118), stateless => Deployment.
+#
+# Deployment này ĐỒNG THỜI là lời giải Lab 1.2 (Init + Sidecar Pattern) — nhúng
+# thẳng pattern multi-container vào manifest thật thay vì để Pod lab riêng:
+#   - initContainer wait-db : chờ DB Ready (pg_isready) rồi app mới start
+#                             (bonus: hết restart lúc DB chưa sẵn sàng)
+#   - app container "api"   : chạy api-server, tee log ra file trong emptyDir "logs"
+#   - sidecar "log-sidecar" : tail -f file đó -> kubectl logs -c log-sidecar
+#
+# TRƯỚC KHI APPLY: image phải nằm trong cluster kind (kind không thấy image host).
+#   docker build -t api-svc:dev -f deploy/api-svc.Dockerfile .     # từ repo root
+#   kind load docker-image api-svc:dev --name ckad
+#
+# Yêu cầu: DB chạy trong ns stock; ConfigMap api-config + Secret api-secret đã apply.
+# auth-svc / prediction-svc CHƯA cần — gRPC client dial lazy nên api-svc vẫn lên.
+#
+# Ambassador nginx (pattern 4-container): Service targetPort → nginx :18118 →
+# proxy_pass localhost:8118. proxy_buffering off để KHÔNG vỡ SSE /api/pipeline/stream.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-svc-nginx
+  namespace: {{ .Release.Namespace }}
+data:
+  nginx.conf: |
+    worker_processes 1;
+    error_log /dev/stderr warn;
+    events { worker_connections 1024; }
+    http {
+      access_log /dev/stdout;
+      server {
+        listen 18118;
+        location / {
+          proxy_pass http://127.0.0.1:8118;
+          proxy_http_version 1.1;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header Connection "";
+          # SSE (/api/pipeline/stream): stream ngay, không buffer
+          proxy_buffering off;
+          proxy_cache off;
+          proxy_read_timeout 3600s;
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-svc
+  namespace: {{ .Release.Namespace }}
+  labels: { app: api-svc }
+spec:
+  replicas: {{ .Values.replicas.api }}
+  selector:
+    matchLabels: { app: api-svc }
+  template:
+    metadata:
+      labels: { app: api-svc }
+      # Prometheus scrapes /metrics on the app port (8118) via pod annotations.
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8118"
+        prometheus.io/path: "/metrics"
+    spec:
+      tolerations:                          # HA: cho phép chạy trên node control-plane (dùng cả 3 node)
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      topologySpreadConstraints:            # HA: rải pod đều các node (kubernetes.io/hostname)
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule     # hard: ép mỗi pod khác node
+          matchLabelKeys: [pod-template-hash]  # spread theo từng ReplicaSet → rollout không kẹt
+          labelSelector:
+            matchLabels: { app: api-svc }
+      # fsGroup=2000: chown emptyDir "logs" về group 2000 (group-writable) + thêm 2000
+      # làm supplemental group cho mọi container. Image chạy appuser (uid 100, gid 101)
+      # — không phải 2000, nhưng nhờ supplemental group vẫn ghi được /var/log/app.
+      securityContext:
+        fsGroup: 2000
+
+      # ---- initContainer: chạy tới hoàn tất TRƯỚC, chặn app tới khi DB sẵn sàng ----
+      initContainers:
+        - name: wait-db
+          image: "{{ .Values.images.apiSvc }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              echo "waiting for db:5432 ..."
+              until pg_isready -h db -p 5432 -U postgres; do
+                echo "db not ready, retry in 2s"; sleep 2
+              done
+              echo "db is ready"
+
+      containers:
+        # ---- App container: chạy api-server, log vừa ra stdout vừa ra file ----
+        - name: api
+          image: "{{ .Values.images.apiSvc }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: IfNotPresent   # BẮT BUỘC: dùng image đã kind load, đừng pull registry
+          # pipefail: api-server chết thì shell trả mã lỗi (không bị tee nuốt) -> restart đúng
+          command: ["sh", "-c", "set -o pipefail; ./api-server 2>&1 | tee /var/log/app/api.log"]
+          ports:
+            - containerPort: 8118
+          envFrom:
+            - configMapRef: { name: api-config }
+            - secretRef:    { name: api-secret }
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "256Mi" }
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 8118 }   # sẵn sàng nhận traffic (thường check DB)
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/simple, port: 8118 }  # process còn sống → không restart oan
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          volumeMounts:
+            - name: backups
+              mountPath: /backups
+            - name: repo
+              mountPath: /repo
+            - name: logs
+              mountPath: /var/log/app
+
+        # ---- Sidecar: tail file log từ volume chung, phơi qua kubectl logs -c log-sidecar ----
+        - name: log-sidecar
+          image: "{{ .Values.images.apiSvc }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "until [ -f /var/log/app/api.log ]; do sleep 1; done; tail -f /var/log/app/api.log"]
+          resources:
+            requests: { cpu: "20m", memory: "32Mi" }
+            limits:   { cpu: "100m", memory: "64Mi" }
+          volumeMounts:
+            - name: logs
+              mountPath: /var/log/app
+
+        # ---- Ambassador nginx: reverse-proxy HTTP :18118 → localhost:8118 (Service trỏ vào đây) ----
+        - name: nginx
+          image: nginx:1.27-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http-proxy, containerPort: 18118 }
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits:   { cpu: "100m", memory: "64Mi" }
+
+      volumes:
+        - name: backups
+          emptyDir: {}
+        - name: repo
+          emptyDir: {}      # DOCS_ROOT — rỗng cũng được, tab Docs không dùng trong lab
+        - name: logs
+          emptyDir: {}      # chia sẻ giữa app "api" và "log-sidecar"
+        - name: nginx-conf
+          configMap: { name: api-svc-nginx }
+{{- end }}

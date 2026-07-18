@@ -1,0 +1,19 @@
+# =============================================================================
+# auth-svc — ClusterIP gRPC :8120 (api-svc gọi qua AUTH_GRPC_TARGET).
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-svc
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector: { app: auth-svc }
+  ports:
+    # grpc targetPort → ambassador nginx (:18120) → grpc_pass app :8120.
+    # Service port giữ 8120 nên api-svc (AUTH_GRPC_TARGET=auth-svc:8120) không đổi.
+    - name: grpc
+      port: 8120
+      targetPort: 18120
+    - name: mgmt              # Actuator HTTP: /actuator/prometheus + /actuator/health — KHÔNG qua nginx
+      port: 9464
+      targetPort: 9464

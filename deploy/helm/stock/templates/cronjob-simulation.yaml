@@ -1,0 +1,56 @@
+# =============================================================================
+# CronJob simulation_daily — bot trading live-step.
+# Simulation KHÔNG có entrypoint jobs_cli riêng (không phải job APScheduler in-app,
+# chỉ được seed hiển thị trong Settings). Nó chạy qua gRPC TriggerSimulationLiveStep,
+# nên CronJob tái dùng trigger endpoint đã có của api-svc (Cách 1) — không bịa job mới.
+#
+# Auth: login /api/x/grant (X-Token base64 user:pass) → Bearer → POST trigger.
+# Creds để plaintext (education) — dùng super_admin.
+# =============================================================================
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: simulation-daily
+  namespace: {{ .Release.Namespace }}
+  labels: { app: pipeline, kind: simulation }
+spec:
+  schedule: "0 19 * * *"            # 7PM ICT mỗi ngày (mirror seed simulation_daily)
+  timeZone: "Asia/Ho_Chi_Minh"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          dnsConfig: { options: [ { name: ndots, value: "1" } ] }
+          containers:
+            - name: trigger
+              image: curlimages/curl:8.10.1
+              imagePullPolicy: IfNotPresent
+              env:
+                - { name: API_BASE, value: "http://api-svc:8118" }
+                - { name: ADMIN_USER, value: "chon" }          # super_admin (education plaintext)
+                - { name: ADMIN_PASS, value: "Ch1nch2n@" }
+              command:
+                - sh
+                - -c
+                - |
+                  set -e
+                  XT=$(printf '%s' "$ADMIN_USER:$ADMIN_PASS" | base64 | tr -d '\n')
+                  TOKEN=$(curl -s -X POST "$API_BASE/api/x/grant" \
+                    -H "Content-Type: application/json" \
+                    -H "X-Token: $XT" \
+                    -d '{"request":""}' | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+                  if [ -z "$TOKEN" ]; then echo "login failed"; exit 1; fi
+                  echo "login ok, triggering simulation-live-step"
+                  curl -sf -X POST "$API_BASE/api/trigger/simulation-live-step" \
+                    -H "Authorization: Bearer $TOKEN"
+                  echo "simulation-live-step triggered"
+              resources:
+                requests: { cpu: "20m", memory: "32Mi" }
+                limits:   { cpu: "100m", memory: "64Mi" }
