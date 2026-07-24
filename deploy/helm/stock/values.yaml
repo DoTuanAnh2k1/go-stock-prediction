@@ -1,6 +1,11 @@
 # =============================================================================
-# values.yaml — chart "stock" (ns stock).
-# Chỉnh sửa về sau: helm upgrade stock deploy/helm/stock -n stock [--set ...]
+# values.yaml — umbrella chart "stock" (ns stock).
+# Chỉnh: helm upgrade stock deploy/helm/stock -n stock [--set ...]
+#
+# CẤU TRÚC: mỗi service là 1 subchart trong charts/<svc>/. Giá trị DÙNG CHUNG cho
+# nhiều subchart đặt ở global: (subchart đọc qua .Values.global.*). Giá trị RIÊNG
+# của từng service (replicas) nằm ở charts/<svc>/values.yaml, override bằng
+# --set <svc>.replicas=N (vd: --set web-svc.replicas=4).
 # =============================================================================
 
 global:
@@ -9,53 +14,46 @@ global:
   imageTag: dev
   imagePullPolicy: IfNotPresent   # template giữ literal IfNotPresent (giá trị này để tham chiếu)
 
-# Repository (tên image) của các app service tự build. Kết với global.imageTag.
-images:
-  apiSvc: api-svc
-  authSvc: auth-svc
-  cliSvc: cli-svc
-  gatewaySvc: gateway-svc
-  predictionSvc: prediction-svc
-  serviceMgt: service-mgt
-  webSvc: web-svc
+  # Repository (tên image) của các app service tự build. Kết với global.imageTag.
+  images:
+    apiSvc: api-svc
+    authSvc: auth-svc
+    cliSvc: cli-svc
+    gatewaySvc: gateway-svc
+    predictionSvc: prediction-svc
+    serviceMgt: service-mgt
+    webSvc: web-svc
 
-# HA: mọi service stateless ≥2 pod, rải đều 3 node (topologySpreadConstraints) + PDB.
-# db & minio là stateful (PVC RWO) → giữ 1 replica (HA thật cần Patroni/operator).
-replicas:
-  api: 2
-  auth: 2
-  cli: 2
-  gateway: 2
-  prediction: 2      # stateless (checkpoint ở MinIO)
-  serviceMgt: 2
-  web: 3             # 3 = 1 pod/node trên cluster 3 node
-  pgadmin: 2
+  # Bí mật (dev). Production: override bằng values-prod.yaml hoặc --set / secret manager.
+  secrets:
+    postgresUser: postgres
+    postgresPassword: "123"
+    postgresDb: go_stock_prediction
+    jwtSecret: change-me-in-dev
+    internalSecret: change-me-in-dev
+    adminPassword: admin123
+    s3AccessKey: minioadmin
+    s3SecretKey: minioadmin123
+    minioRootUser: minioadmin
+    minioRootPassword: minioadmin123
+    pgadminPassword: admin
 
-# Bí mật (dev). Production: override bằng values-prod.yaml hoặc --set / secret manager.
-secrets:
-  postgresUser: postgres
-  postgresPassword: "123"
-  postgresDb: go_stock_prediction
-  jwtSecret: change-me-in-dev
-  internalSecret: change-me-in-dev
-  adminPassword: admin123
-  s3AccessKey: minioadmin
-  s3SecretKey: minioadmin123
-  minioRootUser: minioadmin
-  minioRootPassword: minioadmin123
-  pgadminPassword: admin
+  # Toggle dùng chung (nhiều subchart / parent đọc → đặt ở global).
+  bluegreen:
+    # BẮT BUỘC true cho stack này: gateway-svc route CỨNG /api→api-svc-<color>,
+    # /→web-svc-<color> (blue/green automation baked trong image, không fallback base
+    # routing). false = single sẽ làm gateway 502. Blue/green cũng thỏa HA
+    # (blue+green ≥2 pod/service + spread + PDB).
+    enabled: true
+  pgadmin:
+    enabled: true       # UI quản trị DB (subchart charts/pgadmin)
+  manualJob:
+    enabled: false      # job-manual (Job chạy tay) — bật: --set global.manualJob.enabled=true
+  pdb:
+    enabled: true       # PodDisruptionBudget — stateless: maxUnavailable 1; db/minio: minAvailable 1
+                        # LƯU Ý: PDB minAvailable 1 trên db/minio (1 replica) CHẶN drain node
+                        # → khi cần drain node chứa db/minio phải scale=0 hoặc kubectl drain --force.
 
-# Toggle thành phần tuỳ chọn.
-pgadmin:
-  enabled: true       # UI quản trị DB
-manualJob:
-  enabled: false      # job-manual (Job chạy tay) — bật khi cần: --set manualJob.enabled=true
-bluegreen:
-  # BẮT BUỘC true cho stack này: gateway-svc route CỨNG /api→api-svc-<color>, /→web-svc-<color>
-  # (blue/green automation baked trong image, không fallback base routing). false = single
-  # sẽ làm gateway 502. Blue/green cũng thỏa HA (blue+green ≥2 pod/service + spread + PDB).
-  enabled: true
-pdb:
-  enabled: true       # PodDisruptionBudget — stateless: maxUnavailable 1; db/minio: minAvailable 1
-                      # LƯU Ý: PDB minAvailable 1 trên db/minio (1 replica) CHẶN drain node
-                      # → khi cần drain node chứa db/minio phải scale=0 hoặc kubectl drain --force.
+# HA: mọi service stateless ≥2 pod (replicas ở charts/<svc>/values.yaml), rải đều 3 node
+# (topologySpreadConstraints) + PDB. db & minio stateful (PVC RWO) → 1 replica.
+# Ghi đè replicas per-service: --set <svc>.replicas=N.

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: api-svc
+description: Go HTTP API backend (:8118) — subchart của umbrella "stock".
+type: application
+version: 0.1.0

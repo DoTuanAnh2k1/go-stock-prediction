@@ -1,4 +1,4 @@
-{{- if .Values.pdb.enabled }}
+{{- if .Values.global.pdb.enabled }}
 # =============================================================================
 # PodDisruptionBudget — HA: giữ service sống khi drain/upgrade node.
 # Stateless (≥2 replica): maxUnavailable 1 (cho phép mất tối đa 1 pod/lần disruption).
@@ -19,7 +19,7 @@ spec:
   selector:
     matchLabels: { app: {{ $svc }} }
 {{- end }}
-{{- if .Values.pgadmin.enabled }}
+{{- if .Values.global.pgadmin.enabled }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget

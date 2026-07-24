@@ -1,0 +1,106 @@
+# =============================================================================
+# cli-svc — Go SSH server (wish + bubbletea) :2345. RBAC lệnh client-side.
+#
+# Build & load image:
+#   docker build -t cli-svc:dev -f deploy/cli-svc.Dockerfile cli-svc
+#   kind load docker-image cli-svc:dev --name ckad
+#
+# Multi-container pod (pattern 4-container — CKAD):
+#   init  wait-db         — chờ DB Ready (đồng nhất pattern).           [stock.waitDb]
+#   init  fix-keys-perms  — chown emptyDir host-key về 10001 (chạy root).
+#   app   cli-svc         — SSH :2345; tee log cho sidecar.
+#   amb   nginx           — ambassador stream TCP :12345 → localhost:2345. [stock.nginxAmbassador root]
+#   side  log-sidecar     — tail -f log app qua emptyDir chung.         [stock.logSidecar]
+# Image chạy non-root (USER cli, uid/gid 10001); pod ép runAsUser 10001. nginx cần ghi
+# pid/temp nên override runAsUser 0 (tham số root=true).
+# Boilerplate lặp gom vào library chart charts/common (_ambassador.tpl).
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cli-svc-nginx
+  namespace: {{ .Release.Namespace }}
+data:
+  # Ambassador nginx dạng L4 stream: SSH là TCP thuần nên proxy_pass TCP (không http).
+  nginx.conf: |
+    worker_processes 1;
+    error_log /dev/stderr warn;
+    events { worker_connections 1024; }
+    stream {
+      server {
+        listen 12345;
+        proxy_pass 127.0.0.1:2345;
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cli-svc
+  namespace: {{ .Release.Namespace }}
+  labels: { app: cli-svc }
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels: { app: cli-svc }
+  template:
+    metadata:
+      labels: { app: cli-svc }
+      # Metrics live on the auxiliary HTTP port 9464 (main listener is SSH).
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: "/metrics"
+    spec:
+      tolerations:                          # HA: chạy được trên node control-plane (dùng cả 3 node)
+        {{- include "stock.tolerations" . | nindent 8 }}
+      topologySpreadConstraints:            # HA: rải pod đều các node
+        {{- include "stock.topologySpread" "cli-svc" | nindent 8 }}
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001        # emptyDir group-owned 10001 => user cli ghi host key + log
+      initContainers:
+        # ---- wait-db: đồng nhất pattern "init đợi db lên" ----
+        {{- include "stock.waitDb" (dict "image" "timescale/timescaledb:latest-pg16") | nindent 8 }}
+        # ---- fix-keys-perms: emptyDir đè /etc/cli-svc/keys root-owned => chown về 10001 ----
+        - name: fix-keys-perms
+          image: "{{ .Values.global.images.cliSvc }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "chown -R 10001:10001 /etc/cli-svc/keys"]
+          securityContext:
+            runAsUser: 0        # override pod-level 10001 để chown được
+          volumeMounts:
+            - name: keys
+              mountPath: /etc/cli-svc/keys
+      containers:
+        # ---- App: SSH :2345; tee log cho sidecar ----
+        - name: cli-svc
+          image: "{{ .Values.global.images.cliSvc }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "set -o pipefail; /usr/local/bin/cli-svc 2>&1 | tee /var/log/app/cli.log"]
+          ports:
+            - { name: ssh, containerPort: 2345 }
+            - { name: metrics, containerPort: 9464 }
+          envFrom:
+            - configMapRef: { name: cli-config }
+            - secretRef:    { name: cli-secret }
+          resources:
+            requests: { cpu: "20m", memory: "32Mi" }
+            limits:   { cpu: "150m", memory: "96Mi" }
+          volumeMounts:
+            - name: keys
+              mountPath: /etc/cli-svc/keys
+            - name: logs
+              mountPath: /var/log/app
+        # ---- Ambassador nginx (stream TCP): :12345 → localhost:2345. Chạy root để ghi pid/temp ----
+        {{- include "stock.nginxAmbassador" (dict "portName" "ssh-proxy" "port" 12345 "root" true) | nindent 8 }}
+        # ---- Sidecar: xem log app qua emptyDir chung ----
+        {{- include "stock.logSidecar" (dict "image" (printf "%s:%s" .Values.global.images.cliSvc .Values.global.imageTag) "logfile" "cli.log") | nindent 8 }}
+      volumes:
+        - name: keys
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}                 # chia sẻ giữa app "cli-svc" và "log-sidecar"
+        - name: nginx-conf
+          configMap: { name: cli-svc-nginx }

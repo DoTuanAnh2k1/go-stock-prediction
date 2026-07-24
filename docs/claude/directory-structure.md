@@ -278,25 +278,23 @@ deploy/
 ├── service-mgt.Dockerfile       # Go Service Registry (build context = ../service-mgt)
 ├── helm/
 │   ├── README.md                # Hướng dẫn deploy Helm (helm install / helm upgrade)
-│   ├── stock/                   # Chart ns stock — app stack đầy đủ
-│   │   ├── Chart.yaml
-│   │   ├── values.yaml          # global.imageTag (default dev); replicas.*; secrets.*; pgadmin.enabled (default true); bluegreen.enabled (default false); manualJob.enabled (default false)
-│   │   └── templates/           # 46 template .yaml PHẲNG — tên `<svc>-<resource>.yaml`, mỗi resource 1 file, giữ nguyên comment (KHÔNG có thư mục con; KHÔNG có namespace.yaml — dùng `-n stock`)
-│   │       ├── db-{statefulset,service,secret}.yaml                    # StatefulSet TimescaleDB
-│   │       ├── service-mgt-{deployment,service,configmap,secret}.yaml  # Deployment 4-container (init wait-db + app + nginx grpc :18121 + log-sidecar; fsGroup 2000); Service targetPort 18121
-│   │       ├── prediction-svc-{deployment,service,configmap,secret,pvc}.yaml  # Deployment replicas=2 4-container (nginx grpc :18119; fsGroup 2000); ConfigMap SCHEDULER_ENABLED=false, MODEL_STORE_BACKEND=s3
-│   │       ├── auth-svc-{deployment,service,configmap,secret}.yaml     # Deployment 4-container (nginx grpc :18120); Service targetPort 18120, mgmt 9464 thẳng
-│   │       ├── api-svc-{deployment,service,configmap,secret}.yaml + api-svc-bluegreen.yaml  # single 4-container; bluegreen gated `bluegreen.enabled` (2 màu + Service api-svc-{blue,green} targetPort 18118; nginx proxy_buffering off cho SSE)
-│   │       ├── gateway-svc-{deployment,service,rbac,configmap}.yaml    # Service LoadBalancer :80/:443; KHÔNG áp ambassador
-│   │       ├── web-svc-{deployment,service}.yaml + web-svc-bluegreen.yaml  # bluegreen gated `bluegreen.enabled`
-│   │       ├── cli-svc-{deployment,service,configmap,secret}.yaml      # Deployment 4-container (init fix-keys-perms + nginx stream TCP :12345; nginx runAsUser 0); Service NodePort targetPort 12345
-│   │       ├── pgadmin-{deployment,service,configmap,secret}.yaml      # gated `pgadmin.enabled`
-│   │       ├── minio.yaml                                              # Secret+PVC+Deployment+Service+createbucket Job (ns stock; bucket models)
-│   │       ├── cronjob-{gold,nasdaq,crypto,sp500}.yaml                 # crawler pipeline
-│   │       ├── cronjob-train.yaml (train_*+train_meta), cronjob-weekly.yaml (fundamentals+train_transformer+daily_reconcile)
-│   │       ├── cronjob-backup.yaml (pg_dump+PVC backup-data), cronjob-simulation.yaml
-│   │       ├── job-manual.yaml                                         # gated `manualJob.enabled`
-│   │       └── NOTES.txt
+│   ├── stock/                   # UMBRELLA CHART ns stock — mỗi service là 1 subchart trong charts/
+│   │   ├── Chart.yaml           # dependencies: 12 subchart (common library + db, minio, service-mgt, prediction-svc, auth-svc, api-svc, gateway-svc, web-svc, cli-svc, pgadmin, cronjobs). Vendored trong charts/ nên KHÔNG cần `helm dependency build`
+│   │   ├── values.yaml          # CHỈ `global:` — imageTag (default dev), images.*, secrets.*, bluegreen.enabled (true), pgadmin.enabled (true), manualJob.enabled (false), pdb.enabled (true). Giá trị dùng chung → subchart đọc qua `.Values.global.*`
+│   │   ├── templates/           # CHỈ cross-cutting: `pdb.yaml` (PodDisruptionBudget mọi service; đọc global.pdb/global.pgadmin) + `NOTES.txt`
+│   │   └── charts/              # SUBCHART — mỗi service/thành phần 1 chart con (Chart.yaml version 0.1.0 + values.yaml chỉ giữ `replicas` + templates/ bỏ prefix `<svc>-`)
+│   │       ├── common/          #   LIBRARY CHART (type: library) — templates/_ambassador.tpl: named template stock.tolerations / topologySpread / waitDb / logSidecar / nginxAmbassador / nginxConf.grpc. Define dùng chung TOÀN CỤC cho mọi subchart (không cần khai báo lại per-subchart)
+│   │       ├── api-svc/         #   templates/{deployment,bluegreen,configmap,secret,service}.yaml — 4-container; bluegreen gated `global.bluegreen.enabled` (2 màu range blue/green + Service api-svc-{blue,green} targetPort 18118; nginx proxy_buffering off cho SSE)
+│   │       ├── auth-svc/        #   {deployment,configmap,secret,service} — nginx grpc :18120; mgmt 9464 thẳng
+│   │       ├── prediction-svc/  #   {deployment,configmap,secret,service,pvc} — replicas=2, nginx grpc :18119, fsGroup 2000, dnsConfig ndots:1
+│   │       ├── service-mgt/     #   {deployment,configmap,secret,service} — nginx grpc :18121, fsGroup 2000
+│   │       ├── cli-svc/         #   {deployment,configmap,secret,service} — init fix-keys-perms + nginx stream TCP :12345 (runAsUser 0); Service NodePort targetPort 12345
+│   │       ├── gateway-svc/     #   {deployment,configmap,rbac,service} — LoadBalancer :80/:443; KHÔNG áp ambassador
+│   │       ├── web-svc/         #   {deployment,bluegreen,service} — bluegreen gated `global.bluegreen.enabled`
+│   │       ├── db/             #   {statefulset,service,secret} — StatefulSet TimescaleDB
+│   │       ├── minio/          #   templates/minio.yaml — Secret+PVC+Deployment+Service+createbucket Job (bucket models)
+│   │       ├── pgadmin/        #   {deployment,configmap,secret,service} — gated `global.pgadmin.enabled`
+│   │       └── cronjobs/       #   cronjob-{gold,nasdaq,crypto,sp500,train,weekly,backup,simulation}.yaml + job-manual.yaml (gated `global.manualJob.enabled`)
 │   └── observability/           # Chart ns observability — vòng đời độc lập (helm upgrade stock không đụng)
 │       ├── Chart.yaml
 │       ├── values.yaml
@@ -319,4 +317,11 @@ helm upgrade stock deploy/helm/stock -n stock [--set global.imageTag=v2]
 helm upgrade observability deploy/helm/observability -n observability
 ```
 
-Lưu ý: db-schema ConfigMap KHÔNG do Helm quản lý (tạo thủ công trước `helm install`). `bluegreen.enabled=false` theo mặc định — api-svc/web-svc chạy biến thể single; bật `=true` cho CKAD blue-green demo.
+Lưu ý: db-schema ConfigMap KHÔNG do Helm quản lý (tạo thủ công trước `helm install`).
+
+**Umbrella + subchart:** `stock` là umbrella, mỗi service = 1 subchart trong `charts/<svc>/`. Subchart vendored sẵn nên KHÔNG cần `helm dependency build`. Giá trị dùng chung ở `global:`; đường dẫn `--set` đổi theo:
+- Toggle nằm ở global: `--set global.bluegreen.enabled=false` (default **true**), `--set global.pgadmin.enabled=false`, `--set global.manualJob.enabled=true`.
+- Replicas per-subchart: `--set <svc>.replicas=N` (vd `--set web-svc.replicas=4`) — KHÔNG còn `replicas.web`.
+- Image tag chung: `--set global.imageTag=v2`.
+
+`global.bluegreen.enabled=true` mặc định (gateway route cứng `/api→api-svc-<color>`); `=false` → biến thể single (chỉ dùng khi gateway hỗ trợ base routing).

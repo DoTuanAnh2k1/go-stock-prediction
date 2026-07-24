@@ -1,0 +1,2 @@
+# Cấu hình riêng của api-svc. Giá trị chung (imageTag/images/secrets/toggles) ở global: của umbrella.
+replicas: 2

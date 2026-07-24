@@ -1,0 +1,5 @@
+apiVersion: v2
+name: cronjobs
+description: Cron/batch jobs (crawler pipelines, train, backup, simulation) + manual job — subchart của umbrella "stock".
+type: application
+version: 0.1.0

@@ -1,0 +1,58 @@
+# =============================================================================
+# CronJob pipeline NASDAQ — Cách 2 (k8s-native).
+# `python -m src.jobs_cli nasdaq`. Ngoài giờ phiên Mỹ pipeline tự skip (is_market_open).
+# =============================================================================
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pipeline-nasdaq
+  namespace: {{ .Release.Namespace }}
+  labels: { app: pipeline, market: nasdaq }
+spec:
+  schedule: "15 * * * 1-5"              # phút 15 mỗi giờ, T2-T6
+  timeZone: "Asia/Ho_Chi_Minh"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          # dnsConfig ndots:1 — mạng hotspot/ISP hijack NXDOMAIN: ndots:5 mặc định nối
+          # search-domain rác (tailf643c3.ts.net / DHCP rò từ resolv.conf host) vào tên
+          # external → ISP trả IP parking → crawl timeout 30s → saved=0. ndots:1 ép query
+          # FQDN trước → IP thật. Tên in-cluster 1 nhãn (db) 0 dots vẫn expand bình thường.
+          dnsConfig:
+            options:
+              - name: ndots
+                value: "1"
+          # initContainer wait-db: chờ DB Ready trước khi pipeline connect (như api-svc).
+          # Image timescaledb (đã có sẵn trong cluster) vì prediction-svc không có pg_isready.
+          initContainers:
+            - name: wait-db
+              image: timescale/timescaledb:latest-pg16
+              imagePullPolicy: IfNotPresent
+              command:
+                - sh
+                - -c
+                - |
+                  echo "waiting for db:5432 ..."
+                  until pg_isready -h db -p 5432 -U postgres; do
+                    echo "db not ready, retry in 2s"; sleep 2
+                  done
+                  echo "db is ready"
+          containers:
+            - name: pipeline
+              image: "{{ .Values.global.images.predictionSvc }}:{{ .Values.global.imageTag }}"
+              imagePullPolicy: IfNotPresent
+              command: ["python", "-m", "src.jobs_cli", "nasdaq"]
+              envFrom:
+                - configMapRef: { name: prediction-config }
+                - secretRef:    { name: prediction-secret }
+              resources:
+                requests: { cpu: "250m", memory: "512Mi" }
+                limits:   { cpu: "1500m", memory: "2Gi" }

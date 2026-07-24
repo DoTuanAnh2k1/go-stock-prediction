@@ -1,0 +1,89 @@
+# =============================================================================
+# service-mgt — Go registry/discovery gRPC :8121.
+#
+# Build & load image:
+#   docker build -t service-mgt:dev -f deploy/service-mgt.Dockerfile service-mgt
+#   kind load docker-image service-mgt:dev --name ckad
+#
+# Multi-container pod (pattern 4-container — CKAD):
+#   init  wait-db      — chờ DB Ready (pg_isready) rồi mới chạy.        [stock.waitDb]
+#   app   service-mgt  — gRPC :8121; tee log ra /var/log/app cho sidecar đọc.
+#   amb   nginx        — ambassador gRPC :18121 → localhost:8121.       [stock.nginxAmbassador]
+#   side  log-sidecar  — tail -f log app qua emptyDir chung.            [stock.logSidecar]
+# Boilerplate lặp gom vào library chart charts/common (_ambassador.tpl).
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-mgt-nginx
+  namespace: {{ .Release.Namespace }}
+data:
+  # Ambassador nginx: nhận gRPC (http2) ở :18121, chuyển tiếp về app localhost:8121.
+  nginx.conf: |
+    {{- include "stock.nginxConf.grpc" (dict "listen" 18121 "upstream" 8121) | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-mgt
+  namespace: {{ .Release.Namespace }}
+  labels: { app: service-mgt }
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels: { app: service-mgt }
+  template:
+    metadata:
+      labels: { app: service-mgt }
+      # Metrics live on the auxiliary HTTP port 9464 (service is gRPC-only) — KHÔNG qua nginx.
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: "/metrics"
+    spec:
+      tolerations:                          # HA: chạy được trên node control-plane (dùng cả 3 node)
+        {{- include "stock.tolerations" . | nindent 8 }}
+      topologySpreadConstraints:            # HA: rải pod đều các node
+        {{- include "stock.topologySpread" "service-mgt" | nindent 8 }}
+      # fsGroup: app chạy USER appuser (non-root) → cho phép ghi emptyDir "logs" (group-writable).
+      securityContext:
+        fsGroup: 2000
+      # image service-mgt (Go) không có pg_isready nên wait-db dùng image timescaledb.
+      initContainers:
+        {{- include "stock.waitDb" (dict "image" "timescale/timescaledb:latest-pg16") | nindent 8 }}
+      containers:
+        # ---- App: gRPC :8121; log vừa ra stdout vừa ghi file cho sidecar ----
+        - name: service-mgt
+          image: "{{ .Values.global.images.serviceMgt }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "set -o pipefail; ./service-mgt 2>&1 | tee /var/log/app/service-mgt.log"]
+          ports:
+            - { name: grpc, containerPort: 8121 }
+            - { name: metrics, containerPort: 9464 }
+          envFrom:
+            - configMapRef: { name: service-mgt-config }
+            - secretRef:    { name: service-mgt-secret }
+          # Native gRPC health probes trỏ THẲNG app (:8121), không qua nginx.
+          readinessProbe:
+            grpc: { port: 8121 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            grpc: { port: 8121 }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          volumeMounts:
+            - name: logs
+              mountPath: /var/log/app
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits:   { cpu: "250m", memory: "128Mi" }
+        # ---- Ambassador nginx: reverse-proxy gRPC :18121 → localhost:8121 ----
+        {{- include "stock.nginxAmbassador" (dict "portName" "grpc-proxy" "port" 18121) | nindent 8 }}
+        # ---- Sidecar: xem log app qua emptyDir chung ----
+        {{- include "stock.logSidecar" (dict "image" (printf "%s:%s" .Values.global.images.serviceMgt .Values.global.imageTag) "logfile" "service-mgt.log") | nindent 8 }}
+      volumes:
+        - name: logs
+          emptyDir: {}                 # chia sẻ giữa app "service-mgt" và "log-sidecar"
+        - name: nginx-conf
+          configMap: { name: service-mgt-nginx }

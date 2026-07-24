@@ -59,7 +59,7 @@ Lưu trong bảng `cron_schedules` (reference/display). Chỉnh live qua `/api/s
 
 **Hai chế độ thực thi (factor 10 — scheduler unification):**
 - **Compose** (default `SCHEDULER_ENABLED:-false`, `BACKUP_SCHEDULER_ENABLED:-false`): APScheduler in-app và BackupScheduler tắt. Mọi lịch do `ofelia` container chạy (`python -m src.jobs_cli <job>` trên prediction-svc; pg_dump trên db). Có thể bật lại bằng cách set `=true` trong `.env` (hành vi cũ — APScheduler in-app).
-- **k8s** (`SCHEDULER_ENABLED=false`, `BACKUP_SCHEDULER_ENABLED=false`): APScheduler và BackupScheduler tắt. Mọi lịch do k8s CronJob (template `deploy/helm/stock/templates/cronjob-*.yaml` trong Helm chart `stock`) nắm — chạy `python -m src.jobs_cli <job_key>` hoặc pg_dump trực tiếp.
+- **k8s** (`SCHEDULER_ENABLED=false`, `BACKUP_SCHEDULER_ENABLED=false`): APScheduler và BackupScheduler tắt. Mọi lịch do k8s CronJob (template `deploy/helm/stock/charts/cronjobs/templates/cronjob-*.yaml` trong subchart `cronjobs`) nắm — chạy `python -m src.jobs_cli <job_key>` hoặc pg_dump trực tiếp.
 
 **`daily_backup` k8s:** CronJob riêng (`cronjob-backup.yaml`) pg_dump trực tiếp → PVC `backup-data` (2Gi, ns `stock`). Khác với compose (ofelia label trên `db`). api-svc không liên quan khi `BACKUP_SCHEDULER_ENABLED=false`.
 
