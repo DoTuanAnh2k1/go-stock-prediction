@@ -16,7 +16,9 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels: { app: gateway-svc }
 spec:
-  replicas: {{ .Values.replicas }}
+  {{- if not .Values.global.hpa.enabled }}
+  replicas: {{ .Values.replicas }}   # CKAD 2.3: HPA on → HPA sở hữu replicas (omit để tránh flapping)
+  {{- end }}
   selector:
     matchLabels: { app: gateway-svc }
   template:

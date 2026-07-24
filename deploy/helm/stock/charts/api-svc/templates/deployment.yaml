@@ -52,7 +52,9 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels: { app: api-svc }
 spec:
-  replicas: {{ .Values.replicas }}
+  {{- if not .Values.global.hpa.enabled }}
+  replicas: {{ .Values.replicas }}   # CKAD 2.3: HPA on → HPA sở hữu replicas (omit để tránh flapping)
+  {{- end }}
   # Lab 2.2 — Blue/Green kiểu 1 Deployment: maxSurge=100% bung đủ bộ green song song blue,
   # maxUnavailable=0 giữ blue tới khi green Ready => cutover blue/green-style; `rollout undo` = rollback.
   strategy:

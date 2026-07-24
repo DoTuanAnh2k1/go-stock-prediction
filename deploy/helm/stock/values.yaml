@@ -45,6 +45,13 @@ global:
     # routing). false = single sẽ làm gateway 502. Blue/green cũng thỏa HA
     # (blue+green ≥2 pod/service + spread + PDB).
     enabled: true
+    # activeColor — màu mà SERVICE CHUNG api-svc/web-svc trỏ vào (selector kèm color).
+    # Đây là blue/green KINH ĐIỂN: 1 Service chung + selector color, cutover = FLIP selector.
+    #   Declarative: helm upgrade --set global.bluegreen.activeColor=blue
+    #   Imperative:  kubectl patch svc api-svc -n stock -p '{"spec":{"selector":{"color":"blue"}}}'
+    #   Rollback   : flip lại về green.
+    # (Song song với gateway-native routing per-color; giữ activeColor khớp gateway ConfigMap.)
+    activeColor: green
   pgadmin:
     enabled: true       # UI quản trị DB (subchart charts/pgadmin)
   manualJob:
@@ -72,6 +79,13 @@ global:
                         # Default TẮT vì default-deny cần allow đủ (Prometheus scrape :9464...)
                         # nếu không sẽ cắt nhầm metrics. Bật demo: --set global.networkPolicy.enabled=true
                         # (templates/networkpolicy.yaml — đã allow gateway + ingress-nginx→frontend).
+  hpa:
+    enabled: false      # CKAD 2.3 áp thật — HPA CPU cho api-svc (blue/green) + gateway-svc.
+                        # Default TẮT: service idle nên CPU-HPA chỉ scale khi traffic spike thật;
+                        # khi bật, deployment omit .spec.replicas (HPA sở hữu → tránh flapping).
+                        # Bật: --set global.hpa.enabled=true (templates/hpa.yaml).
+    apiSvc:     { minReplicas: 2, maxReplicas: 6, targetCPU: 60 }
+    gatewaySvc: { minReplicas: 2, maxReplicas: 5, targetCPU: 60 }
 
 # HA: mọi service stateless ≥2 pod (replicas ở charts/<svc>/values.yaml), rải đều 3 node
 # (topologySpreadConstraints) + PDB. db & minio stateful (PVC RWO) → 1 replica.

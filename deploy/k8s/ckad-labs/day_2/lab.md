@@ -190,6 +190,56 @@ kubectl patch svc web-svc -n stock --type=json -p '[{"op":"remove","path":"/spec
 Khôi phục base: `kubectl apply -f deploy/k8s/web-svc/deployment.yaml` (web-svc đơn) +
 xoá key color khỏi selector (trên) + `kubectl delete deploy web-svc-blue web-svc-green`.
 
+### ✅ Áp blue/green KINH ĐIỂN vào stock THẬT (2026-07-24) — Service chung kèm `color` + flip
+
+> Bối cảnh: Service chung `api-svc`/`web-svc` trước đây selector chỉ `{app: api-svc}` (KHÔNG color)
+> → **hit CẢ blue lẫn green cùng lúc** (4 endpoints) ⇒ KHÔNG phải blue/green thật; blue hỏng vẫn
+> nhận 50% traffic. Đã sửa: selector kèm `color=<activeColor>` (driven `global.bluegreen.activeColor`,
+> default green) → Service chung trỏ ĐÚNG 1 màu, **cutover = FLIP selector, rollback = flip lại**.
+
+Sửa `charts/{api-svc,web-svc}/templates/service.yaml` (selector thêm `color` khi bluegreen bật) +
+`values.yaml` (`global.bluegreen.activeColor: green`).
+
+```bash
+helm upgrade stock deploy/helm/stock -n stock          # rev18
+kubectl get svc api-svc -n stock -o jsonpath='{.spec.selector}'
+#   {"app":"api-svc","color":"green"}          ← kèm color
+kubectl get endpoints api-svc -n stock
+#   api-svc   10.244.1.32:18118,10.244.2.75:18118    ← CHỈ 2 green pod (không còn 4)
+
+# CUTOVER green→blue:
+#   declarative: helm upgrade ... --set global.bluegreen.activeColor=blue   (bền qua helm upgrade)
+#   imperative : kubectl patch svc api-svc -n stock -p '{"spec":{"selector":{"app":"api-svc","color":"blue"}}}'
+kubectl get endpoints api-svc -n stock
+#   api-svc   10.244.1.31:18118,10.244.2.73:18118    ← đổi sang blue pods (cutover tức thời)
+# ROLLBACK: flip lại về green → endpoints về green pods
+```
+
+**Chứng minh route ĐÚNG (không chỉ nhìn endpoints — soi log pod thật):** flip sang màu X, curl
+vào Service chung từ pod in-cluster (qua kube-proxy→selector), rồi đếm request trong log nginx
+mỗi màu (marker query để lọc):
+```bash
+kubectl patch svc api-svc -n stock -p '{"spec":{"selector":{"app":"api-svc","color":"blue"}}}'
+kubectl run bg-curl --image=nginx:1.27-alpine --restart=Never -n stock --command -- \
+  sh -c 'for i in 1 2 3 4 5; do wget -qO- "http://api-svc:8118/api/version?bgprobe-blue"; done'
+kubectl logs -n stock -l app=api-svc,color=blue  -c nginx --tail=60 | grep -c bgprobe-blue   # → 5
+kubectl logs -n stock -l app=api-svc,color=green -c nginx --tail=60 | grep -c bgprobe-blue   # → 0
+#   ⇒ BLUE hits=5 | GREEN hits=0  →  request CHỈ vào blue = selector flip route đúng
+# flip sang green rồi lặp lại: GREEN hits=5 | BLUE hits=0.
+```
+(Đã đo thật: blue=5/green=0 khi active=blue; green=5/blue=0 khi active=green. Chạy tự động:
+`ONLY=2.2 ./run-day2.sh` — hàm `_bg_prove` in đủ get svc + endpoints + curl + log 2 màu.)
+
+Điểm chốt:
+- Đây là **blue/green kinh điển**: 1 Service chung + selector `color` + FLIP. Cả 2 màu Ready sẵn ⇒
+  cutover **tức thời zero-downtime**; rollback = flip lại (không rebuild/rollout).
+- ⚠️ **Imperative-patch vs declarative-apply:** `kubectl patch` selector chỉ BỀN tới lần `helm upgrade`
+  kế (helm reset selector về `activeColor`). Cutover LÂU DÀI phải `--set global.bluegreen.activeColor`.
+- **Ingress (Lab 4.2) route `/api`→Service chung `api-svc`** ⇒ nay tự động theo màu active (trước hit cả 2).
+- Song song với **gateway-native blue/green** (Rust controller + ConfigMap `gateway-bluegreen-state`,
+  route per-color `api-svc-<color>` cho `/api`,`/`). Hai cơ chế độc lập — giữ `activeColor` khớp ConfigMap
+  gateway. (Gateway route baked trong image nên KHÔNG gộp được nếu không rebuild.)
+
 ## Lab 2.3 — Scale & HPA
 - Duration: ~45 min | CKAD domain: Application Deployment (20%)
 - Manually scale Deployment to 10 replicas
@@ -261,6 +311,38 @@ SuccessfulRescale  New size: 10   (~15s sau)   ← chạm maxReplicas
 
 Kết quả: manual scale 1→10 (cùng RS) OK; HPA scale-up 1→4→8→10 theo tải thật (TARGETS
 ~500%/50%), scale-down về 1 sau cửa sổ 300s — cả hai chiều chứng minh bằng SuccessfulRescale events.
+
+**Scale-DOWN đo lại (2026-07-24, chu kỳ live đầy đủ):**
+```
+scale-UP  : New size 4 (t=40s) → 8 (t=60s) → 10 (t=80s)   reason: cpu above target
+tải dừng ~t=150s → CPU về 1% tại t=200s NHƯNG HPA GIỮ 10 replicas
+scale-DOWN: giữ đỉnh ~280s (cửa sổ 300s) → New size 4 → New size 1  reason: All metrics below target
+```
+scaleUp nhanh (stab 0s) / scaleDown chậm bất-đối-xứng (stab **300s**) — xác nhận lại bằng events.
+
+### ✅ Áp HPA THẲNG lên service thật (2026-07-24) — api-svc + gateway-svc
+
+`cpu-burn` (hpa-example) chỉ là app demo CPU-bound để kích HPA. Service project **I/O-bound/idle**
+(api 1m, gateway 1-2m CPU vs requests 100m/50m ≈ 1-2%) nên CPU-HPA chỉ scale khi **traffic spike
+thật** — vẫn áp được như feature HA. Gated Helm template `deploy/helm/stock/templates/hpa.yaml`
+(`global.hpa.enabled`, default off):
+
+```bash
+helm upgrade stock deploy/helm/stock -n stock --set global.hpa.enabled=true
+kubectl get hpa -n stock
+#   api-svc-blue    Deployment/api-svc-blue    cpu: 1%/60%   2   6   2
+#   api-svc-green   Deployment/api-svc-green   cpu: 1%/60%   2   6   2
+#   gateway-svc     Deployment/gateway-svc     cpu: 2%/60%   2   5   2
+```
+Điểm chốt (áp HPA lên deployment ĐÃ có):
+- **HPA SỞ HỮU `.spec.replicas`** → deployment phải **OMIT `replicas`** khi HPA bật (template dùng
+  `{{ if not .Values.global.hpa.enabled }}replicas: ...{{ end }}`). Nếu vẫn hardcode replicas thì
+  mỗi `helm upgrade` giành lại → **flapping** với HPA.
+- ⚠️ Omit replicas ⇒ lúc BẬT lần đầu deployment default về **1** (2→1) rồi HPA `minReplicas=2` kéo
+  lại 2 (self-heal ~vài giây). Các upgrade sau không đụng replicas nữa → ổn định.
+- **api-svc blue/green** = 2 Deployment → HPA mỗi màu; màu idle nằm ở minReplicas.
+- Service idle ⇒ HPA nằm im ở min; muốn thấy scale-up phải sinh tải thật (loadgen) — khác cpu-burn
+  tự đốt CPU. Default off để portable; bật khi cần HA co giãn theo traffic.
 
 ## Lab 2.4 — Kustomize Overlay
 - Duration: ~45 min | CKAD domain: Application Deployment (20%)

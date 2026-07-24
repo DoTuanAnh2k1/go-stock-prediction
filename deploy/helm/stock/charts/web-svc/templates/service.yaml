@@ -7,7 +7,13 @@ metadata:
   name: web-svc
   namespace: {{ .Release.Namespace }}
 spec:
-  selector: { app: web-svc }
+  # Blue/green KINH ĐIỂN: bluegreen bật → selector kèm color=<activeColor> (Service chung trỏ 1 màu).
+  # Cutover = FLIP color; rollback = flip lại. Single mode: chỉ {app}.
+  selector:
+    app: web-svc
+    {{- if .Values.global.bluegreen.enabled }}
+    color: {{ .Values.global.bluegreen.activeColor }}
+    {{- end }}
   ports:
     - port: 3000
       targetPort: 3000

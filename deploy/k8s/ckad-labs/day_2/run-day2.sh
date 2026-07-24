@@ -12,6 +12,7 @@
 #   RUN_LOAD=0 ./run-day2.sh         # 2.3: bỏ bắn tải (chỉ attach HPA + show), nhanh
 #   LOAD_SECS=120 ./run-day2.sh      # 2.3: thời lượng bắn tải (giây, mặc định 100)
 #   WAIT_SCALEDOWN=1 ./run-day2.sh   # 2.3: chờ luôn cửa sổ scale-down 300s về minReplicas
+#   REAL_HPA_CYCLE=1 ./run-day2.sh   # 2.3: demo up→down TRÊN HPA THẬT (api-svc+gateway), hạ target 10%→load→restore (~8')
 #   KEEP=1 ./run-day2.sh             # giữ object đã tạo (không dọn)
 #
 # Yêu cầu: context=kind-ckad, ns=stock. Image nginx/curl pull on-demand (node pull OK);
@@ -132,6 +133,38 @@ note "3) ROLLBACK về BLUE — rollout undo --to-revision=1 (tức thì; KHÔNG
 run bash "$E2E" rollback bg 1
 runsh "kubectl get deploy bg -n $NS -o jsonpath='{.spec.template.spec.containers[0].image}'; echo '  <- da ve blue'"
 note "   Khác 2.1: 2.1 maxSurge=1 (thay dần từng pod); 2.2 maxSurge=100% (bung cả loạt = blue/green-style)."
+
+# ---- blue/green KINH ĐIỂN trên SERVICE CHUNG api-svc THẬT + CHỨNG MINH route đúng ----
+note "═══ 4) Blue/green KINH ĐIỂN: Service chung api-svc kèm color → FLIP → chứng minh route bằng log blue/green ═══"
+if kubectl get svc api-svc -n "$NS" -o jsonpath='{.spec.selector.color}' 2>/dev/null | grep -q .; then
+  _bg_prove(){                                   # $1 = màu switch tới
+    local c="$1" mk="bgprobe-$1-$$"
+    note "→ FLIP selector Service chung sang '$c' (cutover), rồi curl vào svc + soi log nginx từng màu (marker=$mk)"
+    run kubectl patch svc api-svc -n "$NS" -p "{\"spec\":{\"selector\":{\"app\":\"api-svc\",\"color\":\"$c\"}}}"
+    runsh "kubectl get svc api-svc -n $NS -o jsonpath='  selector={.spec.selector}{\"\\n\"}'"
+    runsh "kubectl get endpoints api-svc -n $NS 2>/dev/null | grep -v deprecat"
+    note "  color=$c pod IPs (endpoints phải khớp bộ này):"
+    runsh "kubectl get pods -n $NS -l app=api-svc,color=$c -o jsonpath='  {range .items[*]}{.status.podIP} {end}{\"\\n\"}'"
+    kubectl delete pod bg-curl -n "$NS" --ignore-not-found >/dev/null 2>&1
+    note "  curl 5 lần vào Service chung http://api-svc:8118/api/version?$mk (pod in-cluster qua kube-proxy → selector):"
+    kubectl run bg-curl --image=nginx:1.27-alpine --restart=Never -n "$NS" --command -- \
+      sh -c "for i in 1 2 3 4 5; do wget -qO- \"http://api-svc:8118/api/version?$mk\" >/dev/null 2>&1; done; echo curl-done" >/dev/null 2>&1
+    kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/bg-curl -n "$NS" --timeout=45s >/dev/null 2>&1 || true
+    runsh "kubectl logs bg-curl -n $NS 2>/dev/null | tail -1 | sed 's/^/    /'"
+    local hb hg
+    hb=$(kubectl logs -n "$NS" -l app=api-svc,color=blue  -c nginx --tail=60 2>/dev/null | grep -c "$mk")
+    hg=$(kubectl logs -n "$NS" -l app=api-svc,color=green -c nginx --tail=60 2>/dev/null | grep -c "$mk")
+    printf '%s  → log nginx BLUE hits=%s | GREEN hits=%s  →  route ĐÚNG khi request chỉ vào màu "%s"%s\n' "$G" "$hb" "$hg" "$c" "$X"
+    kubectl delete pod bg-curl -n "$NS" --ignore-not-found >/dev/null 2>&1
+  }
+  _bg_prove blue
+  _bg_prove green
+  note "→ rollback Service chung về activeColor mặc định (green)"
+  run kubectl patch svc api-svc -n "$NS" -p '{"spec":{"selector":{"app":"api-svc","color":"green"}}}'
+  note "  (⚠️ patch tay chỉ bền tới lần helm upgrade kế — cutover LÂU DÀI: --set global.bluegreen.activeColor=<màu>)"
+else
+  note "  Service chung api-svc CHƯA kèm color → cần: ${HELM:-/home/chronical/.local/bin/helm} upgrade stock $DIR/../../../helm/stock -n $NS (values global.bluegreen.activeColor). Bỏ qua phần chứng minh."
+fi
 }
 
 # =============================================================================
@@ -190,6 +223,41 @@ if [ "${RUN_LOAD:-1}" = "1" ]; then
   fi
 else
   note "3) RUN_LOAD=0 → bỏ bắn tải. HPA đã attach (TARGETS/50%), scale-up/down bỏ qua cho nhanh."
+fi
+
+# ---- 5) HPA áp THẲNG lên service THẬT (api-svc blue/green + gateway-svc) ----
+note "5) HPA áp THẬT lên service project (gated global.hpa.enabled) — khác cpu-burn (app demo)"
+HELM="${HELM:-/home/chronical/.local/bin/helm}"
+CHART="$DIR/../../../helm/stock"
+if kubectl get hpa gateway-svc -n "$NS" >/dev/null 2>&1; then
+  run kubectl get hpa api-svc-blue api-svc-green gateway-svc -n "$NS"
+  note "   Service project I/O-bound (idle 1-2% CPU) → CPU-HPA CHỈ scale khi traffic spike THẬT; thường nằm ở minReplicas (giữ HA)."
+  note "   HPA sở hữu .spec.replicas ⇒ deployment OMIT replicas khi hpa.enabled (tránh flapping với helm upgrade). api-svc blue/green: HPA mỗi màu; màu idle nằm ở min."
+else
+  note "   HPA thật CHƯA bật. Bật: $HELM upgrade stock $CHART -n $NS --set global.hpa.enabled=true"
+fi
+if [ "${REAL_HPA_CYCLE:-0}" = "1" ] && [ -x "$HELM" ]; then
+  note "   REAL_HPA_CYCLE=1 → demo up→down TRÊN HPA THẬT. Hạ target 60→10% (request /api/version quá rẻ, không đẩy nổi CPU 60%), bắn HTTP load, chờ scale-down, khôi phục 60%."
+  runsh "$HELM upgrade stock $CHART -n $NS --set global.hpa.enabled=true --set global.hpa.apiSvc.targetCPU=10 --set global.hpa.gatewaySvc.targetCPU=10 2>&1 | grep -E 'REVISION|STATUS'"
+  ( bash "$E2E" loadgen gateway-svc 80 150 150 /api/version >/tmp/day2-realhpa.log 2>&1 ) &
+  _rp=$!; _up=""; _t=0
+  printf '%s$ (poll) HPA gateway-svc + api-svc-green mỗi 20s tới scale-down về min=2 (cap 540s)%s\n' "$Y" "$X"
+  while [ "$_t" -lt 540 ]; do
+    _gr="$(kubectl get hpa gateway-svc  -n "$NS" --no-headers 2>/dev/null | awk '{print $7}')"
+    _ar="$(kubectl get hpa api-svc-green -n "$NS" --no-headers 2>/dev/null | awk '{print $7}')"
+    runsh "kubectl get hpa gateway-svc api-svc-green api-svc-blue -n $NS --no-headers 2>/dev/null"
+    [ -z "$_up" ] && { [ "${_gr:-0}" -gt 2 ] 2>/dev/null || [ "${_ar:-0}" -gt 2 ] 2>/dev/null; } && _up=$_t
+    [ -n "$_up" ] && [ "${_gr:-9}" = "2" ] && [ "${_ar:-9}" = "2" ] && { printf '%s  → scale-DOWN về min=2 tại ~%ds (up bắt đầu ~%ds; giữ đỉnh ~300s window)%s\n' "$G" "$_t" "$_up" "$X"; break; }
+    sleep 20; _t=$((_t+20))
+  done
+  wait "$_rp" 2>/dev/null || true
+  note "   Events (cả 2 chiều):"
+  runsh "kubectl describe hpa gateway-svc -n $NS | sed -n '/Events:/,\$p' | grep 'New size' | tail -5"
+  note "   khôi phục targetCPU về 60% (production) + dọn pod load:"
+  runsh "$HELM upgrade stock $CHART -n $NS --set global.hpa.enabled=true 2>&1 | grep REVISION"
+  kubectl delete pod e2e-load -n "$NS" --ignore-not-found >/dev/null 2>&1
+else
+  note "   (full cycle up→down trên HPA thật: REAL_HPA_CYCLE=1 — mất ~8' vì window 300s + phải hạ target demo)"
 fi
 }
 

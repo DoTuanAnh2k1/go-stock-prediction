@@ -52,7 +52,9 @@ metadata:
   namespace: {{ $.Release.Namespace }}
   labels: { app: api-svc, color: {{ $color }} }
 spec:
-  replicas: 2
+  {{- if not $.Values.global.hpa.enabled }}
+  replicas: 2                        # CKAD 2.3: HPA off → giữ 2. HPA on → HPA sở hữu replicas (omit)
+  {{- end }}
   strategy:
     type: RollingUpdate
     rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }

@@ -48,7 +48,7 @@ note "1) Service THẬT trên stack — TYPE + PORT + NODEPORT (ClusterIP nội 
 runsh "kubectl get svc -n $NS -o custom-columns='NAME:.metadata.name,TYPE:.spec.type,PORT:.spec.ports[0].port,NODEPORT:.spec.ports[0].nodePort'"
 
 note "2) DRILL selector mismatch (throwaway ep-demo — dọn cuối)"
-kubectl delete deploy ep-demo svc ep-demo -n "$NS" --ignore-not-found >/dev/null 2>&1
+kubectl delete deploy,svc ep-demo -n "$NS" --ignore-not-found >/dev/null 2>&1
 run kubectl create deploy ep-demo --image=nginx:1.27-alpine -n "$NS"
 note "   Service selector SAI (app=WRONG) → endpoints RỖNG:"
 kubectl expose deploy ep-demo -n "$NS" --port=80 --selector=app=WRONG >/dev/null 2>&1
@@ -80,11 +80,15 @@ if [ -z "$_ctrl" ]; then
 fi
 
 note "2) Bật Ingress (gated template ingress.yaml: host stock.local, / → web-svc, /api → api-svc)"
-run "$HELM" upgrade stock "$CHART" -n "$NS" --set global.ingress.enabled=true
+run "$HELM" upgrade stock "$CHART" -n "$NS" --reuse-values --set global.ingress.enabled=true
 run kubectl get ingress -n "$NS"
 
 note "3) Verify routing — kind nodeIP không routable từ host → port-forward controller (background)"
-run kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 18080:80 &
+printf '%s$ kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 18080:80  (nền, log /tmp/day4-pf.log)%s\n' "$Y" "$X"
+# Chạy TRỰC TIẾP (KHÔNG qua hàm run) + redirect ra file → process con KHÔNG giữ pipe stdout của
+# script (nếu không, tail chờ EOF mãi = task "treo giả"). $! = PID kubectl THẬT (bọc `run ... &`
+# thì $! là PID subshell của run → kill hụt kubectl bên trong → orphan port-forward giữ pipe).
+kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 18080:80 >/tmp/day4-pf.log 2>&1 &
 _pf=$!
 note "   chờ port-forward sẵn sàng (retry-loop curl, KHÔNG sleep cứng)..."
 _ok=0
@@ -101,7 +105,8 @@ else
 fi
 kill "$_pf" 2>/dev/null || true
 wait "$_pf" 2>/dev/null || true
-note "   → đã kill port-forward"
+pkill -f 'port-forward -n ingress-nginx svc/ingress-nginx-controller 18080:80' 2>/dev/null || true
+note "   → đã kill port-forward (kèm pkill fallback, không để orphan giữ pipe)"
 }
 
 # =============================================================================
@@ -109,7 +114,7 @@ lab_4_3(){
 title "LAB 4.3 — NetworkPolicy Isolation (kindnet ENFORCE thật — bật → demo → TẮT LẠI)"
 
 note "1) Bật NetworkPolicy (+ ingress để giữ /api tới được) — 5 policy default-deny + allow-*"
-run "$HELM" upgrade stock "$CHART" -n "$NS" --set global.networkPolicy.enabled=true --set global.ingress.enabled=true
+run "$HELM" upgrade stock "$CHART" -n "$NS" --reuse-values --set global.networkPolicy.enabled=true --set global.ingress.enabled=true
 run kubectl get networkpolicy -n "$NS"
 
 note "2) ISOLATION — pod lạ (app=np-test, KHÔNG trong allow-list) curl api-svc → BỊ CHẶN (timeout)"
@@ -128,7 +133,7 @@ note "   → 'download timed out' + wget_exit=1 = default-deny chặn app=np-tes
 kubectl delete pod np-test -n "$NS" --ignore-not-found >/dev/null 2>&1
 
 note "3) TẮT LẠI NetworkPolicy (restore state an toàn — default-deny cắt nhầm Prometheus scrape :9464)"
-run "$HELM" upgrade stock "$CHART" -n "$NS" --set global.networkPolicy.enabled=false --set global.ingress.enabled=true
+run "$HELM" upgrade stock "$CHART" -n "$NS" --reuse-values --set global.networkPolicy.enabled=false --set global.ingress.enabled=true
 run kubectl get networkpolicy -n "$NS"
 note "   → networkpolicy đã gỡ (No resources / rỗng) = metrics scrape không bị chặn"
 }
@@ -194,7 +199,7 @@ note "   → 'READ-BACK: ckad-4.4-persisted-...' = DATA PERSIST (khác emptyDir 
 cleanup(){
   [ "${KEEP:-0}" = "1" ] && { printf '\n%sKEEP=1 → giữ object nháp (ep-demo, ck-data, pvc-reader...).%s\n' "$D" "$X"; return; }
   title "DỌN DẸP (object nháp — stack thật + gated feature giữ nguyên state)"
-  run kubectl delete deploy ep-demo svc ep-demo -n "$NS" --ignore-not-found
+  run kubectl delete deploy,svc ep-demo -n "$NS" --ignore-not-found
   run kubectl delete pod np-test pvc-writer pvc-reader -n "$NS" --ignore-not-found
   run kubectl delete pvc ck-data -n "$NS" --ignore-not-found
   note "Kiểm chứng sạch (rỗng = OK):"
