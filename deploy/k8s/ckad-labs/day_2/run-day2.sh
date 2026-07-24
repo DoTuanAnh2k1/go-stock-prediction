@@ -263,26 +263,36 @@ fi
 
 # =============================================================================
 lab_2_4(){
-title "LAB 2.4 — Kustomize Overlay (app cô lập 'web-kz', chỉ có kubectl-embedded Kustomize)"
+KZNS=ckad-kustomize
+title "LAB 2.4 — Kustomize Overlay (app 'web-kz' trên NAMESPACE RIÊNG '$KZNS' → output sạch)"
 
-note "0) Tooling: dùng 'kubectl kustomize' / 'kubectl apply -k' (không cần binary kustomize rời)"
+note "0) Tooling: 'kubectl kustomize' / 'kubectl apply -k' (Kustomize nhúng trong kubectl, không cần binary rời)"
 runsh "kubectl version --client 2>/dev/null | grep -i kustomize || echo '(kubectl có Kustomize nhúng)'"
 
-note "1) Render 2 overlay (KHÔNG apply) — chứng minh patch image tag + replica KHÁC nhau, không nhân đôi manifest"
+note "1) Render 2 overlay (KHÔNG apply) — patch image tag + replica KHÁC nhau, không nhân đôi manifest"
 run bash "$E2E" kustomize-diff "$DIR/kustomize/overlays/dev" "$DIR/kustomize/overlays/prod"
 
-note "2) Xem YAML render prod (namePrefix prod- · ns stock · replicas 5 · image web-svc:v2)"
+note "2) Xem YAML render prod (namePrefix prod- · ns $KZNS · replicas 5 · image web-svc:v2)"
 runsh "kubectl kustomize $DIR/kustomize/overlays/prod | grep -E '^kind:|  name:|replicas:|image:|namespace:'"
 
-note "3) apply -k prod (bonus) — 5/5, cô lập khỏi frontend web-svc thật"
-run kubectl apply -k "$DIR/kustomize/overlays/prod"
-kubectl rollout status deploy/prod-web-kz -n "$NS" --timeout=120s || true
-run kubectl get deploy,svc -n "$NS" -l app=web-kz
-note "   web-svc THẬT giữ nguyên (app=web-svc ≠ app=web-kz):"
-run kubectl get deploy -n "$NS" -l app=web-svc
+note "3) Tạo namespace RIÊNG (Kustomize set .metadata.namespace nhưng KHÔNG tự tạo namespace)"
+kubectl create namespace "$KZNS" >/dev/null 2>&1 && note "   → đã tạo ns $KZNS" || note "   → ns $KZNS đã có"
 
-note "4) Dọn overlay prod (delete -k)"
-run kubectl delete -k "$DIR/kustomize/overlays/prod"
+note "4) apply -k CẢ dev (replicas 1) lẫn prod (replicas 5) vào cùng ns $KZNS — khác namePrefix nên không đụng nhau"
+run kubectl apply -k "$DIR/kustomize/overlays/dev"
+run kubectl apply -k "$DIR/kustomize/overlays/prod"
+kubectl rollout status deploy/dev-web-kz  -n "$KZNS" --timeout=90s  || true
+kubectl rollout status deploy/prod-web-kz -n "$KZNS" --timeout=120s || true
+
+note "5) OUTPUT SẠCH — 'get' trên ns $KZNS chỉ thấy đồ Kustomize (dev-web-kz 1/1 + prod-web-kz 5/5), không lẫn stack thật:"
+run kubectl get deploy,svc,pod -n "$KZNS"
+
+if [ "${KEEP:-0}" = "1" ]; then
+  note "6) KEEP=1 → giữ ns $KZNS. Dọn tay khi xong: kubectl delete namespace $KZNS"
+else
+  note "6) Dọn: xóa NGUYÊN namespace $KZNS = xóa sạch mọi thứ Kustomize tạo (1 lệnh gọn)"
+  run kubectl delete namespace "$KZNS" --ignore-not-found
+fi
 }
 
 # =============================================================================
@@ -292,9 +302,14 @@ cleanup(){
   run kubectl delete -f "$DIR/web.yaml" --ignore-not-found
   run kubectl delete deploy bg -n "$NS" --ignore-not-found
   run kubectl delete svc bg -n "$NS" --ignore-not-found
-  run kubectl delete -k "$DIR/kustomize/overlays/prod" --ignore-not-found
+  run kubectl delete namespace ckad-kustomize --ignore-not-found   # lab 2.4 dùng ns riêng
   run kubectl delete pod e2e-poller e2e-load -n "$NS" --ignore-not-found
-  note "cpu-burn: giữ Deployment, scale về 1 (HPA idle sẽ giữ ở 1)"
+  # ⚠️ PHẢI xóa HPA TRƯỚC: sau khi 2.3 bắn tải, HPA giữ cpu-burn ở 10 suốt cửa sổ scaleDown
+  # ~300s (dù CPU đã 1%). Nếu chỉ `scale=1` mà giữ HPA → HPA kéo lại 10 → cpu-burn kẹt 10 (ăn
+  # ~1000m requests.cpu + 10 pod). Chạy script 2 LẦN LIÊN TIẾP → resource dồn → đụng ResourceQuota
+  # (lab 3.4) → 2.4 prod-web-kz (5 replica) không lên đủ → `rollout status` chờ 120s = TREO.
+  note "cpu-burn: XÓA HPA rồi scale về 1 (không giữ HPA — tránh kẹt 10 do cửa sổ scaleDown 300s)"
+  run kubectl delete hpa cpu-burn -n "$NS" --ignore-not-found
   run kubectl scale deploy/cpu-burn --replicas=1 -n "$NS"
   note "Kiểm chứng: app demo đã sạch, web-svc thật còn nguyên:"
   run kubectl get deploy -n "$NS" -l 'app in (web,bg,web-kz)'

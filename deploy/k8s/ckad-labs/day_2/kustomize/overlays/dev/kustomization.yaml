@@ -1,8 +1,8 @@
 # Lab 2.4 — OVERLAY dev. Chỉ chứa DELTA so với base (không chép lại Deployment/Service).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: stock
-namePrefix: dev-              # dev-web-kz — tách tên khỏi prod, không đụng web-svc thật
+namespace: ckad-kustomize    # namespace RIÊNG cho lab → `get -n ckad-kustomize` sạch, không lẫn stock
+namePrefix: dev-              # dev-web-kz — tách tên khỏi prod (cùng ns, khác prefix)
 resources:
   - ../../base
 images:

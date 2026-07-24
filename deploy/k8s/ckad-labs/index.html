@@ -334,7 +334,7 @@ const DATA = {
     {
       id:"2.4", title:"Kustomize Overlay", domain:"App Deployment (20%)", duration:"~45m", status:"done",
       prep:["Overlays sẵn: <code>deploy/k8s/ckad-labs/day_2/kustomize/{base,overlays/dev,overlays/prod}</code>."],
-      cleanup:["Không apply thì không cần dọn (nếu <code>apply -k</code>: <code>kubectl delete -k &lt;overlay&gt;</code>)."],
+      cleanup:["Xóa nguyên namespace là sạch: <code>kubectl delete namespace ckad-kustomize</code>. (Chỉ render <code>kustomize</code> thì không tạo gì, không cần dọn.)"],
       request:"Base cô lập web-kz (namespace-agnostic, tái dùng image web-svc:dev) + overlays dev/prod patch image tag và số replica mà KHÔNG nhân đôi manifest. Chỉ có kubectl-embedded Kustomize (v5.8.1), không binary rời.",
       steps:[
         "Tạo <code>kustomize/base/</code> (deployment.yaml + service.yaml + kustomization.yaml, app=web-kz, KHÔNG hardcode namespace).",
@@ -349,15 +349,16 @@ const DATA = {
         "<b>DRY = mục tiêu 'without duplicating manifests':</b> overlay CHỈ chứa delta, KHÔNG chép lại Deployment/Service.",
         "<b>Base KHÔNG nên hardcode <code>metadata.namespace</code></b> (mùi kustomize) — để overlay set qua <code>namespace:</code>. (Kiểm chứng: overlay <code>namespace:</code> override được cả base có hardcode, nhưng idiomatic là base namespace-agnostic.)",
         "Tag phải <code>kind load</code> TRƯỚC khi apply: <code>web-svc:v2</code> có sẵn từ lab 2.1 ⇒ <code>apply -k</code> chạy ngay; patch sang tag chưa load ⇒ pod <code>ImagePullBackOff</code> (render vẫn đúng, chỉ apply-chạy mới cần image thật).",
-        "<b>Base cô lập <code>app=web-kz</code></b> thay vì trỏ thẳng <code>deploy/k8s/web-svc/</code>: tránh <code>apply -k</code> làm bẩn Endpoints của frontend prod (selector overlap app=web-svc)."
+        "<b>Cô lập bằng NAMESPACE RIÊNG <code>ckad-kustomize</code></b> (overlay set <code>namespace:</code>): <code>get -n ckad-kustomize</code> chỉ thấy đồ demo (dev-* + prod-*), KHÔNG lẫn 26 pod stack thật ở ns <code>stock</code>; dọn = <code>delete namespace</code> một phát. Trước đây apply vào <code>stock</code> nên output rối + đụng ResourceQuota (lab 3.4). App vẫn dùng label <code>app=web-kz</code> riêng."
       ],
       commands:[
         {cmd:"which kustomize\nkubectl version --client | grep -i kustomize", note:"chỉ có bản nhúng trong kubectl", out:"kustomize not found\nKustomize Version: v5.8.1"},
-        {cmd:"kubectl kustomize kustomize/overlays/dev", note:"render dev — overlay chỉ chứa delta", out:"kind: Deployment\nname: dev-web-kz   namespace: stock\nreplicas: 1\nimage: web-svc:dev"},
+        {cmd:"kubectl kustomize kustomize/overlays/dev", note:"render dev — overlay chỉ chứa delta", out:"kind: Deployment\nname: dev-web-kz   namespace: ckad-kustomize\nreplicas: 1\nimage: web-svc:dev"},
         {cmd:"kubectl kustomize kustomize/overlays/prod | grep -E 'name:|replicas:|image:'", note:"render prod — patch tag + replicas", out:"name: prod-web-kz\nreplicas: 5\nimage: web-svc:v2"},
         {cmd:"./e2e-test.sh kustomize-diff kustomize/overlays/dev kustomize/overlays/prod", note:"harness khẳng định 2 overlay khác nhau", out:"dev  -> image=web-svc:dev replicas=1\nprod -> image=web-svc:v2 replicas=5\nPASS ✅ image tag VÀ replica count khác nhau — overlay patch không nhân đôi manifest"},
-        {cmd:"kubectl apply -k kustomize/overlays/prod\nkubectl rollout status deploy/prod-web-kz -n stock", note:"bonus — apply thật + cô lập khỏi web-svc", out:"service/prod-web-kz created\ndeployment.apps/prod-web-kz created\ndeployment \"prod-web-kz\" successfully rolled out\n→ 5/5 image web-svc:v2 · web-svc thật GIỮ NGUYÊN 3/3"},
-        {cmd:"kubectl delete -k kustomize/overlays/prod", note:"dọn sạch", out:"service \"prod-web-kz\" deleted\ndeployment.apps \"prod-web-kz\" deleted"}
+        {cmd:"kubectl create namespace ckad-kustomize\nkubectl apply -k kustomize/overlays/dev\nkubectl apply -k kustomize/overlays/prod", note:"tạo ns RIÊNG (Kustomize không tự tạo ns) + apply dev+prod", out:"namespace/ckad-kustomize created\nservice/dev-web-kz created\ndeployment.apps/dev-web-kz created\nservice/prod-web-kz created\ndeployment.apps/prod-web-kz created"},
+        {cmd:"kubectl get deploy,svc,pod -n ckad-kustomize", note:"OUTPUT SẠCH — chỉ đồ Kustomize, không lẫn 26 pod stack thật", out:"deployment.apps/dev-web-kz    1/1\ndeployment.apps/prod-web-kz   5/5\nservice/dev-web-kz   ...  service/prod-web-kz  ...\n# 2 overlay cùng ns, khác namePrefix (dev-/prod-) → không đụng nhau"},
+        {cmd:"kubectl delete namespace ckad-kustomize", note:"dọn: xóa NGUYÊN ns = xóa sạch mọi thứ Kustomize tạo", out:"namespace \"ckad-kustomize\" deleted"}
       ],
       tool:"# render 2 overlay + khẳng định image tag + replica khác nhau (KHÔNG apply):\n./e2e-test.sh kustomize-diff kustomize/overlays/dev kustomize/overlays/prod"
     },
