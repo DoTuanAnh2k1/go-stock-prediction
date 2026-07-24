@@ -53,6 +53,25 @@ global:
     enabled: true       # PodDisruptionBudget — stateless: maxUnavailable 1; db/minio: minAvailable 1
                         # LƯU Ý: PDB minAvailable 1 trên db/minio (1 replica) CHẶN drain node
                         # → khi cần drain node chứa db/minio phải scale=0 hoặc kubectl drain --force.
+  quota:
+    enabled: true       # CKAD 3.4 — LimitRange (default request/limit) + ResourceQuota (trần ns).
+                        # Size ~2.5–3x mức đang dùng để KHÔNG chặn rollout/blue-green.
+                        # Tắt: --set global.quota.enabled=false (templates/quota.yaml).
+  rbac:
+    enabled: true       # CKAD 3.3 — per-service ServiceAccount (automount:false) cho 5 backend
+                        # + pod-reader Role/RoleBinding. Tắt: --set global.rbac.enabled=false
+                        # (templates/serviceaccounts.yaml). gateway-svc RBAC nằm ở subchart riêng.
+  ingress:
+    enabled: false      # CKAD 4.2 — Ingress / → web-svc, /api → api-svc. Default TẮT: cần
+                        # ingress controller (kind chưa có). Bật sau khi cài ingress-nginx:
+                        # --set global.ingress.enabled=true (templates/ingress.yaml).
+    className: nginx
+    host: stock.local
+  networkPolicy:
+    enabled: false      # CKAD 4.3 — default-deny + allow-graph. kindnet CÓ enforce (verified).
+                        # Default TẮT vì default-deny cần allow đủ (Prometheus scrape :9464...)
+                        # nếu không sẽ cắt nhầm metrics. Bật demo: --set global.networkPolicy.enabled=true
+                        # (templates/networkpolicy.yaml — đã allow gateway + ingress-nginx→frontend).
 
 # HA: mọi service stateless ≥2 pod (replicas ở charts/<svc>/values.yaml), rải đều 3 node
 # (topologySpreadConstraints) + PDB. db & minio stateful (PVC RWO) → 1 replica.

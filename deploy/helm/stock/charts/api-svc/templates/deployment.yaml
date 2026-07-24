@@ -71,14 +71,17 @@ spec:
         prometheus.io/port: "8118"
         prometheus.io/path: "/metrics"
     spec:
+      serviceAccountName: api-svc           # CKAD 3.3 — SA riêng (automount:false, không gọi API)
       tolerations:                          # HA: chạy được trên node control-plane (dùng cả 3 node)
         {{- include "stock.tolerations" . | nindent 8 }}
       topologySpreadConstraints:            # HA: rải pod đều các node
         {{- include "stock.topologySpread" "api-svc" | nindent 8 }}
       # fsGroup=2000: emptyDir "logs" group-writable; app chạy appuser (uid 100) vẫn ghi được
-      # /var/log/app nhờ supplemental group 2000.
+      # /var/log/app nhờ supplemental group 2000. seccompProfile RuntimeDefault (CKAD 3.2).
       securityContext:
         fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
       # api-svc image có pg_isready → wait-db dùng chính image api-svc.
       initContainers:
         {{- include "stock.waitDb" (dict "image" (printf "%s:%s" .Values.global.images.apiSvc .Values.global.imageTag)) | nindent 8 }}
@@ -87,6 +90,12 @@ spec:
         - name: api
           image: "{{ .Values.global.images.apiSvc }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: IfNotPresent   # BẮT BUỘC: dùng image đã kind load, đừng pull registry
+          # CKAD 3.2 — drop ALL caps + no priv-esc. USER appuser (alpine `-S`, non-numeric)
+          # nên KHÔNG runAsNonRoot; image đã non-root sẵn.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           # pipefail: api-server chết thì shell trả mã lỗi (không bị tee nuốt) -> restart đúng
           command: ["sh", "-c", "set -o pipefail; ./api-server 2>&1 | tee /var/log/app/api.log"]
           ports:

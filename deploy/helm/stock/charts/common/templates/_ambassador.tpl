@@ -49,6 +49,12 @@ Chèn dưới `initContainers:` (nindent 8).
 - name: wait-db
   image: {{ .image }}
   imagePullPolicy: IfNotPresent
+  # CKAD 3.2 — init chỉ chạy pg_isready (network client): drop mọi capability, cấm
+  # privilege escalation. Không cần cap nào để mở socket TCP tới db:5432.
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
   command:
     - sh
     - -c
@@ -69,6 +75,13 @@ reqCpu/reqMem/limCpu/limMem override resources. Chèn dưới `containers:` (nin
 - name: log-sidecar
   image: {{ .image }}
   imagePullPolicy: IfNotPresent
+  # CKAD 3.2 — sidecar chỉ `tail -f` file trên emptyDir "logs" (mount, vẫn ghi được):
+  # rootfs read-only, drop mọi capability, cấm privilege escalation. Không ghi gì lên /.
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
   command: ["sh", "-c", "until [ -f /var/log/app/{{ .logfile }} ]; do sleep 1; done; tail -f /var/log/app/{{ .logfile }}"]
   volumeMounts:
     - name: logs
@@ -88,8 +101,18 @@ runAsUser 0 để ghi /run/nginx.pid vì pod ép non-root). Volume "nginx-conf" 
 - name: nginx
   image: nginx:1.27-alpine
   imagePullPolicy: IfNotPresent
-{{- if .root }}
+  # CKAD 3.2 — drop ALL rồi ADD LẠI đúng 3 cap official nginx image cần:
+  #   CHOWN  — entrypoint (root) chown /var/cache/nginx/* sang user nginx (uid 101) lúc start
+  #   SETUID/SETGID — nginx master (root) hạ quyền worker xuống user nginx (compiled default)
+  # (listen cổng cao >1024 nên KHÔNG cần NET_BIND_SERVICE). Vẫn drop ~35 cap còn lại + no
+  # priv-esc. KHÔNG readOnlyRootFilesystem: nginx ghi /var/run/nginx.pid + /var/cache/nginx.
+  # root=true (cli-svc): override runAsUser 0 để ghi được pid (pod ép non-root 10001).
   securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+      add: ["CHOWN", "SETUID", "SETGID"]
+{{- if .root }}
     runAsUser: 0        # override pod-level non-root: nginx cần ghi /run/nginx.pid
 {{- end }}
   ports:

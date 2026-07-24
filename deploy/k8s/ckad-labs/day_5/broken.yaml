@@ -1,0 +1,39 @@
+# =============================================================================
+# CKAD Lab 5.3 — Broken YAML Triage. Manifest CỐ TÌNH có 3 lỗi kinh điển để sửa:
+#   BUG 1 — Deployment selector KHÔNG khớp template labels (app:web vs app:webapp)
+#           → apply BỊ TỪ CHỐI ngay (validation): "selector does not match template labels".
+#   BUG 2 — Service targetPort 8080 nhưng container cổng 80 → có endpoints nhưng curl fail.
+#   BUG 3 — image "nginx:latst" (sai chính tả) → Pod ImagePullBackOff / ErrImagePull.
+#
+# Cách chữa (xem day_5/lab.md 5.3): apply → đọc lỗi → sửa BUG1 → apply → describe pod thấy
+# BUG3 → sửa image → get endpoints/curl thấy BUG2 → sửa targetPort → xanh.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triage
+  namespace: stock
+  labels: { app: triage }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: web }        # BUG 1: template labels là app=webapp → KHÔNG khớp
+  template:
+    metadata:
+      labels: { app: webapp }        # BUG 1 (đối ứng)
+    spec:
+      containers:
+        - name: web
+          image: nginx:latst          # BUG 3: sai chính tả (đúng: nginx:1.27-alpine)
+          ports: [{ containerPort: 80 }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: triage
+  namespace: stock
+spec:
+  selector: { app: webapp }
+  ports:
+    - port: 80
+      targetPort: 8080                # BUG 2: container nghe cổng 80, không phải 8080

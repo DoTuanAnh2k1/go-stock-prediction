@@ -41,13 +41,17 @@ spec:
         prometheus.io/port: "9464"
         prometheus.io/path: "/metrics"
     spec:
+      serviceAccountName: service-mgt       # CKAD 3.3 — SA riêng (automount:false, không gọi API)
       tolerations:                          # HA: chạy được trên node control-plane (dùng cả 3 node)
         {{- include "stock.tolerations" . | nindent 8 }}
       topologySpreadConstraints:            # HA: rải pod đều các node
         {{- include "stock.topologySpread" "service-mgt" | nindent 8 }}
       # fsGroup: app chạy USER appuser (non-root) → cho phép ghi emptyDir "logs" (group-writable).
+      # seccompProfile RuntimeDefault (CKAD 3.2): seccomp mặc định runtime cho mọi container.
       securityContext:
         fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
       # image service-mgt (Go) không có pg_isready nên wait-db dùng image timescaledb.
       initContainers:
         {{- include "stock.waitDb" (dict "image" "timescale/timescaledb:latest-pg16") | nindent 8 }}
@@ -56,6 +60,15 @@ spec:
         - name: service-mgt
           image: "{{ .Values.global.images.serviceMgt }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: IfNotPresent
+          # CKAD 3.2 — FULL lockdown demo trên app container thật: readOnlyRootFilesystem.
+          # service-mgt (Go) chỉ ghi /var/log/app (mount "logs") + /tmp (mount "tmp"); rootfs "/"
+          # để read-only. drop ALL caps + no priv-esc. (USER appuser alpine `-S` non-numeric nên
+          # KHÔNG set runAsNonRoot — cần UID số; image đã chạy non-root sẵn.)
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           command: ["sh", "-c", "set -o pipefail; ./service-mgt 2>&1 | tee /var/log/app/service-mgt.log"]
           ports:
             - { name: grpc, containerPort: 8121 }
@@ -75,6 +88,8 @@ spec:
           volumeMounts:
             - name: logs
               mountPath: /var/log/app
+            - name: tmp
+              mountPath: /tmp        # readOnlyRootFilesystem: cấp /tmp ghi được (Go os.TempDir)
           resources:
             requests: { cpu: "50m", memory: "64Mi" }
             limits:   { cpu: "250m", memory: "128Mi" }
@@ -85,5 +100,7 @@ spec:
       volumes:
         - name: logs
           emptyDir: {}                 # chia sẻ giữa app "service-mgt" và "log-sidecar"
+        - name: tmp
+          emptyDir: {}                 # /tmp ghi được khi readOnlyRootFilesystem: true
         - name: nginx-conf
           configMap: { name: service-mgt-nginx }

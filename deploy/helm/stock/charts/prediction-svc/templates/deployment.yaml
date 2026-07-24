@@ -41,13 +41,17 @@ spec:
         prometheus.io/port: "9464"
         prometheus.io/path: "/metrics"
     spec:
+      serviceAccountName: prediction-svc    # CKAD 3.3 — SA riêng (automount:false, không gọi API)
       tolerations:                          # HA: chạy được trên node control-plane (dùng cả 3 node)
         {{- include "stock.tolerations" . | nindent 8 }}
       topologySpreadConstraints:            # HA: rải pod đều các node
         {{- include "stock.topologySpread" "prediction-svc" | nindent 8 }}
       # fsGroup: app chạy USER appuser (non-root) → ghi được emptyDir "logs" (group-writable).
+      # seccompProfile RuntimeDefault (CKAD 3.2): áp seccomp mặc định của runtime cho mọi container.
       securityContext:
         fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
       # dnsConfig ndots:1 — mạng hotspot/ISP hijack NXDOMAIN: ndots:5 mặc định nối
       # search-domain rác (tailf643c3.ts.net / DHCP rò từ resolv.conf host) vào tên
       # external (crawler_fundamentals yfinance, ...) → ISP trả IP parking → connect
@@ -65,6 +69,15 @@ spec:
         - name: prediction-svc
           image: "{{ .Values.global.images.predictionSvc }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: IfNotPresent
+          # CKAD 3.2 — image build USER appuser uid=1000 (Dockerfile `useradd -u 1000`).
+          # runAsNonRoot enforce fail-closed (UID số nên kubelet verify được non-root).
+          # KHÔNG readOnlyRootFilesystem: torch/matplotlib/numba ghi cache /tmp + ~/.cache lúc load.
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           command: ["sh", "-c", "set -o pipefail; python -m src.main 2>&1 | tee /var/log/app/prediction.log"]
           ports:
             - name: grpc
@@ -78,16 +91,22 @@ spec:
             requests: { cpu: "250m", memory: "512Mi" }
             limits:   { cpu: "1500m", memory: "2Gi" }   # torch/ML nặng RAM
           # ---- Health probes: tcpSocket :8119 (trỏ THẲNG app, gRPC không đăng ký health.v1) ----
+          # CKAD 5.1 — startupProbe cho container slow-start: torch import + ML init + DB connect
+          # có thể mất 30–120s. startupProbe chạy TRƯỚC, gate liveness/readiness → liveness KHÔNG
+          # giết pod oan trong lúc khởi động chậm (bỏ nhu cầu initialDelaySeconds dài trên liveness).
+          startupProbe:
+            tcpSocket:
+              port: 8119
+            periodSeconds: 5
+            failureThreshold: 30        # tối đa ~150s để app mở cổng gRPC
           readinessProbe:
             tcpSocket:
               port: 8119
-            initialDelaySeconds: 15
-            periodSeconds: 10
+            periodSeconds: 10           # startupProbe đã gate → không cần initialDelaySeconds
             failureThreshold: 3
           livenessProbe:
             tcpSocket:
               port: 8119
-            initialDelaySeconds: 30
             periodSeconds: 20
             failureThreshold: 3
           volumeMounts:

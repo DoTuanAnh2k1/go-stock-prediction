@@ -42,10 +42,16 @@ spec:
         prometheus.io/port: "9464"
         prometheus.io/path: "/actuator/prometheus"
     spec:
+      serviceAccountName: auth-svc          # CKAD 3.3 — SA riêng (automount:false, không gọi API)
       tolerations:                          # HA: chạy được trên node control-plane (dùng cả 3 node)
         {{- include "stock.tolerations" . | nindent 8 }}
       topologySpreadConstraints:            # HA: rải pod đều các node
         {{- include "stock.topologySpread" "auth-svc" | nindent 8 }}
+      # seccompProfile RuntimeDefault (CKAD 3.2) cho mọi container trong pod. (Image Java
+      # chạy USER root → KHÔNG runAsNonRoot; drop caps đặt ở container-level bên dưới.)
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       # image auth-svc (Java) không có pg_isready nên wait-db dùng image timescaledb.
       initContainers:
         {{- include "stock.waitDb" (dict "image" "timescale/timescaledb:latest-pg16") | nindent 8 }}
@@ -54,6 +60,13 @@ spec:
         - name: auth-svc
           image: "{{ .Values.global.images.authSvc }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: IfNotPresent
+          # CKAD 3.2 — drop mọi capability + cấm privilege escalation. KHÔNG runAsNonRoot
+          # (image Java USER root) và KHÔNG readOnlyRootFilesystem (JVM ghi /tmp: hsperfdata,
+          # Spring temp, unpack jar). Đây là hardening tối đa an toàn cho container root.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           command: ["sh", "-c", "set -o pipefail; java -jar /app/app.jar 2>&1 | tee /var/log/app/auth.log"]
           ports:
             - name: grpc

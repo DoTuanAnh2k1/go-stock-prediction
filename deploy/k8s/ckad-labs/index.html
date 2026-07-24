@@ -356,6 +356,304 @@ const DATA = {
       ],
       tool:"# render 2 overlay + khẳng định image tag + replica khác nhau (KHÔNG apply):\n./e2e-test.sh kustomize-diff kustomize/overlays/dev kustomize/overlays/prod"
     },
+  ],
+
+  "Day 3 — Configuration & security": [
+    {
+      id:"3.1", title:"ConfigMap & Secret Injection", domain:"App Environment, Config & Security (25%)", duration:"~45m", status:"done",
+      prep:["Không cần dựng object nháp — cả 2 nửa bài đã nằm sẵn trong mọi backend pod của Helm chart <code>stock</code>."],
+      cleanup:["Không tạo mới ⇒ không cần dọn (chỉ document + verify trên pod thật)."],
+      request:"Secret from file (env var) + ConfigMap from literal (mounted volume) trong một Pod — đã hiện thực sẵn trong stack: mỗi service có Secret nạp qua <code>envFrom.secretRef</code>, ConfigMap <code>nginx.conf</code> mount làm volume vào container nginx, và <code>configMapRef</code> nạp config env. Chỉ document + verify.",
+      steps:[
+        "Xác nhận Secret → env: mỗi service có <code>secret.yaml</code> nạp qua <code>envFrom.secretRef</code> (vd <code>api-secret</code>, <code>prediction-secret</code>).",
+        "Xác nhận ConfigMap → mounted volume: <code>nginx.conf</code> của ambassador là ConfigMap <code>&lt;svc&gt;-nginx</code> mount qua <code>volumeMounts</code> + <code>subPath: nginx.conf</code>.",
+        "Xác nhận ConfigMap → env: <code>configMapRef</code> (vd <code>api-config</code>, <code>prediction-config</code>).",
+        "Verify nhanh trên pod thật bằng <code>get cm,secret</code> + đọc <code>envFrom</code> của deployment."
+      ],
+      knowledge:[
+        "<b>Secret → env var</b>: <code>envFrom.secretRef</code> nạp toàn bộ key làm biến môi trường (vs <code>valueFrom.secretKeyRef</code> nạp từng key).",
+        "<b>ConfigMap → mounted volume</b>: <code>volumes[].configMap</code> + <code>volumeMounts[].subPath</code> để mount 1 file (<code>nginx.conf</code>) mà KHÔNG che cả thư mục <code>/etc/nginx</code>.",
+        "<b>ConfigMap → env</b>: <code>configMapRef</code> khác <code>secretRef</code> ở chỗ giá trị không được k8s che (base64-only là mã hoá của Secret, không phải bảo mật thật).",
+        "Cùng một Pod có thể vừa nạp Secret env vừa mount ConfigMap volume — đúng yêu cầu đề CKAD 'inject Secret as env var and ConfigMap as mounted volume in one Pod'."
+      ],
+      commands:[
+        {cmd:"kubectl get cm,secret -n stock | grep -E 'nginx|config|secret'", note:"liệt kê ConfigMap + Secret của stack", out:"configmap/api-config        ...\nconfigmap/prediction-svc-nginx  ...\nsecret/api-secret          Opaque\nsecret/prediction-secret   Opaque"},
+        {cmd:"kubectl get deploy prediction-svc -n stock \\\n  -o jsonpath='{.spec.template.spec.containers[0].envFrom}'", note:"Secret + ConfigMap nạp env", out:"[{\"secretRef\":{\"name\":\"prediction-secret\"}},{\"configMapRef\":{\"name\":\"prediction-config\"}}]"},
+        {cmd:"# ConfigMap mount làm volume (subPath 1 file)\n# volumeMounts: [{name: nginx-conf, mountPath: /etc/nginx/nginx.conf, subPath: nginx.conf}]\n# volumes:      [{name: nginx-conf, configMap: {name: prediction-svc-nginx}}]", note:"nginx.conf = ConfigMap mounted volume", out:"# nginx ambassador đọc config từ ConfigMap mount, không bake vào image"}
+      ]
+    },
+    {
+      id:"3.2", title:"Security Context Lockdown", domain:"App Environment, Config & Security (25%)", duration:"~45m", status:"done",
+      prep:["Hardening gom vào library chart <code>charts/common/templates/_ambassador.tpl</code> (nginx/sidecar/wait-db dùng chung) + app container inline per-service."],
+      cleanup:["Không có object nháp — áp thẳng lên 5 backend qua <code>helm upgrade</code>; rollback bằng <code>helm rollback stock &lt;rev&gt;</code>."],
+      request:"Run Pod as non-root + read-only rootfs + drop all capabilities + disable privilege escalation — áp lên CẢ 5 backend (api/auth/prediction/service-mgt/cli). Pod-level seccomp RuntimeDefault; app/nginx/sidecar/init mỗi cái siết theo khả năng của image.",
+      steps:[
+        "Pod-level: <code>seccompProfile: RuntimeDefault</code> cho cả 5 backend.",
+        "App container: <code>allowPrivilegeEscalation:false</code> + <code>drop:[ALL]</code>; <code>runAsNonRoot+runAsUser</code> CHỈ nơi image có UID SỐ (prediction 1000, cli 10001); <code>readOnlyRootFilesystem</code> nơi ghi được (service-mgt + <code>/tmp</code> emptyDir).",
+        "nginx ambassador: drop ALL nhưng <code>add: [CHOWN, SETUID, SETGID]</code> (official image cần).",
+        "log-sidecar + init wait-db: drop ALL, sidecar readOnlyRootFS (chỉ <code>tail -f</code>).",
+        "<code>helm upgrade stock deploy/helm/stock -n stock</code> → verify securityContext trên pod live."
+      ],
+      knowledge:[
+        "<b>⚠️ Bẫy nginx CAP_CHOWN:</b> <code>drop:[ALL]</code> làm official nginx CrashLoopBackOff (<code>chown(\"/var/cache/nginx/client_temp\",101) failed: Operation not permitted</code>) — entrypoint root chown cache sang uid 101 lúc start cần <code>CAP_CHOWN</code>. Fix: giữ drop-ALL nhưng <code>add: [CHOWN, SETUID, SETGID]</code> (SETUID/SETGID để master hạ quyền worker). Cổng >1024 nên KHÔNG cần <code>NET_BIND_SERVICE</code>.",
+        "<b>App vẫn Ready khi nginx chết (2/3):</b> chỉ container nginx CrashLoop, app + sidecar vẫn Running ⇒ hardening app/sidecar đã chuẩn, chỉ nginx cần cap.",
+        "<code>runAsNonRoot:true</code> với image mà USER là TÊN (alpine <code>adduser -S</code>, không <code>-u &lt;số&gt;</code>) sẽ FAIL admission ('non-numeric user, cannot verify'). Phải có <code>runAsUser</code> SỐ → chỉ enforce ở prediction(1000)/cli(10001); api/service-mgt/auth chỉ drop caps + no-priv-esc.",
+        "UID lấy từ Dockerfile — KHÔNG đoán: <code>api-svc adduser -S appuser</code> (phi số) · <code>auth-svc</code> chạy root · <code>prediction useradd -u 1000</code> · <code>cli adduser -u 10001</code>.",
+        "<code>readOnlyRootFilesystem</code> cần <code>/tmp</code> emptyDir (service-mgt) — nơi nào image ghi rootfs (JVM /tmp, torch cache, ssh host key) thì KHÔNG bật được.",
+        "Kết quả: 5 backend <code>2/2</code> Available, mọi pod <code>3/3</code> Running, 0 restart — hardening không vỡ runtime."
+      ],
+      commands:[
+        {cmd:"helm upgrade stock deploy/helm/stock -n stock", note:"rev6 (sau fix CAP_CHOWN); rollout zero-downtime maxUnavailable:0", out:"Release \"stock\" has been upgraded. Happy Helming!\nREVISION: 6"},
+        {cmd:"p=$(kubectl get pod -n stock -l app=prediction-svc \\\n  -o jsonpath='{.items[0].metadata.name}')\nkubectl get pod $p -n stock -o jsonpath='POD {.spec.securityContext}{\"\\n\"}{range .spec.containers[*]}{.name} {.securityContext}{\"\\n\"}{end}'", note:"securityContext pod + từng container", out:"POD {\"fsGroup\":2000,\"seccompProfile\":{\"type\":\"RuntimeDefault\"}}\nprediction-svc {\"allowPrivilegeEscalation\":false,\"capabilities\":{\"drop\":[\"ALL\"]},\"runAsNonRoot\":true,\"runAsUser\":1000}\nnginx {\"allowPrivilegeEscalation\":false,\"capabilities\":{\"add\":[\"CHOWN\",\"SETUID\",\"SETGID\"],\"drop\":[\"ALL\"]}}\nlog-sidecar {\"allowPrivilegeEscalation\":false,\"capabilities\":{\"drop\":[\"ALL\"]},\"readOnlyRootFilesystem\":true}"},
+        {cmd:"# BẪY (rev5, trước fix): pod 2/3 CrashLoopBackOff — chỉ nginx chết\nkubectl logs $p -n stock -c nginx --previous", note:"lỗi thiếu CAP_CHOWN", out:"[emerg] 1#1: chown(\"/var/cache/nginx/client_temp\", 101) failed (1: Operation not permitted)"},
+        {cmd:"kubectl get pods -n stock -l app=prediction-svc", note:"sau fix — 3/3 Running, 0 restart", out:"NAME                     READY   STATUS    RESTARTS\nprediction-svc-...-hs826 3/3     Running   0"}
+      ]
+    },
+    {
+      id:"3.3", title:"ServiceAccount & RBAC", domain:"App Environment, Config & Security (25%)", duration:"~60m", status:"done",
+      prep:["Template <code>deploy/helm/stock/templates/serviceaccounts.yaml</code> — 5 SA per-service (automount:false) + SA <code>pod-reader</code> + Role + RoleBinding."],
+      cleanup:["<code>helm rollback</code> hoặc <code>--set global.rbac.enabled=false</code>. gateway-svc GIỮ SA+Role riêng (thực sự gọi API) — không đụng."],
+      request:"Create ServiceAccount, Role, RoleBinding; Pod dùng SA token list Pods trong ns qua API. Đồng thời hardening thật: mỗi backend 1 SA riêng với <code>automountServiceAccountToken:false</code> (trước dùng <code>default</code> SA token tự mount dù không service nào gọi API).",
+      steps:[
+        "(A) Per-service SA + <code>automountServiceAccountToken:false</code> → không còn projected token; wire <code>serviceAccountName: &lt;svc&gt;</code> vào từng deployment.",
+        "(B) SA <code>pod-reader</code> + Role chỉ <code>get/list/watch</code> <code>pods/services/endpoints</code> (scope ns stock) + RoleBinding.",
+        "<code>helm upgrade stock deploy/helm/stock -n stock</code> (rev8).",
+        "Verify token KHÔNG còn mount (pod không có volume <code>kube-api-access-*</code>).",
+        "Verify RBAC scope bằng <code>kubectl auth can-i --as=&lt;SA&gt;</code>."
+      ],
+      knowledge:[
+        "<code>automountServiceAccountToken:false</code> đặt ở SA OBJECT → mọi pod dùng SA đó không mount token; verify bằng pod KHÔNG còn volume <code>kube-api-access-*</code>.",
+        "RBAC namespaced: <code>pod-reader</code> list được pod NHƯNG không delete (Role chỉ đọc); SA khác (auth-svc) không bind Role ⇒ không list được → least-privilege chứng minh bằng <code>can-i</code>.",
+        "<code>kubectl auth can-i list pods --as=system:serviceaccount:stock:pod-reader</code> = cách kiểm quyền của một SA mà không cần login vào pod.",
+        "Trước đây 5 backend chạy SA <code>default</code> có token API tự mount dù CHÚNG chỉ nói chuyện qua Service DNS + gRPC — không service nào gọi k8s API ⇒ token thừa = bề mặt tấn công. Per-service SA + automount:false loại bỏ.",
+        "gateway-svc là ngoại lệ: GIỮ SA + Role riêng vì blue/green controller THỰC SỰ patch Deployment qua API (<code>charts/gateway-svc/templates/rbac.yaml</code>)."
+      ],
+      commands:[
+        {cmd:"helm upgrade stock deploy/helm/stock -n stock", note:"rev8 — per-service SA + pod-reader RBAC", out:"Release \"stock\" has been upgraded. Happy Helming!\nREVISION: 8"},
+        {cmd:"p=$(kubectl get pod -n stock -l app=prediction-svc \\\n  -o jsonpath='{.items[0].metadata.name}')\nkubectl get pod $p -n stock -o jsonpath='sa={.spec.serviceAccountName} vols=[{range .spec.volumes[*]}{.name} {end}]'", note:"token KHÔNG còn mount", out:"sa=prediction-svc vols=[models logs tmp nginx-conf]     ← KHÔNG có kube-api-access-* nữa"},
+        {cmd:"kubectl auth can-i list   pods --as=system:serviceaccount:stock:pod-reader -n stock\nkubectl auth can-i delete pods --as=system:serviceaccount:stock:pod-reader -n stock\nkubectl auth can-i list   pods --as=system:serviceaccount:stock:auth-svc   -n stock", note:"scope đúng: đọc yes, xoá no, SA khác no", out:"yes\nno    (Role chỉ đọc)\nno    (không bind Role)"}
+      ]
+    },
+    {
+      id:"3.4", title:"Namespace Quotas", domain:"App Environment, Config & Security (25%)", duration:"~45m", status:"done",
+      prep:["Template <code>deploy/helm/stock/templates/quota.yaml</code> — LimitRange + ResourceQuota áp vào ns <code>stock</code> THẬT (đang chạy 26 pod), size ~2.5–3x an toàn."],
+      cleanup:["<code>--set global.quota.enabled=false</code> hoặc <code>helm rollback</code>. Demo reject dùng <code>--dry-run=server</code> nên không persist → không cần dọn."],
+      request:"Apply ResourceQuota + LimitRange; quan sát Pod bị reject khi vượt quota. Vì áp lên ns live 26 pod, phải size quota để KHÔNG chặn rollout/blue-green; LimitRange bắt buộc đi kèm để tiêm default request cho pod không khai resources (init/CronJob).",
+      steps:[
+        "Apply LimitRange <code>stock-defaults</code> (defaultRequest 50m/64Mi · default 250m/256Mi · max 2/3Gi).",
+        "Apply ResourceQuota <code>stock-quota</code> (requests.cpu=6 mem=10Gi · limits.cpu=30 mem=24Gi · pods=60).",
+        "<code>helm upgrade</code> (rev7) → <code>describe quota</code> xác nhận used dưới trần.",
+        "Demo REJECT bằng <code>--dry-run=server</code> (chạy admission thật, không tạo pod): vượt ResourceQuota, vượt LimitRange max, và default injection."
+      ],
+      knowledge:[
+        "Quota <code>requests.*</code>/<code>limits.*</code> yêu cầu MỌI pod khai resources → <b>phải pair LimitRange</b> (default) nếu không CronJob/init pod thiếu resources bị reject.",
+        "Reject xảy ra ở <b>API server admission</b> (KHÔNG phải scheduler) → pod không được tạo ngay từ đầu.",
+        "<code>--dry-run=server</code> = kênh demo sạch: chạy đủ admission (quota + limitrange) nhưng không persist → không cần dọn.",
+        "LimitRange <code>max</code> giới hạn per-Container; ResourceQuota giới hạn TỔNG toàn ns — hai tầng khác nhau (1 container cpu=3 > max 2 bị chặn ở LimitRange; tổng 2 container cpu=4 > remaining bị chặn ở Quota).",
+        "Default injection: pod không khai resources → LimitRange tự vá <code>{requests:50m/64Mi, limits:250m/256Mi}</code> ⇒ thoả quota."
+      ],
+      commands:[
+        {cmd:"helm upgrade stock deploy/helm/stock -n stock", note:"rev7 — LimitRange + ResourceQuota", out:"Release \"stock\" has been upgraded. Happy Helming!\nREVISION: 7"},
+        {cmd:"kubectl describe quota stock-quota -n stock", note:"used đều dưới trần", out:"requests.cpu     2250m/6\nrequests.memory  3840Mi/10Gi\nlimits.cpu       13200m/30\npods             26/60"},
+        {cmd:"# (1) Vượt ResourceQuota (2 container × cpu=2 → tổng 4 > remaining):\nkubectl apply --dry-run=server -f quota-test.yaml", note:"reject ở admission", out:"Error: pods \"quota-test\" is forbidden: exceeded quota: stock-quota,\n  requested: requests.cpu=4, used: requests.cpu=2250m, limited: requests.cpu=6"},
+        {cmd:"# (2) Vượt LimitRange max (1 container cpu=3 > max 2):\nkubectl apply --dry-run=server -f max-test.yaml", note:"reject ở LimitRange", out:"Error: pods \"max-test\" is forbidden: maximum cpu usage per Container is 2, but limit is 3"},
+        {cmd:"# (3) Default injection: pod KHÔNG khai resources → LimitRange vá\nkubectl apply --dry-run=server -o jsonpath='{...resources}' -f noreq.yaml", note:"tự vá default", out:"{\"limits\":{\"cpu\":\"250m\",\"memory\":\"256Mi\"},\"requests\":{\"cpu\":\"50m\",\"memory\":\"64Mi\"}}"}
+      ]
+    }
+  ],
+
+  "Day 4 — Networking & storage": [
+    {
+      id:"4.1", title:"ClusterIP & NodePort", domain:"Services & Networking (20%)", duration:"~45m", status:"done",
+      prep:["Cả 2 loại Service có sẵn trên stack: ClusterIP (api/prediction/db) + NodePort (cli-svc 32345, gateway-svc 30080). Drill selector mismatch dùng deploy nháp <code>ep-demo</code>."],
+      cleanup:["<code>kubectl delete deploy ep-demo svc ep-demo -n stock</code> (nếu tạo drill)."],
+      request:"Create ClusterIP backend + NodePort frontend; diagnose và fix selector mismatch; verify Endpoints. Trên stack thật đã có cả 2 loại; drill throwaway <code>ep-demo</code> để tái hiện lỗi Endpoints rỗng do selector sai.",
+      steps:[
+        "Liệt kê Service theo TYPE + PORT + NODEPORT: ClusterIP nội bộ vs NodePort expose ra ngoài.",
+        "Tạo deploy nháp <code>ep-demo</code> + Service selector SAI (<code>app=WRONG</code>) → <code>get endpoints</code> RỖNG.",
+        "Fix selector về <code>app=ep-demo</code> bằng <code>kubectl patch svc</code> → Endpoints nhồi IP:port pod Ready.",
+        "Xác nhận db là headless (<code>clusterIP: None</code>) — DNS trả thẳng IP pod."
+      ],
+      knowledge:[
+        "<b>Service selector = tiêu chí chọn pod</b>; Endpoints controller theo dõi pod <code>Ready</code> khớp selector → nhồi IP:port. Selector sai / pod chưa Ready ⇒ <b>Endpoints rỗng = nguyên nhân #1 'service không tới được'</b>. <code>kubectl get endpoints &lt;svc&gt;</code> là lệnh debug ĐẦU TIÊN.",
+        "<b>ClusterIP</b> (default): IP ảo nội bộ, load-balance tới Endpoints. <b>NodePort</b>: mở cổng 30000–32767 trên MỌI node → ClusterIP (expose thô, không cần LoadBalancer).",
+        "headless (<code>clusterIP: None</code>, db): DNS trả thẳng IP pod (StatefulSet cần để địa chỉ hoá từng pod).",
+        "Selector mismatch chữa được vì Service selector là MUTABLE (khác selector của Deployment — immutable)."
+      ],
+      commands:[
+        {cmd:"kubectl get svc -n stock -o custom-columns='NAME:.metadata.name,TYPE:.spec.type,PORT:.spec.ports[0].port,NODEPORT:.spec.ports[0].nodePort'", note:"cả 2 loại Service", out:"api-svc         ClusterIP   8118   <none>\nprediction-svc  ClusterIP   8119   <none>\ndb              ClusterIP   5432   <none>   (headless clusterIP=None)\ncli-svc         NodePort    2345   32345\ngateway-svc     NodePort    80     30080"},
+        {cmd:"kubectl create deploy ep-demo --image=nginx:1.27-alpine -n stock\n# Service selector SAI (app=WRONG):\nkubectl get endpoints ep-demo -n stock", note:"Endpoints RỖNG do selector không khớp", out:"ep-demo   <none>          ← selector không khớp pod nào"},
+        {cmd:"kubectl patch svc ep-demo -n stock -p '{\"spec\":{\"selector\":{\"app\":\"ep-demo\"}}}'\nkubectl get endpoints ep-demo -n stock", note:"fix selector → Endpoints có IP", out:"service/ep-demo patched\nep-demo   10.244.2.57:80  ← IP:port pod Ready khớp selector"}
+      ]
+    },
+    {
+      id:"4.2", title:"Ingress Routing", domain:"Services & Networking (20%)", duration:"~60m", status:"done",
+      prep:["Cluster kind CHƯA có ingress controller → cài <code>ingress-nginx</code> (baremetal/NodePort, kind không map hostPort 80/443)."],
+      cleanup:["<code>--set global.ingress.enabled=false</code>; gỡ controller: <code>kubectl delete -f .../baremetal/deploy.yaml</code> nếu muốn."],
+      request:"Route <code>/</code> → frontend và <code>/api</code> → backend qua Ingress; verify qua ingress controller endpoint. Ingress = gated Helm template (host <code>stock.local</code>, KHÔNG rewrite path), bật bằng <code>--set global.ingress.enabled=true</code>.",
+      steps:[
+        "Cài ingress-nginx (baremetal manifest) → controller 1/1, 2 admission Job Completed; Service NodePort http/https.",
+        "Bật Ingress: <code>helm upgrade ... --set global.ingress.enabled=true</code> → <code>get ingress</code> (host stock.local).",
+        "Verify routing: <code>port-forward</code> controller + curl với header <code>Host: stock.local</code> tới <code>/api/version</code> = 200.",
+        "Host không khớp (<code>nope.invalid</code>) → 404 default backend."
+      ],
+      knowledge:[
+        "<b>Ingress cần Ingress CONTROLLER</b>: Ingress object chỉ là 'cấu hình mong muốn'; controller mới thực thi routing L7. <code>ingressClassName</code> phải khớp controller (<code>nginx</code>).",
+        "Là bản k8s-native SONG SONG với gateway-svc (Rust) đang làm longest-prefix routing qua NodePort — cùng mục tiêu <code>/</code>→fe <code>/api</code>→be, khác cơ chế (controller chuẩn vs proxy tự viết).",
+        "kind KHÔNG map hostPort 80/443 (cluster tạo sẵn, không extraPortMappings) → verify qua NodePort/port-forward thay vì <code>http://localhost</code>.",
+        "Host header quyết định rule nào áp: <code>Host: stock.local</code> khớp → route; host lạ → 404 default backend (không phải lỗi controller)."
+      ],
+      commands:[
+        {cmd:"kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/baremetal/deploy.yaml\nkubectl get svc ingress-nginx-controller -n ingress-nginx", note:"cài controller (baremetal NodePort)", out:"controller 1/1 Running; 2 admission Job Completed\ningress-nginx-controller  NodePort  http=31825  https=30376"},
+        {cmd:"helm upgrade stock deploy/helm/stock -n stock --set global.ingress.enabled=true\nkubectl get ingress -n stock", note:"bật Ingress gated template", out:"stock   nginx   stock.local   80"},
+        {cmd:"kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 18080:80 &\ncurl -s -H \"Host: stock.local\" http://localhost:18080/api/version", note:"route /api → api-svc = 200", out:"{\"service\":\"api-svc\",\"git_sha\":\"unknown\",...,\"consistent\":true}   HTTP 200 ✅"},
+        {cmd:"curl -s -H \"Host: nope.invalid\" http://localhost:18080/api/version -o /dev/null -w '%{http_code}\\n'", note:"host không khớp → default backend", out:"404   ← host không khớp rule"}
+      ]
+    },
+    {
+      id:"4.3", title:"NetworkPolicy Isolation", domain:"Services & Networking (20%)", duration:"~45m", status:"done",
+      prep:["NetworkPolicy = gated template <code>networkpolicy.yaml</code> (default off vì default-deny cần allow đủ traffic hợp lệ — Prometheus scrape :9464...). 5 policy."],
+      cleanup:["Đã TẮT lại (default off) sau demo để không chặn Prometheus scrape. Xoá pod nháp: <code>kubectl delete pod np-test -n stock</code>."],
+      request:"Allow frontend → backend traffic only; deny backend egress ra internet (0.0.0.0/0). 5 policy: default-deny-ingress + allow gateway/ingress-nginx→frontend + api→auth/prediction + backends→db + deny-backend-egress-internet.",
+      steps:[
+        "Bật NetworkPolicy + Ingress: <code>--set global.networkPolicy.enabled=true --set global.ingress.enabled=true</code> → 5 policy.",
+        "(A) Ingress vẫn 200 vì template ĐÃ allow ns <code>ingress-nginx</code> (namespaceSelector).",
+        "(B) ISOLATION: pod lạ <code>app=np-test</code> (không trong allow-list) curl api-svc → wget TIMEOUT (bị chặn).",
+        "Tắt lại (default off) sau demo."
+      ],
+      knowledge:[
+        "<b>⚠️ kindnet CÓ enforce (lật giả định):</b> ban đầu tưởng kindnet KHÔNG enforce NetworkPolicy (kiến thức cũ). Test thật lật lại: bật default-deny → Ingress <code>/api</code> trả HTTP <b>000</b> (backend không tới được); tắt → <b>200</b>. ⇒ CNI này enforce THẬT. Bài học: chạy lệnh kiểm chứng, đừng tin giả định.",
+        "<b>default-deny-ingress</b> (<code>podSelector: {}</code>, <code>policyTypes:[Ingress]</code>, KHÔNG có <code>ingress:</code>) = từ chối MỌI ingress; các policy <code>allow-*</code> <b>cộng dồn (OR)</b> mở đúng call-graph.",
+        "Test isolation THẬT (pod trong allow-list qua, pod ngoài <code>np-test</code> wget timeout = bị chặn) mới chứng minh policy tác dụng — KHÔNG suy đoán từ manifest.",
+        "Cho ingress controller qua backend cần allow <b>ns của controller</b> (<code>namespaceSelector kubernetes.io/metadata.name: ingress-nginx</code>), nếu không Ingress 000 dù controller chạy.",
+        "<code>deny-backend-egress-internet</code> (auth-svc/service-mgt): egress chỉ intra-cluster (10.0.0.0/8) + DNS :53 → chặn ra ngoài. KHÔNG áp prediction-svc (nó crawl external thật)."
+      ],
+      commands:[
+        {cmd:"helm upgrade stock deploy/helm/stock -n stock --set global.networkPolicy.enabled=true --set global.ingress.enabled=true\nkubectl get networkpolicy -n stock", note:"5 policy", out:"default-deny-ingress\nallow-gateway-to-frontend\nallow-api-to-backends\nallow-backends-to-db\ndeny-backend-egress-internet"},
+        {cmd:"curl -s -H \"Host: stock.local\" http://localhost:18082/api/version -w '\\nHTTP %{http_code}\\n'", note:"(A) Ingress vẫn qua (allow ns ingress-nginx)", out:"{\"service\":\"api-svc\",...}   HTTP 200   ← allow-gateway-to-frontend cho ingress-nginx qua"},
+        {cmd:"# (B) pod lạ app=np-test (ngoài allow-list) curl api-svc:\nkubectl run np-test --image=nginx:1.27-alpine --restart=Never -n stock --labels=app=np-test \\\n  --command -- sh -c 'wget -T 5 -qO- http://api-svc:8118/health/ready; echo \"wget_exit=$?\"'\nkubectl logs np-test -n stock", note:"BỊ CHẶN → timeout", out:"wget: download timed out\nwget_exit=1              ← default-deny + không allow app=np-test → TIMEOUT (chặn thật)"}
+      ]
+    },
+    {
+      id:"4.4", title:"Persistent Volume Claims", domain:"Services & Networking (20%)", duration:"~45m", status:"done",
+      prep:["StorageClass <code>standard</code> (rancher.io/local-path, WaitForFirstConsumer) có sẵn (db/minio/rl-models dùng). Demo persistence bằng PVC nháp <code>ck-data</code>."],
+      cleanup:["<code>kubectl delete pod pvc-writer pvc-reader -n stock; kubectl delete pvc ck-data -n stock</code> (reclaimPolicy Delete ⇒ xoá PVC xoá luôn PV+data)."],
+      request:"Provision PVC 1Gi (dynamic provisioning), mount trong Pod, ghi data, xóa Pod, tạo lại, verify persistence. StorageClass standard tự tạo PV; chứng minh PV vòng đời tách khỏi pod.",
+      steps:[
+        "Tạo PVC <code>ck-data</code> (RWO 1Gi) + writer pod ghi <code>/data/proof.txt</code>.",
+        "PVC <code>Bound</code> KHI pod schedule (WaitForFirstConsumer).",
+        "XÓA writer pod.",
+        "reader pod mount CÙNG PVC → data còn nguyên (READ-BACK)."
+      ],
+      knowledge:[
+        "<b>PVC = yêu cầu storage</b>; StorageClass <b>dynamic provisioner</b> tự tạo PV khớp (không cần admin tạo PV tay).",
+        "<code>WaitForFirstConsumer</code> = hoãn bind PV tới khi pod đầu schedule (chọn node/zone đúng) — vì thế <code>backup-data</code> PVC 'Pending/waiting for first consumer' là ĐÚNG, không phải bug.",
+        "<b>PV vòng đời TÁCH KHỎI pod</b>: xóa pod, PVC/PV giữ nguyên; pod mới mount lại thấy data. Khác <code>emptyDir</code> (chết theo pod).",
+        "RWO = ReadWriteOnce mount trên 1 node; <code>reclaimPolicy: Delete</code> = xóa PVC ⇒ xóa PV+data."
+      ],
+      commands:[
+        {cmd:"kubectl apply -f -   # PVC ck-data (RWO 1Gi) + pod pvc-writer\nkubectl get pvc ck-data -n stock", note:"Bound khi pod schedule", out:"ck-data   Bound   pvc-7d6b...   1Gi   RWO   standard   ← WaitForFirstConsumer"},
+        {cmd:"kubectl logs pvc-writer -n stock", note:"writer ghi data", out:"ckad-4.4-persisted-02:49:06"},
+        {cmd:"kubectl delete pod pvc-writer -n stock\n# reader pod mount CÙNG PVC ck-data:\nkubectl logs pvc-reader -n stock", note:"data PERSIST qua vòng đời pod", out:"READ-BACK: ckad-4.4-persisted-02:49:06     ← DATA còn nguyên ✅"}
+      ]
+    }
+  ],
+
+  "Day 5 — Observability & exam prep": [
+    {
+      id:"5.1", title:"Self-Healing App (Probes)", domain:"Observability & Maintenance (15%)", duration:"~45m", status:"done",
+      prep:["Probe đã phủ 6 service từ day trước (HTTP liveness/readiness, native gRPC probe, tcpSocket). Bài này BỔ SUNG startupProbe cho container slow-start."],
+      cleanup:["Không có object nháp — áp thẳng qua <code>helm upgrade</code>; rollback bằng <code>helm rollback</code>."],
+      request:"Configure HTTP liveness + file-based readiness + startupProbe cho slow-start container. auth-svc đã có startupProbe (JVM+Flyway); THÊM mới startupProbe cho prediction-svc (torch import + ML init ~30–120s) gate liveness/readiness.",
+      steps:[
+        "Xác nhận probe sẵn có: api-svc <code>/health/*</code>, auth-svc Actuator <code>/actuator/health/{liveness,readiness}</code>, service-mgt native <code>grpc:8121</code>, prediction-svc tcpSocket :8119.",
+        "THÊM startupProbe prediction-svc: <code>tcpSocket:8119, periodSeconds:5, failureThreshold:30</code> (~150s).",
+        "<code>helm upgrade</code> (rev8) → verify startupProbe trên pod.",
+        "Xác nhận thứ tự probe: startup → (readiness ∥ liveness)."
+      ],
+      knowledge:[
+        "<b>Thứ tự probe</b> = startup → (readiness ∥ liveness). Trong lúc startupProbe CHƯA pass: readiness/liveness BỊ HOÃN → container slow-start không bị liveness restart loop. Startup pass 1 lần → chuyển sang readiness/liveness bình thường.",
+        "startupProbe (<code>failureThreshold:30 periodSeconds:5</code> ≈ 150s) bỏ được <code>initialDelaySeconds</code> dài trên readiness/liveness — sạch hơn.",
+        "Cơ chế self-heal như nhau bất kể loại probe: probe fail → restart (liveness) hoặc notReady (readiness). Stack thật dùng httpGet/tcpSocket/grpc (đúng bản chất service) thay <code>exec cat /tmp/healthy</code> của đề — cùng bản chất.",
+        "prediction-svc chậm vì torch import + ML init + DB connect; auth-svc chậm vì JVM boot + Flyway migrate — cả hai cần startupProbe để không bị giết oan."
+      ],
+      commands:[
+        {cmd:"helm upgrade stock deploy/helm/stock -n stock", note:"rev8 (gộp với 3.3)", out:"Release \"stock\" has been upgraded. Happy Helming!\nREVISION: 8"},
+        {cmd:"p=$(kubectl get pod -n stock -l app=prediction-svc \\\n  -o jsonpath='{.items[0].metadata.name}')\nkubectl get pod $p -n stock -o jsonpath='{.spec.containers[?(@.name==\"prediction-svc\")].startupProbe}'", note:"startupProbe đã set", out:"{\"failureThreshold\":30,\"periodSeconds\":5,\"successThreshold\":1,\"tcpSocket\":{\"port\":8119},\"timeoutSeconds\":1}"},
+        {cmd:"kubectl get pods -n stock -l app=prediction-svc", note:"2/2 Available, 0 restart", out:"NAME                     READY   STATUS    RESTARTS\nprediction-svc-...       3/3     Running   0"}
+      ]
+    },
+    {
+      id:"5.2", title:"CLI Observability", domain:"Observability & Maintenance (15%)", duration:"~45m", status:"done",
+      prep:["Pod thật ambassador multi-container (api-svc = 3 container: app/nginx/log-sidecar) + metrics-server (kind <code>--kubelet-insecure-tls</code>)."],
+      cleanup:["Chỉ đọc — không tạo gì."],
+      request:"Dùng <code>kubectl logs -c</code> và <code>--previous</code>; đọc Events từ <code>describe</code> và <code>get events</code>; dùng <code>kubectl top</code> cho resource usage. Thực hành trên pod thật multi-container.",
+      steps:[
+        "<code>logs -c</code>: chọn container trong pod nhiều container (api-svc = app/nginx/log-sidecar).",
+        "<code>logs --previous</code>: log instance TRƯỚC khi container restart/crash (điều tra CrashLoopBackOff).",
+        "Events: <code>get events --sort-by=.lastTimestamp</code> (toàn ns) vs <code>describe pod</code> (Events của 1 object).",
+        "<code>top pods</code> / <code>top nodes</code>: usage thật (cần metrics-server)."
+      ],
+      knowledge:[
+        "Pod nhiều container ⇒ <code>kubectl logs</code> <b>bắt buộc <code>-c &lt;container&gt;</code></b> (thiếu → lỗi/chọn mặc định). <code>-f</code> follow, <code>--tail=N</code>, <code>--previous</code> (instance trước restart), <code>--since=10m</code>.",
+        "<b>Events là nguồn chẩn đoán #1</b> cho ImagePullBackOff / FailedScheduling / probe fail / quota reject. <code>describe</code> = Events của 1 object; <code>get events</code> = toàn ns (sort theo thời gian).",
+        "<code>--previous</code> đọc được log trước lần restart hiện tại — vd bug nginx CAP_CHOWN ở Lab 3.2 bắt được bằng <code>logs --previous</code>.",
+        "<code>kubectl top</code> cần <b>metrics-server</b> (kind bật <code>--kubelet-insecure-tls</code>); số là <b>usage THẬT</b> (khác <code>resources.requests</code> là 'đặt trước')."
+      ],
+      commands:[
+        {cmd:"POD=$(kubectl get pod -n stock -l app=api-svc -o jsonpath='{.items[0].metadata.name}')\nkubectl get pod $POD -n stock -o jsonpath='{range .spec.containers[*]}{.name} {end}'\nkubectl logs $POD -n stock -c log-sidecar --tail=2", note:"3 container/pod — phải chỉ -c", out:"api-svc nginx log-sidecar\n...HTTP server listening on 0.0.0.0:8118"},
+        {cmd:"kubectl logs $POD -n stock -c <container> --previous", note:"log instance TRƯỚC restart (CrashLoop)", out:"# đọc log lần chạy trước lần restart hiện tại — vd bug nginx CAP_CHOWN (Lab 3.2)"},
+        {cmd:"kubectl get events -n stock --sort-by=.lastTimestamp | tail -4\nkubectl describe pod $POD -n stock   # section Events = timeline riêng pod", note:"Events = chẩn đoán #1", out:"Normal SawCompletedJob   cronjob/pipeline-sp500  Saw completed job ... Complete\nNormal WaitForFirstConsumer  pvc/backup-data  waiting for first consumer ..."},
+        {cmd:"kubectl top pods  -n stock -l app=prediction-svc\nkubectl top nodes", note:"usage thật (metrics-server)", out:"prediction-svc-...-hs826   2m   131Mi     ← CPU cores / RAM thực\nckad-control-plane  164m  1%  1535Mi 10%"}
+      ]
+    },
+    {
+      id:"5.3", title:"Broken YAML Triage", domain:"Observability & Maintenance (15%)", duration:"~45m", status:"done",
+      prep:["Manifest <code>deploy/k8s/ckad-labs/day_5/broken.yaml</code> cố tình có 3 lỗi kinh điển, mỗi lỗi lộ ra ở tầng khác nhau."],
+      cleanup:["<code>kubectl delete deploy triage svc triage -n stock</code> sau khi triage xong."],
+      request:"Fix selector mismatch trong Deployment; fix Service targetPort mismatch; fix invalid image name. Chữa theo trình tự vì mỗi lỗi lộ ở tầng khác nhau (admission → runtime → kết nối).",
+      steps:[
+        "BUG 1 selector≠template → apply BỊ TỪ CHỐI (validation); sửa <code>selector.matchLabels=app:webapp</code> khớp template → apply lại.",
+        "BUG 3 image sai chính tả (<code>nginx:latst</code>) → Pod ImagePullBackOff; <code>describe pod</code> Events; <code>set image</code> sửa.",
+        "BUG 2 Service targetPort 8080 nhưng container cổng 80 → Endpoints CÓ nhưng sai cổng; <code>get endpoints</code> soi; <code>patch svc</code> về 80."
+      ],
+      knowledge:[
+        "<b>3 tầng lỗi khác nhau = kỹ năng triage:</b> selector≠template (admission) → image sai (runtime) → targetPort sai (kết nối).",
+        "<b>selector≠template</b> = lỗi <b>admission</b> (apply fail NGAY, đọc message). Selector Deployment IMMUTABLE nên phải khớp template từ đầu.",
+        "<b>image sai</b> = lỗi <b>runtime</b> (Pod ImagePullBackOff) — đọc <code>describe pod</code> Events 'Failed to pull image'.",
+        "<b>targetPort sai</b> = lỗi <b>kết nối</b> (Pod Running, Endpoints CÓ nhưng sai cổng) — <code>get endpoints</code> soi cổng; lỗi 'ngấm ngầm' nhất vì mọi thứ trông Running."
+      ],
+      commands:[
+        {cmd:"kubectl apply -f deploy/k8s/ckad-labs/day_5/broken.yaml", note:"BUG 1 — apply bị từ chối (admission)", out:"service/triage created\nThe Deployment \"triage\" is invalid: spec.template.metadata.labels: Invalid value:\n{\"app\":\"webapp\"}: `selector` does not match template `labels`"},
+        {cmd:"# BUG 3 — image nginx:latst sai chính tả:\nkubectl get pod -n stock -l app=webapp\nkubectl set image deploy/triage web=nginx:1.27-alpine -n stock", note:"ImagePullBackOff → sửa image", out:"STATUS ErrImagePull → ImagePullBackOff\ndeployment.apps/triage image updated  → rolled out"},
+        {cmd:"# BUG 2 — targetPort 8080 nhưng container cổng 80:\nkubectl get endpoints triage -n stock\nkubectl patch svc triage -n stock -p '{\"spec\":{\"ports\":[{\"port\":80,\"targetPort\":80}]}}'\nkubectl get endpoints triage -n stock", note:"Endpoints sai cổng → patch về 80", out:"triage   10.244.2.63:8080     ← endpoint SAI cổng\ntriage   10.244.2.63:80       ← khớp cổng container → reachable"}
+      ]
+    },
+    {
+      id:"5.4", title:"Helm Deploy & Rollback", domain:"App Deployment (20%)", duration:"~45m", status:"done",
+      prep:["Release <code>stock</code> thật (helm v3.16.2 local). Toàn bộ Day 3/4 tạo lịch sử revision thật (rev5–14)."],
+      cleanup:["Sau demo rollback: <code>helm upgrade stock deploy/helm/stock -n stock</code> để restore đủ state từ chart."],
+      request:"Install Helm chart với value overrides; upgrade release và rollback về revision trước. Trên release stock thật — Day 3/4 đã tạo lịch sử revision là chất liệu cho lab này.",
+      steps:[
+        "Xem <code>helm history stock</code> — rev5(3.2)→6(fix)→7(quota)→8(SA+5.1)→...→14.",
+        "Value override lúc upgrade: <code>--set global.ingress.enabled=true</code>, <code>--set global.imageTag=v2</code>.",
+        "ROLLBACK: <code>helm rollback stock 7</code> → tạo REVISION MỚI (rev15 Rollback to 7).",
+        "Quan sát bẫy: rollback về 7 XOÁ luôn SA của rev8 → restore bằng <code>helm upgrade</code> từ chart."
+      ],
+      knowledge:[
+        "<b>⚠️ Bẫy rollback revert TOÀN BỘ state:</b> <code>helm rollback stock 7</code> = revert về đúng snapshot rev7, KHÔNG phải 'undo lệnh cuối'. Rev7 chưa có 3.3 (SA thêm ở rev8) → rollback về 7 XOÁ luôn 6 SA + RBAC (<code>get sa | grep -c pod-reader → 0</code>). Restore: <code>helm upgrade</code> từ chart (có đủ lại).",
+        "<b>Rollback là toàn-cục, không chọn lọc</b>: resource thêm ở revision SAU bị XOÁ khi lùi về revision TRƯỚC. GitOps: prefer re-apply/upgrade từ chart thay vì rollback khi muốn giữ 1 phần.",
+        "<b>Mỗi upgrade/rollback = 1 revision</b> (<code>helm history</code>); <code>helm rollback &lt;rev&gt;</code> nhảy về snapshot đó và TẠO revision mới (audit trail liền mạch, không xoá lịch sử).",
+        "<code>helm upgrade --set k=v</code> (hoặc <code>-f values-prod.yaml</code>) = override value; <code>--reuse-values</code> giữ set cũ (⚠️ dễ nhầm — dùng <code>--reset-values</code> hoặc upgrade sạch khi muốn chuẩn).",
+        "<code>helm rollback</code> an toàn hơn <code>kubectl rollout undo</code> ở chỗ revert CẢ manifest set (không lệch last-applied) — nhưng chính vì 'cả set' nên phải hiểu nó xoá gì."
+      ],
+      commands:[
+        {cmd:"helm history stock -n stock", note:"lịch sử revision (Day 3/4 tạo ra)", out:"5   Upgrade complete   (3.2 lần đầu — nginx crashloop CAP_CHOWN)\n6   Upgrade complete   (3.2 fix)\n7   Upgrade complete   (3.4 quota)\n8   Upgrade complete   (3.3 SA + 5.1)\n...\n14  deployed           (ingress on / NP off)"},
+        {cmd:"helm upgrade stock deploy/helm/stock -n stock --set global.ingress.enabled=true\nhelm upgrade stock deploy/helm/stock -n stock --set global.imageTag=v2", note:"value override (--set ghi đè values.yaml)", out:"Release \"stock\" has been upgraded. Happy Helming!"},
+        {cmd:"helm rollback stock 7 -n stock\nhelm history stock -n stock | tail -1", note:"rollback tạo REVISION MỚI", out:"Rollback was a success! Happy Helming!\n15  Rollback to 7      ← rollback tạo revision mới (không xoá lịch sử)"},
+        {cmd:"# BẪY — rollback về 7 XOÁ SA của rev8:\nkubectl get sa -n stock | grep -c pod-reader\nhelm upgrade stock deploy/helm/stock -n stock   # restore từ chart", note:"rollback toàn-cục xoá resource rev sau", out:"0    ← SA của rev8 bị XOÁ khi lùi về rev7!\n→ SA về 6 sau khi upgrade lại từ chart"}
+      ]
+    }
   ]
 };
 

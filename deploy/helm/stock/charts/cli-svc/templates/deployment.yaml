@@ -52,6 +52,7 @@ spec:
         prometheus.io/port: "9464"
         prometheus.io/path: "/metrics"
     spec:
+      serviceAccountName: cli-svc           # CKAD 3.3 — SA riêng (automount:false, không gọi API)
       tolerations:                          # HA: chạy được trên node control-plane (dùng cả 3 node)
         {{- include "stock.tolerations" . | nindent 8 }}
       topologySpreadConstraints:            # HA: rải pod đều các node
@@ -60,6 +61,8 @@ spec:
         runAsUser: 10001
         runAsGroup: 10001
         fsGroup: 10001        # emptyDir group-owned 10001 => user cli ghi host key + log
+        seccompProfile:       # CKAD 3.2 — seccomp mặc định runtime cho mọi container
+          type: RuntimeDefault
       initContainers:
         # ---- wait-db: đồng nhất pattern "init đợi db lên" ----
         {{- include "stock.waitDb" (dict "image" "timescale/timescaledb:latest-pg16") | nindent 8 }}
@@ -78,6 +81,14 @@ spec:
         - name: cli-svc
           image: "{{ .Values.global.images.cliSvc }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: IfNotPresent
+          # CKAD 3.2 — image build USER cli uid=10001 (Dockerfile `adduser -u 10001`); pod đã
+          # ép runAsUser 10001. runAsNonRoot enforce fail-closed. drop ALL caps + no priv-esc.
+          # KHÔNG readOnlyRootFilesystem: wish/ssh server sinh host key + ghi state runtime.
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           command: ["sh", "-c", "set -o pipefail; /usr/local/bin/cli-svc 2>&1 | tee /var/log/app/cli.log"]
           ports:
             - { name: ssh, containerPort: 2345 }

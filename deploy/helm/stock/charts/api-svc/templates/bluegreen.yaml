@@ -66,22 +66,37 @@ spec:
         prometheus.io/port: "8118"
         prometheus.io/path: "/metrics"
     spec:
+      serviceAccountName: api-svc           # CKAD 3.3 — SA riêng (automount:false, không gọi API)
       tolerations:                          # HA: chạy được trên node control-plane (dùng cả 3 node)
         {{- include "stock.tolerations" $ | nindent 8 }}
       topologySpreadConstraints:            # HA: rải pod đều các node (spread theo app, không theo màu)
         {{- include "stock.topologySpread" "api-svc" | nindent 8 }}
       # fsGroup: app chạy USER appuser (non-root) → ghi được emptyDir "logs".
+      # seccompProfile RuntimeDefault (CKAD 3.2) cho mọi container ở cả 2 màu.
       securityContext:
         fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         - name: wait-db
           image: timescale/timescaledb:latest-pg16
           imagePullPolicy: IfNotPresent
+          securityContext:              # CKAD 3.2 — init pg_isready: drop ALL caps + no priv-esc
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           command: ["sh", "-c", "until pg_isready -h db -p 5432 -U postgres; do echo 'db not ready'; sleep 2; done"]
       containers:
         - name: api-svc
           image: "{{ $.Values.global.images.apiSvc }}:{{ $.Values.global.imageTag }}"
           imagePullPolicy: IfNotPresent
+          # CKAD 3.2 — drop ALL caps + no priv-esc. USER appuser (alpine `-S`, non-numeric UID)
+          # nên KHÔNG runAsNonRoot (kubelet không verify được UID phi số); image đã non-root sẵn.
+          # KHÔNG readOnlyRootFilesystem (giữ an toàn cho /repo, /backups đã là mount riêng).
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           command: ["sh", "-c", "set -o pipefail; ./api-server 2>&1 | tee /var/log/app/api.log"]
           ports: [{ containerPort: 8118 }]
           envFrom:
