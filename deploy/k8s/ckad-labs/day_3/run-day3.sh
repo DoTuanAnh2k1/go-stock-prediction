@@ -31,11 +31,11 @@ hr(){ printf '%s%s%s\n' "$D" "────────────────�
 title(){ printf '\n'; hr; printf '%s%s  %s%s\n' "$B" "$C" "$1" "$X"; hr; }
 note(){ printf '%s# %s%s\n' "$D" "$1" "$X"; }
 run(){ printf '\n%s$' "$Y"; printf ' %s' "$@"; printf '%s\n' "$X"; "$@"; }
-runsh(){ printf '\n%s$ %s%s\n' "$Y" "$1" "$X"; sh -c "$1"; }   # cho lệnh có pipe
-runx(){ # chạy lệnh MONG ĐỢI lỗi (demo reject)
+runsh(){ printf '\n%s$ %s%s\n' "$Y" "$1" "$X"; eval "$1"; }     # lệnh có pipe — bash-native (KHÔNG sh -c)
+runx(){ # chạy lệnh MONG ĐỢI lỗi (reject/Forbidden) — heredoc gắn thẳng, KHÔNG sh -c
   printf '\n%s$' "$Y"; printf ' %s' "$@"; printf '%s\n' "$X"
-  if "$@"; then printf '%s(?!) lệnh này lẽ ra phải bị admission từ chối%s\n' "$R" "$X"
-  else printf '%s↑ ĐÚNG NHƯ MONG ĐỢI — admission (quota/limitrange) từ chối, không tạo pod%s\n' "$G" "$X"; fi; }
+  if "$@"; then printf '%s(?!) lệnh này lẽ ra phải bị API server từ chối%s\n' "$R" "$X"
+  else printf '%s↑ ĐÚNG NHƯ MONG ĐỢI — API server TỪ CHỐI (Forbidden/admission)%s\n' "$G" "$X"; fi; }
 
 # ---- prereq -----------------------------------------------------------------
 ctx="$(kubectl config current-context 2>/dev/null || true)"
@@ -50,13 +50,13 @@ title "LAB 3.1 — ConfigMap & Secret Injection (đã hiện thực sẵn trong 
 note "1) Liệt kê ConfigMap + Secret của ns stock (nginx.conf ambassador, config, secret per-service)"
 runsh "kubectl get cm,secret -n $NS | grep -E 'nginx|config|secret'"
 
-note "2) Secret → env var: envFrom.secretRef nạp secret vào prediction-svc app container"
-run kubectl get deploy prediction-svc -n "$NS" -o jsonpath='{.spec.template.spec.containers[0].envFrom}'
-printf '\n'
+note "2) Secret+ConfigMap → env: 'describe deploy | grep' phần Environment (dễ nhớ hơn -o jsonpath)"
+runsh "kubectl describe deploy prediction-svc -n $NS | grep -A2 'Environment Variables from'"
+note "   → prediction-config (ConfigMap) + prediction-secret (Secret) = envFrom nạp cả ConfigMap lẫn Secret vào env"
 
-note "   → thấy configMapRef (prediction-config) + secretRef (prediction-secret) = ConfigMap→env + Secret→env"
-note "3) ConfigMap → mounted volume: nginx.conf (ConfigMap <svc>-nginx) mount subPath vào container nginx"
-runsh "kubectl get deploy prediction-svc -n $NS -o jsonpath='{range .spec.template.spec.volumes[*]}{.name}{\"->\"}{.configMap.name}{\" \"}{end}'; echo"
+note "3) ConfigMap → mounted volume: nginx.conf mount subPath — 'describe deploy | grep nginx.conf'"
+runsh "kubectl describe deploy prediction-svc -n $NS | grep 'nginx.conf'"
+note "   → /etc/nginx/nginx.conf from nginx-conf (ConfigMap <svc>-nginx mount subPath, read-only)"
 }
 
 # =============================================================================
@@ -67,8 +67,11 @@ P="$(kubectl get pod -n "$NS" -l app=prediction-svc -o jsonpath='{.items[0].meta
 [ -n "$P" ] || { note "(không thấy pod prediction-svc đang chạy — skip)"; return; }
 note "pod mẫu = $P"
 
-note "1) POD-level securityContext + TỪNG container (fsGroup+seccomp pod; app/nginx/sidecar caps)"
-runsh "kubectl get pod $P -n $NS -o jsonpath='POD {.spec.securityContext}{\"\\n\"}{range .spec.containers[*]}{.name} {.securityContext}{\"\\n\"}{end}'"
+note "1) 'describe pod' KHÔNG show securityContext container (chỉ SeccompProfile) → dùng 'get pod -o yaml | grep <field>'"
+note "   (yaml + grep tên field = dễ nhớ, khỏi cú pháp jsonpath). Pod-level fsGroup/seccomp qua describe:"
+runsh "kubectl describe pod $P -n $NS | grep -iE 'SeccompProfile'"
+note "   Toàn bộ securityContext (pod + 3 container) qua yaml + grep tên field:"
+runsh "kubectl get pod $P -n $NS -o yaml | grep -E 'securityContext:|fsGroup:|type: RuntimeDefault|runAsNonRoot:|runAsUser:|allowPrivilegeEscalation:|readOnlyRootFilesystem:|drop:|add:|- ALL|- CHOWN|- SETUID|- SETGID'"
 note "   → POD: fsGroup 2000 + seccomp RuntimeDefault"
 note "   → prediction-svc(app): drop ALL + runAsNonRoot + runAsUser:1000 (Dockerfile useradd -u 1000)"
 note "   → nginx: drop ALL + add CHOWN/SETUID/SETGID (official image chown cache + hạ quyền worker)"
@@ -77,7 +80,7 @@ note "   → log-sidecar: drop ALL + readOnlyRootFilesystem (chỉ tail -f)"
 note "2) service-mgt app = readOnlyRootFilesystem:true (+ /tmp emptyDir) — read-only rootfs THẬT"
 S="$(kubectl get pod -n "$NS" -l app=service-mgt -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)"
 if [ -n "$S" ]; then
-  runsh "kubectl get pod $S -n $NS -o jsonpath='{range .spec.containers[?(@.name==\"service-mgt\")]}{.name} {.securityContext}{\"\\n\"}{end}'"
+  runsh "kubectl get pod $S -n $NS -o yaml | grep -E 'readOnlyRootFilesystem:|allowPrivilegeEscalation:|drop:|- ALL' | head -6"
 else
   note "   (không thấy pod service-mgt — skip)"
 fi
@@ -91,22 +94,31 @@ title "LAB 3.3 — ServiceAccount & RBAC (per-svc SA automount:false + pod-reade
 note "1) Liệt kê ServiceAccount ns stock (mỗi backend 1 SA riêng + pod-reader + gateway-svc)"
 run kubectl get sa -n "$NS"
 
-note "2) Token KHÔNG còn mount vào pod (automountServiceAccountToken:false ở SA object)"
+note "2) Token KHÔNG mount — 'describe pod | grep' cho thấy Service Account + KHÔNG có volume kube-api-access-*"
 P="$(kubectl get pod -n "$NS" -l app=prediction-svc -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)"
 if [ -n "$P" ]; then
-  runsh "kubectl get pod $P -n $NS -o jsonpath='sa={.spec.serviceAccountName} vols=[{range .spec.volumes[*]}{.name} {end}]'; echo"
-  note "   → KHÔNG có volume kube-api-access-* = token không mount (không service nào gọi k8s API)"
+  runsh "kubectl describe pod $P -n $NS | grep -iE 'Service Account:|kube-api-access'"
+  note "   → chỉ 'Service Account: prediction-svc', KHÔNG dòng kube-api-access-* ⇒ token KHÔNG mount"
+  runsh "kubectl get sa prediction-svc -n $NS -o yaml | grep -i automount"
+  note "   → automountServiceAccountToken: false (đặt ở SA object → không service nào gọi k8s API)"
 else
   note "   (không thấy pod prediction-svc — skip)"
 fi
 
-note "3) RBAC scope (kubectl auth can-i --as=<SA>) — least-privilege chứng minh bằng can-i:"
+note "3) RBAC oracle nhanh (can-i) + LIST toàn bộ quyền pod-reader:"
 run kubectl auth can-i list pods --as=system:serviceaccount:stock:pod-reader -n "$NS"
-note "   ↑ yes  (pod-reader Role cho get/list/watch pods)"
-run kubectl auth can-i list pods --as=system:serviceaccount:stock:auth-svc -n "$NS"
-note "   ↑ no   (auth-svc SA KHÔNG bind Role nào)"
-run kubectl auth can-i delete pods --as=system:serviceaccount:stock:pod-reader -n "$NS"
-note "   ↑ no   (Role chỉ ĐỌC — không có verb delete)"
+note "   ↑ yes"
+runsh "kubectl auth can-i --list --as=system:serviceaccount:stock:pod-reader -n $NS | grep -E 'Resources|^pods|^services|^endpoints'"
+note "   → chỉ get/list/watch trên pods/services/endpoints = least-privilege"
+
+note "4) DEMO THẬT bằng impersonation (--as) — KHÔNG chỉ can-i mà THỰC SỰ chạy lệnh AS the SA:"
+note "   (a) get pods AS pod-reader → liệt kê ĐƯỢC (Role cho phép đọc):"
+runsh "kubectl get pods --as=system:serviceaccount:stock:pod-reader -n $NS | head -4"
+note "   (b) get pods AS auth-svc (SA KHÔNG bind Role) → Forbidden THẬT từ API server:"
+runx kubectl get pods --as=system:serviceaccount:stock:auth-svc -n "$NS"
+note "   (c) delete pod AS pod-reader → Forbidden (Role chỉ ĐỌC, không có verb delete):"
+[ -n "$P" ] && runx kubectl delete pod "$P" --as=system:serviceaccount:stock:pod-reader -n "$NS" --dry-run=server
+note "   → cùng 1 SA: đọc OK / xóa bị chặn; SA khác không quyền = Forbidden. RBAC enforce ở API-server admission."
 }
 
 # =============================================================================
@@ -121,25 +133,37 @@ run kubectl describe limitrange stock-defaults -n "$NS"
 
 note "3) DEMO REJECT — --dry-run=server chạy admission thật NHƯNG không persist (không cần dọn)"
 note "   (a) Vượt ResourceQuota: 2 container × request cpu=2 → tổng 4 > remaining requests.cpu"
-runx sh -c 'kubectl create --dry-run=server -n '"$NS"' -f - <<EOF
+runx kubectl create --dry-run=server -n "$NS" -f - <<EOF
 apiVersion: v1
 kind: Pod
-metadata: { name: quota-test, namespace: '"$NS"' }
+metadata: { name: quota-test, namespace: $NS }
 spec:
   containers:
     - { name: a, image: nginx:1.27-alpine, resources: { requests: { cpu: "2" }, limits: { cpu: "2" } } }
     - { name: b, image: nginx:1.27-alpine, resources: { requests: { cpu: "2" }, limits: { cpu: "2" } } }
-EOF'
+EOF
 
 note "   (b) Vượt LimitRange max: 1 container request cpu=3 (> max 2 mỗi container)"
-runx sh -c 'kubectl create --dry-run=server -n '"$NS"' -f - <<EOF
+runx kubectl create --dry-run=server -n "$NS" -f - <<EOF
 apiVersion: v1
 kind: Pod
-metadata: { name: max-test, namespace: '"$NS"' }
+metadata: { name: max-test, namespace: $NS }
 spec:
   containers:
     - { name: a, image: nginx:1.27-alpine, resources: { requests: { cpu: "3" }, limits: { cpu: "3" } } }
-EOF'
+EOF
+
+note "   (c) Default injection (KHÔNG reject): pod KHÔNG khai resources → LimitRange TỰ VÁ default request/limit"
+run kubectl create --dry-run=server -n "$NS" -o jsonpath='{.spec.containers[0].resources}' -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata: { name: noreq-test, namespace: $NS }
+spec:
+  containers:
+    - { name: a, image: nginx:1.27-alpine }
+EOF
+printf '\n'
+note "   → {requests:50m/64Mi, limits:250m/256Mi} = LimitRange vá default ⇒ pod thiếu resources vẫn ADMIT (thoả quota)"
 
 note "Điểm chốt: Quota requests.*/limits.* yêu cầu MỌI pod khai resources → phải pair LimitRange"
 note "           (default injection). Reject xảy ra ở API-server admission (không phải scheduler)."

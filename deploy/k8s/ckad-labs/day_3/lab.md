@@ -24,10 +24,18 @@ Cả HAI nửa của bài đã nằm trong mọi backend pod — không cần th
   ```
 - **ConfigMap → env**: `configMapRef` (vd `api-config`, `prediction-config`).
 
-Verify nhanh (pod thật):
+Verify nhanh (pod thật) — dùng `describe | grep` (dễ nhớ hơn `-o jsonpath`):
 ```bash
 kubectl get cm,secret -n stock | grep -E 'nginx|config|secret'
-kubectl get deploy prediction-svc -n stock -o jsonpath='{.spec.template.spec.containers[0].envFrom}'
+
+# envFrom (ConfigMap + Secret nạp làm env):
+kubectl describe deploy prediction-svc -n stock | grep -A2 'Environment Variables from'
+#   prediction-config  ConfigMap  Optional: false
+#   prediction-secret  Secret     Optional: false
+
+# ConfigMap → mounted volume (nginx.conf):
+kubectl describe deploy prediction-svc -n stock | grep 'nginx.conf'
+#   /etc/nginx/nginx.conf from nginx-conf (rw,path="nginx.conf")
 ```
 
 ## Lab 3.2 — Security Context Lockdown
@@ -82,18 +90,43 @@ helm upgrade stock deploy/helm/stock -n stock          # rev6 (sau fix)
 # rollout zero-downtime (maxUnavailable:0 giữ pod cũ tới khi pod mới Ready)
 ```
 
-Verify pod live:
+Verify pod live — **`kubectl describe pod` KHÔNG show securityContext của container**
+(chỉ có dòng `SeccompProfile: RuntimeDefault`). Dùng `get -o yaml | grep` theo TÊN field
+(dễ nhớ hơn jsonpath, và thấy được cả cấu trúc):
 ```bash
-p=$(kubectl get pod -n stock -l app=prediction-svc -o jsonpath='{.items[0].metadata.name}')
-kubectl get pod $p -n stock -o jsonpath='POD {.spec.securityContext}{"\n"}{range .spec.containers[*]}{.name} {.securityContext}{"\n"}{end}'
+p=$(kubectl get pod -n stock -l app=prediction-svc -o name | head -1)
+kubectl get $p -n stock -o yaml | grep -E \
+  'securityContext:|fsGroup:|runAsNonRoot:|runAsUser:|allowPrivilegeEscalation:|readOnlyRootFilesystem:|drop:|add:|- ALL|- CHOWN|- SETUID|- SETGID'
 ```
 ```
-POD {"fsGroup":2000,"seccompProfile":{"type":"RuntimeDefault"}}
-prediction-svc {"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":1000}
-nginx {"allowPrivilegeEscalation":false,"capabilities":{"add":["CHOWN","SETUID","SETGID"],"drop":["ALL"]}}
-log-sidecar {"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true}
-# service-mgt app: {"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true}
+  securityContext:               # pod-level
+    fsGroup: 2000
+    seccompProfile: RuntimeDefault  (dòng riêng — không match ở grep trên, xem describe)
+  - securityContext:             # app prediction-svc
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      runAsNonRoot: true
+      runAsUser: 1000
+  - securityContext:             # nginx — drop ALL rồi add lại 3 cap official image cần
+      allowPrivilegeEscalation: false
+      capabilities:
+        add:
+        - CHOWN
+        - SETUID
+        - SETGID
+        drop:
+        - ALL
+  - securityContext:             # log-sidecar — chỉ tail -f nên readOnlyRootFilesystem
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      readOnlyRootFilesystem: true
 ```
+Đọc grep: app **drop ALL + runAsNonRoot + runAsUser 1000**; nginx **add CHOWN/SETUID/SETGID**;
+sidecar **readOnlyRootFilesystem**; pod-level **fsGroup 2000 + seccomp RuntimeDefault**.
 Kết quả: cả 5 backend `2/2` Available, mọi pod `3/3` Running, **0 restart** — hardening không
 vỡ runtime.
 
@@ -115,21 +148,45 @@ gọi API (chúng chỉ nói chuyện qua Service DNS + gRPC). → mỗi service
 ```bash
 helm upgrade stock deploy/helm/stock -n stock          # rev8
 
-# Token KHÔNG còn mount vào pod (automount:false):
-p=$(kubectl get pod -n stock -l app=prediction-svc -o jsonpath='{.items[0].metadata.name}')
-kubectl get pod $p -n stock -o jsonpath='sa={.spec.serviceAccountName} vols=[{range .spec.volumes[*]}{.name} {end}]'
-#   sa=prediction-svc vols=[models logs tmp nginx-conf]     ← KHÔNG có kube-api-access-* nữa
+# ── (A) Token KHÔNG còn mount vào pod (automount:false) ────────────────────────
+p=$(kubectl get pod -n stock -l app=prediction-svc -o name | head -1)
+kubectl describe $p -n stock | grep -iE 'Service Account:|kube-api-access'
+#   Service Account:  prediction-svc          ← CHỈ dòng này, KHÔNG có mount kube-api-access-*
+#                                                (token không được projected vào pod)
+kubectl get sa prediction-svc -n stock -o yaml | grep automount
+#   automountServiceAccountToken: false
 
-# RBAC scope đúng (kubectl auth can-i --as=<SA>):
-kubectl auth can-i list   pods --as=system:serviceaccount:stock:pod-reader -n stock   # yes
-kubectl auth can-i delete pods --as=system:serviceaccount:stock:pod-reader -n stock   # no  (Role chỉ đọc)
-kubectl auth can-i list   pods --as=system:serviceaccount:stock:auth-svc   -n stock   # no  (không bind Role)
+# ── (B) RBAC — oracle (can-i) rồi DEMO THẬT (impersonation --as) ───────────────
+# Oracle: hỏi API-server "SA này làm được gì":
+kubectl auth can-i list pods --as=system:serviceaccount:stock:pod-reader -n stock   # yes
+kubectl auth can-i --list        --as=system:serviceaccount:stock:pod-reader -n stock
+#   Resources   Non-Resource URLs   Resource Names   Verbs
+#   pods        []                  []               [get list watch]
+#   services    []                  []               [get list watch]
+#   endpoints   []                  []               [get list watch]
+
+# Demo THẬT — chạy lệnh AS the SA (không chỉ boolean oracle):
+kubectl get pods --as=system:serviceaccount:stock:pod-reader -n stock
+#   NAME                 READY  STATUS   ...        ← LIỆT KÊ ĐƯỢC (real pod list)
+
+kubectl get pods --as=system:serviceaccount:stock:auth-svc   -n stock
+#   Error from server (Forbidden): pods is forbidden: User
+#   "system:serviceaccount:stock:auth-svc" cannot list resource "pods" in API group ""
+#   in the namespace "stock"                        ← SA khác KHÔNG bind Role → chặn
+
+kubectl delete pod $(basename $p) --as=system:serviceaccount:stock:pod-reader -n stock --dry-run=server
+#   Error from server (Forbidden): pods "..." is forbidden: User
+#   "system:serviceaccount:stock:pod-reader" cannot delete resource "pods" in API group ""
+#   in the namespace "stock"                        ← Role chỉ get/list/watch → xóa bị chặn
 ```
 Điểm chốt:
 - `automountServiceAccountToken:false` đặt ở **SA object** → mọi pod dùng SA đó không mount
-  token; verify bằng việc pod KHÔNG còn volume `kube-api-access-*`.
-- RBAC namespaced: `pod-reader` list được pod NHƯNG không delete; SA khác (auth-svc) không
-  list được → least-privilege chứng minh bằng `can-i`.
+  token; verify bằng `describe pod | grep` KHÔNG thấy `kube-api-access-*`.
+- **Impersonation (`--as`) chứng minh RBAC enforce THẬT ở API-server**, không chỉ boolean
+  `can-i`: cùng SA `pod-reader` **đọc OK** (`get pods` liệt kê) nhưng **xóa bị Forbidden**
+  (Role chỉ get/list/watch); SA khác (`auth-svc`, không bind Role) **list cũng Forbidden**
+  → least-privilege quan sát trực tiếp. `--dry-run=server` cho lệnh delete chạy đủ admission
+  RBAC mà không thực xóa.
 - gateway-svc GIỮ SA + Role riêng (`charts/gateway-svc/templates/rbac.yaml`) vì nó THỰC SỰ
   gọi API (blue/green controller patch Deployment) — không đụng.
 
