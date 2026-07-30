@@ -78,93 +78,54 @@ run kubectl get pods -n "$NS" -l app=web
 
 # =============================================================================
 lab_2_2(){
-title "LAB 2.2 — Blue/Green Switch, kiểu 1 DEPLOYMENT (mentor yêu cầu; app cô lập 'bg')"
-note "Đề gốc là 2 Deployment + lật selector (blue/green thật). Mentor yêu cầu CHỈ 1 Deployment"
-note "=> RollingUpdate maxSurge=100%/maxUnavailable=0: bung GREEN song song BLUE rồi gỡ BLUE. web-svc thật KHÔNG bị đụng."
+title "LAB 2.2 — Blue/Green trên api-svc CÓ SẴN (2 Deployment blue/green + 1 Service chung, FLIP selector)"
+note "KHÔNG tạo manifest mới: dùng api-svc-blue + api-svc-green ĐÃ deploy sẵn (Helm bluegreen), CHUNG 1 Service"
+note "'api-svc' kèm selector 'color'. Cutover = đổi .spec.selector.color; rollback = flip lại. web-svc thật KHÔNG bị đụng."
 
-note "setup) 1 Deployment 'bg' (4 replica, RollingUpdate maxSurge=100% maxUnavailable=0, web-svc:dev = BLUE) + Service bg"
-kubectl apply -f - >/dev/null <<'EOF'
-apiVersion: apps/v1
-kind: Deployment
-metadata: { name: bg, namespace: stock, labels: { app: bg } }
-spec:
-  replicas: 4
-  strategy:
-    type: RollingUpdate
-    rollingUpdate: { maxSurge: 100%, maxUnavailable: 0 }
-  selector: { matchLabels: { app: bg } }
-  template:
-    metadata: { labels: { app: bg } }
-    spec:
-      containers:
-        - name: web
-          image: web-svc:dev
-          imagePullPolicy: IfNotPresent
-          ports: [ { containerPort: 3000 } ]
-          readinessProbe: { httpGet: { path: /, port: 3000 }, initialDelaySeconds: 2, periodSeconds: 3 }
-          # preStop sleep 5: pod phục vụ thêm 5s khi đang bị gỡ endpoint -> tránh termination race
-          # (SIGTERM tới nginx TRƯỚC khi kube-proxy gỡ endpoint) => 0 request rớt khi cutover.
-          lifecycle: { preStop: { exec: { command: ["sh", "-c", "sleep 5"] } } }
----
-apiVersion: v1
-kind: Service
-metadata: { name: bg, namespace: stock, labels: { app: bg } }
-spec:
-  selector: { app: bg }
-  ports: [ { port: 3000, targetPort: 3000 } ]
-EOF
-kubectl rollout status deploy/bg -n "$NS" --timeout=120s || true
-run kubectl get deploy bg -n "$NS"
-
-note "1) SURGE nhìn thấy được — set image tới image LỖI để 'đóng băng' surge cho dễ quan sát:"
-note "   maxSurge=100% bung nguyên bộ GREEN (4) song song BLUE (4) = 8 pod; maxUnavailable=0 giữ AVAILABLE=4"
-run kubectl set image deploy/bg web=web-svc:nope -n "$NS"
-kubectl rollout status deploy/bg -n "$NS" --timeout=12s || printf '%s   ↑ kẹt (green chưa Ready) = đúng, để quan sát surge%s\n' "$D" "$X"
-runsh "kubectl get pods -n $NS -l app=bg -o custom-columns='POD:.metadata.name,IMAGE:.spec.containers[0].image,READY:.status.containerStatuses[0].ready' --no-headers"
-run kubectl get deploy bg -n "$NS"
-note "   → 4 BLUE Ready phục vụ 100% + 4 GREEN surge (chưa Ready); AVAILABLE giữ 4"
-
-note "2) CUTOVER thật blue→green (web-svc:v2) + đo zero-downtime bằng poller TRONG cluster"
-run bash "$E2E" zero-downtime bg 3000 bg web-svc:v2 /
-note "   RS sau cutover: web-svc:dev(blue)→0, web-svc:nope→0, web-svc:v2(green)→4/4"
-runsh "kubectl get rs -n $NS -l app=bg -o custom-columns='RS:.metadata.name,IMAGE:.spec.template.spec.containers[0].image,DESIRED:.spec.replicas,READY:.status.readyReplicas' --no-headers"
-
-note "3) ROLLBACK về BLUE — rollout undo --to-revision=1 (tức thì; KHÔNG lật selector vì chỉ 1 Deployment)"
-run bash "$E2E" rollback bg 1
-runsh "kubectl get deploy bg -n $NS -o jsonpath='{.spec.template.spec.containers[0].image}'; echo '  <- da ve blue'"
-note "   Khác 2.1: 2.1 maxSurge=1 (thay dần từng pod); 2.2 maxSurge=100% (bung cả loạt = blue/green-style)."
-
-# ---- blue/green KINH ĐIỂN trên SERVICE CHUNG api-svc THẬT + CHỨNG MINH route đúng ----
-note "═══ 4) Blue/green KINH ĐIỂN: Service chung api-svc kèm color → FLIP → chứng minh route bằng log blue/green ═══"
-if kubectl get svc api-svc -n "$NS" -o jsonpath='{.spec.selector.color}' 2>/dev/null | grep -q .; then
-  _bg_prove(){                                   # $1 = màu switch tới
-    local c="$1" mk="bgprobe-$1-$$"
-    note "→ FLIP selector Service chung sang '$c' (cutover), rồi curl vào svc + soi log nginx từng màu (marker=$mk)"
-    run kubectl patch svc api-svc -n "$NS" -p "{\"spec\":{\"selector\":{\"app\":\"api-svc\",\"color\":\"$c\"}}}"
-    runsh "kubectl get svc api-svc -n $NS -o jsonpath='  selector={.spec.selector}{\"\\n\"}'"
-    runsh "kubectl get endpoints api-svc -n $NS 2>/dev/null | grep -v deprecat"
-    note "  color=$c pod IPs (endpoints phải khớp bộ này):"
-    runsh "kubectl get pods -n $NS -l app=api-svc,color=$c -o jsonpath='  {range .items[*]}{.status.podIP} {end}{\"\\n\"}'"
-    kubectl delete pod bg-curl -n "$NS" --ignore-not-found >/dev/null 2>&1
-    note "  curl 5 lần vào Service chung http://api-svc:8118/api/version?$mk (pod in-cluster qua kube-proxy → selector):"
-    kubectl run bg-curl --image=nginx:1.27-alpine --restart=Never -n "$NS" --command -- \
-      sh -c "for i in 1 2 3 4 5; do wget -qO- \"http://api-svc:8118/api/version?$mk\" >/dev/null 2>&1; done; echo curl-done" >/dev/null 2>&1
-    kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/bg-curl -n "$NS" --timeout=45s >/dev/null 2>&1 || true
-    runsh "kubectl logs bg-curl -n $NS 2>/dev/null | tail -1 | sed 's/^/    /'"
-    local hb hg
-    hb=$(kubectl logs -n "$NS" -l app=api-svc,color=blue  -c nginx --tail=60 2>/dev/null | grep -c "$mk")
-    hg=$(kubectl logs -n "$NS" -l app=api-svc,color=green -c nginx --tail=60 2>/dev/null | grep -c "$mk")
-    printf '%s  → log nginx BLUE hits=%s | GREEN hits=%s  →  route ĐÚNG khi request chỉ vào màu "%s"%s\n' "$G" "$hb" "$hg" "$c" "$X"
-    kubectl delete pod bg-curl -n "$NS" --ignore-not-found >/dev/null 2>&1
-  }
-  _bg_prove blue
-  _bg_prove green
-  note "→ rollback Service chung về activeColor mặc định (green)"
-  run kubectl patch svc api-svc -n "$NS" -p '{"spec":{"selector":{"app":"api-svc","color":"green"}}}'
-  note "  (⚠️ patch tay chỉ bền tới lần helm upgrade kế — cutover LÂU DÀI: --set global.bluegreen.activeColor=<màu>)"
-else
-  note "  Service chung api-svc CHƯA kèm color → cần: ${HELM:-/home/chronical/.local/bin/helm} upgrade stock $DIR/../../../helm/stock -n $NS (values global.bluegreen.activeColor). Bỏ qua phần chứng minh."
+# prereq: Service api-svc phải kèm color selector (Helm global.bluegreen.enabled=true — mặc định bật)
+if ! kubectl get svc api-svc -n "$NS" -o jsonpath='{.spec.selector.color}' 2>/dev/null | grep -q .; then
+  note "  Service api-svc CHƯA kèm color selector → cần: ${HELM:-/home/chronical/.local/bin/helm} upgrade stock $DIR/../../../helm/stock -n $NS --set global.bluegreen.enabled=true. BỎ QUA lab 2.2."
+  return
 fi
+
+note "0) HIỆN TRẠNG — 2 Deployment blue/green Ready sẵn + 1 Service chung; selector đang trỏ màu nào"
+run kubectl get deploy -n "$NS" -l app=api-svc -L color
+runsh "kubectl get svc api-svc -n $NS -o jsonpath='  Service api-svc selector = {.spec.selector}{\"\\n\"}'"
+
+# ---- helper: FLIP selector rồi CHỨNG MINH route bằng APP LOG (Go zerolog của api-svc, KHÔNG phải nginx) ----
+_bg_prove(){                                     # $1 = màu cutover tới
+  local c="$1" mk="bgprobe-$1-$$"
+  note "── CUTOVER Service api-svc → '$c' (đổi selector) → curl vào Service → soi APP LOG container 'api-svc' 2 màu ──"
+  run kubectl patch svc api-svc -n "$NS" -p "{\"spec\":{\"selector\":{\"app\":\"api-svc\",\"color\":\"$c\"}}}"
+  runsh "kubectl get svc api-svc -n $NS -o jsonpath='  selector -> {.spec.selector}{\"\\n\"}'"
+  note "  Endpoints Service = IP các pod màu '$c' (khớp = selector trỏ đúng bộ pod):"
+  runsh "kubectl get endpoints api-svc -n $NS 2>/dev/null | grep -v deprecat"
+  runsh "kubectl get pods -n $NS -l app=api-svc,color=$c -o jsonpath='  pod color=$c IP: {range .items[*]}{.status.podIP} {end}{\"\\n\"}'"
+  kubectl delete pod bg-curl -n "$NS" --ignore-not-found >/dev/null 2>&1
+  note "  NGUỒN traffic — tạo pod 'bg-curl' IN-CLUSTER bắn 5 request wget vào Service chung (qua kube-proxy→selector), path độc nhất để soi log:"
+  printf "%s$ kubectl run bg-curl --image=nginx:1.27-alpine --restart=Never -n %s --command -- sh -c 'for i in 1 2 3 4 5; do wget -qO- http://api-svc:8118/api/version-%s; done'%s\n" "$Y" "$NS" "$mk" "$X"
+  kubectl run bg-curl --image=nginx:1.27-alpine --restart=Never -n "$NS" --command -- \
+    sh -c "for i in 1 2 3 4 5; do wget -qO- \"http://api-svc:8118/api/version-$mk\" >/dev/null 2>&1; done; echo curl-done" >/dev/null 2>&1
+  kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/bg-curl -n "$NS" --timeout=45s >/dev/null 2>&1 || true
+  local hb hg
+  hb=$(kubectl logs -n "$NS" -l app=api-svc,color=blue  -c api-svc --tail=150 2>/dev/null | grep -c "$mk")
+  hg=$(kubectl logs -n "$NS" -l app=api-svc,color=green -c api-svc --tail=150 2>/dev/null | grep -c "$mk")
+  note "  dòng APP LOG (Go zerolog, container 'api-svc') khớp marker ở màu '$c' = request VÀO ĐÚNG APP (không chỉ nginx ambassador):"
+  runsh "kubectl logs -n $NS -l app=api-svc,color=$c -c api-svc --tail=150 2>/dev/null | grep '$mk' | tail -1 | sed 's/\\x1b\\[[0-9;]*m//g; s/^/    /'"
+  printf '%s  → APP LOG api-svc  BLUE hits=%s | GREEN hits=%s  →  request tới ĐÚNG app màu "%s" (0 màu kia)%s\n' "$G" "$hb" "$hg" "$c" "$X"
+  kubectl delete pod bg-curl -n "$NS" --ignore-not-found >/dev/null 2>&1
+}
+
+note "1) CUTOVER sang BLUE + chứng minh route bằng app-log"
+_bg_prove blue
+note "2) CUTOVER sang GREEN + chứng minh route bằng app-log"
+_bg_prove green
+
+note "3) ROLLBACK = FLIP lại (tức thời, KHÔNG rollout/rebuild). Đang ở green = activeColor mặc định."
+note "   ⚠️ patch tay chỉ BỀN tới lần helm upgrade kế (helm reset selector về activeColor); cutover LÂU DÀI:"
+note "      ${HELM:-/home/chronical/.local/bin/helm} upgrade stock ... --set global.bluegreen.activeColor=<màu>"
+note "   Khác 2.1: 2.1 = rolling update maxSurge=1 thay dần TRONG 1 Deployment; 2.2 = 2 Deployment song song Ready sẵn"
+note "   ⇒ cutover TỨC THÌ zero-downtime bằng selector, rollback = flip lại."
 }
 
 # =============================================================================
@@ -264,46 +225,59 @@ fi
 # =============================================================================
 lab_2_4(){
 KZNS=ckad-kustomize
-title "LAB 2.4 — Kustomize Overlay (app 'web-kz' trên NAMESPACE RIÊNG '$KZNS' → output sạch)"
+BASE="$DIR/kustomize/base"; DEV="$DIR/kustomize/overlays/dev"; PROD="$DIR/kustomize/overlays/prod"
+title "LAB 2.4 — Kustomize: DESCRIBE base → xem overlay PATCH gì (app 'web-kz' ns riêng '$KZNS')"
 
 note "0) Tooling: 'kubectl kustomize' / 'kubectl apply -k' (Kustomize nhúng trong kubectl, không cần binary rời)"
 runsh "kubectl version --client 2>/dev/null | grep -i kustomize || echo '(kubectl có Kustomize nhúng)'"
 
-note "1) Render 2 overlay (KHÔNG apply) — patch image tag + replica KHÁC nhau, không nhân đôi manifest"
-run bash "$E2E" kustomize-diff "$DIR/kustomize/overlays/dev" "$DIR/kustomize/overlays/prod"
+# render sẵn 3 bản ra /tmp: base = nguồn chung; overlay = base + DELTA. Diff base↔overlay để thấy patch.
+kubectl kustomize "$BASE" > /tmp/kz-base.yaml 2>/dev/null
+kubectl kustomize "$DEV"  > /tmp/kz-dev.yaml  2>/dev/null
+kubectl kustomize "$PROD" > /tmp/kz-prod.yaml 2>/dev/null
 
-note "2) Xem YAML render prod (namePrefix prod- · ns $KZNS · replicas 5 · image web-svc:v2)"
-runsh "kubectl kustomize $DIR/kustomize/overlays/prod | grep -E '^kind:|  name:|replicas:|image:|namespace:'"
+note "1) BASE — nguồn CHUNG, KHÔNG môi trường: name=web-kz · replicas=2 · image=web-svc:dev · KHÔNG namespace"
+runsh "grep -E '^kind:|^  name:|replicas:|image:|namespace:' /tmp/kz-base.yaml"
+note "   → base namespace-agnostic (không 'namespace:'), replicas mặc định 2, tag dev — overlay sẽ patch các field này"
 
-note "3) Tạo namespace RIÊNG (Kustomize set .metadata.namespace nhưng KHÔNG tự tạo namespace)"
-kubectl create namespace "$KZNS" >/dev/null 2>&1 && note "   → đã tạo ns $KZNS" || note "   → ns $KZNS đã có"
+note "2) OVERLAY dev = BASE + DELTA. diff base↔dev cho thấy CHÍNH XÁC dev đổi gì ('<' = base, '>' = dev):"
+runsh "diff /tmp/kz-base.yaml /tmp/kz-dev.yaml | grep -E '^[<>]' | grep -E 'name:|namespace:|replicas:|image:' || true"
+note "   → dev PATCH: + namespace=$KZNS · namePrefix 'dev-' (web-kz→dev-web-kz) · replicas 2→1 (GIỮ tag dev)"
 
-note "4) apply -k CẢ dev (replicas 1) lẫn prod (replicas 5) vào cùng ns $KZNS — khác namePrefix nên không đụng nhau"
-run kubectl apply -k "$DIR/kustomize/overlays/dev"
-run kubectl apply -k "$DIR/kustomize/overlays/prod"
+note "3) OVERLAY prod = BASE + DELTA khác. diff base↔prod:"
+runsh "diff /tmp/kz-base.yaml /tmp/kz-prod.yaml | grep -E '^[<>]' | grep -E 'name:|namespace:|replicas:|image:' || true"
+note "   → prod PATCH: + namespace=$KZNS · namePrefix 'prod-' · replicas 2→5 · image web-svc:dev→v2"
+
+note "4) BẢNG ĐỐI CHIẾU 3 render (field chính) — 1 base, 2 overlay, KHÔNG nhân đôi manifest:"
+runsh "for o in base dev prod; do printf '  -- %s --\\n' \"\$o\"; grep -E '^  name:|replicas:|image:|namespace:' /tmp/kz-\$o.yaml; done"
+
+note "5) apply -k CẢ dev (replicas 1) lẫn prod (replicas 5) vào cùng ns $KZNS — khác namePrefix nên không đụng nhau"
+kubectl create namespace "$KZNS" >/dev/null 2>&1 && note "   → đã tạo ns $KZNS (Kustomize set .metadata.namespace nhưng KHÔNG tự tạo ns)" || note "   → ns $KZNS đã có"
+run kubectl apply -k "$DEV"
+run kubectl apply -k "$PROD"
 kubectl rollout status deploy/dev-web-kz  -n "$KZNS" --timeout=90s  || true
 kubectl rollout status deploy/prod-web-kz -n "$KZNS" --timeout=120s || true
 
-note "5) OUTPUT SẠCH — 'get' trên ns $KZNS chỉ thấy đồ Kustomize (dev-web-kz 1/1 + prod-web-kz 5/5), không lẫn stack thật:"
+note "6) OUTPUT SẠCH — 'get' trên ns $KZNS chỉ thấy đồ Kustomize (dev-web-kz 1/1 + prod-web-kz 5/5), không lẫn stack thật:"
 run kubectl get deploy,svc,pod -n "$KZNS"
 
-if [ "${KEEP:-0}" = "1" ]; then
-  note "6) KEEP=1 → giữ ns $KZNS. Dọn tay khi xong: kubectl delete namespace $KZNS"
-else
-  note "6) Dọn: xóa NGUYÊN namespace $KZNS = xóa sạch mọi thứ Kustomize tạo (1 lệnh gọn)"
-  run kubectl delete namespace "$KZNS" --ignore-not-found
-fi
+note "7) GIỮ dev-web-kz + prod-web-kz để quan sát — namespace $KZNS sẽ được xóa ở bước DỌN DẸP cuối (sau khi bấm Enter)"
+rm -f /tmp/kz-base.yaml /tmp/kz-dev.yaml /tmp/kz-prod.yaml
 }
 
 # =============================================================================
 cleanup(){
-  [ "${KEEP:-0}" = "1" ] && { printf '\n%sKEEP=1 → giữ lại object (web, bg, web-kz, HPA...).%s\n' "$D" "$X"; return; }
-  title "DỌN DẸP (roll back — web-svc thật + cpu-burn giữ nguyên)"
+  [ "${KEEP:-0}" = "1" ] && { printf '\n%sKEEP=1 → giữ lại object (web, web-kz, HPA...).%s\n' "$D" "$X"; return; }
+  title "DỌN DẸP (roll back — api-svc/web-svc/cpu-burn thật giữ nguyên)"
   run kubectl delete -f "$DIR/web.yaml" --ignore-not-found
-  run kubectl delete deploy bg -n "$NS" --ignore-not-found
-  run kubectl delete svc bg -n "$NS" --ignore-not-found
-  run kubectl delete namespace ckad-kustomize --ignore-not-found   # lab 2.4 dùng ns riêng
+  run kubectl delete pod bg-curl -n "$NS" --ignore-not-found          # probe pod của 2.2 (nếu còn sót)
+  run kubectl delete namespace ckad-kustomize --ignore-not-found      # lab 2.4 dùng ns riêng
   run kubectl delete pod e2e-poller e2e-load -n "$NS" --ignore-not-found
+  # 2.2 flip selector Service api-svc THẬT → khôi phục về activeColor mặc định (green) nếu có color selector
+  if kubectl get svc api-svc -n "$NS" -o jsonpath='{.spec.selector.color}' 2>/dev/null | grep -q .; then
+    note "khôi phục Service api-svc selector → green (activeColor mặc định)"
+    run kubectl patch svc api-svc -n "$NS" -p '{"spec":{"selector":{"app":"api-svc","color":"green"}}}'
+  fi
   # ⚠️ PHẢI xóa HPA TRƯỚC: sau khi 2.3 bắn tải, HPA giữ cpu-burn ở 10 suốt cửa sổ scaleDown
   # ~300s (dù CPU đã 1%). Nếu chỉ `scale=1` mà giữ HPA → HPA kéo lại 10 → cpu-burn kẹt 10 (ăn
   # ~1000m requests.cpu + 10 pod). Chạy script 2 LẦN LIÊN TIẾP → resource dồn → đụng ResourceQuota
@@ -311,9 +285,9 @@ cleanup(){
   note "cpu-burn: XÓA HPA rồi scale về 1 (không giữ HPA — tránh kẹt 10 do cửa sổ scaleDown 300s)"
   run kubectl delete hpa cpu-burn -n "$NS" --ignore-not-found
   run kubectl scale deploy/cpu-burn --replicas=1 -n "$NS"
-  note "Kiểm chứng: app demo đã sạch, web-svc thật còn nguyên:"
-  run kubectl get deploy -n "$NS" -l 'app in (web,bg,web-kz)'
-  run kubectl get deploy -n "$NS" -l app=web-svc
+  note "Kiểm chứng: app demo đã sạch, api-svc/web-svc thật còn nguyên:"
+  run kubectl get deploy -n "$NS" -l 'app in (web,web-kz)'
+  run kubectl get deploy -n "$NS" -l app=api-svc
 }
 
 # ---- điều phối ---------------------------------------------------------------
@@ -324,5 +298,17 @@ case "$ONLY" in
   2.4) lab_2_4 ;;
   *)   lab_2_1; lab_2_2; lab_2_3; lab_2_4 ;;
 esac
-cleanup
+
+# ---- chờ Enter rồi mới DỌN DẸP (cho quan sát object đã tạo: web, cpu-burn+HPA, ns ckad-kustomize, selector api-svc) ----
+if [ "${KEEP:-0}" = "1" ]; then
+  printf '\n%sKEEP=1 → giữ nguyên mọi object, KHÔNG dọn.%s\n' "$D" "$X"
+elif [ -t 0 ]; then
+  printf '\n%s⏸  Object lab đang GIỮ để quan sát (web, cpu-burn+HPA, ns ckad-kustomize, selector api-svc).%s\n' "$Y" "$X"
+  printf '%s   → Bấm ENTER để DỌN DẸP (Ctrl-C để giữ nguyên)... %s' "$Y" "$X"
+  read -r _ || true
+  cleanup
+else
+  printf '\n%s(stdin không phải TTY → dọn dẹp ngay, không chờ Enter)%s\n' "$D" "$X"
+  cleanup
+fi
 printf '\n%s%s✔ XONG Day 2 (Lab %s).%s\n' "$B" "$G" "$ONLY" "$X"

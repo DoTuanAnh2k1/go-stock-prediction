@@ -126,71 +126,7 @@ nhìn thấy được thì phải rebuild image có thay đổi. Cơ chế rollo
 - Run two Deployments (blue and green)
 - Route traffic via single Service selector flip
 
-### ✅ Lời giải (mentor yêu cầu) — 1 Deployment, KHÔNG tạo 2 blue/green riêng
-
-> ⚠️ Đề gốc ghi *"Run two Deployments (blue and green)"* + *"single Service selector flip"* —
-> đó là blue/green KINH ĐIỂN (2 môi trường + lật selector). Nhưng mentor yêu cầu **chỉ dùng
-> 1 Deployment**. Với 1 Deployment thì KHÔNG có 2 bộ nhãn để "lật selector" giữa blue↔green,
-> nên bản 1-Deployment thực chất là **rolling update cấu hình blue/green-style**
-> (`maxSurge:100% maxUnavailable:0`): bung nguyên bộ GREEN song song BLUE, green Ready hết rồi
-> mới gỡ blue → cutover zero-downtime; `rollout undo` = rollback. KHÔNG phải blue/green "thật"
-> (không gate/test green trước, không lật tức thì) nhưng thỏa ràng buộc "1 Deployment".
-
-Áp trong Helm (default, `bluegreen.enabled=false`): `deploy/helm/stock/templates/web-svc-deployment.yaml`
-+ `api-svc-deployment.yaml` đã đặt `strategy.rollingUpdate.maxSurge:100% maxUnavailable:0`.
-
-```bash
-kubectl -n stock set image deploy/web-svc web-svc=web-svc:v2   # cutover: green lên đủ rồi gỡ blue
-kubectl -n stock rollout status deploy/web-svc                 # AVAILABLE giữ nguyên = zero-downtime
-kubectl -n stock rollout undo deploy/web-svc                   # rollback tức thì
-```
-
-Kiểm chứng đã chạy thật (ns nháp, 4 replica): set image → **8 pod** (4 blue Ready + 4 green surge),
-`AVAILABLE` giữ **4**; green Ready → blue gỡ (RS cũ 0, RS mới 4/4); `rollout undo` về blue sạch.
-
-### 🔬 Biến thể nâng cao (blue/green "thật", 2 Deployment) — giữ tham khảo
-
-Manifest: `deploy/k8s/ckad-labs/day_2/web-bluegreen.yaml` — 2 Deployment:
-`web-svc-blue` (web-svc:dev) + `web-svc-green` (web-svc:v2), mỗi cái selector gồm
-`color` (KHÔNG overlap).
-
-```bash
-kubectl delete deploy web-svc -n stock            # xóa web-svc đơn (selector {app} overlap)
-kubectl apply -f deploy/k8s/ckad-labs/day_2/web-bluegreen.yaml   # blue 2/2, green 2/2
-
-# trỏ Service sang BLUE
-kubectl patch svc web-svc -n stock -p '{"spec":{"selector":{"app":"web-svc","color":"blue"}}}'
-kubectl get endpoints web-svc -n stock
-#   endpoints = 10.244.1.46 10.244.2.44   ← đúng 2 IP pod blue · curl = 200
-
-# FLIP sang GREEN (poller đo xuyên suốt)
-kubectl patch svc web-svc -n stock -p '{"spec":{"selector":{"app":"web-svc","color":"green"}}}'
-#   [poller] RESULT ok=2033 fail=0        → zero-downtime ✅
-kubectl get endpoints web-svc -n stock
-#   endpoints = 10.244.1.45 10.244.2.45   ← đã đổi sang 2 IP pod green
-```
-
-Điểm chốt:
-- **Selector 2 Deployment phải khác nhau (gồm `color`)** để không tranh pod; selector
-  Deployment IMMUTABLE nên phải TẠO MỚI blue/green (không sửa được web-svc đơn thành blue).
-- **Đổi selector Service = switch tức thời** (Endpoints trỏ pod set khác ngay), zero-downtime
-  vì bộ pod màu mới đã Ready sẵn. Rollback = lật selector về màu cũ.
-- Nhược: tốn 2× tài nguyên khi cả 2 màu cùng chạy.
-
-**⚠️ Bẫy imperative-patch vs declarative-apply (gặp khi khôi phục):**
-`color` được thêm vào selector bằng `kubectl patch`. Khi khôi phục, `kubectl apply -f
-web-svc/service.yaml` (selector `{app: web-svc}`) **KHÔNG xoá** key `color` — apply chỉ
-quản key nó biết trong last-applied-config. Kết quả: selector còn `{app, color:green}`,
-mà web-svc đơn không có label color ⇒ **Endpoints RỖNG → frontend down**. Phải xoá tay:
-```bash
-kubectl patch svc web-svc -n stock --type=json -p '[{"op":"remove","path":"/spec/selector/color"}]'
-#   selector={"app":"web-svc"} · endpoints=3 IP · curl=200
-```
-
-Khôi phục base: `kubectl apply -f deploy/k8s/web-svc/deployment.yaml` (web-svc đơn) +
-xoá key color khỏi selector (trên) + `kubectl delete deploy web-svc-blue web-svc-green`.
-
-### ✅ Áp blue/green KINH ĐIỂN vào stock THẬT (2026-07-24) — Service chung kèm `color` + flip
+### ✅ Lời giải chính — blue/green KINH ĐIỂN trên app CÓ SẴN `api-svc` (Service chung kèm `color` + flip)
 
 > Bối cảnh: Service chung `api-svc`/`web-svc` trước đây selector chỉ `{app: api-svc}` (KHÔNG color)
 > → **hit CẢ blue lẫn green cùng lúc** (4 endpoints) ⇒ KHÔNG phải blue/green thật; blue hỏng vẫn
@@ -215,30 +151,40 @@ kubectl get endpoints api-svc -n stock
 # ROLLBACK: flip lại về green → endpoints về green pods
 ```
 
-**Chứng minh route ĐÚNG (không chỉ nhìn endpoints — soi log pod thật):** flip sang màu X, curl
-vào Service chung từ pod in-cluster (qua kube-proxy→selector), rồi đếm request trong log nginx
-mỗi màu (marker query để lọc):
+**Chứng minh route ĐÚNG (không chỉ nhìn endpoints — soi APP-log pod thật):** flip sang màu X, curl
+5 lần vào Service chung từ pod in-cluster (qua kube-proxy→selector) bằng **PATH ĐỘC NHẤT**
+`/api/version-<marker>`, rồi đếm request trong **app-log** (Go zerolog access-log của container
+`api-svc`, KHÔNG phải nginx ambassador) mỗi màu — chứng minh request tới ĐÚNG APP của đúng màu
+(xuyên qua nginx ambassador → app container), không chỉ tới đúng endpoints:
 ```bash
+MARKER=bgprobe-blue-$$
 kubectl patch svc api-svc -n stock -p '{"spec":{"selector":{"app":"api-svc","color":"blue"}}}'
 kubectl run bg-curl --image=nginx:1.27-alpine --restart=Never -n stock --command -- \
-  sh -c 'for i in 1 2 3 4 5; do wget -qO- "http://api-svc:8118/api/version?bgprobe-blue"; done'
-kubectl logs -n stock -l app=api-svc,color=blue  -c nginx --tail=60 | grep -c bgprobe-blue   # → 5
-kubectl logs -n stock -l app=api-svc,color=green -c nginx --tail=60 | grep -c bgprobe-blue   # → 0
-#   ⇒ BLUE hits=5 | GREEN hits=0  →  request CHỈ vào blue = selector flip route đúng
+  sh -c "for i in 1 2 3 4 5; do wget -qO- \"http://api-svc:8118/api/version-$MARKER\"; done"
+kubectl logs -n stock -l app=api-svc,color=blue  -c api-svc --tail=150 | grep -c "$MARKER"   # → 5
+kubectl logs -n stock -l app=api-svc,color=green -c api-svc --tail=150 | grep -c "$MARKER"   # → 0
+#   ⇒ BLUE hits=5 | GREEN hits=0  →  request CHỈ vào app blue = selector flip route đúng
+#   dòng app-log thật: request method=GET path=/api/version-bgprobe-blue-<pid> status=404 dur_ms=0 ip=... user=-
 # flip sang green rồi lặp lại: GREEN hits=5 | BLUE hits=0.
 ```
 (Đã đo thật: blue=5/green=0 khi active=blue; green=5/blue=0 khi active=green. Chạy tự động:
-`ONLY=2.2 ./run-day2.sh` — hàm `_bg_prove` in đủ get svc + endpoints + curl + log 2 màu.)
+`ONLY=2.2 ./run-day2.sh` — hàm `_bg_prove` in đủ get svc + endpoints + curl + app-log 2 màu.)
 
 Điểm chốt:
-- Đây là **blue/green kinh điển**: 1 Service chung + selector `color` + FLIP. Cả 2 màu Ready sẵn ⇒
-  cutover **tức thời zero-downtime**; rollback = flip lại (không rebuild/rollout).
+- Đây là **blue/green kinh điển**: 2 Deployment `api-svc-blue` + `api-svc-green` (đã deploy sẵn bởi
+  Helm `global.bluegreen.enabled=true`) DÙNG CHUNG 1 Service `api-svc` selector `{app, color}` + FLIP.
+  Cả 2 màu Ready sẵn ⇒ cutover **tức thời zero-downtime**; rollback = flip lại (không rebuild/rollout).
 - ⚠️ **Imperative-patch vs declarative-apply:** `kubectl patch` selector chỉ BỀN tới lần `helm upgrade`
   kế (helm reset selector về `activeColor`). Cutover LÂU DÀI phải `--set global.bluegreen.activeColor`.
 - **Ingress (Lab 4.2) route `/api`→Service chung `api-svc`** ⇒ nay tự động theo màu active (trước hit cả 2).
 - Song song với **gateway-native blue/green** (Rust controller + ConfigMap `gateway-bluegreen-state`,
   route per-color `api-svc-<color>` cho `/api`,`/`). Hai cơ chế độc lập — giữ `activeColor` khớp ConfigMap
   gateway. (Gateway route baked trong image nên KHÔNG gộp được nếu không rebuild.)
+- **Biến thể 1-Deployment (tham khảo, KHÔNG phải demo của lab):** khi chỉ có 1 Deployment thì không
+  có 2 bộ nhãn để lật selector — thay bằng **rolling update cấu hình blue/green-style**
+  (`strategy.rollingUpdate.maxSurge:100% maxUnavailable:0`): bung nguyên bộ mới song song bộ cũ, Ready
+  hết mới gỡ cũ (`set image` → cutover zero-downtime, `rollout undo` = rollback). Không gate/test được
+  màu mới trước, không lật tức thì ⇒ không phải blue/green "thật".
 
 ## Lab 2.3 — Scale & HPA
 - Duration: ~45 min | CKAD domain: Application Deployment (20%)
@@ -370,15 +316,30 @@ kubectl version --client | grep -i kustomize
 #   Kustomize Version: v5.8.1         # dùng `kubectl kustomize` / `kubectl apply -k`
 ```
 
-**Patch image tag + replica count KHÔNG nhân đôi manifest** (overlay chỉ chứa DELTA):
+**Render BASE trước — rồi DIFF base↔từng overlay để thấy overlay PATCH gì lên base**
+(overlay chỉ chứa DELTA, KHÔNG nhân đôi manifest):
 ```bash
-kubectl kustomize kustomize/overlays/dev     # dev-web-kz  ns=ckad-kustomize replicas=1 image=web-svc:dev
-kubectl kustomize kustomize/overlays/prod    # prod-web-kz ns=ckad-kustomize replicas=5 image=web-svc:v2
-./e2e-test.sh kustomize-diff kustomize/overlays/dev kustomize/overlays/prod
-#   dev  -> image=web-svc:dev replicas=1
-#   prod -> image=web-svc:v2 replicas=5
-#   PASS ✅ image tag VÀ replica count khác nhau — overlay patch không nhân đôi manifest
+# 1) render BASE riêng: name=web-kz, replicas=2, image=web-svc:dev, KHÔNG namespace
+kubectl kustomize kustomize/base
+
+# 2) diff base ↔ dev → dev PATCH gì?
+diff <(kubectl kustomize kustomize/base) <(kubectl kustomize kustomize/overlays/dev)
+#   name web-kz -> dev-web-kz  ·  + namespace: ckad-kustomize  ·  replicas 2 -> 1  ·  GIỮ tag dev
+
+# 3) diff base ↔ prod → prod PATCH gì?
+diff <(kubectl kustomize kustomize/base) <(kubectl kustomize kustomize/overlays/prod)
+#   name web-kz -> prod-web-kz ·  + namespace: ckad-kustomize  ·  replicas 2 -> 5  ·  image web-svc:dev -> web-svc:v2
 ```
+
+**Bảng đối chiếu 3 render (base + 2 overlay):**
+
+| Render | name         | namespace       | replicas | image        |
+|--------|--------------|-----------------|----------|--------------|
+| base   | web-kz       | (không)         | 2        | web-svc:dev  |
+| dev    | dev-web-kz   | ckad-kustomize  | 1        | web-svc:dev  |
+| prod   | prod-web-kz  | ckad-kustomize  | 5        | web-svc:v2   |
+
+⇒ overlay patch không nhân đôi manifest — chỉ khai `namePrefix`/`namespace`/`replicas`/`images`.
 
 **Apply -k thật vào NAMESPACE RIÊNG → output sạch:**
 ```bash
@@ -391,6 +352,9 @@ kubectl delete namespace ckad-kustomize           # dọn: xóa nguyên ns = xó
 ```
 
 Điểm chốt:
+- **Diff BASE↔overlay (không phải overlay↔overlay):** render base riêng rồi
+  `diff <(kubectl kustomize base) <(kubectl kustomize overlays/dev)` cho thấy đúng DELTA mỗi
+  overlay patch lên base (namePrefix, +namespace, replicas, images) — rõ hơn so 2 overlay với nhau.
 - **`images: [{name: web-svc, newTag: v2}]`** — match theo IMAGE NAME (`web-svc`), KHÔNG phải
   container name (`web`). **`replicas: [{name: web-kz, count: 5}]`** — match theo DEPLOYMENT
   NAME *trước* `namePrefix`. `namespace:`/`namePrefix:` transform tên + ns. Overlay KHÔNG
