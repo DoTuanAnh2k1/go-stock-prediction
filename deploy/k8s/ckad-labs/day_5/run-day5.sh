@@ -37,6 +37,14 @@ runx(){ # chạy lệnh MONG ĐỢI lỗi (demo)
   printf '\n%s$' "$Y"; printf ' %s' "$@"; printf '%s\n' "$X"
   if "$@"; then printf '%s(?!) lệnh này lẽ ra phải lỗi%s\n' "$R" "$X"
   else printf '%s↑ ĐÚNG NHƯ MONG ĐỢI — apply bị admission từ chối (selector≠template)%s\n' "$G" "$X"; fi; }
+HELMLOG="${TMPDIR:-/tmp}/ckad-day5-helm.log"; : > "$HELMLOG"
+runhelm(){  # helm output rất dài (--dry-run render CẢ manifest) → hiện ~10 dòng đầu, full ra $HELMLOG
+  printf '\n%s$' "$Y"; printf ' %s' "$@"; printf '%s\n' "$X"
+  local out; out="$("$@" 2>&1)"
+  printf '%s\n' "$out" | head -10
+  { printf '\n===== $ %s =====\n' "$*"; printf '%s\n' "$out"; } >> "$HELMLOG"
+  printf '%s   … (%s dòng — full output ở %s)%s\n' "$D" "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" "$HELMLOG" "$X"
+}
 
 # ---- prereq -----------------------------------------------------------------
 ctx="$(kubectl config current-context 2>/dev/null || true)"
@@ -126,8 +134,8 @@ note "2) helm get values — value đang áp cho release stock"
 run "$HELM" get values stock -n "$NS"
 
 note "3) value override demo — --dry-run (KHÔNG apply thật, chỉ render để đối chiếu)"
-run "$HELM" upgrade stock "$CHART" -n "$NS" --set global.imageTag=dev --dry-run
-note "   → --dry-run render manifest với imageTag override NHƯNG không đổi release live"
+runhelm "$HELM" upgrade stock "$CHART" -n "$NS" --set global.imageTag=dev --dry-run
+note "   → --dry-run render manifest với imageTag override NHƯNG không đổi release live (full manifest ở \$HELMLOG)"
 
 note "Điểm chốt (KHÔNG chạy helm rollback thật trong script — an toàn release live):"
 note " - helm upgrade --set k=v = override value; mỗi upgrade/rollback = 1 revision (helm history)"

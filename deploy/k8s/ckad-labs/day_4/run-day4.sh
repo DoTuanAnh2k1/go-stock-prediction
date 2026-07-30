@@ -32,6 +32,14 @@ title(){ printf '\n'; hr; printf '%s%s  %s%s\n' "$B" "$C" "$1" "$X"; hr; }
 note(){ printf '%s# %s%s\n' "$D" "$1" "$X"; }
 run(){ printf '\n%s$' "$Y"; printf ' %s' "$@"; printf '%s\n' "$X"; "$@"; }
 runsh(){ printf '\n%s$ %s%s\n' "$Y" "$1" "$X"; sh -c "$1"; }   # cho lệnh có pipe
+HELMLOG="${TMPDIR:-/tmp}/ckad-day4-helm.log"; : > "$HELMLOG"
+runhelm(){  # helm output rất dài (NOTES/manifest) → hiện ~8 dòng đầu, full ra $HELMLOG
+  printf '\n%s$' "$Y"; printf ' %s' "$@"; printf '%s\n' "$X"
+  local out; out="$("$@" 2>&1)"
+  printf '%s\n' "$out" | head -8
+  { printf '\n===== $ %s =====\n' "$*"; printf '%s\n' "$out"; } >> "$HELMLOG"
+  printf '%s   … (%s dòng — full output ở %s)%s\n' "$D" "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" "$HELMLOG" "$X"
+}
 
 # ---- prereq -----------------------------------------------------------------
 ctx="$(kubectl config current-context 2>/dev/null || true)"
@@ -80,7 +88,7 @@ if [ -z "$_ctrl" ]; then
 fi
 
 note "2) Bật Ingress (gated template ingress.yaml: host stock.local, / → web-svc, /api → api-svc)"
-run "$HELM" upgrade stock "$CHART" -n "$NS" --reuse-values --set global.ingress.enabled=true
+runhelm "$HELM" upgrade stock "$CHART" -n "$NS" --reuse-values --set global.ingress.enabled=true
 run kubectl get ingress -n "$NS"
 
 note "3) Verify routing — kind nodeIP không routable từ host → port-forward controller (background)"
@@ -98,8 +106,15 @@ for _i in $(seq 1 20); do
   sleep 1
 done
 if [ "$_ok" = 1 ]; then
-  runsh "curl -s -H 'Host: stock.local' http://localhost:18080/api/version -w '\\nHTTP %{http_code}\\n'"
-  note "   → HTTP 200: Ingress route /api → api-svc:8118 (ingressClassName=nginx khớp controller)"
+  note "   (a) curl qua Ingress vào /api/version (route THẬT) — kỳ vọng HTTP 200:"
+  runsh "curl -s -H 'Host: stock.local' http://localhost:18080/api/version -o /dev/null -w '   → HTTP %{http_code}  (Ingress route /api → api-svc:8118, ingressClassName=nginx)\\n'"
+  _mk="ingressprobe-$$"
+  note "   (b) VERIFY bằng APP LOG (như Day 2): curl PATH độc nhất qua Ingress rồi soi log container 'api-svc':"
+  runsh "curl -s -H 'Host: stock.local' http://localhost:18080/api/version-$_mk -o /dev/null -w '   \$ curl -H \"Host: stock.local\" http://localhost:18080/api/version-$_mk  → HTTP %{http_code}\\n'"
+  sleep 1
+  note "   dòng APP LOG container 'api-svc' khớp marker = request ĐI QUA Ingress → Service api-svc → pod app THẬT:"
+  runsh "kubectl logs -n $NS -l app=api-svc -c api-svc --tail=100 2>/dev/null | grep '$_mk' | tail -1 | sed 's/\\x1b\\[[0-9;]*m//g; s/^/     /'"
+  note "   → thấy 'path=/api/version-$_mk' trong log app ⇒ chứng minh Ingress→api-svc app (không chỉ HTTP 200 ở edge)"
 else
   note "   → port-forward chưa sẵn sàng sau 20s (curl != 200). Controller có thể còn khởi động."
 fi
@@ -114,7 +129,7 @@ lab_4_3(){
 title "LAB 4.3 — NetworkPolicy Isolation (kindnet ENFORCE thật — bật → demo → TẮT LẠI)"
 
 note "1) Bật NetworkPolicy (+ ingress để giữ /api tới được) — 5 policy default-deny + allow-*"
-run "$HELM" upgrade stock "$CHART" -n "$NS" --reuse-values --set global.networkPolicy.enabled=true --set global.ingress.enabled=true
+runhelm "$HELM" upgrade stock "$CHART" -n "$NS" --reuse-values --set global.networkPolicy.enabled=true --set global.ingress.enabled=true
 run kubectl get networkpolicy -n "$NS"
 
 note "2) ISOLATION — pod lạ (app=np-test, KHÔNG trong allow-list) curl api-svc → BỊ CHẶN (timeout)"
@@ -133,7 +148,7 @@ note "   → 'download timed out' + wget_exit=1 = default-deny chặn app=np-tes
 kubectl delete pod np-test -n "$NS" --ignore-not-found >/dev/null 2>&1
 
 note "3) TẮT LẠI NetworkPolicy (restore state an toàn — default-deny cắt nhầm Prometheus scrape :9464)"
-run "$HELM" upgrade stock "$CHART" -n "$NS" --reuse-values --set global.networkPolicy.enabled=false --set global.ingress.enabled=true
+runhelm "$HELM" upgrade stock "$CHART" -n "$NS" --reuse-values --set global.networkPolicy.enabled=false --set global.ingress.enabled=true
 run kubectl get networkpolicy -n "$NS"
 note "   → networkpolicy đã gỡ (No resources / rỗng) = metrics scrape không bị chặn"
 }
@@ -214,5 +229,17 @@ case "$ONLY" in
   4.4) lab_4_4 ;;
   *)   lab_4_1; lab_4_2; lab_4_3; lab_4_4 ;;
 esac
-cleanup
+
+# ---- chờ Enter rồi mới DỌN DẸP (cho quan sát object nháp: ep-demo, ck-data PVC + pvc-reader...) ----
+if [ "${KEEP:-0}" = "1" ]; then
+  printf '\n%sKEEP=1 → giữ nguyên object nháp, KHÔNG dọn.%s\n' "$D" "$X"
+elif [ -t 0 ]; then
+  printf '\n%s⏸  Object nháp đang GIỮ để quan sát (ep-demo, ck-data PVC + pvc-reader...).%s\n' "$Y" "$X"
+  printf '%s   → Bấm ENTER để DỌN DẸP (Ctrl-C để giữ nguyên)... %s' "$Y" "$X"
+  read -r _ || true
+  cleanup
+else
+  printf '\n%s(stdin không phải TTY → dọn dẹp ngay, không chờ Enter)%s\n' "$D" "$X"
+  cleanup
+fi
 printf '\n%s%s✔ XONG Day 4 (Lab %s).%s\n' "$B" "$G" "$ONLY" "$X"
