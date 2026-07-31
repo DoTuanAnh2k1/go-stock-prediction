@@ -450,27 +450,32 @@ const DATA = {
     {
       id:"3.4", title:"Namespace Quotas", domain:"App Environment, Config & Security (25%)", duration:"~45m", status:"done",
       prep:["Template <code>deploy/helm/stock/templates/quota.yaml</code> — LimitRange + ResourceQuota áp vào ns <code>stock</code> THẬT (đang chạy 26 pod), size ~2.5–3x an toàn."],
-      cleanup:["<code>--set global.quota.enabled=false</code> hoặc <code>helm rollback</code>. Demo reject dùng <code>--dry-run=server</code> nên không persist → không cần dọn."],
-      request:"Apply ResourceQuota + LimitRange; quan sát Pod bị reject khi vượt quota. Vì áp lên ns live 26 pod, phải size quota để KHÔNG chặn rollout/blue-green; LimitRange bắt buộc đi kèm để tiêm default request cho pod không khai resources (init/CronJob).",
+      cleanup:["<code>--set global.quota.enabled=false</code> hoặc <code>helm rollback</code> để tắt quota. Lab 3.4 tạo pod <code>noreq-test</code> THẬT và tự xóa trong bước cuối; nếu bị gián đoạn thì chạy <code>kubectl delete pod noreq-test -n stock --ignore-not-found</code>."],
+      request:"Apply ResourceQuota + LimitRange; quan sát Pod bị reject THẬT khi vượt quota; chứng minh default injection qua pod tạo THẬT. Vì áp lên ns live 26 pod, phải size quota để KHÔNG chặn rollout/blue-green; LimitRange bắt buộc đi kèm để tiêm default request cho pod không khai resources (init/CronJob).",
       steps:[
         "Apply LimitRange <code>stock-defaults</code> (defaultRequest 50m/64Mi · default 250m/256Mi · max 2/3Gi).",
         "Apply ResourceQuota <code>stock-quota</code> (requests.cpu=6 mem=10Gi · limits.cpu=30 mem=24Gi · pods=60).",
-        "<code>helm upgrade</code> (rev7) → <code>describe quota</code> xác nhận used dưới trần.",
-        "Demo REJECT bằng <code>--dry-run=server</code> (chạy admission thật, không tạo pod): vượt ResourceQuota, vượt LimitRange max, và default injection."
+        "<code>helm upgrade</code> (rev7) → <code>describe quota</code> + <code>describe limitrange</code> xác nhận used dưới trần.",
+        "REJECT THẬT — <code>kubectl create</code> THẬT (không <code>--dry-run</code>) → admission từ chối tại API server → pod KHÔNG được tạo: (a) 2 container cpu=2 → vượt ResourceQuota; (b) 1 container cpu=3 → vượt LimitRange max.",
+        "ADMIT THẬT + default injection — tạo pod <code>noreq-test</code> THẬT không khai resources → LimitRange vá default; verify bằng <code>get pod -o yaml | grep resources</code> và <code>describe quota</code> (Used requests.cpu tăng +50m); cuối cùng xóa pod để dọn."
       ],
       knowledge:[
         "Quota <code>requests.*</code>/<code>limits.*</code> yêu cầu MỌI pod khai resources → <b>phải pair LimitRange</b> (default) nếu không CronJob/init pod thiếu resources bị reject.",
         "Reject xảy ra ở <b>API server admission</b> (KHÔNG phải scheduler) → pod không được tạo ngay từ đầu.",
-        "<code>--dry-run=server</code> = kênh demo sạch: chạy đủ admission (quota + limitrange) nhưng không persist → không cần dọn.",
+        "Dùng <code>kubectl create</code> THẬT (không <code>--dry-run=server</code>) để reject: pod vẫn KHÔNG persist vì admission từ chối — nhưng khác <code>--dry-run</code> ở chỗ quota accounting đếm THẬT (pod bị reject KHÔNG trừ quota; pod được tạo THẬT mới trừ).",
         "LimitRange <code>max</code> giới hạn per-Container; ResourceQuota giới hạn TỔNG toàn ns — hai tầng khác nhau (1 container cpu=3 > max 2 bị chặn ở LimitRange; tổng 2 container cpu=4 > remaining bị chặn ở Quota).",
-        "Default injection: pod không khai resources → LimitRange tự vá <code>{requests:50m/64Mi, limits:250m/256Mi}</code> ⇒ thoả quota."
+        "Default injection: pod không khai resources → LimitRange tự vá <code>{requests:50m/64Mi, limits:250m/256Mi}</code> ⇒ thoả quota; chỉ chứng minh được bằng pod THẬT (dry-run cũng thấy nhưng không tăng Used trên <code>describe quota</code>)."
       ],
       commands:[
         {cmd:"helm upgrade stock deploy/helm/stock -n stock", note:"rev7 — LimitRange + ResourceQuota", out:"Release \"stock\" has been upgraded. Happy Helming!\nREVISION: 7"},
         {cmd:"kubectl describe quota stock-quota -n stock", note:"used đều dưới trần", out:"requests.cpu     2250m/6\nrequests.memory  3840Mi/10Gi\nlimits.cpu       13200m/30\npods             26/60"},
-        {cmd:"# (1) Vượt ResourceQuota (2 container × cpu=2 → tổng 4 > remaining):\nkubectl apply --dry-run=server -f quota-test.yaml", note:"reject ở admission", out:"Error: pods \"quota-test\" is forbidden: exceeded quota: stock-quota,\n  requested: requests.cpu=4, used: requests.cpu=2250m, limited: requests.cpu=6"},
-        {cmd:"# (2) Vượt LimitRange max (1 container cpu=3 > max 2):\nkubectl apply --dry-run=server -f max-test.yaml", note:"reject ở LimitRange", out:"Error: pods \"max-test\" is forbidden: maximum cpu usage per Container is 2, but limit is 3"},
-        {cmd:"# (3) Default injection: pod KHÔNG khai resources → LimitRange vá\nkubectl apply --dry-run=server -o jsonpath='{...resources}' -f noreq.yaml", note:"tự vá default", out:"{\"limits\":{\"cpu\":\"250m\",\"memory\":\"256Mi\"},\"requests\":{\"cpu\":\"50m\",\"memory\":\"64Mi\"}}"}
+        {cmd:"kubectl describe limitrange stock-defaults -n stock", note:"xem default + max per-Container", out:"Type        Resource  Min   Max  Default Request  Default Limit\nContainer   cpu       -     2     50m              250m\nContainer   memory    -     3Gi   64Mi             256Mi"},
+        {cmd:"# (a) REJECT THẬT — vượt ResourceQuota (2 container × cpu=2 → tổng requests.cpu=4):\nkubectl create -n stock -f quota-test.yaml", note:"kubectl create THẬT (không --dry-run); admission từ chối → không persist", out:"Error from server (Forbidden): pods \"quota-test\" is forbidden: exceeded quota: stock-quota, requested: requests.cpu=4, used: requests.cpu=2250m, limited: requests.cpu=6"},
+        {cmd:"# (b) REJECT THẬT — vượt LimitRange max (1 container cpu=3 > max 2):\nkubectl create -n stock -f max-test.yaml", note:"LimitRange max per-Container bắt trước Quota", out:"Error from server (Forbidden): pods \"max-test\" is forbidden: maximum cpu usage per Container is 2, but limit is 3"},
+        {cmd:"# ADMIT THẬT — pod noreq-test không khai resources → LimitRange vá default:\nkubectl create -n stock -f - <<'EOF'\napiVersion: v1\nkind: Pod\nmetadata:\n  name: noreq-test\nspec:\n  containers:\n  - name: nginx\n    image: nginx\nEOF", note:"tạo pod THẬT; không khai resources → LimitRange inject default", out:"pod/noreq-test created"},
+        {cmd:"kubectl get pod noreq-test -n stock -o yaml | grep -A4 'resources:'", note:"xác nhận LimitRange đã vá default requests + limits", out:"    resources:\n      limits:\n        cpu: 250m\n        memory: 256Mi\n      requests:\n        cpu: 50m\n        memory: 64Mi"},
+        {cmd:"kubectl describe quota stock-quota -n stock", note:"Used requests.cpu tăng +50m so với trước (quota đếm pod THẬT)", out:"requests.cpu     2300m/6\nrequests.memory  3904Mi/10Gi\npods             27/60"},
+        {cmd:"kubectl delete pod noreq-test -n stock", note:"dọn pod test; Used quota giảm lại", out:"pod \"noreq-test\" deleted"}
       ]
     }
   ],

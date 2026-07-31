@@ -215,22 +215,48 @@ kubectl describe quota stock-quota -n stock
 #   requests.cpu 2250m/6 · requests.memory 3840Mi/10Gi · limits.cpu 13200m/30 · pods 26/60   (đều dưới trần)
 ```
 
-**Demo REJECT (CKAD objective) — `--dry-run=server` chạy admission thật, không tạo pod:**
+**Demo THẬT (CKAD objective) — `kubectl create` THẬT (KHÔNG `--dry-run`); reject bị chặn ở
+admission nên không persist, admit thì pod chạy THẬT rồi tự xóa:**
+
 ```bash
-# (1) Vượt ResourceQuota: 2 container × request cpu=2 (mỗi cái ≤ max) → tổng 4 > remaining 3.75:
-#   Error: pods "quota-test" is forbidden: exceeded quota: stock-quota,
-#          requested: requests.cpu=4, used: requests.cpu=2250m, limited: requests.cpu=6
-# (2) Vượt LimitRange max: 1 container request cpu=3 (> max 2):
-#   Error: pods "max-test" is forbidden: maximum cpu usage per Container is 2, but limit is 3
-# (3) Default injection: pod KHÔNG khai resources → LimitRange tự vá:
-#   {"limits":{"cpu":"250m","memory":"256Mi"},"requests":{"cpu":"50m","memory":"64Mi"}}
+# REJECT THẬT — create thật nhưng admission từ chối → KHÔNG có gì persist (không cần dọn):
+# (a) Vượt ResourceQuota: 2 container × request cpu=2 (mỗi cái ≤ max) → tổng 4 > remaining:
+kubectl create -n stock -f - <<'EOF'   # (2 container a/b, mỗi cái requests.cpu=2)
+#   Error from server (Forbidden): pods "quota-test" is forbidden: exceeded quota: stock-quota,
+#          requested: requests.cpu=4, used: requests.cpu=2270m, limited: requests.cpu=6
+# (b) Vượt LimitRange max: 1 container request cpu=3 (> max 2 mỗi container):
+kubectl create -n stock -f - <<'EOF'   # (1 container a, requests.cpu=3)
+#   Error from server (Forbidden): pods "max-test" is forbidden:
+#          maximum cpu usage per Container is 2, but limit is 3
 ```
-Điểm chốt:
+
+```bash
+# ADMIT THẬT + default injection — pod noreq-test KHÔNG khai resources → LimitRange vá → CHẠY:
+kubectl describe quota stock-quota -n stock | awk '/requests.cpu/{print $2}'
+#   → Used requests.cpu TRƯỚC = 2270m
+
+kubectl create -n stock -f - <<'EOF'   # (1 container a, image nginx:1.27-alpine, KHÔNG resources)
+#   pod/noreq-test created                         ← admitted, pod chạy THẬT
+
+kubectl get pod noreq-test -n stock -o yaml | grep -A4 'resources:'
+#   → default LimitRange vá THẬT lên pod:
+#     limits:   { cpu: 250m, memory: 256Mi }
+#     requests: { cpu: 50m,  memory: 64Mi }
+
+kubectl describe quota stock-quota -n stock | awk '/requests.cpu/{print $2}'
+#   → Used requests.cpu SAU  = 2320m             ← TRƯỚC +50m (quota đếm pod THẬT vừa tạo)
+
+kubectl delete pod noreq-test -n stock            # dọn → trả quota về 2270m
+```
+
+Điểm chốt (khác `--dry-run`: đây là create THẬT, có persist thật khi admitted):
 - Quota `requests.*`/`limits.*` yêu cầu MỌI pod khai resources → **phải pair LimitRange**
   (default) nếu không CronJob/pod thiếu resources bị reject.
-- Reject xảy ra ở **API server admission** (không phải scheduler) → pod không được tạo.
-- `--dry-run=server` = kênh demo sạch: chạy đủ admission (quota + limitrange) nhưng không
-  persist → không cần dọn.
+- **Reject** ((a)/(b)) là `kubectl create` THẬT nhưng bị **API-server admission** từ chối
+  (không phải scheduler) → pod KHÔNG persist, không cần dọn.
+- **Admit** ((c)) tạo pod noreq-test THẬT: LimitRange vá default lên pod rồi pod chạy;
+  ResourceQuota `Used requests.cpu` **TĂNG thật +50m** rồi **giảm** khi xóa pod ⇒ chứng minh
+  quota accounting hoạt động THẬT, không chỉ render. Pod tự xóa cuối lab (idempotent cleanup).
 
 ---
 

@@ -3,20 +3,21 @@
 # CKAD — Day 3 — Configuration & security. VERIFY hardening ĐÃ áp trên stack THẬT.
 #   3.1 ConfigMap & Secret Injection   (read-only: envFrom + nginx.conf volume)
 #   3.2 Security Context Lockdown       (read-only: securityContext pod+container)
-#   3.3 ServiceAccount & RBAC           (read-only: automount:false + can-i)
-#   3.4 Namespace Quotas                (read-only + demo reject qua --dry-run=server)
+#   3.3 ServiceAccount & RBAC           (describe/yaml + can-i + demo impersonation --as)
+#   3.4 Namespace Quotas                (create THẬT bị reject + pod noreq-test thật → default injection → xóa)
 #
-# TẤT CẢ read-only — KHÔNG helm upgrade, KHÔNG tạo pod thật. Chỉ 3.4 dùng
-# --dry-run=server (chạy admission, KHÔNG persist) để demo reject.
+# 3.1/3.2/3.3 read-only (verify hardening có sẵn). 3.4 có tạo pod THẬT:
+# (a)(b) 'kubectl create' bị admission từ chối (không persist), (c) tạo 'noreq-test'
+# để chứng minh default-injection + quota Used tăng THẬT rồi xóa (throwaway, tự dọn).
 #
 #   ./run-day3.sh                    # cả 4 lab
 #   ONLY=3.2 ./run-day3.sh           # chỉ 1 lab: 3.1 | 3.2 | 3.3 | 3.4
-#   KEEP=1 ./run-day3.sh             # (không sinh object nháp — KEEP không có tác dụng ở đây)
+#   KEEP=1 ./run-day3.sh             # giữ pod noreq-test (nếu 3.4 dừng giữa chừng) — bình thường tự dọn
 #
 # Yêu cầu: context=kind-ckad, ns=stock, hardening đã helm upgrade (rev6/7/8).
 #          helm KHÔNG trên PATH → dùng /home/chronical/.local/bin/helm.
 # =============================================================================
-set -uo pipefail          # KHÔNG set -e: 3.4 có lệnh --dry-run CỐ TÌNH lỗi (reject)
+set -uo pipefail          # KHÔNG set -e: 3.4 có lệnh create CỐ TÌNH bị reject (runx)
 
 NS=stock
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -131,9 +132,9 @@ run kubectl describe quota stock-quota -n "$NS"
 note "2) LimitRange stock-defaults — defaultRequest/default/max tiêm vào pod thiếu resources"
 run kubectl describe limitrange stock-defaults -n "$NS"
 
-note "3) DEMO REJECT — --dry-run=server chạy admission thật NHƯNG không persist (không cần dọn)"
+note "3) REJECT THẬT — 'kubectl create' THẬT (KHÔNG dry-run); bị admission từ chối nên KHÔNG có gì persist:"
 note "   (a) Vượt ResourceQuota: 2 container × request cpu=2 → tổng 4 > remaining requests.cpu"
-runx kubectl create --dry-run=server -n "$NS" -f - <<EOF
+runx kubectl create -n "$NS" -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata: { name: quota-test, namespace: $NS }
@@ -144,7 +145,7 @@ spec:
 EOF
 
 note "   (b) Vượt LimitRange max: 1 container request cpu=3 (> max 2 mỗi container)"
-runx kubectl create --dry-run=server -n "$NS" -f - <<EOF
+runx kubectl create -n "$NS" -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata: { name: max-test, namespace: $NS }
@@ -153,17 +154,23 @@ spec:
     - { name: a, image: nginx:1.27-alpine, resources: { requests: { cpu: "3" }, limits: { cpu: "3" } } }
 EOF
 
-note "   (c) Default injection (KHÔNG reject): pod KHÔNG khai resources → LimitRange TỰ VÁ default request/limit"
-run kubectl create --dry-run=server -n "$NS" -o jsonpath='{.spec.containers[0].resources}' -f - <<EOF
+note "4) ADMIT THẬT + default injection — tạo pod THẬT KHÔNG khai resources → LimitRange vá → pod chạy được:"
+kubectl delete pod noreq-test -n "$NS" --ignore-not-found >/dev/null 2>&1
+runsh "kubectl describe quota stock-quota -n $NS | awk '/requests.cpu/{print \"   Used requests.cpu TRƯỚC = \"\$2}'"
+run kubectl create -n "$NS" -f - <<EOF
 apiVersion: v1
 kind: Pod
-metadata: { name: noreq-test, namespace: $NS }
+metadata: { name: noreq-test, namespace: $NS, labels: { app: ckad-quota } }
 spec:
   containers:
     - { name: a, image: nginx:1.27-alpine }
 EOF
-printf '\n'
-note "   → {requests:50m/64Mi, limits:250m/256Mi} = LimitRange vá default ⇒ pod thiếu resources vẫn ADMIT (thoả quota)"
+note "   → pod noreq-test ĐƯỢC TẠO (admitted). Resources THẬT trên pod = default LimitRange vá:"
+runsh "kubectl get pod noreq-test -n $NS -o yaml | grep -A4 'resources:'"
+note "   → {requests:50m/64Mi, limits:250m/256Mi} tiêm vào pod THẬT (không khai vẫn chạy, thoả quota)"
+runsh "kubectl describe quota stock-quota -n $NS | awk '/requests.cpu/{print \"   Used requests.cpu SAU  = \"\$2\"  (tăng +50m = default vừa vá, quota đếm THẬT)\"}'"
+note "5) Dọn pod demo (trả quota về cũ):"
+run kubectl delete pod noreq-test -n "$NS"
 
 note "Điểm chốt: Quota requests.*/limits.* yêu cầu MỌI pod khai resources → phải pair LimitRange"
 note "           (default injection). Reject xảy ra ở API-server admission (không phải scheduler)."
@@ -171,9 +178,10 @@ note "           (default injection). Reject xảy ra ở API-server admission (
 
 # =============================================================================
 cleanup(){
-  # Day 3 read-only — không sinh object nháp (chỉ --dry-run=server, không persist).
-  [ "${KEEP:-0}" = "1" ] && { printf '\n%sKEEP=1 (Day 3 read-only — không có gì để giữ/dọn).%s\n' "$D" "$X"; return; }
-  note "Day 3 read-only: không tạo object thật (chỉ --dry-run=server) → không cần dọn."
+  [ "${KEEP:-0}" = "1" ] && { printf '\n%sKEEP=1 — giữ nguyên (3.4 pod noreq-test nếu còn).%s\n' "$D" "$X"; return; }
+  # 3.4 tạo pod noreq-test THẬT (đã xóa trong lab); xóa lại cho chắc (idempotent, phòng script dừng giữa chừng).
+  kubectl delete pod noreq-test -n "$NS" --ignore-not-found >/dev/null 2>&1
+  note "Day 3: 3.1/3.2/3.3 read-only; 3.4 pod noreq-test thật đã dọn (nếu còn sót)."
 }
 
 # ---- điều phối --------------------------------------------------------------
