@@ -61,3 +61,12 @@ _tz_backup/
 # Rust build artifacts
 gateway-svc/target/
 gateway-svc/.cargo/
+
+# Helm secret overrides — production credentials, NEVER commit (CKAD C2 auto-fail guard).
+# Only the *.example template is tracked. Real values live in gitignored copies.
+values-secret.yaml
+values-prod.yaml
+deploy/helm/**/values-secret.yaml
+deploy/helm/**/values-prod.yaml
+!**/values-secret.yaml.example
+!**/values-prod.yaml.example

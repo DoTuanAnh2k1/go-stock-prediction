@@ -24,7 +24,11 @@ global:
     serviceMgt: service-mgt
     webSvc: web-svc
 
-  # Bí mật (dev). Production: override bằng values-prod.yaml hoặc --set / secret manager.
+  # Bí mật — CHỈ PLACEHOLDER DEV để stack chạy out-of-the-box (không phải credential
+  # thật → an toàn commit). Production PHẢI override qua file GITIGNORE:
+  #   cp deploy/helm/stock/values-secret.yaml.example deploy/helm/stock/values-secret.yaml
+  #   helm upgrade --install stock deploy/helm/stock -n stock -f .../values-secret.yaml
+  # (hoặc --set / secret manager / SealedSecrets). Xem values-secret.yaml.example.
   secrets:
     postgresUser: postgres
     postgresPassword: "123"

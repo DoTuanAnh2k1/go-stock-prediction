@@ -164,6 +164,106 @@ curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&s
   -H "Authorization: Bearer $TOKEN"
 ```
 
+## Kubernetes / CKAD Capstone
+
+Besides Docker Compose, the whole stack deploys to Kubernetes via a Helm **umbrella chart**
+(`deploy/helm/stock/`, one subchart per service). This section is the CKAD deliverable runbook.
+Item-by-item mapping of every mandatory requirement → resource → file → verify command lives in
+[`docs/ckad-checklist.md`](docs/ckad-checklist.md).
+
+### Prerequisites
+
+- A cluster (kind `ckad` used here) — **v1.35+**, policy-capable CNI (kindnet) for NetworkPolicy
+- `kubectl`, `helm` v3, `kustomize` (or `kubectl apply -k`)
+- **ingress-nginx** installed (for Ingress N2/N3) and **metrics-server** (for HPA P4)
+- A default StorageClass (dynamic PVC for db / MinIO / backups)
+
+### Deploy (scripted)
+
+```bash
+./scripts/build.sh                 # build 7 images :dev + kind load into cluster "ckad"
+./scripts/deploy.sh                # ns stock + db-schema ConfigMap + helm install (demo toggles ON)
+./scripts/smoke-test.sh            # E2E: login → /api/version → monitoring (via gateway/ingress)
+```
+
+### Deploy (manual)
+
+```bash
+kubectl create namespace stock
+# db-schema ConfigMap is NOT Helm-managed — create it first
+kubectl create configmap db-schema -n stock --from-file=01-schema.sql=database.sql
+helm install stock deploy/helm/stock -n stock
+
+# Production secrets (never committed): override placeholders in values.yaml
+cp deploy/helm/stock/values-secret.yaml.example deploy/helm/stock/values-secret.yaml   # edit real creds
+helm upgrade stock deploy/helm/stock -n stock -f deploy/helm/stock/values-secret.yaml
+```
+
+Toggles `quota`, `rbac`, `pdb`, `bluegreen`, `pgadmin` are **on by default**. HPA, Ingress and
+NetworkPolicy are **demo-gated off** (they need ingress-nginx / metrics-server or would cut idle
+metrics) — enable them for the graded cluster state:
+
+```bash
+helm upgrade stock deploy/helm/stock -n stock \
+  --set global.hpa.enabled=true \
+  --set global.ingress.enabled=true \
+  --set global.networkPolicy.enabled=true
+```
+
+### Verify the CKAD mandatory items
+
+```bash
+kubectl get pods,svc,endpoints -n stock          # D1/N1/N5 — all Ready, no orphan Endpoints
+kubectl get cronjob,deploy -n stock              # D2/P1  — Deployments + CronJobs
+kubectl get pod <pod> -n stock \
+  -o jsonpath='{.spec.initContainers[*].name} | {.spec.containers[*].name}'   # D3 init + sidecar
+kubectl get pvc -n stock                         # D5 — persistent volumes
+kubectl get hpa -n stock                         # P4
+kubectl get resourcequota,limitrange -n stock    # C5
+kubectl get netpol,ingress -n stock              # N3/N4
+kubectl auth can-i list pods \
+  --as=system:serviceaccount:stock:pod-reader -n stock   # C4 — expect "yes"
+helm history stock -n stock                      # P6 — upgrade/rollback trail
+```
+
+### Debug runbook (O4)
+
+Backend pods run the **ambassador pattern** (≥4 containers) so `kubectl logs` needs `-c`:
+
+```bash
+kubectl logs <pod> -n stock -c log-sidecar        # tail app stdout via sidecar (emptyDir)
+kubectl logs <pod> -n stock -c api-svc            # the app container directly
+kubectl logs <pod> -n stock -c wait-db            # init container (DB readiness)
+kubectl describe pod <pod> -n stock               # events, probe status, mounts, QoS
+kubectl get events -n stock --sort-by=.lastTimestamp | tail -20
+kubectl top pod -n stock                          # CPU/mem (needs metrics-server)
+kubectl exec <pod> -n stock -c api-svc -- env | grep -E 'GRPC_TARGET|JWT'   # ConfigMap/Secret injection
+```
+
+Container names per backend: init `wait-db` → app (`<svc>`) → `nginx` ambassador → `log-sidecar`.
+
+### Rollout, blue/green, rollback (P2/P3/P6)
+
+```bash
+kubectl set image deploy/api-svc-green api-svc=api-svc:v2 -n stock && kubectl rollout status deploy/api-svc-green -n stock
+kubectl patch svc api-svc -n stock -p '{"spec":{"selector":{"color":"blue"}}}'   # blue/green flip
+helm rollback stock <REV> -n stock                                               # Helm rollback
+```
+
+### Kustomize overlay (P5)
+
+```bash
+kubectl kustomize deploy/k8s/kustomize/overlays/prod       # render (image v2, replicas 3)
+kubectl apply -k deploy/k8s/kustomize/overlays/dev         # apply into ns stock (needs Helm stack)
+```
+
+### Known limitations
+
+- `global.bluegreen.enabled` must stay **true** — gateway-svc hard-routes `/api → api-svc-<color>`.
+- `values.yaml` secrets are **dev placeholders only**; real credentials go in the gitignored
+  `values-secret.yaml` (see `values-secret.yaml.example`).
+- prediction-svc uses a `startupProbe` (~150s for torch import); gRPC health is a `tcpSocket` probe.
+
 ## Configuration
 
 Create a `.env` file at the **repo root** (passed to Compose via `--env-file .env`):

@@ -64,8 +64,10 @@ spec:
         seccompProfile:       # CKAD 3.2 — seccomp mặc định runtime cho mọi container
           type: RuntimeDefault
       initContainers:
-        # ---- wait-db: đồng nhất pattern "init đợi db lên" ----
-        {{- include "stock.waitDb" (dict "image" "timescale/timescaledb:latest-pg16") | nindent 8 }}
+        # KHÔNG wait-db: cli-svc KHÔNG tích hợp DB (chỉ nói chuyện gateway/api qua HTTP).
+        # Trước đây có init wait-db "cho đồng nhất" nhưng NetworkPolicy least-privilege
+        # (allow-backends-to-db) KHÔNG cấp cli-svc→db → wait-db treo mãi. Bỏ đi: đúng
+        # least-privilege (N4) và cli-svc vẫn boot (upsert catalog best-effort, retry).
         # ---- fix-keys-perms: emptyDir đè /etc/cli-svc/keys root-owned => chown về 10001 ----
         - name: fix-keys-perms
           image: "{{ .Values.global.images.cliSvc }}:{{ .Values.global.imageTag }}"

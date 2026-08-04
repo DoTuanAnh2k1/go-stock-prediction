@@ -1,0 +1,19 @@
+# OVERLAY dev — patch: namespace stock · namePrefix dev- · replicas 1 · image tag dev.
+# Render: kubectl kustomize deploy/k8s/kustomize/overlays/dev
+# Apply : kubectl apply -k deploy/k8s/kustomize/overlays/dev
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: stock
+namePrefix: dev-
+
+resources:
+  - ../../base
+
+replicas:
+  - name: api-kz
+    count: 1
+
+images:
+  - name: api-svc
+    newTag: dev

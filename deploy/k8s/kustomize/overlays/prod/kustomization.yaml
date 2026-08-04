@@ -1,0 +1,33 @@
+# OVERLAY prod — patch: namespace stock · namePrefix prod- · replicas 3 · image tag v2.
+# So với dev: image tag VÀ replica count KHÁC nhau → overlay patch, KHÔNG nhân đôi base.
+# Render: kubectl kustomize deploy/k8s/kustomize/overlays/prod
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: stock
+namePrefix: prod-
+
+resources:
+  - ../../base
+
+replicas:
+  - name: api-kz
+    count: 3
+
+images:
+  - name: api-svc
+    newTag: v2
+
+# Patch chiến lược rollout cho prod (maxUnavailable 0 — zero-downtime).
+patches:
+  - target:
+      kind: Deployment
+      name: api-kz
+    patch: |
+      - op: add
+        path: /spec/strategy
+        value:
+          type: RollingUpdate
+          rollingUpdate:
+            maxUnavailable: 0
+            maxSurge: 1

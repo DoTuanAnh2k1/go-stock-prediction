@@ -1,0 +1,19 @@
+# ConfigMap NON-SENSITIVE cho api-kz (C1). Trỏ vào Service DNS THẬT trong ns stock.
+# Credentials (JWT_SECRET, DB password...) KHÔNG ở đây — lấy từ Secret `api-svc`
+# (do Helm tạo) qua envFrom secretRef trong deployment.yaml → không commit secret.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-kz-config
+data:
+  SERVER_PORT: "8118"
+  GRPC_TARGET: "prediction-svc:8119"
+  AUTH_GRPC_TARGET: "auth-svc:8120"
+  POSTGRES_HOST: "db"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "go_stock_prediction"
+  DB_DRIVER: "postgresql"
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "console"
+  SERVICE_MGT_ENABLED: "false"
+  BACKUP_SCHEDULER_ENABLED: "false"

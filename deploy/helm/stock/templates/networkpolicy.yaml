@@ -57,7 +57,10 @@ spec:
     - from:
         - podSelector: { matchLabels: { app: api-svc } }
 ---
-# (4) db chỉ nhận từ backend (api/auth/prediction/service-mgt) trên :5432.
+# (4) db chỉ nhận từ backend (api/auth/prediction/service-mgt) + CronJob pipeline (app:
+#     pipeline — chạy image prediction-svc qua jobs_cli, cần db để crawl/predict/reconcile
+#     + pg_dump backup) trên :5432. CronJob pod chỉ có label auto job-name → PHẢI gắn thêm
+#     app: pipeline ở pod template (charts/cronjobs/*) nếu không default-deny chặn → wait-db treo.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -68,7 +71,7 @@ spec:
   policyTypes: ["Ingress"]
   ingress:
     - from:
-        - podSelector: { matchExpressions: [{ key: app, operator: In, values: ["api-svc","auth-svc","prediction-svc","service-mgt"] }] }
+        - podSelector: { matchExpressions: [{ key: app, operator: In, values: ["api-svc","auth-svc","prediction-svc","service-mgt","pipeline"] }] }
       ports:
         - { protocol: TCP, port: 5432 }
 ---

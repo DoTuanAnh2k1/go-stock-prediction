@@ -25,6 +25,8 @@ spec:
       backoffLimit: 2
       ttlSecondsAfterFinished: 1800
       template:
+        metadata:
+          labels: { app: pipeline }
         spec:
           restartPolicy: Never
           dnsConfig: { options: [ { name: ndots, value: "1" } ] }

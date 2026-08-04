@@ -1,0 +1,58 @@
+# api-kz Deployment (BASE). Image tag & replicas do overlay patch (P5).
+# SecurityContext (C3) + resources requests/limits (C6) + probes (O1/O2) đầy đủ.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-kz
+spec:
+  replicas: 2          # overlay patch: dev=1, prod=3
+  selector:
+    matchLabels:
+      app: api-kz
+  template:
+    metadata:
+      labels:
+        app: api-kz
+        tier: backend
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api-svc
+          image: api-svc:dev        # overlay patch tag qua images:
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8118
+          envFrom:
+            - configMapRef:
+                name: api-kz-config       # C1
+            - secretRef:
+                name: api-svc             # C2 — Secret do Helm tạo (không commit)
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          readinessProbe:
+            tcpSocket:
+              port: 8118
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8118
+            initialDelaySeconds: 15
+            periodSeconds: 20
