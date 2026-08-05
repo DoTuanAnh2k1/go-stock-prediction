@@ -1,0 +1,7 @@
+# Lab 2.4 — BASE kustomization. Chỉ gom resources; mọi khác biệt môi trường
+# (namespace, replicas, image tag, tên) do overlay quyết định => KHÔNG nhân đôi manifest.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml

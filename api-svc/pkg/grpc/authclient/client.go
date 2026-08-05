@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"go-stock-prediction/pkg/logger"
+	"go-stock-prediction/pkg/telemetry"
 	authpb "go-stock-prediction/proto/auth"
 
 	"google.golang.org/grpc"
@@ -19,7 +20,12 @@ var (
 // and initialises the singleton AuthServiceClient.
 func Init(target string) {
 	logger.Logger.Infof("authclient: connecting to auth service at %s", target)
-	c, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	c, err := grpc.NewClient(target,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		// Injects the current trace context into outbound RPC metadata so the
+		// span chains into the Java auth service.
+		telemetry.GRPCClientDialOption(),
+	)
 	if err != nil {
 		logger.Logger.Fatalf("authclient: failed to connect to %s: %v", target, err)
 		return

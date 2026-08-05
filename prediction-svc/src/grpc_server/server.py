@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import queue
+import time
 import threading
 from concurrent import futures
 
 import grpc
 
 from src.utils.logger import get_logger
+from src.telemetry import metrics as _metrics
 
 log = get_logger("grpc_server")
 
@@ -528,6 +530,45 @@ def _stream_predict(market_key: str, context):
 
 
 # -------------------------------------------------------------------
+# Metrics interceptor
+# -------------------------------------------------------------------
+
+class _MetricsInterceptor(grpc.ServerInterceptor):
+    """Records per-method RPC count, latency, and errors via prometheus_client."""
+
+    def intercept_service(self, continuation, handler_call_details):
+        handler = continuation(handler_call_details)
+        if handler is None:
+            return handler
+        method = handler_call_details.method or "unknown"
+        # Strip the service prefix: /prediction.PredictionService/TriggerTrain → TriggerTrain
+        method_short = method.rsplit("/", 1)[-1] if "/" in method else method
+
+        original = handler.unary_unary or handler.unary_stream or handler.stream_unary or handler.stream_stream
+
+        def _wrap(request, context):
+            start = time.monotonic()
+            error = False
+            try:
+                return original(request, context)
+            except Exception:
+                error = True
+                raise
+            finally:
+                _metrics.record_rpc(method_short, time.monotonic() - start, error=error)
+
+        if handler.unary_unary:
+            return handler._replace(unary_unary=_wrap)
+        if handler.unary_stream:
+            return handler._replace(unary_stream=_wrap)
+        if handler.stream_unary:
+            return handler._replace(stream_unary=_wrap)
+        if handler.stream_stream:
+            return handler._replace(stream_stream=_wrap)
+        return handler
+
+
+# -------------------------------------------------------------------
 # Server lifecycle
 # -------------------------------------------------------------------
 
@@ -538,8 +579,21 @@ def start_grpc_server(port: int) -> None:
     global _grpc_server
     pb2, pb2_grpc = _get_pb()
 
+    # Collect interceptors: OTel tracing (extracts W3C context) + Prometheus metrics.
+    interceptors: list[grpc.ServerInterceptor] = []
+
+    from src.telemetry.tracing import get_grpc_server_interceptor
+    otel_interceptor = get_grpc_server_interceptor()
+    if otel_interceptor is not None:
+        interceptors.append(otel_interceptor)
+
+    interceptors.append(_MetricsInterceptor())
+
     servicer = PredictionServicer()
-    _grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    _grpc_server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=10),
+        interceptors=interceptors,
+    )
     pb2_grpc.add_PredictionServiceServicer_to_server(servicer, _grpc_server)
     _grpc_server.add_insecure_port(f"[::]:{port}")
     _grpc_server.start()

@@ -1,0 +1,11 @@
+# Lab 2.4 — BASE Service (namespace-agnostic; overlay set namespace).
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-kz
+  labels: { app: web-kz }
+spec:
+  selector: { app: web-kz }
+  ports:
+    - port: 3000
+      targetPort: 3000

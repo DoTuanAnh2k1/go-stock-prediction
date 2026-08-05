@@ -65,6 +65,7 @@ import numpy as np
 
 from src.algorithms.base import PredictionAlgorithm, PredictionResult, get_max_change_pct
 from src.algorithms.features import MIN_DATA_POINTS, build_enhanced_features
+from src.storage.model_store import get_store
 from src.utils.logger import get_logger
 
 log = get_logger("rl_dqn")
@@ -623,6 +624,8 @@ class RLDQNPredictor(PredictionAlgorithm):
         """Try to load checkpoint for self._market_key (and optionally self._symbol_key). Returns True on success."""
         symbol = getattr(self, "_symbol_key", None)
         path = _checkpoint_path(self._market_key, symbol)
+        # Ensure local (downloads from S3 if backend=s3 and file missing locally).
+        path = get_store().ensure_local(path)
         if not os.path.exists(path):
             return False
         try:
@@ -660,6 +663,8 @@ class RLDQNPredictor(PredictionAlgorithm):
             }, path)
             log.info("rl_dqn.checkpoint.saved", market=self._market_key, symbol=symbol,
                      path=path, arch=self._arch)
+            # Upload to S3/MinIO (no-op for local backend).
+            get_store().upload_if_remote(path)
         except Exception as exc:
             log.warning("rl_dqn.checkpoint.save_failed", market=self._market_key, symbol=symbol, path=path, error=str(exc))
 

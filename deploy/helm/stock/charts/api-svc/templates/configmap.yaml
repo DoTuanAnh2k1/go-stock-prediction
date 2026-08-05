@@ -1,0 +1,33 @@
+# =============================================================================
+# api-svc — env KHÔNG nhạy cảm (cấu hình chung). Cặp với secret.yaml.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config
+  namespace: {{ .Release.Namespace }}
+data:
+  SERVER_PORT: "8118"
+  DB_DRIVER: postgresql
+  POSTGRES_HOST: "db"            # = tên Service DB
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: go_stock_prediction
+  POSTGRES_USER: postgres
+  GRPC_TARGET: "prediction-svc:8119"
+  AUTH_GRPC_TARGET: "auth-svc:8120"
+  SERVICE_MGT_ENABLED: "false"
+  LOG_LEVEL: INFO
+  DB_LOG_LEVEL: WARN
+  ADMIN_USERNAME: admin
+  BACKUP_DIR: /backups
+  DOCS_ROOT: /repo
+  ALLOWED_ORIGINS: "https://localhost"
+  # In k8s the daily_backup job runs as a CronJob, not in-process. Compose keeps
+  # the in-app scheduler (env unset there → default true).
+  BACKUP_SCHEDULER_ENABLED: "false"
+  # ---- OpenTelemetry tracing (OTLP/gRPC → collector in ns observability) ----
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability:4317"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  OTEL_SERVICE_NAME: "api-svc"
+  OTEL_TRACES_SAMPLER: "parentbased_always_on"
+  OTEL_RESOURCE_ATTRIBUTES: "service.namespace=stock,deployment.environment=kind"

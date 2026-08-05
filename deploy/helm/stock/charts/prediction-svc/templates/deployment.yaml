@@ -1,0 +1,129 @@
+# =============================================================================
+# prediction-svc — Python gRPC (:8119). Crawling + 13 thuật toán ML + scheduler.
+#
+# Build & load image (repo root, vì Dockerfile lấy proto từ api-svc/):
+#   docker build -t prediction-svc:dev -f deploy/prediction-svc.Dockerfile .
+#   kind load docker-image prediction-svc:dev --name ckad
+#
+# Multi-container pod (pattern 4-container — CKAD):
+#   init  wait-db        — chờ DB Ready (SQLAlchemy connect lúc khởi động). [stock.waitDb]
+#   app   prediction-svc — gRPC :8119; tee log cho sidecar.
+#   amb   nginx          — ambassador gRPC :18119 → localhost:8119.         [stock.nginxAmbassador]
+#   side  log-sidecar    — tail -f log app qua emptyDir chung.              [stock.logSidecar]
+# Metrics :9464 KHÔNG qua nginx (Prometheus scrape thẳng).
+# Boilerplate lặp gom vào library chart charts/common (_ambassador.tpl).
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prediction-svc-nginx
+  namespace: {{ .Release.Namespace }}
+data:
+  nginx.conf: |
+    {{- include "stock.nginxConf.grpc" (dict "listen" 18119 "upstream" 8119) | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prediction-svc
+  namespace: {{ .Release.Namespace }}
+  labels: { app: prediction-svc }
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels: { app: prediction-svc }
+  template:
+    metadata:
+      labels: { app: prediction-svc }
+      annotations:
+        # Prometheus pod scrape annotations (kubernetes_sd)
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: prediction-svc    # CKAD 3.3 — SA riêng (automount:false, không gọi API)
+      tolerations:                          # HA: chạy được trên node control-plane (dùng cả 3 node)
+        {{- include "stock.tolerations" . | nindent 8 }}
+      topologySpreadConstraints:            # HA: rải pod đều các node
+        {{- include "stock.topologySpread" "prediction-svc" | nindent 8 }}
+      # fsGroup: app chạy USER appuser (non-root) → ghi được emptyDir "logs" (group-writable).
+      # seccompProfile RuntimeDefault (CKAD 3.2): áp seccomp mặc định của runtime cho mọi container.
+      securityContext:
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
+      # dnsConfig ndots:1 — mạng hotspot/ISP hijack NXDOMAIN: ndots:5 mặc định nối
+      # search-domain rác (tailf643c3.ts.net / DHCP rò từ resolv.conf host) vào tên
+      # external (crawler_fundamentals yfinance, ...) → ISP trả IP parking → connect
+      # timeout. ndots:1 ép query FQDN trước → IP thật. Tên in-cluster 1 nhãn 0 dots
+      # (db, service-mgt) vẫn expand bình thường.
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
+      # image prediction-svc (Python) không có pg_isready nên wait-db dùng image timescaledb.
+      initContainers:
+        {{- include "stock.waitDb" (dict "image" "timescale/timescaledb:latest-pg16") | nindent 8 }}
+      containers:
+        # ---- App: gRPC :8119; tee log cho sidecar ----
+        - name: prediction-svc
+          image: "{{ .Values.global.images.predictionSvc }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: IfNotPresent
+          # CKAD 3.2 — image build USER appuser uid=1000 (Dockerfile `useradd -u 1000`).
+          # runAsNonRoot enforce fail-closed (UID số nên kubelet verify được non-root).
+          # KHÔNG readOnlyRootFilesystem: torch/matplotlib/numba ghi cache /tmp + ~/.cache lúc load.
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command: ["sh", "-c", "set -o pipefail; python -m src.main 2>&1 | tee /var/log/app/prediction.log"]
+          ports:
+            - name: grpc
+              containerPort: 8119
+            - name: metrics
+              containerPort: 9464
+          envFrom:
+            - configMapRef: { name: prediction-config }
+            - secretRef:    { name: prediction-secret }
+          resources:
+            requests: { cpu: "250m", memory: "512Mi" }
+            limits:   { cpu: "1500m", memory: "2Gi" }   # torch/ML nặng RAM
+          # ---- Health probes: tcpSocket :8119 (trỏ THẲNG app, gRPC không đăng ký health.v1) ----
+          # CKAD 5.1 — startupProbe cho container slow-start: torch import + ML init + DB connect
+          # có thể mất 30–120s. startupProbe chạy TRƯỚC, gate liveness/readiness → liveness KHÔNG
+          # giết pod oan trong lúc khởi động chậm (bỏ nhu cầu initialDelaySeconds dài trên liveness).
+          startupProbe:
+            tcpSocket:
+              port: 8119
+            periodSeconds: 5
+            failureThreshold: 30        # tối đa ~150s để app mở cổng gRPC
+          readinessProbe:
+            tcpSocket:
+              port: 8119
+            periodSeconds: 10           # startupProbe đã gate → không cần initialDelaySeconds
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 8119
+            periodSeconds: 20
+            failureThreshold: 3
+          volumeMounts:
+            - name: models
+              mountPath: /models
+            - name: logs
+              mountPath: /var/log/app
+        # ---- Ambassador nginx: reverse-proxy gRPC :18119 → localhost:8119 ----
+        {{- include "stock.nginxAmbassador" (dict "portName" "grpc-proxy" "port" 18119) | nindent 8 }}
+        # ---- Sidecar: xem log app qua emptyDir chung ----
+        {{- include "stock.logSidecar" (dict "image" (printf "%s:%s" .Values.global.images.predictionSvc .Values.global.imageTag) "logfile" "prediction.log") | nindent 8 }}
+      volumes:
+        - name: models
+          # emptyDir — ephemeral local cache (model files are read-through from S3/MinIO
+          # at load time when MODEL_STORE_BACKEND=s3; populated per-pod on first load).
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}                 # chia sẻ giữa app "prediction-svc" và "log-sidecar"
+        - name: nginx-conf
+          configMap: { name: prediction-svc-nginx }

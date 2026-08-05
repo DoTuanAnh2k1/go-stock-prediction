@@ -4,7 +4,8 @@
 
 ```
 api-svc/cmd/main.go                         # API Backend entry point — config → timezone → logger → repository → grpcclient → backup_scheduler → server
-api-svc/pkg/config/                         # Load .env, trả về config struct toàn cục (bao gồm GRPCConfig)
+api-svc/pkg/config/                         # Load .env, trả về config struct toàn cục (bao gồm GRPCConfig, BackupSchedulerEnabled)
+api-svc/pkg/telemetry/                      # OTel tracing (tracing.go), Prometheus metrics (metrics.go), sampler (sampler.go) — factor 14
 api-svc/pkg/grpc/client/client.go           # gRPC client singleton — API Backend dùng để gọi Python Prediction Service
 api-svc/pkg/grpc/authclient/client.go       # gRPC client singleton — API Backend dùng để gọi Java Auth Service
 api-svc/proto/prediction/prediction.proto   # gRPC service definitions (shared với Python service)
@@ -45,7 +46,7 @@ api-svc/pkg/server/api_users.go                   # CRUD /api/users — quản l
 api-svc/pkg/server/api_market_groups.go           # CRUD /api/market-groups (admin only)
 api-svc/pkg/server/api_schedules.go               # GET /api/schedules, PUT /api/schedules/{key}
 api-svc/pkg/server/api_backup.go                  # GET/POST/DELETE /api/backups; runBackup(ctx) dùng chung
-api-svc/pkg/server/backup_scheduler.go            # StartBackupScheduler(store) — poll DB 60s, seed daily_backup
+api-svc/pkg/server/backup_scheduler.go            # StartBackupScheduler(store) — poll DB 60s, seed daily_backup; guard BACKUP_SCHEDULER_ENABLED
 api-svc/pkg/server/api_simulation.go              # GET /api/simulation/leaderboard, bots, trades, chart; PUT config; POST toggle/run
 api-svc/pkg/server/api_monitoring.go              # GET /api/monitoring/overview, /api/monitoring/bots
 api-svc/pkg/server/api_pipeline_reports.go        # GET /api/pipeline-reports
@@ -89,7 +90,7 @@ prediction-svc/
 ├── deploy/prediction-svc.Dockerfile    # Multi-stage: proto-builder → python:3.12-slim; build context = repo root
 ├── pyproject.toml                      # Dependencies: torch, statsmodels, lightgbm, xgboost, grpcio, APScheduler, SQLAlchemy, pandas-ta; optuna [ml]
 ├── src/
-│   ├── main.py                         # Entry point — config → timezone → logger → DB → gRPC → scheduler → registry_client → signal wait
+│   ├── main.py                         # Entry point — config → timezone → logger → DB → gRPC → scheduler (skip nếu SCHEDULER_ENABLED=false) → registry_client → signal wait
 │   ├── config.py                       # Pydantic Settings (env vars; service_mgt_enabled, registry_grpc_target)
 │   ├── registry_client.py              # RegistryClient — register/heartbeat daemon thread; re-register khi NOT_FOUND
 │   ├── database/
@@ -122,9 +123,15 @@ prediction-svc/
 │   │   ├── sp500.py                    # Yahoo Finance — 16 S&P 500 symbols
 │   │   ├── fundamentals.py             # yfinance — báo cáo tài chính NASDAQ+SP500 → stock_fundamentals (tuần)
 │   │   └── sanity.py                   # Crawl sanity guard: check_update() persistence-confirmed daily gate + batch_outlier_mask() bilateral intraday spike filter
+│   ├── storage/
+│   │   └── model_store.py              # ModelStore abstraction: backend local|s3; ensure_local()/upload_if_remote(); singleton get_store(); wire vào rl_dqn/transformer/meta_stack
+│   ├── telemetry/
+│   │   ├── tracing.py                  # OTel SDK tracing setup — OTLP/gRPC exporter → otel-collector.observability:4317
+│   │   └── metrics.py                  # Prometheus client — HTTP metrics server :9464
 │   ├── scheduler/
-│   │   ├── manager.py                  # APScheduler + DB-backed CronSchedule; poll 60s; DEFAULT_SCHEDULES
-│   │   └── jobs.py                     # Định nghĩa tất cả jobs (_run_pipeline, train, reconcile)
+│   │   ├── manager.py                  # APScheduler + DB-backed CronSchedule; poll 60s; DEFAULT_SCHEDULES; guard SCHEDULER_ENABLED
+│   │   └── jobs.py                     # Định nghĩa tất cả jobs (_run_pipeline, train, reconcile); JOB_FUNCTIONS dict (dùng bởi jobs_cli.py)
+│   ├── jobs_cli.py                     # CLI entrypoint cho k8s Job/CronJob: `python -m src.jobs_cli <job_key|gold|nasdaq|crypto|sp500>`; --list; exit 0/1/2; KHÔNG gRPC KHÔNG scheduler
 │   ├── orchestrator/
 │   │   ├── runner.py                   # run_for_market(key); target = now+1h; is_intraday_open guard NASDAQ/SP500
 │   │   ├── training.py                 # reconcile_predictions(only_market=None); train_for_market(); train_meta_for_market(); train_meta_all()
@@ -158,7 +165,7 @@ auth-svc/                               # Spring Boot 3 Java Auth Service — gR
 │                                       # GrpcLoggingInterceptor (@GrpcGlobalServerInterceptor) — log 1 dòng/RPC
 │                                       # RegistryClient — @EventListener register, @Scheduled(10s) heartbeat, @PreDestroy deregister
 ├── src/main/proto/
-│   ├── auth.proto                      # Bản Java (đồng bộ với api-svc/proto/auth/auth.proto)
+│   ├── auth.proto                      # KHÔNG SỬA TAY — generated bởi `make proto-auth-sync` (copy từ api-svc/proto/auth/auth.proto)
 │   └── registry.proto                  # Copy của service-mgt/proto/registry/registry.proto
 └── src/main/resources/
     ├── application.yml                 # spring.output.ansi.enabled: always; cấu hình service-mgt
@@ -260,7 +267,7 @@ service-mgt/                                # Go Service Registry — gRPC :8121
 
 ```
 deploy/
-├── docker-compose.yaml          # Toàn bộ stack
+├── docker-compose.yaml          # Toàn bộ stack; thêm service ofelia (container-native cron); SCHEDULER_ENABLED=false + BACKUP_SCHEDULER_ENABLED=false trên các service liên quan
 ├── docker-compose.test.yml      # Test stack
 ├── api-svc.Dockerfile           # Go API Backend (build context = repo root)
 ├── auth-svc.Dockerfile          # Java Auth Service
@@ -268,5 +275,53 @@ deploy/
 ├── web-svc.Dockerfile           # React Frontend
 ├── gateway-svc.Dockerfile       # Rust Gateway
 ├── cli-svc.Dockerfile           # Go CLI (build context = ../cli-svc riêng)
-└── service-mgt.Dockerfile       # Go Service Registry (build context = ../service-mgt)
+├── service-mgt.Dockerfile       # Go Service Registry (build context = ../service-mgt)
+├── helm/
+│   ├── README.md                # Hướng dẫn deploy Helm (helm install / helm upgrade)
+│   ├── stock/                   # UMBRELLA CHART ns stock — mỗi service là 1 subchart trong charts/
+│   │   ├── Chart.yaml           # dependencies: 12 subchart (common library + db, minio, service-mgt, prediction-svc, auth-svc, api-svc, gateway-svc, web-svc, cli-svc, pgadmin, cronjobs). Vendored trong charts/ nên KHÔNG cần `helm dependency build`
+│   │   ├── values.yaml          # CHỈ `global:` — imageTag (default dev), images.*, secrets.*, bluegreen.enabled (true), pgadmin.enabled (true), manualJob.enabled (false), pdb.enabled (true). Giá trị dùng chung → subchart đọc qua `.Values.global.*`
+│   │   ├── templates/           # CHỈ cross-cutting: `pdb.yaml` (PodDisruptionBudget mọi service; đọc global.pdb/global.pgadmin) + `NOTES.txt`
+│   │   └── charts/              # SUBCHART — mỗi service/thành phần 1 chart con (Chart.yaml version 0.1.0 + values.yaml chỉ giữ `replicas` + templates/ bỏ prefix `<svc>-`)
+│   │       ├── common/          #   LIBRARY CHART (type: library) — templates/_ambassador.tpl: named template stock.tolerations / topologySpread / waitDb / logSidecar / nginxAmbassador / nginxConf.grpc. Define dùng chung TOÀN CỤC cho mọi subchart (không cần khai báo lại per-subchart)
+│   │       ├── api-svc/         #   templates/{deployment,bluegreen,configmap,secret,service}.yaml — 4-container; bluegreen gated `global.bluegreen.enabled` (2 màu range blue/green + Service api-svc-{blue,green} targetPort 18118; nginx proxy_buffering off cho SSE)
+│   │       ├── auth-svc/        #   {deployment,configmap,secret,service} — nginx grpc :18120; mgmt 9464 thẳng
+│   │       ├── prediction-svc/  #   {deployment,configmap,secret,service,pvc} — replicas=2, nginx grpc :18119, fsGroup 2000, dnsConfig ndots:1
+│   │       ├── service-mgt/     #   {deployment,configmap,secret,service} — nginx grpc :18121, fsGroup 2000
+│   │       ├── cli-svc/         #   {deployment,configmap,secret,service} — init fix-keys-perms + nginx stream TCP :12345 (runAsUser 0); Service NodePort targetPort 12345
+│   │       ├── gateway-svc/     #   {deployment,configmap,rbac,service} — LoadBalancer :80/:443; KHÔNG áp ambassador
+│   │       ├── web-svc/         #   {deployment,bluegreen,service} — bluegreen gated `global.bluegreen.enabled`
+│   │       ├── db/             #   {statefulset,service,secret} — StatefulSet TimescaleDB
+│   │       ├── minio/          #   templates/minio.yaml — Secret+PVC+Deployment+Service+createbucket Job (bucket models)
+│   │       ├── pgadmin/        #   {deployment,configmap,secret,service} — gated `global.pgadmin.enabled`
+│   │       └── cronjobs/       #   cronjob-{gold,nasdaq,crypto,sp500,train,weekly,backup,simulation}.yaml + job-manual.yaml (gated `global.manualJob.enabled`)
+│   └── observability/           # Chart ns observability — vòng đời độc lập (helm upgrade stock không đụng)
+│       ├── Chart.yaml
+│       ├── values.yaml
+│       └── templates/           # 6 template: otel-collector.yaml, prometheus.yaml, tempo.yaml, grafana.yaml, node-exporter.yaml, kube-state-metrics.yaml
+└── k8s/
+    └── ckad-labs/               # Manifest thô lưu trữ cho CKAD lab — KHÔNG dùng để deploy stack chính
 ```
+
+**Deploy k8s (Helm):**
+
+```bash
+# Lần đầu — tạo namespace + ConfigMap schema (ngoài Helm quản lý), rồi install
+kubectl create namespace stock
+kubectl create configmap db-schema -n stock --from-file=01-schema.sql=database.sql
+helm install stock deploy/helm/stock -n stock
+helm install observability deploy/helm/observability -n observability --create-namespace
+
+# Cập nhật (image mới, thay đổi values...)
+helm upgrade stock deploy/helm/stock -n stock [--set global.imageTag=v2]
+helm upgrade observability deploy/helm/observability -n observability
+```
+
+Lưu ý: db-schema ConfigMap KHÔNG do Helm quản lý (tạo thủ công trước `helm install`).
+
+**Umbrella + subchart:** `stock` là umbrella, mỗi service = 1 subchart trong `charts/<svc>/`. Subchart vendored sẵn nên KHÔNG cần `helm dependency build`. Giá trị dùng chung ở `global:`; đường dẫn `--set` đổi theo:
+- Toggle nằm ở global: `--set global.bluegreen.enabled=false` (default **true**), `--set global.pgadmin.enabled=false`, `--set global.manualJob.enabled=true`.
+- Replicas per-subchart: `--set <svc>.replicas=N` (vd `--set web-svc.replicas=4`) — KHÔNG còn `replicas.web`.
+- Image tag chung: `--set global.imageTag=v2`.
+
+`global.bluegreen.enabled=true` mặc định (gateway route cứng `/api→api-svc-<color>`); `=false` → biến thể single (chỉ dùng khi gateway hỗ trợ base routing).

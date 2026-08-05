@@ -33,6 +33,31 @@ jwt:
   secret: ${JWT_SECRET:change-me-in-production}
   expiration-ms: 86400000      # 24h
 
+# =============================================================================
+# Actuator (factor 14 — metrics + health probes).
+# auth-svc là gRPC-only → thêm spring-boot-starter-web cấp Tomcat, chạy HTTP trên
+# server.port=9464 (KHÔNG tách management context — đơn giản, chắc chắn có listener).
+# gRPC vẫn ở grpc.server.port=8120 (riêng biệt, không đụng). /actuator/prometheus
+# (metrics) và /actuator/health/{readiness,liveness} nằm trên :9464. Prometheus
+# scrape qua pod annotation prometheus.io/port=9464.
+# =============================================================================
+server:
+  port: ${MANAGEMENT_PORT:9464}       # Tomcat HTTP cho Actuator (gRPC tách riêng ở grpc.server.port)
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
+  endpoint:
+    health:
+      probes:
+        enabled: true          # health groups readiness/liveness cho k8s probe
+      show-details: always
+  metrics:
+    tags:
+      application: auth-svc
+
 service-mgt:
   enabled: ${SERVICE_MGT_ENABLED:false}
   target: ${REGISTRY_GRPC_TARGET:service-mgt:8121}

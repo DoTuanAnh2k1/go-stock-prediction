@@ -1,0 +1,783 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CKAD Labs — go-stock-prediction (kind ckad)</title>
+<style>
+  :root{
+    --bg:#0d1117; --bg2:#161b22; --bg3:#1c2430; --line:#2b3441;
+    --fg:#c9d1d9; --dim:#8b949e; --accent:#3fb950; --accent2:#58a6ff;
+    --amber:#d29922; --red:#f85149; --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  header{display:flex;align-items:center;gap:14px;padding:14px 20px;background:var(--bg2);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  header .dot{width:11px;height:11px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+  header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.2px}
+  header .sub{color:var(--dim);font-size:12px;font-family:var(--mono)}
+  .wrap{display:grid;grid-template-columns:278px minmax(0,1fr);min-height:calc(100vh - 53px)}
+  .side{background:var(--bg2);border-right:1px solid var(--line);position:sticky;top:53px;align-self:start;max-height:calc(100vh - 53px);overflow:auto;display:flex;flex-direction:column}
+  nav{padding:10px}
+  .day{display:flex;align-items:center;gap:7px;padding:9px 10px;cursor:pointer;border-radius:8px;font-weight:700;font-size:12.5px;color:var(--fg);user-select:none}
+  .day:hover{background:var(--bg3)}
+  .day .caret{color:var(--dim);width:12px;display:inline-block}
+  .day-labs.collapsed{display:none}
+  .day-labs{margin:2px 0 8px 6px;border-left:1px solid var(--line);padding-left:6px}
+  .lab{display:block;width:100%;text-align:left;background:none;border:1px solid transparent;color:var(--fg);padding:8px 10px;border-radius:8px;cursor:pointer;margin-bottom:3px}
+  .lab:hover{background:var(--bg3)}
+  .lab.on{background:var(--bg3);border-color:var(--line)}
+  .lab .id{font-family:var(--mono);color:var(--accent2);font-size:12px}
+  .lab .t{display:block;font-weight:600;margin-top:1px;font-size:13px}
+  .lab .meta{color:var(--dim);font-size:11px}
+  .st-done{color:var(--accent)} .st-planned{color:var(--amber)} .st-ref{color:var(--accent2)}
+  main{padding:24px 40px;overflow:auto;min-width:0}
+  /* mục lục section — nằm dưới cây lab ở CỘT TRÁI, nhảy tới từng section */
+  .toc{border-top:1px solid var(--line);padding:12px 10px 16px;margin-top:4px}
+  .toc .lbl{color:var(--dim);font-size:10px;letter-spacing:.7px;text-transform:uppercase;margin:0 0 8px 8px}
+  .toc a{display:block;padding:6px 10px;color:var(--dim);border-radius:6px;font-size:12px;border-left:2px solid transparent;text-decoration:none;cursor:pointer}
+  .toc a:hover{background:var(--bg3);color:var(--fg)}
+  .toc a.on{color:var(--accent);border-left-color:var(--accent);background:var(--bg3)}
+  /* section "Các bước chạy" — runbook đánh số */
+  ol.steps{margin:0;padding:14px 16px 14px 18px;counter-reset:s;list-style:none}
+  ol.steps li{counter-increment:s;position:relative;padding:7px 0 7px 34px;border-bottom:1px dashed #222a34}
+  ol.steps li:last-child{border-bottom:0}
+  ol.steps li:before{content:counter(s);position:absolute;left:0;top:6px;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;background:var(--bg3);border:1px solid var(--line);color:var(--accent);font-family:var(--mono);font-size:11px;font-weight:700}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 18px}
+  .badge{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+  .badge.done{color:var(--accent);border-color:#20402a;background:#0f2015}
+  .badge.planned{color:var(--amber);border-color:#3a2f12;background:#20180a}
+  .badge.ref{color:var(--accent2);border-color:#173154;background:#0d1d33}
+  h2.title{margin:0;font-size:24px}
+  section{margin:22px 0;border:1px solid var(--line);border-radius:12px;background:var(--bg2);overflow:hidden}
+  section > .h{display:flex;align-items:center;gap:8px;padding:11px 16px;background:var(--bg3);border-bottom:1px solid var(--line);font-weight:700;font-size:13px;letter-spacing:.3px;text-transform:uppercase}
+  section > .h .k{color:var(--accent)}
+  section .body{padding:14px 16px}
+  section .body p{margin:0 0 8px}
+  ul.know{margin:0;padding-left:0;list-style:none}
+  ul.know li{padding:6px 0 6px 22px;position:relative;border-bottom:1px dashed #222a34}
+  ul.know li:last-child{border-bottom:0}
+  ul.know li:before{content:"▸";position:absolute;left:4px;color:var(--accent2)}
+  code{font-family:var(--mono);background:#0b1622;color:#9cdcfe;padding:1px 5px;border-radius:4px;font-size:.92em}
+  .cmd{display:flex;align-items:flex-start;gap:10px;padding:9px 12px;font-family:var(--mono);font-size:12.5px;border-top:1px solid #202833}
+  .cmd:first-child{border-top:0}
+  .cmd .code{flex:1;white-space:pre-wrap;word-break:break-word;color:#e6edf3}
+  .cmd .code .note{color:var(--dim)}
+  .cmd .code .prompt{color:var(--accent)}
+  .cmd button.cp{background:var(--bg3);border:1px solid var(--line);color:var(--dim);border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px;flex:none}
+  .cmd button.cp:hover{color:var(--fg)}
+  pre.cmd-out{margin:0;padding:9px 14px 12px 26px;background:#0b0f14;color:#9aa4ae;font-family:var(--mono);font-size:11.5px;white-space:pre-wrap;word-break:break-word;border-top:1px dashed #1b232d}
+  pre.cmd-out:before{content:"↳ output";display:block;color:#4b5563;font-size:10px;letter-spacing:.5px;margin-bottom:3px}
+  pre.out{margin:0;padding:14px 16px;background:#0b0f14;color:#b9c2cc;font-family:var(--mono);font-size:12px;white-space:pre-wrap;word-break:break-word;overflow:auto}
+  .ok{color:var(--accent)} .bad{color:var(--red)} .hi{color:var(--accent2)}
+  pre.tool{color:var(--amber)}
+  a{color:var(--accent2)}
+  .foot{color:var(--dim);font-size:11px;margin-top:30px;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<header>
+  <span class="dot"></span>
+  <div>
+    <h1>CKAD Labs — go-stock-prediction</h1>
+    <div class="sub">cluster kind <b>ckad</b> · ns <b>stock</b> · reading room (không cần đọc README)</div>
+  </div>
+</header>
+<div class="wrap">
+  <div class="side">
+    <nav id="nav"></nav>
+    <div class="toc" id="toc"></div>
+  </div>
+  <main id="main"></main>
+</div>
+
+<script>
+// ===========================================================================
+// DỮ LIỆU LAB — data-driven. Mỗi lab:
+//   {id,title,domain,duration,status, request, knowledge[], commands[{cmd,note,out}], tool?}
+// commands[].out = output THẬT của riêng lệnh đó (bỏ trống nếu chưa chạy).
+// status: "done" | "planned" | "ref"
+// ===========================================================================
+const DATA = {
+  "Day 1 — Pod design & imperative": [
+    {
+      id:"1.1", title:"The 60-Second Pod", domain:"App Design & Build (20%)", duration:"~45m", status:"ref",
+      prep:["Không cần chuẩn bị — drill imperative thuần."],
+      cleanup:["<code>kubectl delete pod web</code>"],
+      request:"Tạo Pod bằng lệnh (imperative) có labels + env + resources, export YAML bằng --dry-run, verify không cần mở editor (đường exam-speed).",
+      steps:[
+        "Sinh manifest imperative: <code>kubectl run web --image=nginx --restart=Never --labels=app=web,tier=frontend --env=ENV=dev --dry-run=client -o yaml > pod.yaml</code>.",
+        "Thêm <code>resources.requests/limits</code> vào pod.yaml (kubectl run không có flag đủ).",
+        "Tạo: <code>kubectl apply -f pod.yaml</code>.",
+        "Verify không mở editor: <code>kubectl get pod web -o wide --show-labels</code> · <code>kubectl describe pod web</code>."
+      ],
+      knowledge:[
+        "<code>kubectl run</code> tạo Pod nhanh; <code>--restart=Never</code> = Pod (không phải Deployment).",
+        "<code>--dry-run=client -o yaml</code> in manifest mà KHÔNG tạo — nền tảng mọi thao tác nhanh.",
+        "resources requests/limits phải thêm tay vào YAML (kubectl run không có flag đủ).",
+        "Verify bằng <code>kubectl get -o wide</code> / <code>describe</code> thay vì mở editor."
+      ],
+      commands:[
+        {cmd:"kubectl run web --image=nginx --restart=Never \\\n  --labels=app=web,tier=frontend --env=ENV=dev \\\n  --dry-run=client -o yaml > pod.yaml", note:"sinh manifest, chưa tạo", out:"# ghi ra pod.yaml — chưa tạo gì trên cluster"},
+        {cmd:"kubectl apply -f pod.yaml", note:"tạo thật sau khi thêm resources", out:"pod/web created"},
+        {cmd:"kubectl get pod web -o wide --show-labels", note:"verify nhanh", out:"NAME   READY   STATUS    IP           LABELS\nweb    1/1     Running   10.244.x.y   app=web,tier=frontend"}
+      ]
+    },
+    {
+      id:"1.2", title:"Init + Sidecar Pattern", domain:"App Design & Build (20%)", duration:"~60m", status:"done",
+      prep:["⚠️ api-svc đã là blue/green → label <code>app=api-svc</code> OVERLAP. Demo vào ns riêng, hoặc apply-xem-rồi-xóa NGAY."],
+      cleanup:["<code>kubectl delete deploy api-svc -n stock</code> — xóa ngay kẻo lẫn blue/green."],
+      request:"Dựng Pod nhiều container (initContainer + app + sidecar), chia data qua emptyDir, đọc log app QUA sidecar. Nhúng thẳng vào Deployment api-svc thật.",
+      steps:[
+        "Apply Deployment api-svc (đã nhúng init+sidecar): <code>kubectl apply -f deploy/k8s/api-svc/deployment.yaml</code>.",
+        "Chờ <code>kubectl rollout status deploy/api-svc -n stock</code> → Pod 2/2 Running.",
+        "Xác nhận init chờ DB: <code>kubectl logs $POD -c wait-db</code> → 'db is ready'.",
+        "Đọc log app QUA sidecar: <code>kubectl logs $POD -c log-sidecar -f</code>."
+      ],
+      knowledge:[
+        "initContainer chạy TUẦN TỰ tới hoàn tất, chặn app/sidecar tới khi DB sẵn sàng.",
+        "app + sidecar chạy SONG SONG trong cùng Pod, trao đổi qua <code>emptyDir</code> chung.",
+        "<code>securityContext.fsGroup</code> chown volume + thêm supplemental group ⇒ app non-root ghi được (image chạy uid 100/gid 101, không cần khớp 2000).",
+        "<code>set -o pipefail</code> để <code>app | tee</code> vẫn trả đúng exit code (không bị tee nuốt).",
+        "Đọc log 1 container: <code>kubectl logs POD -c &lt;container&gt;</code>."
+      ],
+      commands:[
+        {cmd:"kubectl apply -f deploy/k8s/api-svc/deployment.yaml", note:"Deployment = lời giải 1.2", out:"deployment.apps/api-svc configured"},
+        {cmd:"kubectl rollout status deploy/api-svc -n stock", note:"", out:"deployment \"api-svc\" successfully rolled out"},
+        {cmd:"kubectl get pods -n stock -l app=api-svc", note:"chờ 2/2", out:"NAME                       READY   STATUS    RESTARTS\napi-svc-8476f74597-v8rg8   2/2     Running   0"},
+        {cmd:"kubectl logs $POD -n stock -c wait-db", note:"init chờ DB", out:"waiting for db:5432 ...\ndb:5432 - accepting connections\ndb is ready"},
+        {cmd:"kubectl logs $POD -n stock -c log-sidecar -f", note:"đọc log app qua sidecar", out:"HTTP server listening on 0.0.0.0:8118"}
+      ]
+    },
+    {
+      id:"1.3", title:"Jobs & CronJobs", domain:"App Design & Build (20%)", duration:"~45m", status:"done",
+      prep:["4 CronJob pipeline chạy sẵn: <code>kubectl get cronjob,job -n stock</code> (job hậu-tố-số = CronJob tự đẻ theo lịch)."],
+      cleanup:["<code>kubectl delete job verify-crypto -n stock</code>"],
+      request:"Job run-to-completion (backoffLimit) + CronJob theo lịch; phân biệt với Deployment. Chuyển pipeline crawl 4 market sang k8s-native (Cách 2).",
+      steps:[
+        "Sửa code: thêm entrypoint run-once <code>src/jobs_cli.py</code> + disable crawler trong <code>DEFAULT_SCHEDULES</code> (manager.py).",
+        "Rebuild image prediction-svc → <code>kind load</code> → <code>kubectl rollout restart deploy/prediction-svc</code>; verify scheduler không còn add crawler.",
+        "Apply 4 CronJob: <code>kubectl apply -f deploy/k8s/pipeline/</code>; kiểm tra <code>kubectl get cronjob -n stock</code>.",
+        "Chạy thử ngay (không chờ lịch): <code>kubectl create job verify-crypto --from=cronjob/pipeline-crypto -n stock</code>.",
+        "Chờ + xem pipeline TỰ chạy trong pod: <code>kubectl wait --for=condition=complete</code> rồi <code>kubectl logs -l job-name=verify-crypto</code>.",
+        "(tuỳ chọn) demo retry: Job <code>exit 1</code> → 3 Pod Error → Job Failed (BackoffLimitExceeded)."
+      ],
+      knowledge:[
+        "Job đẻ Pod (ownerReference); xóa Job ⇒ Pod bị GC theo. Pod Complete KHÔNG restart, KHÔNG xóa (giữ để xem log).",
+        "<b>CronJob biết Job thành/bại qua status, KHÔNG đọc log:</b> exit code container → Pod phase → Job condition (Complete/Failed) → CronJob đọc <code>.status</code>.",
+        "<code>restartPolicy: Never</code> (đẻ Pod mới khi fail) vs <code>OnFailure</code> (restart container tại chỗ). Bắt buộc, không được Always.",
+        "<code>backoffLimit</code> = số retry; hết ⇒ Job Failed (reason <code>BackoffLimitExceeded</code>).",
+        "CronJob = 'đồng hồ' đẻ Job đúng giờ; <code>concurrencyPolicy: Forbid</code>, <code>timeZone</code>, <code>ttlSecondsAfterFinished</code>, history limits. Cron k8s 5 trường (khác APScheduler 6).",
+        "k8s-native: Pod TỰ chạy việc (<code>python -m src.jobs_cli &lt;market&gt;</code>) rồi <code>sys.exit(0/1)</code> — exit code là tín hiệu success duy nhất.",
+        "Go (compiled) thì không 'chạy file' — thêm subcommand vào binary rồi build lại: <code>./api-server run-pipeline gold</code>."
+      ],
+      commands:[
+        {cmd:"kubectl apply -f deploy/k8s/pipeline/", note:"4 CronJob (không apply job-manual)", out:"cronjob.batch/pipeline-gold created\ncronjob.batch/pipeline-crypto created\ncronjob.batch/pipeline-nasdaq created\ncronjob.batch/pipeline-sp500 created"},
+        {cmd:"kubectl get cronjob -n stock", note:"SCHEDULE + TIMEZONE + SUSPEND", out:"NAME              SCHEDULE         TIMEZONE           SUSPEND   ACTIVE\npipeline-crypto   0 * * * *        Asia/Ho_Chi_Minh   False     0\npipeline-gold     0 * * * *        Asia/Ho_Chi_Minh   False     0\npipeline-nasdaq   15 * * * 1-5     Asia/Ho_Chi_Minh   False     0\npipeline-sp500    0,30 * * * 1-5   Asia/Ho_Chi_Minh   False     0"},
+        {cmd:"kubectl create job verify-crypto --from=cronjob/pipeline-crypto -n stock", note:"chạy ngay, không chờ lịch", out:"job.batch/verify-crypto created"},
+        {cmd:"kubectl wait --for=condition=complete job/verify-crypto -n stock --timeout=240s", note:"", out:"job.batch/verify-crypto condition met"},
+        {cmd:"kubectl logs -n stock -l job-name=verify-crypto", note:"pipeline TỰ chạy trong pod", out:"jobs_cli.start market=crypto\ncrypto.crawl.done errors=0 saved=3\npipeline.crawl.done market=CRYPTO saved=3\npredict.crypto.start algorithms=13 coins=3\nsim.live_step.market_start bots=146 market=CRYPTO\npipeline.reconcile.done market=CRYPTO scored=0\ncrypto.intraday.done saved=49\njobs_cli.done market=crypto        → exit 0"},
+        {cmd:"kubectl get job verify-crypto -n stock", note:"trạng thái Job", out:"NAME            STATUS     COMPLETIONS   DURATION\nverify-crypto   Complete   1/1           32s"},
+        {cmd:"# demo RETRY: Job cố tình exit 1 (backoffLimit=2)\nkubectl get job fail-demo -n stock", note:"đẻ 3 Pod Error rồi Failed", out:"NAME        STATUS   COMPLETIONS\nfail-demo   Failed   0/1\n# 3 Pod Error (1 + 2 retry) · condition Failed\n# reason=BackoffLimitExceeded · failed=3 · exitCode=1"},
+        {cmd:"kubectl apply -f deploy/k8s/pipeline/job-manual.yaml", note:"chạy tay; tự xóa sau 5' (ttl 300s)", out:"job.batch/pipeline-manual created"}
+      ]
+    },
+    {
+      id:"1.4", title:"Label & Annotation Drill", domain:"App Design & Build (20%)", duration:"~30m", status:"done",
+      prep:["Setup Pod nháp <code>demo-*</code> trong stock (coi stock là sandbox) — chọn 1 trong 2: <b>imperative</b> <code>kubectl run</code> (bên dưới) HOẶC <b>declarative</b> <code>kubectl apply -f deploy/k8s/ckad-labs/day_1/lab-1.4-demo.yaml</code> (dựng demo-web + demo-api + demo-dep)."],
+      cleanup:["<code>kubectl delete deploy demo-dep -n stock; kubectl delete pod -n stock -l 'app in (demo,quarantine)'</code> — hoặc nếu setup bằng manifest: <code>kubectl delete -f deploy/k8s/ckad-labs/day_1/lab-1.4-demo.yaml</code> (+ xóa pod quarantine nếu đã tách)."],
+      request:"Gán/sửa label hàng loạt, query bằng selector, dùng --overwrite. Thực hành thẳng trên ns stock (Pod nháp demo-*), cuối roll back. Setup object dựng được cả imperative (kubectl run) lẫn declarative (kubectl apply -f lab-1.4-demo.yaml); riêng phần DRILL (label/annotate/query) giữ imperative — đó là nội dung bài.",
+      steps:[
+        "Tạo Pod nháp trong stock — <b>imperative</b>: <code>kubectl run demo-web --image=api-svc:dev --labels=... --command -- sleep 3600</code>; HOẶC <b>declarative</b>: <code>kubectl apply -f deploy/k8s/ckad-labs/day_1/lab-1.4-demo.yaml</code>.",
+        "Query selector: <code>-l</code>, <code>-L</code> (cột), set-based <code>'env in (prod)'</code>, <code>--show-labels</code>.",
+        "Label CRUD: thêm / sửa (<code>--overwrite</code>) / xóa (<code>key-</code>) / hàng loạt (<code>-l</code>).",
+        "Tách Pod khỏi RS: relabel <code>app=</code> → RS đẻ Pod bù; Pod tách vẫn Running.",
+        "Roll back: <code>kubectl delete</code> resource nháp <code>app in (demo,quarantine)</code>."
+      ],
+      knowledge:[
+        "<b>Label</b> = định danh để CHỌN (Service→Pod, RS→Pod, Job→Pod), query được <code>-l</code>. <b>Annotation</b> = metadata để ĐỌC, KHÔNG selector được — nhưng KHÔNG phải ghi chú suông: <code>last-applied-configuration</code> (apply merge), <code>deployment.kubernetes.io/revision</code> (rollout undo), ingress/prometheus/cert-manager đều đọc annotation.",
+        "Selector: equality <code>app=web</code>, <code>tier!=x</code>; set-based <code>'env in (prod)'</code>; tồn tại <code>'!release'</code>; AND <code>'a=1,b=2'</code>.",
+        "<code>-L app,tier</code> (hoa) = hiện label thành CỘT; <code>--show-labels</code> = xem hết.",
+        "Sửa label đã tồn tại BẮT BUỘC <code>--overwrite</code> (thiếu ⇒ lỗi 'already has a value'). Xóa bằng hậu tố <code>key-</code>.",
+        "⚠️ <code>.spec.selector</code> của Deployment/StatefulSet là IMMUTABLE.",
+        "Kỹ thuật: đổi label <code>app=</code> của 1 Pod ⇒ tách khỏi RS ⇒ RS đẻ Pod mới bù; Pod tách vẫn sống để debug.",
+        "Setup object dựng được cả 2 chiều: <code>kubectl run</code>/<code>create deployment</code> (imperative, exam-speed) HOẶC <code>kubectl apply -f lab-1.4-demo.yaml</code> (declarative, tái lập). Nhưng chính DRILL (label/annotate/query/--overwrite) VẪN imperative — đó mới là kỹ năng của lab, không nên biến thành sửa YAML."
+      ],
+      commands:[
+        {cmd:"kubectl run demo-web --image=api-svc:dev -n stock \\\n  --labels=app=demo,tier=frontend,env=dev --command -- sleep 3600", note:"Pod nháp trong stock (imperative)", out:"pod/demo-web created"},
+        {cmd:"# hoặc DECLARATIVE — cùng object, apply được:\nkubectl apply -f deploy/k8s/ckad-labs/day_1/lab-1.4-demo.yaml", note:"dựng demo-web + demo-api + demo-dep", out:"pod/demo-web created\npod/demo-api created\ndeployment.apps/demo-dep created"},
+        {cmd:"kubectl get pods -n stock -l app=demo -L tier,env", note:"label thành cột", out:"NAME       READY   STATUS    TIER       ENV\ndemo-api   1/1     Running   backend    prod\ndemo-web   1/1     Running   frontend   dev"},
+        {cmd:"kubectl get pods -n stock -l 'app=demo,env in (prod)'", note:"set-based + AND", out:"NAME       READY   STATUS\ndemo-api   1/1     Running"},
+        {cmd:"kubectl label pod demo-web tier=backend -n stock", note:"thiếu --overwrite ⇒ LỖI", out:"error: 'tier' already has a value (frontend), and --overwrite is false"},
+        {cmd:"kubectl label pod demo-web tier=backend --overwrite -n stock", note:"sửa đúng", out:"pod/demo-web labeled"},
+        {cmd:"kubectl label pod demo-web release- -n stock", note:"xóa label (hậu tố -)", out:"pod/demo-web unlabeled"},
+        {cmd:"kubectl annotate pod demo-web owner=team-x -n stock", note:"annotation", out:"pod/demo-web annotated"},
+        {cmd:"# tách 1 Pod khỏi ReplicaSet\nkubectl label pod $V app=quarantine --overwrite -n stock", note:"RS đẻ Pod mới bù", out:"app=demo-dep  count=3  (RS đẻ bù 1 Pod mới)\napp=quarantine count=1  (Pod tách, vẫn Running)"},
+        {cmd:"kubectl delete deploy demo-dep -n stock\nkubectl delete pod -n stock -l 'app in (demo,quarantine)'", note:"ROLL BACK — đồ thật giữ nguyên", out:"deployment \"demo-dep\" deleted\npod \"demo-web\" / \"demo-api\" / \"...quarantine\" deleted"}
+      ]
+    }
+  ],
+
+  "Day 2 — Deployments & rollouts": [
+    {
+      id:"2.1", title:"Rolling Update & Rollback", domain:"App Deployment (20%)", duration:"~45m", status:"done",
+      prep:["App nginx demo: <code>kubectl apply -f deploy/k8s/ckad-labs/day_2/web.yaml</code> (4 replica, maxUnavailable=0, preStop) nếu chưa có."],
+      cleanup:["<code>kubectl delete -f deploy/k8s/ckad-labs/day_2/web.yaml</code>"],
+      request:"Rolling update + rollback áp dụng THẲNG trên web-svc (frontend thật) trong ns stock — scale 3, thêm readinessProbe/preStop. Chứng minh zero-downtime + bad deploy không sập service. (day_2/web.yaml = app nginx demo dùng rút bài học đo lường ở Kiến thức.)",
+      steps:[
+        "Chuẩn bị app: nâng <code>deploy/k8s/web-svc/deployment.yaml</code> (replicas 3, maxUnavailable=0, readinessProbe, preStop) rồi <code>kubectl apply</code> → chờ 3/3 Running.",
+        "Tạo 'v2' để roll: <code>docker tag web-svc:dev web-svc:v2</code> + <code>kind load docker-image web-svc:v2 --name ckad</code>.",
+        "Rolling update: <code>kubectl set image deploy/web-svc web-svc=web-svc:v2</code>; theo dõi <code>kubectl rollout status</code> (exit 0 = xong).",
+        "Monitor 5 góc: cột AVAILABLE không tụt · <code>get rs</code> (mới up/cũ down) · <code>describe</code> Events + Conditions.",
+        "Đo zero-downtime: <code>DUR=45 ./e2e-test.sh zero-downtime web-svc 3000 web-svc web-svc:v2 /</code> → mong đợi fail=0 (nhờ preStop).",
+        "Giả lập bad deploy: <code>set image ... web-svc:nope</code> → rollout KẸT (ImagePullBackOff) nhưng pod cũ vẫn phục vụ (curl HTTP 200).",
+        "Rollback: <code>kubectl rollout undo deploy/web-svc</code> → 3/3 bản tốt; kiểm tra <code>rollout history</code>."
+      ],
+      knowledge:[
+        "<code>RollingUpdate</code>: <code>maxSurge</code> (thêm bao nhiêu pod dư) + <code>maxUnavailable</code> (giảm tối đa bao nhiêu). <code>maxUnavailable=0</code> = không bao giờ dưới số mong muốn.",
+        "⚠️ <code>maxUnavailable=0</code> CẦN nhưng CHƯA ĐỦ zero-dropped-connection: khi pod bị xóa có <b>termination race</b> (SIGTERM tới app trước khi kube-proxy kịp gỡ endpoint). Fix: <code>lifecycle.preStop</code> sleep vài giây để drain. Đo thật: <b>17/6784 fail</b> (không preStop) → <b>0/7309</b> (có preStop).",
+        "Đo zero-downtime phải poll TỪ TRONG cluster (Service ClusterIP load-balance). <b>KHÔNG</b> dùng <code>port-forward svc</code> để đo — nó GHIM 1 pod, pod đó bị update giết ⇒ báo lỗi giả (20 fail artifact).",
+        "<code>rollout status/history/undo</code>; <code>--to-revision=N</code>. <code>change-cause</code> là SNAPSHOT annotation lúc revision tạo ra ⇒ phải <code>kubectl annotate ... kubernetes.io/change-cause</code> KÈM mỗi thay đổi mới có nghĩa.",
+        "<b>Monitor rollout — 5 góc:</b> (1) <code>rollout status</code> block + <b>exit code</b> = success/fail (gate CI); (2) cột <code>AVAILABLE</code> KHÔNG tụt dưới desired = zero-downtime nhìn thấy được (updated 1→2→3 mà available luôn =3); (3) <code>get rs</code> mới-up/cũ-down; (4) <code>describe</code> Events (<code>ScalingReplicaSet</code> xen kẽ) ; (5) Conditions <code>Available</code>/<code>Progressing</code>. Kẹt quá <code>progressDeadlineSeconds</code> (600s) ⇒ <code>Progressing=False reason=ProgressDeadlineExceeded</code> = Failed — KHÁC <code>--timeout</code> của lệnh <code>rollout status</code> (chỉ là timeout chờ).",
+        "Mỗi đổi <code>.spec.template</code> ⇒ ReplicaSet MỚI; RS cũ giữ ở 0 replica để undo (revision).",
+        "Bad deploy (image sai) với <code>maxUnavailable=0</code>: rollout KẸT (<code>ImagePullBackOff</code>) nhưng pod cũ vẫn phục vụ ⇒ Service KHÔNG sập.",
+        "<code>rollout undo</code> KHÔNG cập nhật <code>last-applied-configuration</code> ⇒ <code>apply</code> sau có thể lệch; GitOps nên re-apply manifest cũ thay vì undo."
+      ],
+      commands:[
+        {cmd:"kubectl apply -f deploy/k8s/web-svc/deployment.yaml", note:"web-svc THẬT: scale 3 + readinessProbe + preStop + maxUnavailable=0", out:"deployment.apps/web-svc configured\n→ 3/3 Running"},
+        {cmd:"docker tag web-svc:dev web-svc:v2\nkind load docker-image web-svc:v2 --name ckad", note:"tạo 'v2' để roll (same bits, đủ tạo revision mới)", out:"web-svc:v2 loaded → 3 node"},
+        {cmd:"kubectl set image deploy/web-svc web-svc=web-svc:v2 -n stock\nkubectl rollout status deploy/web-svc -n stock", note:"rolling update dev→v2", out:"deployment.apps/web-svc image updated\n1→2→3 of 3 new replicas updated...\ndeployment \"web-svc\" successfully rolled out   (exit=0)"},
+        {cmd:"# MONITOR (5 góc)\nkubectl get deploy web-svc -n stock -w        # cột AVAILABLE\nkubectl get rs -n stock -l app=web-svc         # RS mới up / cũ down\nkubectl describe deploy web-svc -n stock       # Events + Conditions", note:"AVAILABLE không tụt = zero-downtime; Conditions báo Failed khi kẹt", out:"[t=0s]  ready=3 updated=1 available=3\n[t=6s]  ready=3 updated=2 available=3\n[t=12s] ready=3 updated=3 available=3   ← available LUÔN =3\n\nEvents: ScalingReplicaSet  new 0→1→2→3 · old 3→2→1→0 (xen kẽ)\nConditions: Available=True · Progressing=True reason=NewReplicaSetAvailable\n# kẹt quá progressDeadlineSeconds(600s) → reason=ProgressDeadlineExceeded = Failed"},
+        {cmd:"DUR=45 ./e2e-test.sh zero-downtime web-svc 3000 web-svc web-svc:v2 /", note:"đo zero-downtime TỪ TRONG cluster (web-svc có preStop)", out:"RESULT ok=6566 fail=0  → PASS ✅\n# bài học đo (rút từ nginx demo, xem Kiến thức):\n#   port-forward svc = 20 fail GIẢ · chưa preStop = 17/6784 race · có preStop = 0"},
+        {cmd:"kubectl rollout history deploy/web-svc -n stock\nkubectl get rs -n stock -l app=web-svc", note:"revision + RS (cũ giữ 0 để undo)", out:"REVISION  CHANGE-CAUSE ...\nweb-svc-dfd99f7      3   web-svc:v2   (active)\nweb-svc-59bfbdcc4b   0   web-svc:dev  (rev2)\nweb-svc-58644dfcbd   0   web-svc:dev  (rev1)"},
+        {cmd:"kubectl set image deploy/web-svc web-svc=web-svc:nope -n stock\nkubectl rollout status deploy/web-svc -n stock --timeout=20s", note:"BAD deploy → rollout KẸT", out:"error: timed out waiting for the condition\nweb-svc-6d85b88565  0/1  ImagePullBackOff  ← pod MỚI kẹt\nweb-svc-dfd99f7     1/1  Running (x3)       ← pod CŨ vẫn sống\n→ curl http://web-svc:3000/ = HTTP 200 (maxUnavailable=0 chặn sập)"},
+        {cmd:"kubectl rollout undo deploy/web-svc -n stock", note:"ROLLBACK về bản tốt", out:"deployment.apps/web-svc rolled back\ndeployment \"web-svc\" successfully rolled out\n→ 3/3 Running web-svc:v2\nWarning: undo KHÔNG cập nhật last-applied-configuration"}
+      ],
+      tool:"# đo zero-downtime khi rolling update web-svc thật (harness poll IN-CLUSTER):\nDUR=45 ./e2e-test.sh zero-downtime web-svc 3000 web-svc web-svc:v2 /\n./e2e-test.sh rollback web-svc                              # undo + history"
+    },
+    {
+      id:"2.2", title:"Blue/Green Switch", domain:"App Deployment (20%)", duration:"~45m", status:"done",
+      prep:["<code>api-svc-blue</code> + <code>api-svc-green</code> ĐÃ deploy sẵn qua Helm (<code>global.bluegreen.enabled=true</code>). Kiểm: <code>kubectl get deploy -n stock -l app=api-svc -L color</code> (cả 2 màu Ready). Gateway controller: <code>kubectl get cm gateway-bluegreen-state -n stock -o jsonpath='{.data}'</code>."],
+      cleanup:["Rollback selector về màu ban đầu (green): <code>kubectl patch svc api-svc -n stock -p '{\"spec\":{\"selector\":{\"app\":\"api-svc\",\"color\":\"green\"}}}'</code>.","Declarative BỀN: <code>helm upgrade stock deploy/helm/stock -n stock --set global.bluegreen.activeColor=green</code>.","Bẫy kẹt color: <code>kubectl patch svc api-svc --type=json -p '[{\"op\":\"remove\",\"path\":\"/spec/selector/color\"}]'</code> — chỉ khi cần reset hẳn."],
+      request:"Blue/green trên app CÓ SẴN <code>api-svc</code>: 2 Deployment <code>api-svc-blue</code> + <code>api-svc-green</code> ĐÃ deploy sẵn (Helm <code>global.bluegreen.enabled</code>), CHUNG 1 Service <code>api-svc</code> có selector <code>{app, color}</code>. Cutover = flip selector <code>color</code>. Chứng minh route đúng bằng APP LOG (Go zerolog) — KHÔNG tạo manifest mới.",
+      steps:[
+        "Xác nhận 2 màu ĐÃ có sẵn: <code>kubectl get deploy -n stock -l app=api-svc -L color</code> → thấy <code>api-svc-blue</code> + <code>api-svc-green</code> đều Ready.",
+        "Xem selector hiện tại của Service chung: <code>kubectl get svc api-svc -n stock -o jsonpath='{.spec.selector}'</code> → <code>{\"app\":\"api-svc\",\"color\":\"green\"}</code>.",
+        "Cutover sang blue: <code>kubectl patch svc api-svc -n stock -p '{\"spec\":{\"selector\":{\"app\":\"api-svc\",\"color\":\"blue\"}}}'</code>; verify <code>get endpoints api-svc</code> = IP pod blue.",
+        "Chứng minh route bằng APP LOG: curl 5× vào path độc nhất <code>/api/version-labtest01</code> xuyên qua Service chung, rồi grep APP LOG container <code>api-svc</code> (Go zerolog) từng màu: <code>kubectl logs -n stock -l app=api-svc,color=blue -c api-svc --tail=150 | grep -c version-labtest01</code> → 5; màu green → 0.",
+        "FLIP sang green: patch selector <code>color=green</code>; rollback = flip lại về blue.",
+        "Cutover lâu dài (BỀN qua helm upgrade): <code>helm upgrade stock deploy/helm/stock -n stock --set global.bluegreen.activeColor=blue</code>."
+      ],
+      knowledge:[
+        "Service route theo <code>selector</code> (L4, kube-proxy). Đổi selector ⇒ Endpoints trỏ pod set khác NGAY = switch tức thời, zero-downtime (bộ pod mới đã Ready sẵn).",
+        "<b>api-svc-blue/green ĐÃ có sẵn (Helm bluegreen)</b> — KHÔNG phải tạo mới. Helm <code>global.bluegreen.enabled=true</code> (default) sinh 2 Deployment mỗi màu + Service CHUNG <code>api-svc</code> selector <code>{app, color: activeColor}</code>. Lab chỉ FLIP selector Service — KHÔNG tạo manifest mới.",
+        "⚠️ <b>Bẫy patch↔apply:</b> <code>color</code> thêm bằng <code>kubectl patch</code> thì <code>kubectl apply</code> manifest gốc KHÔNG xoá được (apply chỉ quản key trong last-applied) ⇒ selector kẹt <code>{app, color:green}</code>, pod không màu ⇒ Endpoints RỖNG. Phải xoá tay: <code>kubectl patch svc api-svc --type=json -p '[{\"op\":\"remove\",\"path\":\"/spec/selector/color\"}]'</code>.",
+        "Verify bằng <code>kubectl get endpoints api-svc</code> — IP đổi sang pod set màu mới; đối chiếu với <code>get pods -l color=blue -o wide</code>.",
+        "<b>Chứng minh route bằng APP LOG (mấu chốt):</b> curl 5× path độc nhất <code>/api/version-&lt;marker&gt;</code> → Go zerolog ghi <code>request method=GET path=/api/version-&lt;marker&gt; status=404 dur_ms=0</code>. Grep app-log từng màu: màu active hits=5, màu kia=0 — không thể giả mạo.",
+        "Ưu điểm blue/green: rollback = lật selector về màu cũ (tức thì, 0 downtime); nhược: tốn 2× tài nguyên khi cả 2 màu cùng chạy.",
+        "<b>━━ NÂNG CAO: gateway-native blue/green tự động</b> (bỏ <code>kubectl patch</code> tay). Bản chất = canary/progressive delivery tự viết (mini-Flagger): gateway watch Deployment (kube-rs, edge-triggered khi <code>set image</code> màu idle), lật 100% traffic NỘI BỘ, đo success-rate 60s, tự <b>promote</b> hoặc <b>rollback</b>. Khác cách tay: KHÔNG đụng selector Service (né bẫy patch↔apply); gateway giữ <code>active</code> trong bộ nhớ + persist ConfigMap <code>gateway-bluegreen-state</code>.",
+        "State machine gateway: Stable → Flip → Analyzing 60s (rollback SỚM nếu fail rate vượt ngưỡng) → Promote/Rollback. Fail = HTTP≥500/proxy error (4xx=success); ngưỡng success 99%, min 20 req. RBAC: SA <code>gateway-svc</code> get/list/watch/patch deployments + configmaps.",
+        "2 bug tìm khi tích hợp: (1) edge bị consume khi candidate còn mid-rollout → mất trigger; (2) promote patch màu còn lại → tick sau tưởng candidate mới → <b>ping-pong</b> (fix: cập nhật <code>last_seen[old]</code> sau patch). Code <code>gateway-svc/src/bluegreen/</code>; spec+plan ở <code>docs/specs|plans/2026-07-11-gateway-bluegreen-*</code>.",
+        "<b>━━ SỬA (2026-07-24): Service CHUNG <code>api-svc</code>/<code>web-svc</code> nay kèm <code>color</code></b> — trước selector chỉ <code>{app}</code> ⇒ hit CẢ 2 màu (blue hỏng vẫn nhận 50% traffic, KHÔNG phải blue/green). Nay <code>{app, color: activeColor}</code> (<code>global.bluegreen.activeColor</code>, default green) ⇒ trỏ ĐÚNG 1 màu; cutover = <b>FLIP selector</b> (declarative <code>--set global.bluegreen.activeColor=blue</code> BỀN qua helm upgrade, hoặc <code>kubectl patch</code> tạm). Đây là blue/green KINH ĐIỂN. Ingress (Lab 4.2) route <code>/api</code>→Service chung ⇒ nay tự theo màu active. Song song gateway-native (per-color, ConfigMap) — giữ activeColor khớp ConfigMap gateway."
+      ],
+      commands:[
+        {cmd:"kubectl get deploy -n stock -l app=api-svc -L color", note:"2 màu ĐÃ có sẵn (Helm bluegreen) — KHÔNG tạo mới", out:"NAME             READY   UP-TO-DATE   AVAILABLE   COLOR\napi-svc-blue     2/2     2            2           blue\napi-svc-green    2/2     2            2           green"},
+        {cmd:"kubectl get svc api-svc -n stock -o jsonpath='{.spec.selector}'", note:"Service chung kèm color (trước chỉ {app})", out:"{\"app\":\"api-svc\",\"color\":\"green\"}   ← trỏ ĐÚNG 1 màu"},
+        {cmd:"kubectl patch svc api-svc -n stock -p '{\"spec\":{\"selector\":{\"app\":\"api-svc\",\"color\":\"blue\"}}}'\nkubectl get endpoints api-svc -n stock", note:"cutover sang BLUE — flip selector", out:"service/api-svc patched\nendpoints: 10.244.1.31,10.244.2.73   ← đúng IP pod blue"},
+        {cmd:"# CHỨNG MINH ROUTE bằng APP LOG (Go zerolog)\nMARKER=version-labtest01\nfor i in $(seq 5); do kubectl exec -n stock deploy/api-svc-blue -- wget -qO- http://api-svc:8118/api/$MARKER 2>/dev/null; done\nkubectl logs -n stock -l app=api-svc,color=blue  -c api-svc --tail=150 | grep -c $MARKER\nkubectl logs -n stock -l app=api-svc,color=green -c api-svc --tail=150 | grep -c $MARKER", note:"curl 5× path độc nhất → grep app-log từng màu; KHÔNG giả được", out:"# BLUE  → 5   (request method=GET path=/api/version-labtest01 status=404 dur_ms=0)\n# GREEN → 0   ← KHÔNG nhận request nào"},
+        {cmd:"# FLIP sang GREEN (rollback = flip lại)\nkubectl patch svc api-svc -n stock -p '{\"spec\":{\"selector\":{\"app\":\"api-svc\",\"color\":\"green\"}}}'\nkubectl get endpoints api-svc -n stock", note:"lật selector color=green; rollback = patch lại blue", out:"service/api-svc patched\nendpoints: 10.244.1.32,10.244.2.75   ← đổi sang IP pod green"},
+        {cmd:"# Cutover LÂU DÀI (BỀN qua helm upgrade)\nhelm upgrade stock deploy/helm/stock -n stock --set global.bluegreen.activeColor=blue", note:"declarative — không bị kubectl apply ghi đè", out:"Release \"stock\" has been upgraded. Happy Helming!"},
+        {cmd:"# ━━ NÂNG CAO (gateway tự động, bỏ patch tay) ━━\nkubectl logs -n stock deploy/gateway-svc | grep bluegreen", note:"controller đã bật khi gateway start", out:"Loaded 2 route(s), 2 bluegreen app(s)\nbluegreen controller started (2 app(s))\nbluegreen.controller.ready app=api-svc active=green"},
+        {cmd:"kubectl set image deploy/api-svc-blue api-svc=api-svc:v2 -n stock", note:"HAPPY PATH: set image màu IDLE → gateway TỰ flip→analyze→promote", out:"bluegreen.rollout.start app=api-svc from=\"green\" to=\"blue\" image=Some(\"api-svc:v2\")\nbluegreen.flip         app=api-svc color=\"blue\"\nbluegreen.promote      app=api-svc total=1019 fail=0"},
+        {cmd:"# ROLLBACK THẬT: candidate Ready-nhưng-503\nkubectl patch deploy api-svc-blue -n stock --type=strategic -p '{...503 conf + /healthz readiness...}'", note:"gateway đo fail → tự rollback", out:"bluegreen.flip     app=api-svc color=\"blue\"\nbluegreen.rollback app=api-svc total=155 fail=39   ← 25% fail > 1% → lật về green (~6s)"},
+        {cmd:"kubectl set image deploy/api-svc-blue api-svc=api-svc:nope -n stock", note:"BAD deploy: candidate không Ready", out:"# controller: image đổi nhưng deployment_ready=false → KHÔNG flip\n# active giữ nguyên · curl /api/version = 200 (service KHÔNG gián đoạn)"}
+      ],
+      tool:"# cutover tay + verify endpoints:\nkubectl patch svc api-svc -n stock -p '{\"spec\":{\"selector\":{\"app\":\"api-svc\",\"color\":\"blue\"}}}'\nkubectl get endpoints api-svc -n stock\n# rollback:\nkubectl patch svc api-svc -n stock -p '{\"spec\":{\"selector\":{\"app\":\"api-svc\",\"color\":\"green\"}}}'\n# quan sát gateway controller:\nkubectl logs -n stock deploy/gateway-svc | grep bluegreen\nkubectl get cm gateway-bluegreen-state -n stock -o yaml"
+    },
+    {
+      id:"2.3", title:"Scale & HPA", domain:"App Deployment (20%)", duration:"~45m", status:"done",
+      prep:["cpu-burn (1/1) + metrics-server sẵn, CHƯA có HPA. Kiểm: <code>kubectl get deploy cpu-burn -n stock; kubectl get deploy metrics-server -n kube-system</code>."],
+      cleanup:["<code>kubectl delete hpa cpu-burn -n stock</code> (cpu-burn về 1/1)."],
+      request:"Scale tay cpu-burn 1→10 (obj 1, làm TRƯỚC khi có HPA) rồi HPA declarative 50% CPU (obj 2). Sinh tải thật: scale-up theo bậc 1→4→8→10 rồi scale-down về 1 sau cửa sổ 300s. App = registry.k8s.io/hpa-example (mỗi GET chạy vòng sqrt đốt CPU); nginx web-svc quá rẻ CPU không kích được HPA.",
+      steps:[
+        "Manual scale (obj 1) khi CHƯA có HPA: <code>kubectl scale deploy/cpu-burn --replicas=10 -n stock</code> → 10/10; verify <code>get pods -o wide</code> (chỉ 2 worker, control-plane taint) + <code>get rs</code> (CÙNG 1 RS, không tạo RS mới). Rồi scale về 1.",
+        "HPA declarative (obj 2): <code>kubectl apply -f deploy/k8s/ckad-labs/day_2/cpu-burn-hpa.yaml</code> (autoscaling/v2, cpu 50% theo request); verify TARGETS <code>&lt;unknown&gt;</code>→<code>1%/50%</code>, <code>ScalingActive=True</code>.",
+        "Sinh tải 2 terminal (loadgen + watch-hpa đều BLOCK): <code>NS=stock ./e2e-test.sh loadgen cpu-burn 80 30 150 /</code> ở tab B, <code>./e2e-test.sh watch-hpa cpu-burn</code> mở TRƯỚC ở tab A.",
+        "Scale-UP: <code>describe hpa</code> Events <code>New size 4→8→10</code> (~15s/bậc); <code>top pods</code> 194–491m.",
+        "Scale-DOWN: tải dừng → CPU về 1% NGAY nhưng REPLICAS giữ 10 tới ~5 phút (window 300s) → <code>New size 1</code>.",
+        "Cleanup: <code>kubectl delete hpa cpu-burn -n stock</code>; cpu-burn về baseline 1/1 (manifest đã commit để re-apply)."
+      ],
+      knowledge:[
+        "<code>kubectl scale deploy/X --replicas=10</code> = scale tay. <b>HPA SỞ HỮU <code>.spec.replicas</code> sau khi attach</b> ⇒ scale tay khi đã có HPA bị kéo về theo recommendation (idle→min=1) — nhưng do window 300s nên KHÔNG tức thì (~5 phút). Vì vậy demo obj-1 làm TRƯỚC khi tạo HPA.",
+        "Scale tay chỉ đổi số replica ⇒ <b>CÙNG 1 ReplicaSet</b> scale 1→10 (không sinh RS mới như khi đổi image ở 2.1).",
+        "HPA % cần <code>resources.requests.cpu</code> — <b>utilization = usage / REQUEST (100m), KHÔNG phải limit (500m)</b>. Thiếu request ⇒ <code>TARGETS &lt;unknown&gt;/50%</code>, <code>ScalingActive=False reason=FailedGetResourceMetric</code>, không scale. Cần <b>metrics-server</b> (kind cài kèm <code>--kubelet-insecure-tls</code>; <code>kubectl top pods</code> trả data = HPA đọc được PodMetrics).",
+        "<b>Scale-UP KHÔNG nhảy 1→10 một nhịp:</b> policy scaleUp mặc định cap ở max(+4 pod, ×2)/window ⇒ 1→4→8→10 qua ~3 chu kỳ sync (~15s) dù metric ratio (~500%/50%) tính desired=10. Utilization đọc ~500% vì pod tải chạm limit 500m = 500% của request 100m.",
+        "<b>Scale-DOWN chậm bất đối xứng:</b> <code>scaleDown.stabilizationWindowSeconds</code> mặc định <b>300s</b> — giữ đỉnh 5 phút rồi mới hạ về minReplicas. scaleUp stab=0s (nhanh) / scaleDown stab=300s (chậm). Đo thật: CPU về 1% lúc ~20:51 nhưng tới ~20:55:40 mới <code>New size 1</code>.",
+        "<code>--cpu-percent</code> đã <b>DEPRECATED</b> (kubectl mới) → dùng <code>--cpu=50%</code>. Imperative tương đương: <code>kubectl autoscale deploy/cpu-burn --cpu=50% --min=1 --max=10 -n stock</code>. Khuyến nghị declarative (commit <code>cpu-burn-hpa.yaml</code> giống 2.1/2.2).",
+        "Tải qua Service ClusterIP (loadgen chạy IN-CLUSTER, không port-forward vốn ghim 1 pod) ⇒ kube-proxy trải đều mọi pod Ready = đúng cho HPA (average utilization). ⚠️ <code>kubectl top</code> là ảnh point-in-time đã smoothing 15s — xem xu hướng, đừng chấp số lẻ. control-plane có taint NoSchedule ⇒ 10 pod chỉ lên 2 worker; image registry.k8s.io public ⇒ node chưa cache vẫn PULL được (không ImagePullBackOff).",
+        "<b>Áp HPA lên service THẬT (api-svc blue/green + gateway-svc):</b> HPA sở hữu <code>.spec.replicas</code> ⇒ deployment phải OMIT <code>replicas</code> khi HPA bật (template <code>{{ if not .Values.global.hpa.enabled }}</code>) — nếu không mỗi <code>helm upgrade</code> giành lại → <b>flapping</b>. ⚠️ Omit ⇒ lúc bật lần đầu default về 1 rồi <code>minReplicas</code> kéo lại. Service project I/O-bound (idle 1-2% CPU) ⇒ CPU-HPA CHỈ scale khi traffic spike THẬT — demo phải HẠ target 60→10% (request <code>/api/version</code> quá rẻ không đẩy nổi 60%; đúng lý do lab dùng cpu-burn). Blue/green: HPA mỗi màu, chỉ màu ACTIVE scale theo tải, màu idle nằm ở min."
+      ],
+      commands:[
+        {cmd:"kubectl scale deploy/cpu-burn --replicas=10 -n stock\nkubectl get deploy cpu-burn -n stock", note:"obj 1 — scale tay (CHƯA có HPA)", out:"deployment.apps/cpu-burn scaled\nNAME       READY   UP-TO-DATE   AVAILABLE\ncpu-burn   10/10   10           10"},
+        {cmd:"kubectl get rs -n stock -l app=cpu-burn", note:"CÙNG 1 RS scale 1→10 (không RS mới)", out:"NAME                 DESIRED   CURRENT   READY\ncpu-burn-64f94747b   10        10        10\n# 10 pod chỉ trên ckad-worker + ckad-worker2 (control-plane NoSchedule)"},
+        {cmd:"kubectl scale deploy/cpu-burn --replicas=1 -n stock", note:"reset trước khi tạo HPA", out:"deployment.apps/cpu-burn scaled  → 1/1"},
+        {cmd:"kubectl apply -f deploy/k8s/ckad-labs/day_2/cpu-burn-hpa.yaml\nkubectl get hpa cpu-burn -n stock", note:"obj 2 — HPA declarative autoscaling/v2, cpu 50%", out:"horizontalpodautoscaler.autoscaling/cpu-burn created\nTARGETS cpu: <unknown>/50%   ← ~15s đầu metrics chưa về\nTARGETS cpu: 1%/50%          ← idle 1m/100m ≈ 1%\n# conditions: ScalingActive=True ValidMetricFound"},
+        {cmd:"NS=stock ./e2e-test.sh loadgen cpu-burn 80 30 150 /\nkubectl top pods -n stock -l app=cpu-burn", note:"30 luồng x150s qua Service; CPU/pod tăng", out:"CPU(cores): 426m 274m 327m 491m 412m 312m 329m 327m 194m 297m\n# = 194–491% của REQUEST 100m (không phải limit 500m)"},
+        {cmd:"kubectl describe hpa cpu-burn -n stock   # Events", note:"scale-UP theo BẬC (không 1→10)", out:"SuccessfulRescale  New size: 4    reason: cpu utilization above target\nSuccessfulRescale  New size: 8    (~15s sau)\nSuccessfulRescale  New size: 10   (~15s sau) ← chạm maxReplicas"},
+        {cmd:"# sau khi tải dừng — theo dõi scale-DOWN\nkubectl describe hpa cpu-burn -n stock   # Events", note:"giữ 10 tới ~5 phút (window 300s) rồi về 1", out:"# CPU về 1%/50% NGAY nhưng REPLICAS giữ 10 tới ~20:55:40\nSuccessfulRescale  New size: 1  reason: All metrics below target"},
+        {cmd:"kubectl delete hpa cpu-burn -n stock", note:"cleanup (manifest đã commit để re-apply)", out:"horizontalpodautoscaler.autoscaling \"cpu-burn\" deleted\n→ cpu-burn về baseline 1/1"},
+        {cmd:"# ÁP HPA THẬT: helm upgrade ... --set global.hpa.enabled=true\nkubectl get hpa api-svc-blue api-svc-green gateway-svc -n stock", note:"HPA trên service project (gated global.hpa.enabled)", out:"NAME            REFERENCE                  TARGETS      MINPODS MAXPODS REPLICAS\napi-svc-blue    Deployment/api-svc-blue    cpu: 1%/60%  2       6       2\napi-svc-green   Deployment/api-svc-green   cpu: 1%/60%  2       6       2\ngateway-svc     Deployment/gateway-svc     cpu: 2%/60%  2       5       2"},
+        {cmd:"# demo up→down trên HPA THẬT (hạ target 10%, bắn HTTP load qua gateway 150 luồng)\nkubectl describe hpa gateway-svc -n stock | grep 'New size'", note:"gateway 2→4→5; api-green 2→3; api-blue(idle) giữ 2; scale-down sau ~300s", out:"New size: 4  reason: cpu resource utilization above target\nNew size: 5\n# tải dừng → CPU 1-2% NGAY nhưng giữ đỉnh ~300s (stabilizationWindow) →\nNew size: 2  reason: All metrics below target   ← scale-DOWN về min, KHÔI PHỤC target 60% sau demo"}
+      ],
+      tool:"# tab A (mở TRƯỚC): xem HPA scale REPLICAS/TARGETS\n./e2e-test.sh watch-hpa cpu-burn\n# tab B: sinh tải 30 luồng x150s qua Service ClusterIP\nNS=stock ./e2e-test.sh loadgen cpu-burn 80 30 150 /"
+    },
+    {
+      id:"2.4", title:"Kustomize Overlay", domain:"App Deployment (20%)", duration:"~45m", status:"done",
+      prep:["Overlays sẵn: <code>deploy/k8s/ckad-labs/day_2/kustomize/{base,overlays/dev,overlays/prod}</code>."],
+      cleanup:["Xóa nguyên namespace là sạch: <code>kubectl delete namespace ckad-kustomize</code>. (Chỉ render <code>kustomize</code> thì không tạo gì, không cần dọn.)"],
+      request:"Describe BASE riêng (name=web-kz, replicas=2, image=web-svc:dev, KHÔNG namespace) rồi diff base↔overlay để thấy DELTA: dev (name→dev-web-kz, +namespace ckad-kustomize, replicas 2→1) vs prod (name→prod-web-kz, +namespace, replicas 2→5, image dev→v2). Chỉ có kubectl-embedded Kustomize (v5.8.1), không binary rời.",
+      steps:[
+        "Render BASE riêng: <code>kubectl kustomize deploy/k8s/ckad-labs/day_2/kustomize/base</code> → thấy name=web-kz, replicas=2, image=web-svc:dev, KHÔNG có namespace.",
+        "Diff base↔dev: <code>diff &lt;(kubectl kustomize .../base) &lt;(kubectl kustomize .../overlays/dev)</code> → delta: name+namespace thêm prefix \"dev-\", replicas 2→1.",
+        "Diff base↔prod: tương tự với overlay prod → delta: prefix \"prod-\", replicas 2→5, image tag dev→v2.",
+        "Đọc bảng đối chiếu 3 cột (base / dev / prod): namePrefix, namespace, replicas, image tag.",
+        "(bonus) Tạo ns <code>ckad-kustomize</code> + <code>kubectl apply -k overlays/dev</code> + <code>apply -k overlays/prod</code> → 1/1 dev-web-kz + 5/5 prod-web-kz cô lập khỏi web-svc thật.",
+        "Dọn: <code>kubectl delete namespace ckad-kustomize</code>."
+      ],
+      knowledge:[
+        "<code>kustomization.yaml</code> (<code>apiVersion: kustomize.config.k8s.io/v1beta1</code>): base gom <code>resources:</code>; overlay dùng <b><code>images: [{name,newTag}]</code></b> (match theo IMAGE NAME) + <b><code>replicas: [{name,count}]</code></b> (match theo DEPLOYMENT NAME, TRƯỚC namePrefix) + <code>namespace:</code>/<code>namePrefix:</code>.",
+        "<code>kubectl kustomize &lt;dir&gt;</code> render YAML; <code>kubectl apply -k &lt;dir&gt;</code> apply thẳng. Máy này KHÔNG có binary <code>kustomize</code> rời (<code>which kustomize</code> = not found) — chỉ có bản nhúng trong kubectl (<b>v5.8.1</b>).",
+        "<b>DRY = mục tiêu 'without duplicating manifests':</b> overlay CHỈ chứa delta, KHÔNG chép lại Deployment/Service. Cách đọc rõ nhất: render BASE trước rồi <code>diff base↔overlay</code> — chỉ thấy dòng thay đổi.",
+        "<b>Base KHÔNG nên hardcode <code>metadata.namespace</code></b> (mùi kustomize) — để overlay set qua <code>namespace:</code>. (Kiểm chứng: overlay <code>namespace:</code> override được cả base có hardcode, nhưng idiomatic là base namespace-agnostic.)",
+        "Tag phải <code>kind load</code> TRƯỚC khi apply: <code>web-svc:v2</code> có sẵn từ lab 2.1 ⇒ <code>apply -k</code> chạy ngay; patch sang tag chưa load ⇒ pod <code>ImagePullBackOff</code> (render vẫn đúng, chỉ apply-chạy mới cần image thật).",
+        "<b>Cô lập bằng NAMESPACE RIÊNG <code>ckad-kustomize</code></b> (overlay set <code>namespace:</code>): <code>get -n ckad-kustomize</code> chỉ thấy đồ demo (dev-* + prod-*), KHÔNG lẫn 26 pod stack thật ở ns <code>stock</code>; dọn = <code>delete namespace</code> một phát. Trước đây apply vào <code>stock</code> nên output rối + đụng ResourceQuota (lab 3.4). App vẫn dùng label <code>app=web-kz</code> riêng."
+      ],
+      commands:[
+        {cmd:"which kustomize\nkubectl version --client | grep -i kustomize", note:"chỉ có bản nhúng trong kubectl", out:"kustomize not found\nKustomize Version: v5.8.1"},
+        {cmd:"BASE=deploy/k8s/ckad-labs/day_2/kustomize\nkubectl kustomize $BASE/base", note:"render BASE riêng — namespace-agnostic, replicas=2", out:"kind: Deployment\nname: web-kz\nreplicas: 2\nimage: web-svc:dev\n# KHÔNG có metadata.namespace"},
+        {cmd:"BASE=deploy/k8s/ckad-labs/day_2/kustomize\ndiff <(kubectl kustomize $BASE/base) <(kubectl kustomize $BASE/overlays/dev)", note:"diff base↔dev — chỉ thấy DELTA", out:"< name: web-kz\n> name: dev-web-kz\n> namespace: ckad-kustomize\n< replicas: 2\n> replicas: 1\n# image KHÔNG đổi (dev overlay giữ web-svc:dev)"},
+        {cmd:"BASE=deploy/k8s/ckad-labs/day_2/kustomize\ndiff <(kubectl kustomize $BASE/base) <(kubectl kustomize $BASE/overlays/prod)", note:"diff base↔prod — delta: prefix prod-, replicas 5, image v2", out:"< name: web-kz\n> name: prod-web-kz\n> namespace: ckad-kustomize\n< replicas: 2\n> replicas: 5\n< image: web-svc:dev\n> image: web-svc:v2"},
+        {cmd:"# Bảng đối chiếu 3 cột\n# Trường      base          dev              prod\n# namePrefix  (none)        dev-             prod-\n# namespace   (none)        ckad-kustomize   ckad-kustomize\n# replicas    2             1                5\n# image tag   dev           dev              v2", note:"overlay patch đúng điểm — KHÔNG nhân đôi manifest", out:"# dev: chỉ có kustomization.yaml (references base + delta)\n# prod: chỉ có kustomization.yaml + images/replicas patch"},
+        {cmd:"kubectl create namespace ckad-kustomize\nkubectl apply -k $BASE/overlays/dev\nkubectl apply -k $BASE/overlays/prod", note:"tạo ns RIÊNG (Kustomize không tự tạo ns) + apply dev+prod", out:"namespace/ckad-kustomize created\nservice/dev-web-kz created\ndeployment.apps/dev-web-kz created\nservice/prod-web-kz created\ndeployment.apps/prod-web-kz created"},
+        {cmd:"kubectl get deploy,svc,pod -n ckad-kustomize", note:"OUTPUT SẠCH — chỉ đồ Kustomize, không lẫn 26 pod stack thật", out:"deployment.apps/dev-web-kz    1/1\ndeployment.apps/prod-web-kz   5/5\nservice/dev-web-kz   ...  service/prod-web-kz  ...\n# 2 overlay cùng ns, khác namePrefix (dev-/prod-) → không đụng nhau"},
+        {cmd:"kubectl delete namespace ckad-kustomize", note:"dọn: xóa NGUYÊN ns = xóa sạch mọi thứ Kustomize tạo", out:"namespace \"ckad-kustomize\" deleted"}
+      ],
+      tool:"# render BASE + diff từng overlay (KHÔNG apply):\nBASE=deploy/k8s/ckad-labs/day_2/kustomize\nkubectl kustomize $BASE/base\ndiff <(kubectl kustomize $BASE/base) <(kubectl kustomize $BASE/overlays/dev)\ndiff <(kubectl kustomize $BASE/base) <(kubectl kustomize $BASE/overlays/prod)"
+    },
+  ],
+
+  "Day 3 — Configuration & security": [
+    {
+      id:"3.1", title:"ConfigMap & Secret Injection", domain:"App Environment, Config & Security (25%)", duration:"~45m", status:"done",
+      prep:["Không cần dựng object nháp — cả 2 nửa bài đã nằm sẵn trong mọi backend pod của Helm chart <code>stock</code>."],
+      cleanup:["Không tạo mới ⇒ không cần dọn (chỉ document + verify trên pod thật)."],
+      request:"Secret from file (env var) + ConfigMap from literal (mounted volume) trong một Pod — đã hiện thực sẵn trong stack: mỗi service có Secret nạp qua <code>envFrom.secretRef</code>, ConfigMap <code>nginx.conf</code> mount làm volume vào container nginx, và <code>configMapRef</code> nạp config env. Chỉ document + verify.",
+      steps:[
+        "Xác nhận Secret → env: mỗi service có <code>secret.yaml</code> nạp qua <code>envFrom.secretRef</code> (vd <code>api-secret</code>, <code>prediction-secret</code>).",
+        "Xác nhận ConfigMap → mounted volume: <code>nginx.conf</code> của ambassador là ConfigMap <code>&lt;svc&gt;-nginx</code> mount qua <code>volumeMounts</code> + <code>subPath: nginx.conf</code>.",
+        "Xác nhận ConfigMap → env: <code>configMapRef</code> (vd <code>api-config</code>, <code>prediction-config</code>).",
+        "Verify nhanh trên pod thật bằng <code>get cm,secret</code> + đọc <code>envFrom</code> của deployment."
+      ],
+      knowledge:[
+        "<b>Secret → env var</b>: <code>envFrom.secretRef</code> nạp toàn bộ key làm biến môi trường (vs <code>valueFrom.secretKeyRef</code> nạp từng key).",
+        "<b>ConfigMap → mounted volume</b>: <code>volumes[].configMap</code> + <code>volumeMounts[].subPath</code> để mount 1 file (<code>nginx.conf</code>) mà KHÔNG che cả thư mục <code>/etc/nginx</code>.",
+        "<b>ConfigMap → env</b>: <code>configMapRef</code> khác <code>secretRef</code> ở chỗ giá trị không được k8s che (base64-only là mã hoá của Secret, không phải bảo mật thật).",
+        "Cùng một Pod có thể vừa nạp Secret env vừa mount ConfigMap volume — đúng yêu cầu đề CKAD 'inject Secret as env var and ConfigMap as mounted volume in one Pod'."
+      ],
+      commands:[
+        {cmd:"kubectl get cm,secret -n stock | grep -E 'nginx|config|secret'", note:"liệt kê ConfigMap + Secret của stack", out:"configmap/api-config        ...\nconfigmap/prediction-svc-nginx  ...\nsecret/api-secret          Opaque\nsecret/prediction-secret   Opaque"},
+        {cmd:"kubectl describe deploy prediction-svc -n stock | grep -A2 'Environment Variables from'", note:"Secret + ConfigMap nạp env (envFrom)", out:"  prediction-config  ConfigMap  Optional: false\n  prediction-secret  Secret     Optional: false"},
+        {cmd:"kubectl describe deploy prediction-svc -n stock | grep 'nginx.conf'", note:"nginx.conf mount từ ConfigMap volume", out:"  /etc/nginx/nginx.conf from nginx-conf (rw)"}
+      ]
+    },
+    {
+      id:"3.2", title:"Security Context Lockdown", domain:"App Environment, Config & Security (25%)", duration:"~45m", status:"done",
+      prep:["Hardening gom vào library chart <code>charts/common/templates/_ambassador.tpl</code> (nginx/sidecar/wait-db dùng chung) + app container inline per-service."],
+      cleanup:["Không có object nháp — áp thẳng lên 5 backend qua <code>helm upgrade</code>; rollback bằng <code>helm rollback stock &lt;rev&gt;</code>."],
+      request:"Run Pod as non-root + read-only rootfs + drop all capabilities + disable privilege escalation — áp lên CẢ 5 backend (api/auth/prediction/service-mgt/cli). Pod-level seccomp RuntimeDefault; app/nginx/sidecar/init mỗi cái siết theo khả năng của image.",
+      steps:[
+        "Pod-level: <code>seccompProfile: RuntimeDefault</code> cho cả 5 backend.",
+        "App container: <code>allowPrivilegeEscalation:false</code> + <code>drop:[ALL]</code>; <code>runAsNonRoot+runAsUser</code> CHỈ nơi image có UID SỐ (prediction 1000, cli 10001); <code>readOnlyRootFilesystem</code> nơi ghi được (service-mgt + <code>/tmp</code> emptyDir).",
+        "nginx ambassador: drop ALL nhưng <code>add: [CHOWN, SETUID, SETGID]</code> (official image cần).",
+        "log-sidecar + init wait-db: drop ALL, sidecar readOnlyRootFS (chỉ <code>tail -f</code>).",
+        "<code>helm upgrade stock deploy/helm/stock -n stock</code> → verify securityContext trên pod live."
+      ],
+      knowledge:[
+        "<b>⚠️ Bẫy nginx CAP_CHOWN:</b> <code>drop:[ALL]</code> làm official nginx CrashLoopBackOff (<code>chown(\"/var/cache/nginx/client_temp\",101) failed: Operation not permitted</code>) — entrypoint root chown cache sang uid 101 lúc start cần <code>CAP_CHOWN</code>. Fix: giữ drop-ALL nhưng <code>add: [CHOWN, SETUID, SETGID]</code> (SETUID/SETGID để master hạ quyền worker). Cổng >1024 nên KHÔNG cần <code>NET_BIND_SERVICE</code>.",
+        "<b>App vẫn Ready khi nginx chết (2/3):</b> chỉ container nginx CrashLoop, app + sidecar vẫn Running ⇒ hardening app/sidecar đã chuẩn, chỉ nginx cần cap.",
+        "<code>runAsNonRoot:true</code> với image mà USER là TÊN (alpine <code>adduser -S</code>, không <code>-u &lt;số&gt;</code>) sẽ FAIL admission ('non-numeric user, cannot verify'). Phải có <code>runAsUser</code> SỐ → chỉ enforce ở prediction(1000)/cli(10001); api/service-mgt/auth chỉ drop caps + no-priv-esc.",
+        "UID lấy từ Dockerfile — KHÔNG đoán: <code>api-svc adduser -S appuser</code> (phi số) · <code>auth-svc</code> chạy root · <code>prediction useradd -u 1000</code> · <code>cli adduser -u 10001</code>.",
+        "<code>readOnlyRootFilesystem</code> cần <code>/tmp</code> emptyDir (service-mgt) — nơi nào image ghi rootfs (JVM /tmp, torch cache, ssh host key) thì KHÔNG bật được.",
+        "Kết quả: 5 backend <code>2/2</code> Available, mọi pod <code>3/3</code> Running, 0 restart — hardening không vỡ runtime."
+      ],
+      commands:[
+        {cmd:"helm upgrade stock deploy/helm/stock -n stock", note:"rev6 (sau fix CAP_CHOWN); rollout zero-downtime maxUnavailable:0", out:"Release \"stock\" has been upgraded. Happy Helming!\nREVISION: 6"},
+        {cmd:"p=$(kubectl get pod -n stock -l app=prediction-svc \\\n  -o jsonpath='{.items[0].metadata.name}')\n# NOTE: describe pod KHÔNG show securityContext container (chỉ SeccompProfile ở pod-level)\n# Dùng yaml|grep để đọc đầy đủ:\nkubectl get pod $p -n stock -o yaml | grep -E \\\n  'securityContext:|fsGroup:|runAsNonRoot:|runAsUser:|allowPrivilegeEscalation:|readOnlyRootFilesystem:|drop:|add:|- ALL|- CHOWN|- SETUID|- SETGID'", note:"yaml+grep dễ nhớ hơn jsonpath; bắt đủ mọi field securityContext", out:"  securityContext:          # pod-level\n    fsGroup: 2000\n    seccompProfile:\n      type: RuntimeDefault\n  securityContext:          # prediction-svc (app)\n    allowPrivilegeEscalation: false\n    capabilities:\n      drop:\n      - ALL\n    runAsNonRoot: true\n    runAsUser: 1000\n  securityContext:          # nginx ambassador\n    allowPrivilegeEscalation: false\n    capabilities:\n      add:\n      - CHOWN\n      - SETUID\n      - SETGID\n      drop:\n      - ALL\n  securityContext:          # log-sidecar\n    allowPrivilegeEscalation: false\n    capabilities:\n      drop:\n      - ALL\n    readOnlyRootFilesystem: true"},
+        {cmd:"# BẪY (rev5, trước fix): pod 2/3 CrashLoopBackOff — chỉ nginx chết\nkubectl logs $p -n stock -c nginx --previous", note:"lỗi thiếu CAP_CHOWN", out:"[emerg] 1#1: chown(\"/var/cache/nginx/client_temp\", 101) failed (1: Operation not permitted)"},
+        {cmd:"kubectl get pods -n stock -l app=prediction-svc", note:"sau fix — 3/3 Running, 0 restart", out:"NAME                     READY   STATUS    RESTARTS\nprediction-svc-...-hs826 3/3     Running   0"}
+      ]
+    },
+    {
+      id:"3.3", title:"ServiceAccount & RBAC", domain:"App Environment, Config & Security (25%)", duration:"~60m", status:"done",
+      prep:["Template <code>deploy/helm/stock/templates/serviceaccounts.yaml</code> — 5 SA per-service (automount:false) + SA <code>pod-reader</code> + Role + RoleBinding."],
+      cleanup:["<code>helm rollback</code> hoặc <code>--set global.rbac.enabled=false</code>. gateway-svc GIỮ SA+Role riêng (thực sự gọi API) — không đụng."],
+      request:"Create ServiceAccount, Role, RoleBinding; Pod dùng SA token list Pods trong ns qua API. Đồng thời hardening thật: mỗi backend 1 SA riêng với <code>automountServiceAccountToken:false</code> (trước dùng <code>default</code> SA token tự mount dù không service nào gọi API).",
+      steps:[
+        "(A) Per-service SA + <code>automountServiceAccountToken:false</code> → không còn projected token; wire <code>serviceAccountName: &lt;svc&gt;</code> vào từng deployment.",
+        "(B) SA <code>pod-reader</code> + Role chỉ <code>get/list/watch</code> <code>pods/services/endpoints</code> (scope ns stock) + RoleBinding.",
+        "<code>helm upgrade stock deploy/helm/stock -n stock</code> (rev8).",
+        "Verify token KHÔNG còn mount (pod không có volume <code>kube-api-access-*</code>).",
+        "Verify RBAC scope bằng <code>kubectl auth can-i --as=&lt;SA&gt;</code>."
+      ],
+      knowledge:[
+        "<code>automountServiceAccountToken:false</code> đặt ở SA OBJECT → mọi pod dùng SA đó không mount token; verify bằng pod KHÔNG còn volume <code>kube-api-access-*</code>.",
+        "RBAC namespaced: <code>pod-reader</code> list được pod NHƯNG không delete (Role chỉ đọc); SA khác (auth-svc) không bind Role ⇒ không list được → least-privilege chứng minh bằng impersonation thật.",
+        "<code>kubectl auth can-i list pods --as=system:serviceaccount:stock:pod-reader</code> = oracle nhanh (yes/no). <code>kubectl get pods --as=...</code> = impersonation THẬT — trả danh sách pod thật hoặc Forbidden tùy Role.",
+        "Impersonation <code>--as=system:serviceaccount:&lt;ns&gt;:&lt;sa&gt;</code> demo RBAC thật: <code>pod-reader</code> đọc OK / xóa bị chặn; SA không bind Role → Forbidden — minh chứng rõ hơn chỉ <code>can-i</code>.",
+        "Trước đây 5 backend chạy SA <code>default</code> có token API tự mount dù CHÚNG chỉ nói chuyện qua Service DNS + gRPC — không service nào gọi k8s API ⇒ token thừa = bề mặt tấn công. Per-service SA + automount:false loại bỏ.",
+        "gateway-svc là ngoại lệ: GIỮ SA + Role riêng vì blue/green controller THỰC SỰ patch Deployment qua API (<code>charts/gateway-svc/templates/rbac.yaml</code>)."
+      ],
+      commands:[
+        {cmd:"helm upgrade stock deploy/helm/stock -n stock", note:"rev8 — per-service SA + pod-reader RBAC", out:"Release \"stock\" has been upgraded. Happy Helming!\nREVISION: 8"},
+        {cmd:"p=$(kubectl get pod -n stock -l app=prediction-svc \\\n  -o jsonpath='{.items[0].metadata.name}')\nkubectl describe pod $p -n stock | grep -iE 'Service Account:|kube-api-access'", note:"Service Account name; không thấy kube-api-access = token không còn mount", out:"Service Account:  prediction-svc\n# (không có dòng kube-api-access-* trong Mounts)"},
+        {cmd:"kubectl get sa prediction-svc -n stock -o yaml | grep automount", note:"xác nhận automountServiceAccountToken tắt tại SA object", out:"automountServiceAccountToken: false"},
+        {cmd:"kubectl auth can-i --list --as=system:serviceaccount:stock:pod-reader -n stock", note:"liệt kê toàn bộ quyền của pod-reader SA", out:"Resources               Non-Resource URLs   Resource Names   Verbs\npods                    []                  []               [get list watch]\nservices                []                  []               [get list watch]\nendpoints               []                  []               [get list watch]"},
+        {cmd:"kubectl get pods --as=system:serviceaccount:stock:pod-reader -n stock", note:"impersonation THẬT — pod-reader đọc được danh sách pod", out:"NAME                          READY   STATUS    RESTARTS\napi-svc-blue-...              3/3     Running   0\nprediction-svc-...            3/3     Running   0\n# ... (danh sách pod thật trong ns stock)"},
+        {cmd:"kubectl get pods --as=system:serviceaccount:stock:auth-svc -n stock", note:"SA khác không bind Role → Forbidden", out:"Error from server (Forbidden): pods is forbidden: User \"system:serviceaccount:stock:auth-svc\" cannot list resource \"pods\" in API group \"\" in the namespace \"stock\""},
+        {cmd:"p=$(kubectl get pod -n stock -l app=prediction-svc \\\n  -o jsonpath='{.items[0].metadata.name}')\nkubectl delete pod $p --as=system:serviceaccount:stock:pod-reader -n stock --dry-run=server", note:"pod-reader không có quyền delete — Role chỉ get/list/watch", out:"Error from server (Forbidden): pods \"prediction-svc-...\" is forbidden: User \"system:serviceaccount:stock:pod-reader\" cannot delete resource \"pods\" in API group \"\" in the namespace \"stock\""}
+      ]
+    },
+    {
+      id:"3.4", title:"Namespace Quotas", domain:"App Environment, Config & Security (25%)", duration:"~45m", status:"done",
+      prep:["Template <code>deploy/helm/stock/templates/quota.yaml</code> — LimitRange + ResourceQuota áp vào ns <code>stock</code> THẬT (đang chạy 26 pod), size ~2.5–3x an toàn."],
+      cleanup:["<code>--set global.quota.enabled=false</code> hoặc <code>helm rollback</code> để tắt quota. Lab 3.4 tạo pod <code>noreq-test</code> THẬT và tự xóa trong bước cuối; nếu bị gián đoạn thì chạy <code>kubectl delete pod noreq-test -n stock --ignore-not-found</code>."],
+      request:"Apply ResourceQuota + LimitRange; quan sát Pod bị reject THẬT khi vượt quota; chứng minh default injection qua pod tạo THẬT. Vì áp lên ns live 26 pod, phải size quota để KHÔNG chặn rollout/blue-green; LimitRange bắt buộc đi kèm để tiêm default request cho pod không khai resources (init/CronJob).",
+      steps:[
+        "Apply LimitRange <code>stock-defaults</code> (defaultRequest 50m/64Mi · default 250m/256Mi · max 2/3Gi).",
+        "Apply ResourceQuota <code>stock-quota</code> (requests.cpu=6 mem=10Gi · limits.cpu=30 mem=24Gi · pods=60).",
+        "<code>helm upgrade</code> (rev7) → <code>describe quota</code> + <code>describe limitrange</code> xác nhận used dưới trần.",
+        "REJECT THẬT — <code>kubectl create</code> THẬT (không <code>--dry-run</code>) → admission từ chối tại API server → pod KHÔNG được tạo: (a) 2 container cpu=2 → vượt ResourceQuota; (b) 1 container cpu=3 → vượt LimitRange max.",
+        "ADMIT THẬT + default injection — tạo pod <code>noreq-test</code> THẬT không khai resources → LimitRange vá default; verify bằng <code>get pod -o yaml | grep resources</code> và <code>describe quota</code> (Used requests.cpu tăng +50m); cuối cùng xóa pod để dọn."
+      ],
+      knowledge:[
+        "Quota <code>requests.*</code>/<code>limits.*</code> yêu cầu MỌI pod khai resources → <b>phải pair LimitRange</b> (default) nếu không CronJob/init pod thiếu resources bị reject.",
+        "Reject xảy ra ở <b>API server admission</b> (KHÔNG phải scheduler) → pod không được tạo ngay từ đầu.",
+        "Dùng <code>kubectl create</code> THẬT (không <code>--dry-run=server</code>) để reject: pod vẫn KHÔNG persist vì admission từ chối — nhưng khác <code>--dry-run</code> ở chỗ quota accounting đếm THẬT (pod bị reject KHÔNG trừ quota; pod được tạo THẬT mới trừ).",
+        "LimitRange <code>max</code> giới hạn per-Container; ResourceQuota giới hạn TỔNG toàn ns — hai tầng khác nhau (1 container cpu=3 > max 2 bị chặn ở LimitRange; tổng 2 container cpu=4 > remaining bị chặn ở Quota).",
+        "Default injection: pod không khai resources → LimitRange tự vá <code>{requests:50m/64Mi, limits:250m/256Mi}</code> ⇒ thoả quota; chỉ chứng minh được bằng pod THẬT (dry-run cũng thấy nhưng không tăng Used trên <code>describe quota</code>)."
+      ],
+      commands:[
+        {cmd:"helm upgrade stock deploy/helm/stock -n stock", note:"rev7 — LimitRange + ResourceQuota", out:"Release \"stock\" has been upgraded. Happy Helming!\nREVISION: 7"},
+        {cmd:"kubectl describe quota stock-quota -n stock", note:"used đều dưới trần", out:"requests.cpu     2250m/6\nrequests.memory  3840Mi/10Gi\nlimits.cpu       13200m/30\npods             26/60"},
+        {cmd:"kubectl describe limitrange stock-defaults -n stock", note:"xem default + max per-Container", out:"Type        Resource  Min   Max  Default Request  Default Limit\nContainer   cpu       -     2     50m              250m\nContainer   memory    -     3Gi   64Mi             256Mi"},
+        {cmd:"# (a) REJECT THẬT — vượt ResourceQuota (2 container × cpu=2 → tổng requests.cpu=4):\nkubectl create -n stock -f quota-test.yaml", note:"kubectl create THẬT (không --dry-run); admission từ chối → không persist", out:"Error from server (Forbidden): pods \"quota-test\" is forbidden: exceeded quota: stock-quota, requested: requests.cpu=4, used: requests.cpu=2250m, limited: requests.cpu=6"},
+        {cmd:"# (b) REJECT THẬT — vượt LimitRange max (1 container cpu=3 > max 2):\nkubectl create -n stock -f max-test.yaml", note:"LimitRange max per-Container bắt trước Quota", out:"Error from server (Forbidden): pods \"max-test\" is forbidden: maximum cpu usage per Container is 2, but limit is 3"},
+        {cmd:"# ADMIT THẬT — pod noreq-test không khai resources → LimitRange vá default:\nkubectl create -n stock -f - <<'EOF'\napiVersion: v1\nkind: Pod\nmetadata:\n  name: noreq-test\nspec:\n  containers:\n  - name: nginx\n    image: nginx\nEOF", note:"tạo pod THẬT; không khai resources → LimitRange inject default", out:"pod/noreq-test created"},
+        {cmd:"kubectl get pod noreq-test -n stock -o yaml | grep -A4 'resources:'", note:"xác nhận LimitRange đã vá default requests + limits", out:"    resources:\n      limits:\n        cpu: 250m\n        memory: 256Mi\n      requests:\n        cpu: 50m\n        memory: 64Mi"},
+        {cmd:"kubectl describe quota stock-quota -n stock", note:"Used requests.cpu tăng +50m so với trước (quota đếm pod THẬT)", out:"requests.cpu     2300m/6\nrequests.memory  3904Mi/10Gi\npods             27/60"},
+        {cmd:"kubectl delete pod noreq-test -n stock", note:"dọn pod test; Used quota giảm lại", out:"pod \"noreq-test\" deleted"}
+      ]
+    }
+  ],
+
+  "Day 4 — Networking & storage": [
+    {
+      id:"4.1", title:"ClusterIP & NodePort", domain:"Services & Networking (20%)", duration:"~45m", status:"done",
+      prep:["Cả 2 loại Service có sẵn trên stack: ClusterIP (api/prediction/db) + NodePort (cli-svc 32345, gateway-svc 30080). Drill selector mismatch dùng deploy nháp <code>ep-demo</code>."],
+      cleanup:["<code>kubectl delete deploy ep-demo svc ep-demo -n stock</code> (nếu tạo drill)."],
+      request:"Create ClusterIP backend + NodePort frontend; diagnose và fix selector mismatch; verify Endpoints. Trên stack thật đã có cả 2 loại; drill throwaway <code>ep-demo</code> để tái hiện lỗi Endpoints rỗng do selector sai.",
+      steps:[
+        "Liệt kê Service theo TYPE + PORT + NODEPORT: ClusterIP nội bộ vs NodePort expose ra ngoài.",
+        "Tạo deploy nháp <code>ep-demo</code> + Service selector SAI (<code>app=WRONG</code>) → <code>get endpoints</code> RỖNG.",
+        "Fix selector về <code>app=ep-demo</code> bằng <code>kubectl patch svc</code> → Endpoints nhồi IP:port pod Ready.",
+        "Xác nhận db là headless (<code>clusterIP: None</code>) — DNS trả thẳng IP pod."
+      ],
+      knowledge:[
+        "<b>Service selector = tiêu chí chọn pod</b>; Endpoints controller theo dõi pod <code>Ready</code> khớp selector → nhồi IP:port. Selector sai / pod chưa Ready ⇒ <b>Endpoints rỗng = nguyên nhân #1 'service không tới được'</b>. <code>kubectl get endpoints &lt;svc&gt;</code> là lệnh debug ĐẦU TIÊN.",
+        "<b>ClusterIP</b> (default): IP ảo nội bộ, load-balance tới Endpoints. <b>NodePort</b>: mở cổng 30000–32767 trên MỌI node → ClusterIP (expose thô, không cần LoadBalancer).",
+        "headless (<code>clusterIP: None</code>, db): DNS trả thẳng IP pod (StatefulSet cần để địa chỉ hoá từng pod).",
+        "Selector mismatch chữa được vì Service selector là MUTABLE (khác selector của Deployment — immutable)."
+      ],
+      commands:[
+        {cmd:"kubectl get svc -n stock -o custom-columns='NAME:.metadata.name,TYPE:.spec.type,PORT:.spec.ports[0].port,NODEPORT:.spec.ports[0].nodePort'", note:"cả 2 loại Service", out:"api-svc         ClusterIP   8118   <none>\nprediction-svc  ClusterIP   8119   <none>\ndb              ClusterIP   5432   <none>   (headless clusterIP=None)\ncli-svc         NodePort    2345   32345\ngateway-svc     NodePort    80     30080"},
+        {cmd:"kubectl create deploy ep-demo --image=nginx:1.27-alpine -n stock\n# Service selector SAI (app=WRONG):\nkubectl get endpoints ep-demo -n stock", note:"Endpoints RỖNG do selector không khớp", out:"ep-demo   <none>          ← selector không khớp pod nào"},
+        {cmd:"kubectl patch svc ep-demo -n stock -p '{\"spec\":{\"selector\":{\"app\":\"ep-demo\"}}}'\nkubectl get endpoints ep-demo -n stock", note:"fix selector → Endpoints có IP", out:"service/ep-demo patched\nep-demo   10.244.2.57:80  ← IP:port pod Ready khớp selector"}
+      ]
+    },
+    {
+      id:"4.2", title:"Ingress Routing", domain:"Services & Networking (20%)", duration:"~60m", status:"done",
+      prep:["Cluster kind CHƯA có ingress controller → cài <code>ingress-nginx</code> (baremetal/NodePort, kind không map hostPort 80/443)."],
+      cleanup:["<code>--set global.ingress.enabled=false</code>; gỡ controller: <code>kubectl delete -f .../baremetal/deploy.yaml</code> nếu muốn."],
+      request:"Route <code>/</code> → frontend và <code>/api</code> → backend qua Ingress; verify qua ingress controller endpoint. Ingress = gated Helm template (host <code>stock.local</code>, KHÔNG rewrite path), bật bằng <code>--set global.ingress.enabled=true</code>.",
+      steps:[
+        "Cài ingress-nginx (baremetal manifest) → controller 1/1, 2 admission Job Completed; Service NodePort http/https.",
+        "Bật Ingress: <code>helm upgrade ... --set global.ingress.enabled=true</code> → <code>get ingress</code> (host stock.local).",
+        "Verify routing: <code>port-forward</code> controller + curl với header <code>Host: stock.local</code> tới <code>/api/version</code> = 200.",
+        "Host không khớp (<code>nope.invalid</code>) → 404 default backend."
+      ],
+      knowledge:[
+        "<b>Ingress cần Ingress CONTROLLER</b>: Ingress object chỉ là 'cấu hình mong muốn'; controller mới thực thi routing L7. <code>ingressClassName</code> phải khớp controller (<code>nginx</code>).",
+        "Là bản k8s-native SONG SONG với gateway-svc (Rust) đang làm longest-prefix routing qua NodePort — cùng mục tiêu <code>/</code>→fe <code>/api</code>→be, khác cơ chế (controller chuẩn vs proxy tự viết).",
+        "kind KHÔNG map hostPort 80/443 (cluster tạo sẵn, không extraPortMappings) → verify qua NodePort/port-forward thay vì <code>http://localhost</code>.",
+        "Host header quyết định rule nào áp: <code>Host: stock.local</code> khớp → route; host lạ → 404 default backend (không phải lỗi controller)."
+      ],
+      commands:[
+        {cmd:"kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/baremetal/deploy.yaml\nkubectl get svc ingress-nginx-controller -n ingress-nginx", note:"cài controller (baremetal NodePort)", out:"controller 1/1 Running; 2 admission Job Completed\ningress-nginx-controller  NodePort  http=31825  https=30376"},
+        {cmd:"helm upgrade stock deploy/helm/stock -n stock --set global.ingress.enabled=true\nkubectl get ingress -n stock", note:"bật Ingress gated template", out:"stock   nginx   stock.local   80"},
+        {cmd:"kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 18080:80 &\ncurl -s -H \"Host: stock.local\" http://localhost:18080/api/version", note:"route /api → api-svc = 200", out:"{\"service\":\"api-svc\",\"git_sha\":\"unknown\",...,\"consistent\":true}   HTTP 200 ✅"},
+        {cmd:"curl -s -H \"Host: nope.invalid\" http://localhost:18080/api/version -o /dev/null -w '%{http_code}\\n'", note:"host không khớp → default backend", out:"404   ← host không khớp rule"}
+      ]
+    },
+    {
+      id:"4.3", title:"NetworkPolicy Isolation", domain:"Services & Networking (20%)", duration:"~45m", status:"done",
+      prep:["NetworkPolicy = gated template <code>networkpolicy.yaml</code> (default off vì default-deny cần allow đủ traffic hợp lệ — Prometheus scrape :9464...). 5 policy."],
+      cleanup:["Đã TẮT lại (default off) sau demo để không chặn Prometheus scrape. Xoá pod nháp: <code>kubectl delete pod np-test -n stock</code>."],
+      request:"Allow frontend → backend traffic only; deny backend egress ra internet (0.0.0.0/0). 5 policy: default-deny-ingress + allow gateway/ingress-nginx→frontend + api→auth/prediction + backends→db + deny-backend-egress-internet.",
+      steps:[
+        "Bật NetworkPolicy + Ingress: <code>--set global.networkPolicy.enabled=true --set global.ingress.enabled=true</code> → 5 policy.",
+        "(A) Ingress vẫn 200 vì template ĐÃ allow ns <code>ingress-nginx</code> (namespaceSelector).",
+        "(B) ISOLATION: pod lạ <code>app=np-test</code> (không trong allow-list) curl api-svc → wget TIMEOUT (bị chặn).",
+        "Tắt lại (default off) sau demo."
+      ],
+      knowledge:[
+        "<b>⚠️ kindnet CÓ enforce (lật giả định):</b> ban đầu tưởng kindnet KHÔNG enforce NetworkPolicy (kiến thức cũ). Test thật lật lại: bật default-deny → Ingress <code>/api</code> trả HTTP <b>000</b> (backend không tới được); tắt → <b>200</b>. ⇒ CNI này enforce THẬT. Bài học: chạy lệnh kiểm chứng, đừng tin giả định.",
+        "<b>default-deny-ingress</b> (<code>podSelector: {}</code>, <code>policyTypes:[Ingress]</code>, KHÔNG có <code>ingress:</code>) = từ chối MỌI ingress; các policy <code>allow-*</code> <b>cộng dồn (OR)</b> mở đúng call-graph.",
+        "Test isolation THẬT (pod trong allow-list qua, pod ngoài <code>np-test</code> wget timeout = bị chặn) mới chứng minh policy tác dụng — KHÔNG suy đoán từ manifest.",
+        "Cho ingress controller qua backend cần allow <b>ns của controller</b> (<code>namespaceSelector kubernetes.io/metadata.name: ingress-nginx</code>), nếu không Ingress 000 dù controller chạy.",
+        "<code>deny-backend-egress-internet</code> (auth-svc/service-mgt): egress chỉ intra-cluster (10.0.0.0/8) + DNS :53 → chặn ra ngoài. KHÔNG áp prediction-svc (nó crawl external thật)."
+      ],
+      commands:[
+        {cmd:"helm upgrade stock deploy/helm/stock -n stock --set global.networkPolicy.enabled=true --set global.ingress.enabled=true\nkubectl get networkpolicy -n stock", note:"5 policy", out:"default-deny-ingress\nallow-gateway-to-frontend\nallow-api-to-backends\nallow-backends-to-db\ndeny-backend-egress-internet"},
+        {cmd:"curl -s -H \"Host: stock.local\" http://localhost:18082/api/version -w '\\nHTTP %{http_code}\\n'", note:"(A) Ingress vẫn qua (allow ns ingress-nginx)", out:"{\"service\":\"api-svc\",...}   HTTP 200   ← allow-gateway-to-frontend cho ingress-nginx qua"},
+        {cmd:"# (B) pod lạ app=np-test (ngoài allow-list) curl api-svc:\nkubectl run np-test --image=nginx:1.27-alpine --restart=Never -n stock --labels=app=np-test \\\n  --command -- sh -c 'wget -T 5 -qO- http://api-svc:8118/health/ready; echo \"wget_exit=$?\"'\nkubectl logs np-test -n stock", note:"BỊ CHẶN → timeout", out:"wget: download timed out\nwget_exit=1              ← default-deny + không allow app=np-test → TIMEOUT (chặn thật)"}
+      ]
+    },
+    {
+      id:"4.4", title:"Persistent Volume Claims", domain:"Services & Networking (20%)", duration:"~45m", status:"done",
+      prep:["StorageClass <code>standard</code> (rancher.io/local-path, WaitForFirstConsumer) có sẵn (db/minio/rl-models dùng). Demo persistence bằng PVC nháp <code>ck-data</code>."],
+      cleanup:["<code>kubectl delete pod pvc-writer pvc-reader -n stock; kubectl delete pvc ck-data -n stock</code> (reclaimPolicy Delete ⇒ xoá PVC xoá luôn PV+data)."],
+      request:"Provision PVC 1Gi (dynamic provisioning), mount trong Pod, ghi data, xóa Pod, tạo lại, verify persistence. StorageClass standard tự tạo PV; chứng minh PV vòng đời tách khỏi pod.",
+      steps:[
+        "Tạo PVC <code>ck-data</code> (RWO 1Gi) + writer pod ghi <code>/data/proof.txt</code>.",
+        "PVC <code>Bound</code> KHI pod schedule (WaitForFirstConsumer).",
+        "XÓA writer pod.",
+        "reader pod mount CÙNG PVC → data còn nguyên (READ-BACK)."
+      ],
+      knowledge:[
+        "<b>PVC = yêu cầu storage</b>; StorageClass <b>dynamic provisioner</b> tự tạo PV khớp (không cần admin tạo PV tay).",
+        "<code>WaitForFirstConsumer</code> = hoãn bind PV tới khi pod đầu schedule (chọn node/zone đúng) — vì thế <code>backup-data</code> PVC 'Pending/waiting for first consumer' là ĐÚNG, không phải bug.",
+        "<b>PV vòng đời TÁCH KHỎI pod</b>: xóa pod, PVC/PV giữ nguyên; pod mới mount lại thấy data. Khác <code>emptyDir</code> (chết theo pod).",
+        "RWO = ReadWriteOnce mount trên 1 node; <code>reclaimPolicy: Delete</code> = xóa PVC ⇒ xóa PV+data."
+      ],
+      commands:[
+        {cmd:"kubectl apply -f -   # PVC ck-data (RWO 1Gi) + pod pvc-writer\nkubectl get pvc ck-data -n stock", note:"Bound khi pod schedule", out:"ck-data   Bound   pvc-7d6b...   1Gi   RWO   standard   ← WaitForFirstConsumer"},
+        {cmd:"kubectl logs pvc-writer -n stock", note:"writer ghi data", out:"ckad-4.4-persisted-02:49:06"},
+        {cmd:"kubectl delete pod pvc-writer -n stock\n# reader pod mount CÙNG PVC ck-data:\nkubectl logs pvc-reader -n stock", note:"data PERSIST qua vòng đời pod", out:"READ-BACK: ckad-4.4-persisted-02:49:06     ← DATA còn nguyên ✅"}
+      ]
+    }
+  ],
+
+  "Day 5 — Observability & exam prep": [
+    {
+      id:"5.1", title:"Self-Healing App (Probes)", domain:"Observability & Maintenance (15%)", duration:"~45m", status:"done",
+      prep:["Probe đã phủ 6 service từ day trước (HTTP liveness/readiness, native gRPC probe, tcpSocket). Bài này BỔ SUNG startupProbe cho container slow-start."],
+      cleanup:["Không có object nháp — áp thẳng qua <code>helm upgrade</code>; rollback bằng <code>helm rollback</code>."],
+      request:"Configure HTTP liveness + file-based readiness + startupProbe cho slow-start container. auth-svc đã có startupProbe (JVM+Flyway); THÊM mới startupProbe cho prediction-svc (torch import + ML init ~30–120s) gate liveness/readiness.",
+      steps:[
+        "Xác nhận probe sẵn có: api-svc <code>/health/*</code>, auth-svc Actuator <code>/actuator/health/{liveness,readiness}</code>, service-mgt native <code>grpc:8121</code>, prediction-svc tcpSocket :8119.",
+        "THÊM startupProbe prediction-svc: <code>tcpSocket:8119, periodSeconds:5, failureThreshold:30</code> (~150s).",
+        "<code>helm upgrade</code> (rev8) → verify startupProbe trên pod.",
+        "Xác nhận thứ tự probe: startup → (readiness ∥ liveness)."
+      ],
+      knowledge:[
+        "<b>Thứ tự probe</b> = startup → (readiness ∥ liveness). Trong lúc startupProbe CHƯA pass: readiness/liveness BỊ HOÃN → container slow-start không bị liveness restart loop. Startup pass 1 lần → chuyển sang readiness/liveness bình thường.",
+        "startupProbe (<code>failureThreshold:30 periodSeconds:5</code> ≈ 150s) bỏ được <code>initialDelaySeconds</code> dài trên readiness/liveness — sạch hơn.",
+        "Cơ chế self-heal như nhau bất kể loại probe: probe fail → restart (liveness) hoặc notReady (readiness). Stack thật dùng httpGet/tcpSocket/grpc (đúng bản chất service) thay <code>exec cat /tmp/healthy</code> của đề — cùng bản chất.",
+        "prediction-svc chậm vì torch import + ML init + DB connect; auth-svc chậm vì JVM boot + Flyway migrate — cả hai cần startupProbe để không bị giết oan."
+      ],
+      commands:[
+        {cmd:"helm upgrade stock deploy/helm/stock -n stock", note:"rev8 (gộp với 3.3)", out:"Release \"stock\" has been upgraded. Happy Helming!\nREVISION: 8"},
+        {cmd:"p=$(kubectl get pod -n stock -l app=prediction-svc \\\n  -o jsonpath='{.items[0].metadata.name}')\nkubectl get pod $p -n stock -o jsonpath='{.spec.containers[?(@.name==\"prediction-svc\")].startupProbe}'", note:"startupProbe đã set", out:"{\"failureThreshold\":30,\"periodSeconds\":5,\"successThreshold\":1,\"tcpSocket\":{\"port\":8119},\"timeoutSeconds\":1}"},
+        {cmd:"kubectl get pods -n stock -l app=prediction-svc", note:"2/2 Available, 0 restart", out:"NAME                     READY   STATUS    RESTARTS\nprediction-svc-...       3/3     Running   0"}
+      ]
+    },
+    {
+      id:"5.2", title:"CLI Observability", domain:"Observability & Maintenance (15%)", duration:"~45m", status:"done",
+      prep:["Pod thật ambassador multi-container (api-svc = 3 container: app/nginx/log-sidecar) + metrics-server (kind <code>--kubelet-insecure-tls</code>)."],
+      cleanup:["Chỉ đọc — không tạo gì."],
+      request:"Dùng <code>kubectl logs -c</code> và <code>--previous</code>; đọc Events từ <code>describe</code> và <code>get events</code>; dùng <code>kubectl top</code> cho resource usage. Thực hành trên pod thật multi-container.",
+      steps:[
+        "<code>logs -c</code>: chọn container trong pod nhiều container (api-svc = app/nginx/log-sidecar).",
+        "<code>logs --previous</code>: log instance TRƯỚC khi container restart/crash (điều tra CrashLoopBackOff).",
+        "Events: <code>get events --sort-by=.lastTimestamp</code> (toàn ns) vs <code>describe pod</code> (Events của 1 object).",
+        "<code>top pods</code> / <code>top nodes</code>: usage thật (cần metrics-server)."
+      ],
+      knowledge:[
+        "Pod nhiều container ⇒ <code>kubectl logs</code> <b>bắt buộc <code>-c &lt;container&gt;</code></b> (thiếu → lỗi/chọn mặc định). <code>-f</code> follow, <code>--tail=N</code>, <code>--previous</code> (instance trước restart), <code>--since=10m</code>.",
+        "<b>Events là nguồn chẩn đoán #1</b> cho ImagePullBackOff / FailedScheduling / probe fail / quota reject. <code>describe</code> = Events của 1 object; <code>get events</code> = toàn ns (sort theo thời gian).",
+        "<code>--previous</code> đọc được log trước lần restart hiện tại — vd bug nginx CAP_CHOWN ở Lab 3.2 bắt được bằng <code>logs --previous</code>.",
+        "<code>kubectl top</code> cần <b>metrics-server</b> (kind bật <code>--kubelet-insecure-tls</code>); số là <b>usage THẬT</b> (khác <code>resources.requests</code> là 'đặt trước')."
+      ],
+      commands:[
+        {cmd:"POD=$(kubectl get pod -n stock -l app=api-svc -o jsonpath='{.items[0].metadata.name}')\nkubectl get pod $POD -n stock -o jsonpath='{range .spec.containers[*]}{.name} {end}'\nkubectl logs $POD -n stock -c log-sidecar --tail=2", note:"3 container/pod — phải chỉ -c", out:"api-svc nginx log-sidecar\n...HTTP server listening on 0.0.0.0:8118"},
+        {cmd:"kubectl logs $POD -n stock -c <container> --previous", note:"log instance TRƯỚC restart (CrashLoop)", out:"# đọc log lần chạy trước lần restart hiện tại — vd bug nginx CAP_CHOWN (Lab 3.2)"},
+        {cmd:"kubectl get events -n stock --sort-by=.lastTimestamp | tail -4\nkubectl describe pod $POD -n stock   # section Events = timeline riêng pod", note:"Events = chẩn đoán #1", out:"Normal SawCompletedJob   cronjob/pipeline-sp500  Saw completed job ... Complete\nNormal WaitForFirstConsumer  pvc/backup-data  waiting for first consumer ..."},
+        {cmd:"kubectl top pods  -n stock -l app=prediction-svc\nkubectl top nodes", note:"usage thật (metrics-server)", out:"prediction-svc-...-hs826   2m   131Mi     ← CPU cores / RAM thực\nckad-control-plane  164m  1%  1535Mi 10%"}
+      ]
+    },
+    {
+      id:"5.3", title:"Broken YAML Triage", domain:"Observability & Maintenance (15%)", duration:"~45m", status:"done",
+      prep:["Manifest <code>deploy/k8s/ckad-labs/day_5/broken.yaml</code> cố tình có 3 lỗi kinh điển, mỗi lỗi lộ ra ở tầng khác nhau."],
+      cleanup:["<code>kubectl delete deploy triage svc triage -n stock</code> sau khi triage xong."],
+      request:"Fix selector mismatch trong Deployment; fix Service targetPort mismatch; fix invalid image name. Chữa theo trình tự vì mỗi lỗi lộ ở tầng khác nhau (admission → runtime → kết nối).",
+      steps:[
+        "BUG 1 selector≠template → apply BỊ TỪ CHỐI (validation); sửa <code>selector.matchLabels=app:webapp</code> khớp template → apply lại.",
+        "BUG 3 image sai chính tả (<code>nginx:latst</code>) → Pod ImagePullBackOff; <code>describe pod</code> Events; <code>set image</code> sửa.",
+        "BUG 2 Service targetPort 8080 nhưng container cổng 80 → Endpoints CÓ nhưng sai cổng; <code>get endpoints</code> soi; <code>patch svc</code> về 80."
+      ],
+      knowledge:[
+        "<b>3 tầng lỗi khác nhau = kỹ năng triage:</b> selector≠template (admission) → image sai (runtime) → targetPort sai (kết nối).",
+        "<b>selector≠template</b> = lỗi <b>admission</b> (apply fail NGAY, đọc message). Selector Deployment IMMUTABLE nên phải khớp template từ đầu.",
+        "<b>image sai</b> = lỗi <b>runtime</b> (Pod ImagePullBackOff) — đọc <code>describe pod</code> Events 'Failed to pull image'.",
+        "<b>targetPort sai</b> = lỗi <b>kết nối</b> (Pod Running, Endpoints CÓ nhưng sai cổng) — <code>get endpoints</code> soi cổng; lỗi 'ngấm ngầm' nhất vì mọi thứ trông Running."
+      ],
+      commands:[
+        {cmd:"kubectl apply -f deploy/k8s/ckad-labs/day_5/broken.yaml", note:"BUG 1 — apply bị từ chối (admission)", out:"service/triage created\nThe Deployment \"triage\" is invalid: spec.template.metadata.labels: Invalid value:\n{\"app\":\"webapp\"}: `selector` does not match template `labels`"},
+        {cmd:"# BUG 3 — image nginx:latst sai chính tả:\nkubectl get pod -n stock -l app=webapp\nkubectl set image deploy/triage web=nginx:1.27-alpine -n stock", note:"ImagePullBackOff → sửa image", out:"STATUS ErrImagePull → ImagePullBackOff\ndeployment.apps/triage image updated  → rolled out"},
+        {cmd:"# BUG 2 — targetPort 8080 nhưng container cổng 80:\nkubectl get endpoints triage -n stock\nkubectl patch svc triage -n stock -p '{\"spec\":{\"ports\":[{\"port\":80,\"targetPort\":80}]}}'\nkubectl get endpoints triage -n stock", note:"Endpoints sai cổng → patch về 80", out:"triage   10.244.2.63:8080     ← endpoint SAI cổng\ntriage   10.244.2.63:80       ← khớp cổng container → reachable"}
+      ]
+    },
+    {
+      id:"5.4", title:"Helm Deploy & Rollback", domain:"App Deployment (20%)", duration:"~45m", status:"done",
+      prep:["Release <code>stock</code> thật (helm v3.16.2 local). Toàn bộ Day 3/4 tạo lịch sử revision thật (rev5–14)."],
+      cleanup:["Sau demo rollback: <code>helm upgrade stock deploy/helm/stock -n stock</code> để restore đủ state từ chart."],
+      request:"Install Helm chart với value overrides; upgrade release và rollback về revision trước. Trên release stock thật — Day 3/4 đã tạo lịch sử revision là chất liệu cho lab này.",
+      steps:[
+        "Xem <code>helm history stock</code> — rev5(3.2)→6(fix)→7(quota)→8(SA+5.1)→...→14.",
+        "Value override lúc upgrade: <code>--set global.ingress.enabled=true</code>, <code>--set global.imageTag=v2</code>.",
+        "ROLLBACK: <code>helm rollback stock 7</code> → tạo REVISION MỚI (rev15 Rollback to 7).",
+        "Quan sát bẫy: rollback về 7 XOÁ luôn SA của rev8 → restore bằng <code>helm upgrade</code> từ chart."
+      ],
+      knowledge:[
+        "<b>⚠️ Bẫy rollback revert TOÀN BỘ state:</b> <code>helm rollback stock 7</code> = revert về đúng snapshot rev7, KHÔNG phải 'undo lệnh cuối'. Rev7 chưa có 3.3 (SA thêm ở rev8) → rollback về 7 XOÁ luôn 6 SA + RBAC (<code>get sa | grep -c pod-reader → 0</code>). Restore: <code>helm upgrade</code> từ chart (có đủ lại).",
+        "<b>Rollback là toàn-cục, không chọn lọc</b>: resource thêm ở revision SAU bị XOÁ khi lùi về revision TRƯỚC. GitOps: prefer re-apply/upgrade từ chart thay vì rollback khi muốn giữ 1 phần.",
+        "<b>Mỗi upgrade/rollback = 1 revision</b> (<code>helm history</code>); <code>helm rollback &lt;rev&gt;</code> nhảy về snapshot đó và TẠO revision mới (audit trail liền mạch, không xoá lịch sử).",
+        "<code>helm upgrade --set k=v</code> (hoặc <code>-f values-prod.yaml</code>) = override value; <code>--reuse-values</code> giữ set cũ (⚠️ dễ nhầm — dùng <code>--reset-values</code> hoặc upgrade sạch khi muốn chuẩn).",
+        "<code>helm rollback</code> an toàn hơn <code>kubectl rollout undo</code> ở chỗ revert CẢ manifest set (không lệch last-applied) — nhưng chính vì 'cả set' nên phải hiểu nó xoá gì."
+      ],
+      commands:[
+        {cmd:"helm history stock -n stock", note:"lịch sử revision (Day 3/4 tạo ra)", out:"5   Upgrade complete   (3.2 lần đầu — nginx crashloop CAP_CHOWN)\n6   Upgrade complete   (3.2 fix)\n7   Upgrade complete   (3.4 quota)\n8   Upgrade complete   (3.3 SA + 5.1)\n...\n14  deployed           (ingress on / NP off)"},
+        {cmd:"helm upgrade stock deploy/helm/stock -n stock --set global.ingress.enabled=true\nhelm upgrade stock deploy/helm/stock -n stock --set global.imageTag=v2", note:"value override (--set ghi đè values.yaml)", out:"Release \"stock\" has been upgraded. Happy Helming!"},
+        {cmd:"helm rollback stock 7 -n stock\nhelm history stock -n stock | tail -1", note:"rollback tạo REVISION MỚI", out:"Rollback was a success! Happy Helming!\n15  Rollback to 7      ← rollback tạo revision mới (không xoá lịch sử)"},
+        {cmd:"# BẪY — rollback về 7 XOÁ SA của rev8:\nkubectl get sa -n stock | grep -c pod-reader\nhelm upgrade stock deploy/helm/stock -n stock   # restore từ chart", note:"rollback toàn-cục xoá resource rev sau", out:"0    ← SA của rev8 bị XOÁ khi lùi về rev7!\n→ SA về 6 sau khi upgrade lại từ chart"}
+      ]
+    }
+  ]
+};
+
+// ===========================================================================
+// RENDER
+// ===========================================================================
+const $ = s => document.querySelector(s);
+const days = Object.keys(DATA);
+let curDay = days[0], curLab = 0;
+const open = {};   // day -> bool (mặc định mở)
+
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function hiOut(s){
+  return esc(s)
+    .replace(/\b(Complete|Running|created|configured|labeled|annotated|PASS|ready=true|exit 0|successfully rolled out|condition met)\b/g,'<span class="ok">$1</span>')
+    .replace(/\b(Error|Failed|FAIL|error|deleted|unlabeled|BackoffLimitExceeded|exitCode=1)\b/g,'<span class="bad">$1</span>');
+}
+
+function renderNav(){
+  $("#nav").innerHTML = days.map(d=>{
+    const isOpen = open[d]!==false;
+    const labs = DATA[d].map((l,i)=>`
+      <button class="lab ${(d===curDay&&i===curLab)?'on':''}" data-day="${d}" data-i="${i}">
+        <span class="id">${l.id}</span>
+        <span class="t">${l.title}</span>
+        <span class="meta">${l.duration} · <span class="st-${l.status}">${l.status.toUpperCase()}</span></span>
+      </button>`).join("");
+    return `<div class="day-group">
+        <div class="day" data-day="${d}"><span class="caret">${isOpen?'▾':'▸'}</span> ${d}</div>
+        <div class="day-labs ${isOpen?'':'collapsed'}">${labs}</div>
+      </div>`;
+  }).join("");
+  document.querySelectorAll('#nav .day').forEach(h=>h.onclick=()=>{
+    const d=h.dataset.day; open[d] = !(open[d]!==false); renderNav();
+  });
+  document.querySelectorAll('#nav .lab').forEach(b=>b.onclick=()=>{
+    curDay=b.dataset.day; curLab=+b.dataset.i; renderNav(); renderMain();
+  });
+}
+
+function cmdBlock(cmds){
+  return cmds.map((c,i)=>{
+    const noteHtml = c.note ? `  <span class="note"># ${esc(c.note)}</span>` : "";
+    const outHtml = c.out ? `<pre class="cmd-out">${hiOut(c.out)}</pre>` : "";
+    return `<div class="cmd">
+        <div class="code"><span class="prompt">$</span> ${esc(c.cmd)}${noteHtml}</div>
+        <button class="cp" data-i="${i}">copy</button>
+      </div>${outHtml}`;
+  }).join("");
+}
+
+let curSecs = [];
+function sectionsOf(l){
+  const s = [
+    {id:"request", label:"Request", icon:"◎", title:"Request — yêu cầu",
+      html:`<div class="body"><p>${esc(l.request)}</p></div>`},
+    {id:"know", label:"Kiến thức", icon:"✦", title:"Kiến thức cần biết",
+      html:`<div class="body"><ul class="know">${l.knowledge.map(k=>`<li>${k}</li>`).join("")}</ul></div>`}
+  ];
+  if(l.prep && l.prep.length) s.push({id:"prep", label:"Chuẩn bị", icon:"⚑", title:"Chuẩn bị (prereq)",
+      html:`<div class="body"><ul class="know">${l.prep.map(k=>`<li>${k}</li>`).join("")}</ul></div>`});
+  if(l.steps && l.steps.length) s.push({id:"steps", label:"Các bước", icon:"◷", title:"Các bước chạy",
+      html:`<ol class="steps">${l.steps.map(x=>`<li>${x}</li>`).join("")}</ol>`});
+  s.push({id:"cmds", label:"Lệnh", icon:"$", title:"Lệnh execute + output từng lệnh",
+      html:`<div class="cmds">${cmdBlock(l.commands)}</div>`});
+  if(l.cleanup && l.cleanup.length) s.push({id:"cleanup", label:"Dọn dẹp", icon:"✕", title:"Dọn dẹp (cleanup)",
+      html:`<div class="body"><ul class="know">${l.cleanup.map(k=>`<li>${k}</li>`).join("")}</ul></div>`});
+  if(l.tool) s.push({id:"tool", label:"Tool test", icon:"⚙", title:"Tool test (giả lập end-to-end)",
+      html:`<pre class="out tool">${esc(l.tool)}</pre>`});
+  return s;
+}
+function spyToc(){
+  let cur = curSecs[0] && curSecs[0].id;
+  for(const x of curSecs){ const el=document.getElementById("sec-"+x.id); if(el && el.getBoundingClientRect().top - 90 <= 0) cur = x.id; }
+  document.querySelectorAll("#toc a").forEach(a=>a.classList.toggle("on", a.dataset.sec==="sec-"+cur));
+}
+function renderMain(){
+  const l = DATA[curDay][curLab];
+  curSecs = sectionsOf(l);
+  $("#main").innerHTML = `
+    <h2 class="title">${l.id} · ${l.title}</h2>
+    <div class="badges">
+      <span class="badge ${l.status}">${l.status.toUpperCase()}</span>
+      <span class="badge">${l.domain}</span>
+      <span class="badge">${l.duration}</span>
+    </div>
+    ${curSecs.map(x=>`<section id="sec-${x.id}"><div class="h"><span class="k">${x.icon}</span> ${x.title}</div>${x.html}</section>`).join("")}
+    <div class="foot">CKAD labs · nguồn: deploy/k8s/ckad-labs/day_*/lab.md · harness: day_2/e2e-test.sh</div>`;
+  // mục lục
+  $("#toc").innerHTML = `<div class="lbl">Trong lab này</div>` +
+    curSecs.map(x=>`<a data-sec="sec-${x.id}">${x.label}</a>`).join("");
+  document.querySelectorAll("#toc a").forEach(a=>a.onclick=()=>{
+    const el=document.getElementById(a.dataset.sec); if(el) el.scrollIntoView({behavior:"smooth",block:"start"});
+  });
+  // copy
+  document.querySelectorAll("#main .cp").forEach(btn=>btn.onclick=()=>{
+    const raw = DATA[curDay][curLab].commands[+btn.dataset.i].cmd.replace(/\\\n\s*/g," ");
+    navigator.clipboard.writeText(raw).then(()=>{btn.textContent="copied";setTimeout(()=>btn.textContent="copy",1200);});
+  });
+  window.scrollTo(0, 0);
+  spyToc();
+}
+
+window.addEventListener("scroll", spyToc, true);  // capture=true để bắt cả scroll của <main>
+renderNav();
+renderMain();
+</script>
+</body>
+</html>

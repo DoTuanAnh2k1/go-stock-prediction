@@ -31,6 +31,28 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
+        <!-- spring-boot-starter-web — servlet container (Tomcat) để Actuator phục vụ
+             HTTP /actuator/* trên :9464. auth-svc gRPC-only nên trước đó KHÔNG có
+             HTTP server → Actuator management port không có listener → k8s probe
+             connection-refused → CrashLoop. starter-web cấp Tomcat cho actuator. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Actuator — health probes + metrics endpoint (factor 14). Chạy trên
+             server.port=9464 (cùng Tomcat, không tách management context). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Micrometer Prometheus registry → /actuator/prometheus (factor 14 metrics) -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
         <!-- PostgreSQL -->
         <dependency>
             <groupId>org.postgresql</groupId>

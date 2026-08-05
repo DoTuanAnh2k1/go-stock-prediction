@@ -9,6 +9,8 @@ pub struct AppConfig {
     pub routes: Vec<RouteConfig>,
     pub middleware: MiddlewareConfig,
     pub logging: LoggingConfig,
+    #[serde(default)]
+    pub bluegreen: Option<crate::bluegreen::config::BlueGreenConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

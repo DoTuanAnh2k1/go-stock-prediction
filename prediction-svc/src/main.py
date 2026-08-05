@@ -5,10 +5,11 @@ Startup sequence (mirrors Go cmd/prediction/main.go):
 2. Set timezone
 3. Init logger
 4. Init DB
-5. Start gRPC server
-6. Init scheduler
-7. Startup data sync (5s delay, crawl once)
-8. Wait for SIGTERM/SIGINT → graceful shutdown
+5. Init telemetry (OTel tracing + Prometheus metrics)
+6. Start gRPC server (with OTel interceptor)
+7. Init scheduler (SCHEDULER_ENABLED=true, default; skip when =false for k8s CronJob mode)
+8. Startup data sync (5s delay, crawl once)
+9. Wait for SIGTERM/SIGINT → graceful shutdown
 """
 from __future__ import annotations
 
@@ -52,6 +53,17 @@ from src.utils.version import stamp_version
 stamp_version()
 
 # ---------------------------------------------------------------------------
+# 3c. Telemetry — OTel tracing + Prometheus metrics
+#     Both are fail-safe: missing deps or unreachable collector → log warning, continue.
+# ---------------------------------------------------------------------------
+from src.telemetry.tracing import init_tracing, shutdown_tracing
+from src.telemetry.metrics import init_metrics, stop_metrics
+
+init_tracing()
+init_metrics()
+log.info("telemetry.ready")
+
+# ---------------------------------------------------------------------------
 # 4. Database
 # ---------------------------------------------------------------------------
 from src.database.connection import init_db
@@ -60,7 +72,7 @@ init_db()
 log.info("database.ready")
 
 # ---------------------------------------------------------------------------
-# 5. gRPC server
+# 5. gRPC server (OTel interceptor attached inside start_grpc_server)
 # ---------------------------------------------------------------------------
 from src.grpc_server.server import start_grpc_server, stop_grpc_server
 
@@ -82,12 +94,25 @@ registry_start(
 
 # ---------------------------------------------------------------------------
 # 6. Scheduler
+#    Controlled by SCHEDULER_ENABLED env var (default: true).
+#    Set to false in k8s ConfigMap — CronJob manifests drive scheduling instead.
+#    docker-compose keeps the default (true) so nothing changes for local dev.
 # ---------------------------------------------------------------------------
-from src.scheduler.jobs import JOB_FUNCTIONS
-from src.scheduler.manager import init_scheduler, shutdown_scheduler
+_scheduler_enabled = os.environ.get("SCHEDULER_ENABLED", "true").strip().lower() not in (
+    "false", "0", "no", "off"
+)
 
-init_scheduler(JOB_FUNCTIONS)
-log.info("scheduler.ready")
+if _scheduler_enabled:
+    from src.scheduler.jobs import JOB_FUNCTIONS
+    from src.scheduler.manager import init_scheduler, shutdown_scheduler
+
+    init_scheduler(JOB_FUNCTIONS)
+    log.info("scheduler.ready")
+else:
+    log.info("scheduler.disabled", reason="SCHEDULER_ENABLED=false — k8s CronJob mode")
+
+    def shutdown_scheduler():  # noqa: F811  (redefine to safe no-op)
+        pass
 
 # ---------------------------------------------------------------------------
 # 7. Startup data sync
@@ -141,5 +166,7 @@ log.info("service.shutdown")
 registry_stop()
 stop_grpc_server()
 shutdown_scheduler()
+stop_metrics()
+shutdown_tracing()
 log.info("service.stopped")
 sys.exit(0)

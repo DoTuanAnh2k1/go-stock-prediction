@@ -1,0 +1,48 @@
+{{- if .Values.global.pdb.enabled }}
+# =============================================================================
+# PodDisruptionBudget — HA: giữ service sống khi drain/upgrade node.
+# Stateless (≥2 replica): maxUnavailable 1 (cho phép mất tối đa 1 pod/lần disruption).
+# Stateful single (db, minio): minAvailable 1 (bảo vệ pod duy nhất — CHẶN drain node
+#   chứa nó; muốn drain phải scale=0 hoặc `kubectl drain --force`).
+# selector `app: <svc>` khớp cả biến thể single lẫn blue/green.
+# =============================================================================
+{{- range $svc := list "api-svc" "auth-svc" "cli-svc" "gateway-svc" "prediction-svc" "service-mgt" "web-svc" }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $svc }}
+  namespace: {{ $.Release.Namespace }}
+  labels: { app: {{ $svc }} }
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: { app: {{ $svc }} }
+{{- end }}
+{{- if .Values.global.pgadmin.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pgadmin
+  namespace: {{ .Release.Namespace }}
+  labels: { app: pgadmin }
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: { app: pgadmin }
+{{- end }}
+{{- range $svc := list "db" "minio" }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $svc }}
+  namespace: {{ $.Release.Namespace }}
+  labels: { app: {{ $svc }} }
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: { app: {{ $svc }} }
+{{- end }}
+{{- end }}

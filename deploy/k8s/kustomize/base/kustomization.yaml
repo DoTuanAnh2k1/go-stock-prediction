@@ -1,0 +1,21 @@
+# =============================================================================
+# CKAD P5 — Kustomize BASE (image api-svc THẬT, không phải nginx demo).
+#
+# BASE = nguồn chung, KHÔNG mang thông tin môi trường (namespace, replicas cụ thể,
+# image tag). Mọi khác biệt dev/prod do overlay patch → KHÔNG nhân đôi manifest.
+#
+# api-kz = biến thể api-svc triển khai declarative bằng Kustomize, chạy SONG SONG
+# với bản Helm (name khác nhờ overlay namePrefix). Khi deploy vào ns stock (nơi
+# Helm đã dựng db/auth-svc/prediction-svc + Secret api-svc), api-kz nói chuyện với
+# backend THẬT qua Service DNS và trở nên Ready.
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+
+# Label app/tier đã khai tường minh trong từng manifest (deployment selector +
+# pod template + service selector) → không cần commonLabels (đã deprecated).

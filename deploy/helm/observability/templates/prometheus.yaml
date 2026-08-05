@@ -1,0 +1,218 @@
+{{- if .Values.prometheus.enabled }}
+# =============================================================================
+# Prometheus — scrape metrics từ mọi pod trên toàn cluster qua pod annotations:
+#   prometheus.io/scrape: "true"
+#   prometheus.io/port:   "<metrics-port>"
+#   prometheus.io/path:   "/metrics"   (mặc định /metrics nếu thiếu)
+#
+# RBAC: ServiceAccount + ClusterRole (read pods/nodes/endpoints) +
+# ClusterRoleBinding cho kubernetes_sd role: pod.
+#
+# Apply:
+#   kubectl apply -f deploy/k8s/observability/prometheus.yaml
+# =============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: {{ .Release.Namespace }}
+  labels: { app: prometheus }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+  labels: { app: prometheus }
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/proxy", "nodes/metrics", "services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get"]
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+  labels: { app: prometheus }
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: {{ .Release.Namespace }}
+  labels: { app: prometheus }
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      # Prometheus tự scrape chính nó.
+      - job_name: prometheus
+        static_configs:
+          - targets: ["localhost:9090"]
+
+      # Scrape mọi pod có annotation prometheus.io/scrape=true trên toàn cluster.
+      - job_name: kubernetes-pods
+        # honor_labels: giữ nhãn GỐC của metric khi trùng với nhãn relabel đặt.
+        # Cần cho kube-state-metrics (metric mang sẵn namespace/pod của OBJECT) —
+        # nếu không, relabel đè bằng ns/pod của pod-scraper → nhãn thật thành
+        # exported_namespace/exported_pod, join theo namespace/pod hỏng.
+        honor_labels: true
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          # Chỉ giữ pod có annotation prometheus.io/scrape: "true".
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          # Path tuỳ chỉnh qua prometheus.io/path (mặc định /metrics).
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          # Ghép host:port từ pod IP + prometheus.io/port.
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          # Đưa các label k8s hữu ích vào series.
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: pod
+          # app label -> service (dùng bởi dashboard). Fallback container name.
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: replace
+            target_label: service
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+
+      # Infrastructure metrics: CPU/RAM từng container (cAdvisor) qua API-server
+      # proxy. Cần ClusterRole nodes/proxy + bearer token (SA auto-mount). Cho ra
+      # container_cpu_usage_seconds_total, container_memory_working_set_bytes, ...
+      - job_name: kubernetes-cadvisor
+        scheme: https
+        metrics_path: /metrics/cadvisor
+        tls_config:
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+
+      # Kubelet metrics (node-level, từ chính kubelet) qua API-server proxy.
+      - job_name: kubernetes-kubelet
+        scheme: https
+        tls_config:
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/$1/proxy/metrics
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+  namespace: {{ .Release.Namespace }}
+  labels: { app: prometheus }
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: {{ .Release.Namespace }}
+  labels: { app: prometheus }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: prometheus }
+  strategy:
+    type: Recreate           # PVC RWO
+  template:
+    metadata:
+      labels: { app: prometheus }
+    spec:
+      serviceAccountName: prometheus
+      securityContext:
+        fsGroup: 65534         # nobody — prom cần ghi TSDB trên PVC
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.54.1
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--storage.tsdb.retention.time=6h"
+            - "--web.enable-lifecycle"
+          ports:
+            - { name: http, containerPort: 9090 }
+          readinessProbe:
+            httpGet: { path: /-/ready, port: 9090 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /-/healthy, port: 9090 }
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+          volumeMounts:
+            - { name: config, mountPath: /etc/prometheus }
+            - { name: data, mountPath: /prometheus }
+      volumes:
+        - name: config
+          configMap: { name: prometheus-config }
+        - name: data
+          persistentVolumeClaim: { claimName: prometheus-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: {{ .Release.Namespace }}
+  labels: { app: prometheus }
+spec:
+  selector: { app: prometheus }
+  ports:
+    - { name: http, port: 9090, targetPort: 9090 }
+{{- end }}

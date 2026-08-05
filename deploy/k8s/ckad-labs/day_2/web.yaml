@@ -1,0 +1,61 @@
+# =============================================================================
+# Lab 2.1/2.2/2.3 — app demo "web" (nginx) để luyện rollout/blue-green/HPA.
+# CKAD domain: Application Deployment (20%)
+#
+#   - RollingUpdate maxUnavailable=0, maxSurge=1  => zero-downtime (thêm pod mới
+#     Ready TRƯỚC khi bỏ pod cũ).
+#   - readinessProbe httpGet /  => Service chỉ route pod đã sẵn sàng.
+#   - resources.requests.cpu     => bắt buộc cho HPA % (lab 2.3) tính theo request.
+#
+# Apply:  kubectl apply -f deploy/k8s/ckad-labs/day_2/web.yaml
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: stock
+  labels: { app: web }
+spec:
+  replicas: 4
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0        # không bao giờ giảm dưới số replica mong muốn
+  selector:
+    matchLabels: { app: web }
+  template:
+    metadata:
+      labels: { app: web }
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.25       # v1
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet: { path: /, port: 80 }
+            initialDelaySeconds: 2
+            periodSeconds: 3
+          # preStop: giữ pod phục vụ thêm 5s TRONG LÚC bị gỡ khỏi Endpoints, tránh
+          # "termination race" (SIGTERM tới nginx trước khi kube-proxy kịp ngừng route)
+          # => zero-dropped-connection. maxUnavailable=0 cần nhưng KHÔNG đủ nếu thiếu cái này.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          resources:
+            requests: { cpu: "50m", memory: "32Mi" }
+            limits:   { cpu: "200m", memory: "128Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: stock
+  labels: { app: web }
+spec:
+  selector: { app: web }
+  ports:
+    - port: 80
+      targetPort: 80

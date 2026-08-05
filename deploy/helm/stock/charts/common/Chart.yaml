@@ -1,0 +1,10 @@
+apiVersion: v2
+name: common
+description: >-
+  Library chart — partial dùng chung cho stack "stock". KHÔNG render resource nào
+  của riêng nó (type: library); chỉ export các named template (_ambassador.tpl) mà
+  các *-deployment.yaml của chart cha include lại để gom boilerplate ambassador/
+  sidecar/HA lặp ở 5 backend service. Subchart nằm sẵn trong charts/ nên Helm tự
+  nạp — không cần khai báo dependency hay `helm dependency build`.
+type: library
+version: 0.1.0

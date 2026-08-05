@@ -1,0 +1,38 @@
+{{- if .Values.global.ingress.enabled }}
+# =============================================================================
+# CKAD Lab 4.2 — Ingress Routing (trỏ vào Service THẬT của stack).
+#
+# / → web-svc:3000 (frontend) · /api → api-svc:8118 (backend). Đây là bản k8s-native
+# SONG SONG với gateway-svc (Rust) vốn đã làm longest-prefix routing qua NodePort —
+# học Ingress trên chính stack thật, so sánh với gateway.
+#
+# YÊU CẦU: ingress controller (ingress-nginx) đã cài + ingressClassName khớp. Cluster
+# kind này KHÔNG có sẵn → cài trước (xem lab.md 4.2). Vì thế default TẮT
+# (global.ingress.enabled=false) — bật: --set global.ingress.enabled=true.
+# KHÔNG rewrite path: api-svc phục vụ prefix /api nguyên vẹn (giống gateway).
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stock
+  namespace: {{ .Release.Namespace }}
+  labels: { app: stock }
+spec:
+  ingressClassName: {{ .Values.global.ingress.className | default "nginx" }}
+  rules:
+    - host: {{ .Values.global.ingress.host | default "stock.local" | quote }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api-svc
+                port: { number: 8118 }
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-svc
+                port: { number: 3000 }
+{{- end }}

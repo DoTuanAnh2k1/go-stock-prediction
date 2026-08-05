@@ -1,0 +1,139 @@
+{{- if not .Values.global.bluegreen.enabled }}
+# =============================================================================
+# api-svc — Go HTTP backend (:8118), stateless => Deployment.
+#
+# Deployment này ĐỒNG THỜI là lời giải Lab 1.2 (Init + Sidecar Pattern) — nhúng
+# thẳng pattern multi-container vào manifest thật:
+#   - initContainer wait-db : chờ DB Ready (pg_isready) rồi app mới start. [stock.waitDb]
+#   - app container "api"   : chạy api-server, tee log ra emptyDir "logs".
+#   - sidecar "log-sidecar" : tail -f file đó -> kubectl logs -c log-sidecar. [stock.logSidecar]
+#   - ambassador nginx      : Service targetPort → :18118 → proxy_pass :8118. [stock.nginxAmbassador]
+#
+# TRƯỚC KHI APPLY: image phải nằm trong cluster kind.
+#   docker build -t api-svc:dev -f deploy/api-svc.Dockerfile .     # từ repo root
+#   kind load docker-image api-svc:dev --name ckad
+#
+# nginx http conf để INLINE (proxy_buffering off để KHÔNG vỡ SSE /api/pipeline/stream —
+# đặc thù api-svc, không share). Boilerplate lặp gom vào charts/common (_ambassador.tpl).
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-svc-nginx
+  namespace: {{ .Release.Namespace }}
+data:
+  nginx.conf: |
+    worker_processes 1;
+    error_log /dev/stderr warn;
+    events { worker_connections 1024; }
+    http {
+      access_log /dev/stdout;
+      server {
+        listen 18118;
+        location / {
+          proxy_pass http://127.0.0.1:8118;
+          proxy_http_version 1.1;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header Connection "";
+          # SSE (/api/pipeline/stream): stream ngay, không buffer
+          proxy_buffering off;
+          proxy_cache off;
+          proxy_read_timeout 3600s;
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-svc
+  namespace: {{ .Release.Namespace }}
+  labels: { app: api-svc }
+spec:
+  {{- if not .Values.global.hpa.enabled }}
+  replicas: {{ .Values.replicas }}   # CKAD 2.3: HPA on → HPA sở hữu replicas (omit để tránh flapping)
+  {{- end }}
+  # Lab 2.2 — Blue/Green kiểu 1 Deployment: maxSurge=100% bung đủ bộ green song song blue,
+  # maxUnavailable=0 giữ blue tới khi green Ready => cutover blue/green-style; `rollout undo` = rollback.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 100%
+      maxUnavailable: 0
+  selector:
+    matchLabels: { app: api-svc }
+  template:
+    metadata:
+      labels: { app: api-svc }
+      # Prometheus scrapes /metrics on the app port (8118) via pod annotations.
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8118"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: api-svc           # CKAD 3.3 — SA riêng (automount:false, không gọi API)
+      tolerations:                          # HA: chạy được trên node control-plane (dùng cả 3 node)
+        {{- include "stock.tolerations" . | nindent 8 }}
+      topologySpreadConstraints:            # HA: rải pod đều các node
+        {{- include "stock.topologySpread" "api-svc" | nindent 8 }}
+      # fsGroup=2000: emptyDir "logs" group-writable; app chạy appuser (uid 100) vẫn ghi được
+      # /var/log/app nhờ supplemental group 2000. seccompProfile RuntimeDefault (CKAD 3.2).
+      securityContext:
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
+      # api-svc image có pg_isready → wait-db dùng chính image api-svc.
+      initContainers:
+        {{- include "stock.waitDb" (dict "image" (printf "%s:%s" .Values.global.images.apiSvc .Values.global.imageTag)) | nindent 8 }}
+      containers:
+        # ---- App container: chạy api-server, log vừa ra stdout vừa ra file ----
+        - name: api
+          image: "{{ .Values.global.images.apiSvc }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: IfNotPresent   # BẮT BUỘC: dùng image đã kind load, đừng pull registry
+          # CKAD 3.2 — drop ALL caps + no priv-esc. USER appuser (alpine `-S`, non-numeric)
+          # nên KHÔNG runAsNonRoot; image đã non-root sẵn.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          # pipefail: api-server chết thì shell trả mã lỗi (không bị tee nuốt) -> restart đúng
+          command: ["sh", "-c", "set -o pipefail; ./api-server 2>&1 | tee /var/log/app/api.log"]
+          ports:
+            - containerPort: 8118
+          envFrom:
+            - configMapRef: { name: api-config }
+            - secretRef:    { name: api-secret }
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "256Mi" }
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 8118 }   # sẵn sàng nhận traffic (thường check DB)
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/simple, port: 8118 }  # process còn sống → không restart oan
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          volumeMounts:
+            - name: backups
+              mountPath: /backups
+            - name: repo
+              mountPath: /repo
+            - name: logs
+              mountPath: /var/log/app
+        # ---- Sidecar: tail file log từ volume chung (giữ THỨ TỰ sidecar trước nginx như bản gốc) ----
+        {{- include "stock.logSidecar" (dict "image" (printf "%s:%s" .Values.global.images.apiSvc .Values.global.imageTag) "logfile" "api.log" "reqCpu" "20m" "reqMem" "32Mi" "limCpu" "100m" "limMem" "64Mi") | nindent 8 }}
+        # ---- Ambassador nginx: reverse-proxy HTTP :18118 → localhost:8118 (Service trỏ vào đây) ----
+        {{- include "stock.nginxAmbassador" (dict "portName" "http-proxy" "port" 18118) | nindent 8 }}
+      volumes:
+        - name: backups
+          emptyDir: {}
+        - name: repo
+          emptyDir: {}      # DOCS_ROOT — rỗng cũng được, tab Docs không dùng trong lab
+        - name: logs
+          emptyDir: {}      # chia sẻ giữa app "api" và "log-sidecar"
+        - name: nginx-conf
+          configMap: { name: api-svc-nginx }
+{{- end }}

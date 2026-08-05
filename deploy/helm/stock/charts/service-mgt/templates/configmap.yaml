@@ -1,0 +1,24 @@
+# =============================================================================
+# service-mgt — env không nhạy cảm (Go registry gRPC :8121).
+# LƯU Ý: các service khác mặc định SERVICE_MGT_ENABLED=false nên KHÔNG gọi tới
+# service-mgt (dùng static fallback). Deploy ở đây chủ yếu để đủ bộ / tập luyện;
+# muốn bật thật thì đổi SERVICE_MGT_ENABLED=true ở mọi service.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-mgt-config
+  namespace: {{ .Release.Namespace }}
+data:
+  GRPC_PORT: "8121"
+  POSTGRES_HOST: "db"
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: postgres
+  POSTGRES_DB: go_stock_prediction
+  LOG_FORMAT: console
+  # ---- OpenTelemetry tracing (OTLP/gRPC → collector in ns observability) ----
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability:4317"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  OTEL_SERVICE_NAME: "service-mgt"
+  OTEL_TRACES_SAMPLER: "parentbased_always_on"
+  OTEL_RESOURCE_ATTRIBUTES: "service.namespace=stock,deployment.environment=kind"

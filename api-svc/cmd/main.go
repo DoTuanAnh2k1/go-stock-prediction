@@ -15,6 +15,7 @@ import (
 	"go-stock-prediction/pkg/logger"
 	"go-stock-prediction/pkg/server"
 	"go-stock-prediction/pkg/store/repository"
+	"go-stock-prediction/pkg/telemetry"
 	"go-stock-prediction/pkg/version"
 
 	regclient "go-stock-prediction/service-mgt/client"
@@ -49,6 +50,10 @@ func main() {
 	// Stamp version info (reads GIT_SHA/BUILD_TIME/GIT_DIRTY env vars, logs, writes /versions/api-svc.json)
 	version.Init()
 
+	// Initialize OpenTelemetry tracing (OTLP/gRPC → collector). No-op when
+	// OTEL_EXPORTER_OTLP_ENDPOINT is unset (e.g. Docker Compose).
+	telemetry.InitTracing("api-svc")
+
 	// Initialize the database connection (read queries)
 	repository.Init()
 
@@ -75,8 +80,13 @@ func main() {
 	// Initialize gRPC client pointing at the prediction service
 	grpcclient.Init(predTarget)
 
-	// Start the scheduled database backup (DB-backed schedule, editable via Settings)
-	server.StartBackupScheduler(repository.GetSingleton())
+	// Start the scheduled database backup (DB-backed schedule, editable via Settings).
+	// Skipped in k8s (BACKUP_SCHEDULER_ENABLED=false) where daily_backup runs as a CronJob.
+	if config.GetBackupSchedulerEnabled() {
+		server.StartBackupScheduler(repository.GetSingleton())
+	} else {
+		logger.Logger.Infof("backup scheduler disabled (BACKUP_SCHEDULER_ENABLED=false) — daily_backup handled externally")
+	}
 
 	// Start the HTTP API server
 	go server.StartHTTPServer()
@@ -90,5 +100,6 @@ func main() {
 	reg.Stop()
 	authclient.Close()
 	grpcclient.Close()
+	telemetry.ShutdownTracing()
 	logger.Logger.Info("API service stopped")
 }

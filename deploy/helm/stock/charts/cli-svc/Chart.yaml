@@ -1,0 +1,5 @@
+apiVersion: v2
+name: cli-svc
+description: Go SSH CLI service (:2345) — subchart của umbrella "stock".
+type: application
+version: 0.1.0

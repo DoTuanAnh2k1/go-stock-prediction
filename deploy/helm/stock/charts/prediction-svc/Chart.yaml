@@ -1,0 +1,5 @@
+apiVersion: v2
+name: prediction-svc
+description: Python prediction service (gRPC :8119) — subchart của umbrella "stock".
+type: application
+version: 0.1.0

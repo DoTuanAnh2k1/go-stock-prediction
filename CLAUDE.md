@@ -7,7 +7,7 @@ Hệ thống dự đoán giá tài sản tài chính. Thu thập dữ liệu t�
 **Kiến trúc: microservice (6 service chính + supporting)**
 - **API Backend** (`api-svc/cmd`) — Go HTTP `:8118`, thin proxy cho auth (validate JWT locally, forward sang Java Auth qua gRPC), trigger gRPC sang Prediction Service, đọc DB trực tiếp.
 - **Auth Service** (`auth-svc/`) — **Java** Spring Boot 3, gRPC `:8120`. Toàn bộ auth/RBAC: login, JWT (HMAC256), user CRUD, market groups, command RBAC, bcrypt, Flyway V1–V3. Seeds `chon/super_admin` on startup. Ba roles: `super_admin`, `admin`, `user`.
-- **Prediction Service** (`prediction-svc/`) — **Python** gRPC `:8119`. Crawling, 13 thuật toán ML, training, APScheduler cron jobs.
+- **Prediction Service** (`prediction-svc/`) — **Python** gRPC `:8119`. Crawling, 13 thuật toán ML, training. APScheduler in-app tắt được bằng `SCHEDULER_ENABLED=false` (k8s: CronJob chạy thay).
 - **Gateway Service** (`gateway-svc/`) — **Rust** Axum `:80`/`:443`. Longest-prefix routing: `/swagger`→404, `/api`→api-svc:8118, `/`→web-svc:3000. TLS self-signed cert tự tạo.
 - **CLI Service** (`cli-svc/`) — **Go** SSH server `:2345` (expose trực tiếp, không qua gateway). charmbracelet/wish + bubbletea TUI. SSH auth → POST /api/x/grant (X-Token header). Command RBAC client-side. **KHÔNG tích hợp service-mgt.**
 - **Service Management** (`service-mgt/`) — **Go** gRPC `:8121` (internal only). Registry/discovery — **4 service tích hợp** (api-svc, auth-svc, prediction-svc, gateway-svc). `SERVICE_MGT_ENABLED=false` by default — có static fallback.
@@ -27,7 +27,9 @@ psql -U postgres -d go_stock_prediction -f database.sql
 
 # Regenerate proto Go stubs
 cd api-svc && protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/prediction/prediction.proto
-cd api-svc && protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/auth/auth.proto
+# auth.proto: sửa CANONICAL tại api-svc/proto/auth/auth.proto, rồi:
+make proto-auth           # tự sync Java copy + regenerate Go stubs
+make proto-auth-check     # CI guard: fail nếu hai bản drift
 
 # Regenerate proto Python stubs
 python -m grpc_tools.protoc -Iapi-svc/proto --python_out=prediction-svc/src/proto --grpc_python_out=prediction-svc/src/proto api-svc/proto/prediction/prediction.proto
@@ -55,12 +57,12 @@ make stats-watch    # refresh 3s
 ### API Backend (api-svc/cmd/main.go)
 1. `config.InitConfig()` → set timezone ICT → `logger.Init()` → `repository.Init()` (PostgreSQL)
 2. `authclient.Init()` (→ Java Auth :8120) → `grpcclient.Init()` (→ Python Prediction :8119)
-3. `server.StartBackupScheduler(store)` → `server.StartHTTPServer()` (:8118)
+3. `telemetry.Init()` (OTel tracing + Prometheus metrics) → `server.StartBackupScheduler(store)` nếu `BACKUP_SCHEDULER_ENABLED=true` (default `false`) → `server.StartHTTPServer()` (:8118)
 4. SIGTERM → `StopBackupScheduler()` + `grpcclient.Close()` + `authclient.Close()`
 
 ### Prediction Service (prediction-svc/src/main.py)
 1. config → timezone (`TZ=Asia/Ho_Chi_Minh` + `time.tzset()`) → `init_logger()` → `init_db()`
-2. `start_grpc_server(:8119)` → `init_scheduler()` (APScheduler, poll DB 60s)
+2. `start_grpc_server(:8119)` → `init_scheduler()` (APScheduler, poll DB 60s) — bỏ qua khi `SCHEDULER_ENABLED=false`
 3. `registry_client.start()` nếu `SERVICE_MGT_ENABLED=true`
 4. SIGTERM → `registry_client.stop()` + `stop_grpc_server()` + `shutdown_scheduler()`
 
@@ -116,6 +118,25 @@ CRAWL_MAX_TICK_DEVIATION_GOLD=0.30       # ngưỡng lệch 1-lần cho daily-li
 CRAWL_MAX_TICK_DEVIATION_NASDAQ=0.40
 CRAWL_MAX_TICK_DEVIATION_SP500=0.40
 CRAWL_MAX_TICK_DEVIATION_CRYPTO=0.80
+
+# Scheduler guards (factor 10 — compose và k8s đều default =false; ofelia/CronJob chạy thay)
+SCHEDULER_ENABLED=false                  # prediction-svc: false → tắt APScheduler in-app; true → bật lại (hành vi cũ)
+BACKUP_SCHEDULER_ENABLED=false           # api-svc: false → tắt BackupScheduler in-app; true → bật lại
+
+# Model Store — MinIO S3-compatible object storage (factor 4/6/8)
+MODEL_STORE_BACKEND=local                # local (default, compose/test) | s3 (k8s MinIO)
+S3_ENDPOINT=http://minio.stock:9000      # dùng khi MODEL_STORE_BACKEND=s3
+S3_BUCKET=models                         # bucket chứa checkpoint rl_dqn/transformer/meta
+S3_ACCESS_KEY=                           # credentials MinIO
+S3_SECRET_KEY=
+
+# Observability — OpenTelemetry (factor 14); k8s set qua ConfigMap; compose/local bỏ trống = tắt
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability:4317
+OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+OTEL_SERVICE_NAME=api-svc                # mỗi service điền tên mình
+OTEL_TRACES_SAMPLER=parentbased_always_on
+OTEL_RESOURCE_ATTRIBUTES=service.namespace=stock,deployment.environment=kind
+# auth-svc dùng Java agent: JAVA_TOOL_OPTIONS=-javaagent:/otel/opentelemetry-javaagent.jar
 ```
 
 ## Ports
@@ -123,14 +144,21 @@ CRAWL_MAX_TICK_DEVIATION_CRYPTO=0.80
 | Service | Port | Protocol | Ghi chú |
 |---------|------|----------|---------|
 | Gateway | 80/443 | HTTP/HTTPS | Proxy `/api`→api-svc:8118, `/`→web-svc:3000 |
-| API Backend | 8118 | HTTP | Internal; Swagger tại `http://localhost:8118/swagger/` |
+| API Backend | 8118 | HTTP | Internal; Swagger tại `http://localhost:8118/swagger/`; `/metrics` trên cùng port |
 | Prediction Service | 8119 | gRPC | Internal |
-| Auth Service | 8120 | gRPC | Internal |
+| Auth Service | 8120 | gRPC | Internal; `/actuator/prometheus` trên :8120 (Spring Actuator HTTP) |
 | Service Management | 8121 | gRPC | Internal only — KHÔNG qua gateway |
 | TimescaleDB | 5432 | TCP | Container `timescaledb` |
 | pgAdmin | 8081 | HTTP | bind 127.0.0.1 |
 | Frontend | 3000 | HTTP | Internal (qua gateway) |
 | CLI Service | 2345 | SSH | Expose trực tiếp |
+| Gateway admin | 9100 | HTTP | `/metrics` (Prometheus scrape) — không nằm trong proxy |
+| Prediction/cli-svc/service-mgt metrics | 9464 | HTTP | `/metrics` — HTTP server phụ cho gRPC-only services |
+| MinIO (k8s) | 9000/9001 | HTTP | ns `stock`; bucket `models` cho checkpoint; API :9000, Console :9001 |
+| OTel Collector (k8s) | 4317 | gRPC | ns `observability`; nhận OTLP/gRPC từ cả 6 service |
+| Prometheus (k8s) | 9090 | HTTP | ns `observability` |
+| Grafana (k8s) | 3000 | HTTP | ns `observability`; datasource Prometheus + Tempo |
+| Tempo (k8s) | 3200 | HTTP | ns `observability`; traces backend |
 
 ## Docker Compose Services
 
@@ -140,13 +168,14 @@ CRAWL_MAX_TICK_DEVIATION_CRYPTO=0.80
 |---------|----------|------------|---------|
 | `db` | TimescaleDB | — | Schema init từ `database.sql`; volume `postgres_data` |
 | `service-mgt` | Go | `db` | gRPC :8121; build context = `../service-mgt` |
-| `prediction-svc` | Python | `db`, `service-mgt` | gRPC :8119; build context = repo root; volume `rl_models:/models` |
+| `prediction-svc` | Python | `db`, `service-mgt` | gRPC :8119; build context = repo root; volume `rl_models:/models`; `SCHEDULER_ENABLED:-false` (default off; ofelia chạy thay) |
 | `auth-svc` | Java | `db`, `service-mgt` | gRPC :8120; Flyway migrations; seeds super_admin |
-| `api-svc` | Go | `db`, `prediction-svc`, `auth-svc`, `service-mgt` | HTTP :8118; build context = repo root (copy service-mgt/); volume `backup_data:/backups`; bind-mount `../:/repo:ro` (DOCS_ROOT) |
+| `api-svc` | Go | `db`, `prediction-svc`, `auth-svc`, `service-mgt` | HTTP :8118; build context = repo root (copy service-mgt/); volume `backup_data:/backups`; bind-mount `../:/repo:ro` (DOCS_ROOT); `BACKUP_SCHEDULER_ENABLED=false` |
 | `gateway-svc` | Rust | `api-svc`, `web-svc`, `service-mgt` | expose :80/:443; bind-mount `./gateway-svc/certs` |
 | `web-svc` | React/nginx | `api-svc` | port 3000 (qua gateway); không tích hợp service-mgt |
 | `cli-svc` | Go | `gateway-svc` | SSH :2345; build context = `../cli-svc`; KHÔNG tích hợp service-mgt |
 | `pgadmin` | — | `db` | expose 127.0.0.1:8081 |
+| `ofelia` | mcuadros/ofelia | `db`, `prediction-svc` | Container-native cron (parity với k8s CronJob); đọc labels `ofelia.*` trên container `db` (daily-backup pg_dump) và `prediction-svc` (`python -m src.jobs_cli <job>`). Thay APScheduler in-app + BackupScheduler. |
 
 ## Conventions trong codebase
 
@@ -154,8 +183,8 @@ CRAWL_MAX_TICK_DEVIATION_CRYPTO=0.80
 - **Algorithms (Python):** Mỗi thuật toán implement `PredictionAlgorithm` (`base.py`) với `predict(prices, volumes) -> PredictionResult`. Đăng ký metadata tại `api-svc/pkg/service/predict/registry/algorithms.go` (Go). 13 thuật toán: moving_average, ema, lstm_nn, gru_nn, arima_garch, egarch, sarima, lightgbm, xgboost, random_forest, ensemble, rl_dqn, transformer_nn. `transformer_nn` (PatchTST-lite) dùng thêm bảng `stock_fundamentals` (báo cáo tài chính yfinance, crawl thứ Bảy) làm static context — symbol truyền qua `_context_symbol` (runner set per-symbol cho NASDAQ/SP500) và `train_batch_labeled(series3)` (base có default strip label). **Direction head label = dấu return THÔ (`ret > 0`)** qua `_direction_targets(y_std, r_mean, r_std)` = `y_std > -r_mean/r_std` (return đã chuẩn hóa nên ngưỡng 0 = `ret > r_mean`, sai so với metric chấm `ret > 0`; từng gây bias "giảm" 95% → dưới chance, xem `docs/incidents/2026-07-transformer-direction-bias.md`). KHÔNG trong Ensemble. Bot simulation của transformer_nn dùng nhánh `is_conviction` (P(up) từ direction head, floor 0.52/0.48) — không dùng threshold %-giá.
 - **Market-aware clamp:** Tất cả algorithms dùng `get_max_change_pct(self._market_key)` từ `base.py`. Giới hạn: GOLD/SP500 ±15%, NASDAQ100 ±20%, CRYPTO ±50%.
 - **Direction accuracy:** `direction_correct` (nullable bool) trong 4 prediction tables. `True` = hướng đúng; `NULL` = chưa reconcile. Reconcile tất cả theo GOLD-style: `target_date <= now`, `actual` = giá live mới nhất. Orchestrator dùng dir_acc để set weight cho Ensemble mỗi run. **Frozen-actual guard:** `repository.direction_verdict(pred_diff, actual_diff)` trả `None` khi `actual == current` (giá live chưa nhích khỏi entry — đóng phiên sau target hoặc crawl trễ trên bảng daily-live). Cả `reconcile_predictions` (main) lẫn `backfill_direction_correct_*` **skip** row frozen (để `NULL`, pending) thay vì chấm sai — nếu không, cả batch bị chấm 0% vì `sign(actual_diff)=0` không bao giờ khớp `sign(pred_diff)`.
-- **Cron schedules:** Nguồn sự thật Python-side = `DEFAULT_SCHEDULES` trong `prediction-svc/src/scheduler/manager.py` (upsert mỗi startup). Go `seedCronSchedules()` chỉ insert-if-not-exists. `daily_backup` là ngoại lệ — Go-side (`backup_scheduler.go`, insert-if-not-exists).
-- **`auth.proto` hai bản:** `api-svc/proto/auth/auth.proto` (Go) và `auth-svc/src/main/proto/auth.proto` (Java) — phải đồng bộ thủ công khi thêm RPC.
+- **Cron schedules — scheduler unification (factor 10):** k8s dùng CronJob (template `deploy/helm/stock/charts/cronjobs/templates/cronjob-*.yaml`) chạy `python -m src.jobs_cli <job_key>`; compose dùng `ofelia` (labels `ofelia.*` trên container). Cả hai mode đều tắt in-app scheduler: `SCHEDULER_ENABLED=false` (prediction-svc APScheduler) và `BACKUP_SCHEDULER_ENABLED=false` (api-svc BackupScheduler). Compose/local mặc định `=true` (giữ hành vi cũ). Nguồn sự thật cron expression: `DEFAULT_SCHEDULES` trong `prediction-svc/src/scheduler/manager.py` (reference); k8s/ofelia mirror giá trị đó. `daily_backup` là ngoại lệ — k8s dùng CronJob riêng (`cronjob-backup.yaml` trong subchart `charts/cronjobs`, PVC `backup-data`), compose dùng ofelia label trên `db`.
+- **`auth.proto` — nguồn sự thật duy nhất:** `api-svc/proto/auth/auth.proto` là CANONICAL. Bản Java `auth-svc/src/main/proto/auth.proto` được sinh bằng `make proto-auth-sync` (copy byte-identical). **KHÔNG sửa tay bản Java.** `make proto-auth` depend `proto-auth-sync` (tự đồng bộ trước khi generate Go stubs). `make proto-auth-check` = CI guard fail nếu hai bản drift.
 - **Proto regeneration:** Sửa `prediction.proto` → tái sinh Go stubs (`protoc` từ `api-svc/`) và Python stubs (trong Dockerfile stage proto-builder). Không sửa tay file generated.
 - **Data ordering:** DB trả `*_prices` với `ORDER BY trading_date DESC`. Python algorithms tự đảo ngược về ASC trước khi build feature sequences.
 - **JWT middleware — non-blocking:** `JWTMiddleware` chỉ inject claims vào context, request không có token vẫn tiếp tục. Handler bảo vệ dùng `requireAuth()` / `requireAdmin()`.
@@ -164,7 +193,7 @@ CRAWL_MAX_TICK_DEVIATION_CRYPTO=0.80
 - **Swagger annotations:** Mỗi handler có swaggo annotations. Sau khi sửa, chạy `cd api-svc && swag init -g cmd/main.go -o docs/ --parseInternal --parseDependency` (thiếu hai flag → lỗi `cannot find type definition`). Không sửa tay `api-svc/docs/`.
 - **Decimal:** Go dùng `shopspring/decimal` cho giá. Python dùng `Decimal` stdlib hoặc pandas float64 (làm tròn trước khi lưu DB).
 - **gRPC triggers:** Mọi trigger handler gọi `requireGRPCClient(w)` trước (503 nếu chưa init). Wrap bằng `AdminRequired()`.
-- **Dynamic cron:** Python poll DB 60s, tự reschedule APScheduler. API `PUT /api/schedules/{key}` để chỉnh live.
+- **Dynamic cron:** Khi `SCHEDULER_ENABLED=true` (compose/local), Python poll DB 60s, tự reschedule APScheduler. API `PUT /api/schedules/{key}` để chỉnh live. Khi `=false` (k8s/ofelia), bảng `cron_schedules` chỉ dùng để hiển thị cấu hình tham chiếu — lịch thực tế do CronJob/ofelia nắm.
 - **Market calendar:** `market_calendar.py` — `is_market_open()` (guard ngày) và `is_intraday_open()` (guard giờ phiên). CRYPTO = 24/7. GOLD = 24/5 (đóng T7+CN). NASDAQ/SP500 = đóng cuối tuần + lễ NYSE + ngoài giờ phiên Mỹ (≈20:30–03:00 ICT).
 - **Service discovery (service-mgt):** Client-side discovery; write-through cache (Postgres + in-memory). Reaper 1s (TTL 30s→DOWN, +60s→evict). Heartbeat 10s. Toàn bộ tắt khi `SERVICE_MGT_ENABLED=false`. Static fallback.
 - **Per-symbol models:** Khi `PER_SYMBOL_ENABLED=true`, mỗi (mã × algo) có instance riêng; prediction lưu với `algorithm_name = f"{key}__ps"`. Seeder base algos: 3996 bot per-symbol + 444 bot pooled = 4440 tổng; `meta_stack` thêm 4 bot pooled + per-symbol bots khi `PER_SYMBOL_ENABLED`. Xem `algo-per-symbol.md`.
@@ -175,6 +204,9 @@ CRAWL_MAX_TICK_DEVIATION_CRYPTO=0.80
 - **Optuna:** LightGBM và XGBoost dùng Optuna khi data ≥ 200 và optuna cài (`[ml]` extras). Max 30 trials, timeout 120s. RandomForest không dùng Optuna.
 - **Tactic meta-stacking (simulation):** `meta_stack` là CHIẾN THUẬT giao dịch (tầng `simulation/`) — KHÔNG phải thuật toán dự đoán thứ 13, KHÔNG đăng ký vào `algorithms/registry.py` hay `algorithms.go`. `MetaStackModel` (`simulation/meta_stack.py`): đọc tất cả dự đoán các algo + direction accuracy rolling từng algo → LightGBM binary classifier + calibration isotonic → P(up) đã hiệu chỉnh → quyết định + size theo conviction. Fallback reliability-weighted vote khi thiếu checkpoint. `bot.py` nhánh `is_meta` (base_key == "meta_stack") → `_step_meta`. Bot pooled: `meta_stack` (1/market, 4 tổng); per-symbol: `meta_stack__ps` (gate `PER_SYMBOL_ENABLED`). Checkpoint: `${RL_MODEL_DIR}/meta_{market}.pkl` (pooled) / `meta_{market}_{symbol}.pkl` (per-symbol). Training: `train_meta_for_market()` + `train_meta_all()` trong `orchestrator/training.py`; cron `train_meta` (Chủ nhật 8AM); trigger tay: `POST /api/trigger/train` body `{"algorithm":"meta_stack"}`.
 - **Crawl sanity guard** (`crawlers/sanity.py`): lọc tick giá rác ở tầng ingest, **không chặn** biến động thật/split. Hai hàm: (1) `check_update(market, key, new_price, last_price)` — "persistence confirmation" 2 nhịp cho daily-live upsert (`upsert_{gold,nasdaq,crypto,sp500}_price` trong `repository.py`): giá lệch ngoài ngưỡng market-aware bị GIỮ pending, chỉ chấp nhận khi crawl kế tiếp xác nhận lại cùng mức; reject → log `crawl.sanity.reject`, giữ giá cũ. (2) `batch_outlier_mask(prices, market)` — so sánh hai phía với bar liền kề trong chuỗi intraday, chỉ flag spike cô lập (lệch cả bar trước lẫn bar sau); điểm biên split không bị flag; log `crawl.sanity.spike_dropped`. Ngưỡng lệch 1-lần: GOLD 0.30, NASDAQ/SP500 0.40, CRYPTO 0.80 — override bằng env `CRAWL_MAX_TICK_DEVIATION_<MARKET>`. Giới hạn đã biết: `crawl_history`/backfill đi qua `check_update` — split thật trong batch lịch sử bị bỏ 1 lần rồi tự lành ở crawl live kế tiếp; `batch_outlier_mask` KHÔNG áp cho backfill historical.
+- **Observability — factor 14 (k8s `observability` namespace):** OTel Collector, Prometheus, Grafana, Tempo trong Helm chart riêng `deploy/helm/observability/` (ns `observability`, vòng đời độc lập — `helm upgrade stock` không đụng observability). Cả 6 service đã instrument: (1) **Tracing** — OTel SDK → OTLP/gRPC → `otel-collector.observability:4317` → Tempo; chuỗi trace nối xuyên `gateway(Rust)→api-svc(Go)→{auth-svc(Java),prediction-svc(Python)}`; Java dùng `-javaagent` thay SDK thủ công. (2) **Metrics** — api-svc `/metrics` :8118; gateway-svc `/metrics` :9100 (admin port); prediction-svc/cli-svc/service-mgt `/metrics` :9464; auth-svc `/actuator/prometheus` :8120; Prometheus scrape qua pod annotations `prometheus.io/scrape`. (3) **Probes** — readiness+liveness đủ 6 service (native `grpc:` probe cho gRPC-only, `httpGet` cho HTTP/SSH). Code: `api-svc/pkg/telemetry/`, `prediction-svc/src/telemetry/`.
+- **Multi-container ambassador pattern (k8s — 5 backend service):** Mỗi pod của `api-svc, auth-svc, prediction-svc, service-mgt, cli-svc` chạy **≥4 container**: **init `wait-db`** (pg_isready `db:5432`; cli-svc có thêm init `fix-keys-perms`) → **app** (command bọc `sh -c "set -o pipefail; <entrypoint> 2>&1 | tee /var/log/app/<svc>.log"`) → **`nginx` ambassador** (image `nginx:1.27-alpine`, ConfigMap `<svc>-nginx`, listen `app+10000`: api 18118 / auth 18120 / prediction 18119 / service-mgt 18121 / cli 12345; `proxy_pass` HTTP cho api-svc, `grpc_pass` + `http2 on` cho auth·prediction·service-mgt, `stream`/`proxy_pass` TCP cho cli-svc SSH → `localhost:<app>`) → **`log-sidecar`** (`tail -f /var/log/app/<svc>.log` qua emptyDir `logs`). **Service `targetPort` → cổng nginx** (Service `port` giữ nguyên → client `auth-svc:8120`/`prediction-svc:8119`/… KHÔNG đổi). Metrics/mgmt `:9464` (auth Actuator + các gRPC-only) KHÔNG qua nginx — Prometheus scrape thẳng app port; probe cũng trỏ THẲNG app. **api-svc**: pattern áp trong template `bluegreen.yaml` (cả 2 màu + Service `api-svc-{blue,green}` targetPort 18118) vì gateway-svc route `/api` qua Service màu active (`backend: http://api-svc-<color>:8118`); nginx `proxy_buffering off` để KHÔNG vỡ SSE `/api/pipeline/stream`. prediction-svc & service-mgt thêm `securityContext.fsGroup: 2000` (app chạy appuser non-root → ghi được `/var/log/app`); cli-svc nginx override `runAsUser: 0` (pod ép runAsUser 10001 nhưng nginx cần ghi `/run/nginx.pid`). Xem log app qua sidecar: `kubectl logs <pod> -c log-sidecar`. gateway-svc & web-svc KHÔNG áp (bản thân đã là proxy/nginx). **Cấu trúc Helm — UMBRELLA + SUBCHART:** `stock` là umbrella; mỗi service = 1 subchart `deploy/helm/stock/charts/<svc>/` (Chart.yaml + values.yaml chỉ giữ `replicas` + `templates/` bỏ prefix, vd `charts/api-svc/templates/{deployment,bluegreen,configmap,secret,service}.yaml`). Giá trị dùng chung ở **`global:`** của umbrella values.yaml (imageTag, images.*, secrets.*, toggles) — subchart đọc qua `.Values.global.*`; đổi `--set`: `global.bluegreen.enabled` (default true; blue/green sinh bằng `{{- range $color := list "blue" "green" }}` — 1 body), `global.pgadmin.enabled`, `global.manualJob.enabled`, và replicas per-subchart `--set <svc>.replicas=N`. Cross-cutting `pdb.yaml` + `NOTES.txt` ở `charts/stock/templates/` (đọc `global.pdb`/`global.pgadmin`); cronjobs ở `charts/cronjobs/`. **Boilerplate lặp giữa 5 deployment gom vào LIBRARY CHART `deploy/helm/stock/charts/common/` (`type: library`, `templates/_ambassador.tpl`):** named template `stock.tolerations` / `stock.topologySpread <app>` / `stock.waitDb (dict "image" ...)` / `stock.logSidecar (dict "image" ... "logfile" ...)` / `stock.nginxAmbassador (dict "portName" ... "port" ... "root" bool)` / `stock.nginxConf.grpc (dict "listen" ... "upstream" ...)`, gọi qua `{{ include "stock.X" ARG | nindent 8 }}` — define chia sẻ TOÀN CỤC nên subchart anh em dùng được không cần khai báo lại. Phần KHÁC NHAU thật sự (app container, probes, resources app, volumes, dnsConfig ndots của prediction-svc, fsGroup, strategy, thứ tự container, nginx http/stream conf đặc thù api/cli, init `fix-keys-perms` của cli) vẫn INLINE trong `charts/<svc>/templates/deployment.yaml`. Subchart vendored trong `charts/` nên Helm auto-load — KHÔNG cần `helm dependency build`; dependency khai báo trong `Chart.yaml` để `helm lint` sạch. Đổi partial/subchart → verify không đổi hành vi bằng `helm template` diff (parsed-object) cả 2 nhánh, so với baseline git HEAD: `helm template stock deploy/helm/stock` và `--set global.bluegreen.enabled=false`.
+- **Model Store — MinIO (factor 4/6/8):** `prediction-svc/src/storage/model_store.py` — abstraction `ensure_local(path)`/`upload_if_remote(path)` với 2 backend: `local` (mặc định, compose/test — hành vi cũ) và `s3` (k8s, đọc/ghi MinIO bucket `models`). Backend `s3` dùng boto3 + read-through cache local (`RL_MODEL_DIR` = `emptyDir` ephemeral trong k8s). Wire vào `rl_dqn.py`, `transformer_model.py`, `simulation/meta_stack.py`. Singleton `get_store()`. MinIO template: `deploy/helm/stock/charts/minio/templates/minio.yaml` (subchart ns `stock`). Env: `MODEL_STORE_BACKEND`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`. prediction-svc k8s: `replicas: 2` (stateless vì checkpoint ở MinIO); `/models` PVC → `emptyDir`.
 - **Docs viewer (api-svc):** `GET /api/docs` và `GET /api/docs/raw` phục vụ file markdown từ `DOCS_ROOT` (mount read-only `../:/repo:ro`) cho tab Tài liệu trên web dashboard. Chỉ admin. Chống path traversal (reject `..`, chỉ `.md`, kiểm tra prefix `DOCS_ROOT`). Giới hạn 2MB/file.
 - **Stock split handling** (chỉ NASDAQ/SP500 — gold/crypto không có split): Crawler (`nasdaq.py`/`sp500.py`) fetch `&events=split` từ Yahoo chart API, parse `events.splits` (numerator/denominator/ex-date) → `repo.record_split(...)` (INSERT ON CONFLICT DO NOTHING, idempotent). Sau khi crawl xong toàn bộ symbol, gọi `apply_pending_splits()` nếu có split mới. History adjustment (`orchestrator/splits.py`): CHỈ chỉnh bảng INTRADAY (`nasdaq_intraday_prices`/`sp500_intraday_prices`) — KHÔNG chỉnh daily (Yahoo daily đã split-adjust sẵn) và KHÔNG chỉnh predictions. Boundary phát hiện từ data (điểm consecutive close rớt ~ratio) chứ không dùng ex-date, vì intraday lưu lẫn scale (bar cũ backfill unadjusted, bar mới crawl adjusted). Chia mọi bar trước boundary cho ratio → chuỗi liên tục ở scale post-split. Idempotent (`applied_at` + sau adjust hết cliff). Non-cliff → mark applied, không đụng giá. Log `crawl.split.detected`, `split.applied`. Simulation split-aware: `engine.py` `_restore_portfolio_state` — bot NASDAQ/SP500 khi tái dựng vị thế mở, mỗi split có `split_date > entry_date`: quantity × ratio, entry_price / ratio (dồn nhiều split); fix bug "lỗ ảo -74%" do giữ vị thế qua split. KHÔNG mutate trade lịch sử. Bảng `stock_splits`: `(market_key, symbol, split_date)` unique; `applied_at NULL` = chưa apply. Repo methods: `record_split`, `list_unapplied_splits`, `list_splits_for_symbol`, `mark_split_applied`.
 

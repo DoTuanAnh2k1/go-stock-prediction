@@ -25,11 +25,13 @@ _lock = threading.Lock()
 
 # Default schedules (mirrors Go constants)
 DEFAULT_SCHEDULES = [
-    ("crawler_sp500", "Pipeline S&P 500 (every 30 min at :00 and :30, all days — is_market_open filters by ET)", "0 0,30 * * * *", True),
-    ("crawler_gold", "Pipeline Gold (every hour at :00)", "0 0 * * * *", True),
+    # Pipeline crawlers DISABLED in-app — chuyển sang k8s CronJob (Cách 2, k8s-native).
+    # Xem deploy/k8s/pipeline/. Đổi lại True nếu chạy docker-compose / không dùng k8s.
+    ("crawler_sp500", "Pipeline S&P 500 (disabled — moved to k8s CronJob pipeline-sp500)", "0 0,30 * * * *", False),
+    ("crawler_gold", "Pipeline Gold (disabled — moved to k8s CronJob pipeline-gold)", "0 0 * * * *", False),
     ("gold_predict", "Gold predict standalone (disabled — runs inside pipeline)", "0 0 11 * * *", False),
-    ("crawler_nasdaq", "Pipeline NASDAQ (every 30 min at :15 and :45, all days — is_market_open filters by ET)", "0 15,45 * * * *", True),
-    ("crawler_crypto", "Pipeline Crypto (every hour at :00)", "0 0 * * * *", True),
+    ("crawler_nasdaq", "Pipeline NASDAQ (disabled — moved to k8s CronJob pipeline-nasdaq)", "0 15,45 * * * *", False),
+    ("crawler_crypto", "Pipeline Crypto (disabled — moved to k8s CronJob pipeline-crypto)", "0 0 * * * *", False),
     ("weekly_training", "Train all models (Sunday 9AM)", "0 0 9 * * 0", False),
     # Per-market training jobs — staggered on Sunday to avoid overlap
     ("train_gold",   "Training Gold (Sunday 3AM)",           "0 0 3 * * 0", True),
@@ -43,7 +45,9 @@ DEFAULT_SCHEDULES = [
     ("predict_nasdaq", "NASDAQ predict standalone (disabled — runs inside pipeline)",  "0 30 23 * * 1-5", False),
     ("predict_crypto", "Crypto predict standalone (disabled — runs inside pipeline)", "0 0 */6 * * *",   False),
     ("predict_sp500",  "S&P 500 predict standalone (disabled — runs inside pipeline)", "0 0 13 * * 1-5",  False),
-    ("daily_reconcile", "Reconcile predictions (daily 6AM)", "0 0 6 * * *", True),
+    # Disabled — pipeline CronJob (Cách 2) đã reconcile per-market ở cuối mỗi lần chạy.
+    # Catch-all 6AM in-app không còn cần; bật lại True nếu chạy docker-compose / không k8s.
+    ("daily_reconcile", "Reconcile predictions (disabled — reconcile chạy trong pipeline CronJob)", "0 0 6 * * *", False),
     # daily_backup moved to the Go API service (api/pkg/server/backup_scheduler.go)
     # which now owns the schedule and runs pg_dump itself.
 ]

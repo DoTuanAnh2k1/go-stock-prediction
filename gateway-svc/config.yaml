@@ -21,24 +21,39 @@ http:
 
 # Path-prefix routing — longest prefix wins.
 # /swagger → 404 blocked
-# /api     → Go API Backend at api-svc:8118
-# /health  → Go API Backend at api-svc:8118 (existing nginx behaviour)
-# /        → React SPA at web-svc:3000
+# /health  → api-svc aggregate Service (both colors) — nginx-compat health path
+# /api, /  → managed by the `bluegreen` block below (per-color routing)
 routes:
   - prefix: "/swagger"
     action: "block"
-  - prefix: "/api"
-    action: "proxy"
-    backend: "http://api-svc:8118"
-    security_headers: true
   - prefix: "/health"
     action: "proxy"
     backend: "http://api-svc:8118"
     security_headers: false
-  - prefix: "/"
-    action: "proxy"
-    backend: "http://web-svc:3000"
-    security_headers: false
+
+# Blue/green automation — gateway routes each prefix to the active color's Service,
+# watches Deployments, and auto-promotes/rolls back. See docs/specs.
+bluegreen:
+  enabled: true
+  analysis:
+    window_seconds: 60
+    success_threshold: 0.99
+    min_requests: 20
+    max_window_multiplier: 3
+    failure_status_from: 500
+  apps:
+    - name: web-svc
+      prefix: "/"
+      namespace: stock
+      blue:  { deployment: web-svc-blue,  backend: "http://web-svc-blue:3000" }
+      green: { deployment: web-svc-green, backend: "http://web-svc-green:3000" }
+      default_active: green
+    - name: api-svc
+      prefix: "/api"
+      namespace: stock
+      blue:  { deployment: api-svc-blue,  backend: "http://api-svc-blue:8118" }
+      green: { deployment: api-svc-green, backend: "http://api-svc-green:8118" }
+      default_active: green
 
 middleware:
   rate_limit:

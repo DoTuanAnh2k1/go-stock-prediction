@@ -1,0 +1,49 @@
+apiVersion: v2
+name: stock
+description: Go stock prediction — app stack (ns stock). Port 1-1 từ deploy/k8s/ sang Helm.
+type: application
+# version = phiên bản chart; appVersion = phiên bản ứng dụng (image tag mặc định *:dev cho kind).
+version: 0.1.0
+appVersion: "dev"
+
+# Umbrella chart: mỗi service/thành phần là 1 subchart trong charts/ (vendored nên
+# KHÔNG cần `helm dependency build`). `common` là library chart (partial ambassador/
+# sidecar/HA) — define của nó dùng chung cho mọi subchart qua namespace template toàn cục.
+# Giá trị dùng chung đặt ở global: (values.yaml); mỗi subchart chỉ giữ config riêng (replicas).
+dependencies:
+  - name: common
+    version: 0.1.0
+    repository: "file://charts/common"
+  - name: db
+    version: 0.1.0
+    repository: "file://charts/db"
+  - name: minio
+    version: 0.1.0
+    repository: "file://charts/minio"
+  - name: service-mgt
+    version: 0.1.0
+    repository: "file://charts/service-mgt"
+  - name: prediction-svc
+    version: 0.1.0
+    repository: "file://charts/prediction-svc"
+  - name: auth-svc
+    version: 0.1.0
+    repository: "file://charts/auth-svc"
+  - name: api-svc
+    version: 0.1.0
+    repository: "file://charts/api-svc"
+  - name: gateway-svc
+    version: 0.1.0
+    repository: "file://charts/gateway-svc"
+  - name: web-svc
+    version: 0.1.0
+    repository: "file://charts/web-svc"
+  - name: cli-svc
+    version: 0.1.0
+    repository: "file://charts/cli-svc"
+  - name: pgadmin
+    version: 0.1.0
+    repository: "file://charts/pgadmin"
+  - name: cronjobs
+    version: 0.1.0
+    repository: "file://charts/cronjobs"

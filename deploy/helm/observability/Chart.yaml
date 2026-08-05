@@ -1,0 +1,6 @@
+apiVersion: v2
+name: observability
+description: Observability stack (ns observability) — OTel Collector, Prometheus, Grafana, Tempo, node/kube-state metrics. Port 1-1 từ deploy/k8s/observability/.
+type: application
+version: 0.1.0
+appVersion: "1.0"
