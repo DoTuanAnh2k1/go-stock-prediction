@@ -2,6 +2,15 @@
 
 Financial asset price prediction system with RBAC — crawls Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, and S&P 500, runs 11 ML algorithms, and displays results in a web dashboard with role-based market access control.
 
+> ### 🎓 CKAD Capstone — start here / bắt đầu ở đây
+> - **How to deploy & verify (EN + VI):** [VERIFY.md](VERIFY.md) — cluster up → `scripts/build.sh` → `scripts/deploy.sh` → `scripts/smoke-test.sh` → `scripts/run-labs.sh`
+> - **§4 requirement → resource → verify command:** [docs/ckad-checklist.md](docs/ckad-checklist.md)
+> - **The graded spec:** [deploy/k8s/ckad-labs/capstone-requirements.md](deploy/k8s/ckad-labs/capstone-requirements.md)
+> - **Day 1–5 labs:** [deploy/k8s/ckad-labs/](deploy/k8s/ckad-labs/) (`day_N/run-dayN.sh` + `lab.md`, `DEMO.md`) — or run all: `./scripts/run-labs.sh`
+> - **Deploy scripts:** [scripts/](scripts/) · **Architecture/impl:** [DESIGN.md](DESIGN.md) · [IMPLEMENTATION.md](IMPLEMENTATION.md)
+>
+> Verified live on **kind Kubernetes v1.35.0** — see the [Kubernetes / CKAD](#kubernetes--ckad-capstone) section below.
+
 ## Architecture
 
 ```
@@ -184,7 +193,10 @@ Item-by-item mapping of every mandatory requirement → resource → file → ve
 ./scripts/build.sh                 # build 7 images :dev + kind load into cluster "ckad"
 ./scripts/deploy.sh                # ns stock + db-schema ConfigMap + helm install (demo toggles ON)
 ./scripts/smoke-test.sh            # E2E: login → /api/version → monitoring (via gateway/ingress)
+./scripts/run-labs.sh              # run all CKAD day 1–5 labs (handles NetworkPolicy toggle)
 ```
+
+Full deploy + verify walkthrough (English + Vietnamese): **[VERIFY.md](VERIFY.md)**.
 
 ### Deploy (manual)
 
