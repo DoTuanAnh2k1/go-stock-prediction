@@ -103,6 +103,45 @@ curl -H 'Host: stock.local' http://localhost/api/version   # → 200 (api-svc)
 curl -H 'Host: stock.local' http://localhost/              # → 200 (web-svc)
 ```
 
+### §4 mandatory checklist (all ✅ verified live on k8s v1.35.0)
+
+Detailed mapping in [`docs/ckad-checklist.md`](docs/ckad-checklist.md); condensed here.
+The checklist is language-neutral (codes + `kubectl`) and shared by both sections.
+
+| # | Requirement | ✔ | Where / verify |
+|---|---|---|---|
+| **D1** | Custom image per service | ✅ | 7× `*-svc:dev` (`deploy/*.Dockerfile`) |
+| **D2** | Deployment + Job/CronJob | ✅ | `kubectl get deploy,cronjob -n stock` (12 + 14) |
+| **D3** | init **and** sidecar | ✅ | init `wait-db` + sidecar `log-sidecar` (+nginx ambassador) |
+| **D4** | emptyDir shared logs | ✅ | pod volume `logs` (app ↔ sidecar) |
+| **D5** | PVC persists pod delete | ✅ | `data-db-0`/`minio-data` Bound; day-4 writer→delete→reader read-back |
+| **D6** | Labels for blue/green | ✅ | selector `color: {blue,green}` |
+| **P1** | Deployments ≥1 replica | ✅ | stateless ≥2 |
+| **P2** | Rolling update documented | ✅ | day-2 `RESULT ok=1025 fail=0`; `rollout status` |
+| **P3** | Blue/green (or canary) | ✅ | flip `svc/api-svc` selector color |
+| **P4** | HPA | ✅ | `kubectl get hpa -n stock` (3, live CPU%) |
+| **P5** | Kustomize base + overlay | ✅ | `deploy/k8s/kustomize/` dev(1)/prod(5, tag v2) |
+| **P6** | Helm upgrade + rollback | ✅ | `helm history stock -n stock` |
+| **C1** | ConfigMap injected | ✅ | `kubectl get cm -n stock` |
+| **C2** | Secret (no plaintext in git) | ✅ | `kubectl get secret -n stock`; real secrets via `values-secret.yaml` (gitignored) |
+| **C3** | SecurityContext lockdown | ✅ | `runAsNonRoot`+`allowPrivilegeEscalation:false`+drop `ALL` |
+| **C4** | SA + Role + RoleBinding | ✅ | `auth can-i list pods --as=…:pod-reader` → yes; other SA → no |
+| **C5** | ResourceQuota + LimitRange | ✅ | `kubectl get resourcequota,limitrange -n stock` |
+| **C6** | requests/limits every container | ✅ | app resources + LimitRange default-injection |
+| **N1** | ClusterIP internal | ✅ | `kubectl get svc -n stock` |
+| **N2** | NodePort **or** Ingress | ✅ | gateway NodePort + Ingress |
+| **N3** | Ingress ≥2 rules | ✅ | `/api`→api-svc, `/`→web-svc — both 200 from host |
+| **N4** | NetworkPolicy | ✅ | 5 policies (default-deny + allow-graph); kindnet enforces |
+| **N5** | No orphan endpoints | ✅ | `kubectl get endpoints -n stock` (no `<none>`) |
+| **O1** | Liveness probe | ✅ | every long-running Deployment |
+| **O2** | Readiness probe | ✅ | every long-running Deployment |
+| **O3** | Startup probe (slow start) | ✅ | prediction-svc `failureThreshold:30` (torch ~150s) |
+| **O4** | Debug runbook | ✅ | README "Debug runbook (O4)" |
+| **O5** | Current stable APIs | ✅ | `apps/v1`, `networking.k8s.io/v1`, `autoscaling/v2` |
+
+**Automatic-fail conditions:** all cleared — ≥3 independent services, real K8s Deployments
+(not compose-only), no plaintext secrets in git, Ingress + NodePort exposure, Pods Ready in `stock`.
+
 ## 3. Run the CKAD day labs (1–5)
 
 All labs at once from repo root:
@@ -173,8 +212,11 @@ Bảng ánh xạ đầy đủ yêu cầu → resource → lệnh nằm ở
 ở phần English §2 (pods/deploy/cronjob/hpa/ingress/netpol/quota/limitrange/pvc + `auth can-i` +
 `helm history` + `curl` Ingress từ host).
 
-Ý nghĩa cột: mỗi mã (D1, P4, C4, N3, D5, P6...) tương ứng một mục **Required** trong
-[`capstone-requirements.md`](deploy/k8s/ckad-labs/capstone-requirements.md) §4.
+**Bảng checklist §4 đầy đủ (tất cả ✅)** nằm ngay trong phần English §2 phía trên
+(*§4 mandatory checklist*) — dùng chung cho cả hai ngôn ngữ. Mỗi mã (D1, P4, C4, N3,
+D5, P6...) tương ứng một mục **Required** trong
+[`capstone-requirements.md`](deploy/k8s/ckad-labs/capstone-requirements.md) §4; chi tiết
+ánh xạ ở [`docs/ckad-checklist.md`](docs/ckad-checklist.md).
 
 ## 3. Chạy các bài lab CKAD (1–5)
 
