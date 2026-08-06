@@ -1,0 +1,118 @@
+# =============================================================================
+# Kafka — single-broker StatefulSet + ClusterIP Service (port 9092).
+# Image: bitnami/kafka:3.7  (classic Zookeeper mode — NOT KRaft)
+# Advertised listener: kafka.<ns>.svc:9092 (PLAINTEXT) — matches canonical env
+#   KAFKA_BOOTSTRAP_SERVERS=kafka:9092 used by app services.
+# auto.create.topics.enable=false — topics created explicitly by topics-job.
+# min.insync.replicas=1, replication-factor=1 (single broker, kind cluster).
+# PVC 2Gi via volumeClaimTemplates (data-kafka-0).
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: kafka
+    chart: kafka
+spec:
+  selector:
+    app: kafka
+  ports:
+    - name: broker
+      port: {{ .Values.kafka.port }}
+      targetPort: {{ .Values.kafka.port }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: kafka
+    chart: kafka
+spec:
+  serviceName: kafka
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+        chart: kafka
+    spec:
+      securityContext:
+        fsGroup: 1001       # bitnami images run as uid 1001
+      containers:
+        - name: kafka
+          image: "{{ .Values.kafka.image }}:{{ .Values.kafka.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            # Classic Zookeeper mode (KAFKA_CFG_PROCESS_ROLES is NOT set)
+            - name: KAFKA_CFG_ZOOKEEPER_CONNECT
+              value: "zookeeper:{{ .Values.zookeeper.port }}"
+            # Listeners: PLAINTEXT inside the cluster, EXTERNAL optionally
+            - name: KAFKA_CFG_LISTENERS
+              value: "PLAINTEXT://:9092"
+            # Advertised as kafka.<namespace>.svc:9092 so all in-cluster clients
+            # can resolve it. App env var: KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+            # (Kubernetes resolves "kafka" to the Service ClusterIP).
+            - name: KAFKA_CFG_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://kafka.{{ .Release.Namespace }}.svc:9092"
+            - name: KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "PLAINTEXT:PLAINTEXT"
+            - name: KAFKA_CFG_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+            # Disable auto topic creation — topics managed by topics-job
+            - name: KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE
+              value: "false"
+            # Single broker: RF=1, min ISR=1
+            - name: KAFKA_CFG_DEFAULT_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_CFG_MIN_INSYNC_REPLICAS
+              value: "1"
+            - name: KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+            # bitnami: allow plaintext for dev (no auth)
+            - name: ALLOW_PLAINTEXT_LISTENER
+              value: "yes"
+          ports:
+            - name: broker
+              containerPort: {{ .Values.kafka.port }}
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.kafka.port }}
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.kafka.port }}
+            initialDelaySeconds: 40
+            periodSeconds: 15
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: {{ .Values.kafka.resources.requests.cpu | quote }}
+              memory: {{ .Values.kafka.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.kafka.resources.limits.cpu | quote }}
+              memory: {{ .Values.kafka.resources.limits.memory | quote }}
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/kafka
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.kafka.storage | quote }}
+        # storageClassName: omitted => kind default StorageClass (standard)

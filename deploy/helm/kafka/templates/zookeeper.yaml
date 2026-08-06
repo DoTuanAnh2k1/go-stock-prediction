@@ -1,0 +1,106 @@
+# =============================================================================
+# Zookeeper — single node, headless Service + StatefulSet.
+# Image: bitnami/zookeeper:3.9  (pairs with bitnami/kafka:3.7 classic ZK mode)
+# ALLOW_ANONYMOUS_LOGIN=yes — dev/kind cluster only.
+# PVC 1Gi via volumeClaimTemplates (data-zookeeper-0).
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: zookeeper
+    chart: kafka
+spec:
+  clusterIP: None   # headless — StatefulSet DNS zookeeper-0.zookeeper.<ns>.svc
+  selector:
+    app: zookeeper
+  ports:
+    - name: client
+      port: {{ .Values.zookeeper.port }}
+      targetPort: {{ .Values.zookeeper.port }}
+    - name: follower
+      port: 2888
+      targetPort: 2888
+    - name: election
+      port: 3888
+      targetPort: 3888
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zookeeper
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: zookeeper
+    chart: kafka
+spec:
+  serviceName: zookeeper
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+        chart: kafka
+    spec:
+      securityContext:
+        fsGroup: 1001       # bitnami images run as uid 1001
+      containers:
+        - name: zookeeper
+          image: "{{ .Values.zookeeper.image }}:{{ .Values.zookeeper.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ALLOW_ANONYMOUS_LOGIN
+              value: "yes"
+            - name: ZOO_SERVER_ID
+              value: "1"
+            - name: ZOO_SERVERS
+              value: "zookeeper-0.zookeeper.{{ .Release.Namespace }}.svc:2888:3888"
+          ports:
+            - name: client
+              containerPort: {{ .Values.zookeeper.port }}
+            - name: follower
+              containerPort: 2888
+            - name: election
+              containerPort: 3888
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "zkServer.sh status 2>/dev/null | grep -E 'Mode: (standalone|leader|follower)'"
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "zkServer.sh status 2>/dev/null | grep -E 'Mode: (standalone|leader|follower)'"
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: {{ .Values.zookeeper.resources.requests.cpu | quote }}
+              memory: {{ .Values.zookeeper.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.zookeeper.resources.limits.cpu | quote }}
+              memory: {{ .Values.zookeeper.resources.limits.memory | quote }}
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/zookeeper
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.zookeeper.storage | quote }}
+        # storageClassName: omitted => kind default StorageClass (standard)
