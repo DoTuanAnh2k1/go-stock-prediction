@@ -1,6 +1,6 @@
 # go-stock-prediction
 
-Financial asset price prediction system with RBAC — crawls Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, and S&P 500, runs 11 ML algorithms, and displays results in a web dashboard with role-based market access control.
+Hệ thống dự đoán giá tài sản tài chính thời gian thực — thu thập dữ liệu Gold SJC/XAU, NASDAQ, Crypto BTC/ETH/SOL, và S&P 500, chạy 13 thuật toán ML, mô phỏng bot giao dịch, và hiển thị kết quả qua web dashboard với kiểm soát truy cập theo market group.
 
 > ### 🎓 CKAD Capstone — start here / bắt đầu ở đây
 > - **How to deploy & verify (EN + VI):** [VERIFY.md](VERIFY.md) — cluster up → `scripts/build.sh` → `scripts/deploy.sh` → `scripts/smoke-test.sh` → `scripts/run-labs.sh`
@@ -11,34 +11,128 @@ Financial asset price prediction system with RBAC — crawls Gold SJC/XAU, NASDA
 >
 > Verified live on **kind Kubernetes v1.35.0** — see the [Kubernetes / CKAD](#kubernetes--ckad-capstone) section below.
 
-## Architecture
+## Nghiệp vụ & bối cảnh
+
+### Hệ thống làm gì
+
+Hệ thống thu thập giá thị trường từ các nguồn công khai (Yahoo Finance, CoinGecko, BTMC, Phú Quý) và chạy song song 13 thuật toán Machine Learning để dự đoán giá tài sản trong **giờ kế tiếp** (`target = now + 1h`). Có bốn nhóm tài sản:
+
+| Nhóm | Tài sản | Lịch crawl | Giờ dự đoán |
+|------|---------|-----------|------------|
+| **Gold** | SJC (VND/lượng), XAU (USD/oz) | Mỗi giờ, 24/5 (đóng T7+CN) | Liên tục khi thị trường mở |
+| **NASDAQ** | 15 mã (AAPL, MSFT, NVDA...) | Phút 15 mỗi giờ, T2–T6 | Chỉ trong giờ phiên Mỹ (≈ 20:30–03:00 ICT) |
+| **Crypto** | BTC, ETH, SOL | Mỗi giờ, 24/7 | Liên tục |
+| **S&P 500** | 16 mã (SPY, AMZN, GOOGL...) | Phút 0 và 30, T2–T6 | Chỉ trong giờ phiên Mỹ |
+
+Mỗi lần dự đoán được **chấm điểm hướng** (`direction_correct`) khi `target_date <= now`: hệ thống so sánh hướng dự đoán (tăng/giảm) với giá live thực tế. Kết quả direction accuracy tích lũy theo từng thuật toán và được dùng để điều chỉnh trọng số Ensemble mỗi lần chạy.
+
+Ngoài dự đoán, hệ thống chạy **mô phỏng bot giao dịch** đa chiến thuật — threshold, RL DQN, meta-stack LightGBM, conviction (Transformer), trailing stop — để đánh giá hiệu quả thực chiến của từng thuật toán trên dữ liệu thật. Leaderboard bot cập nhật theo từng step live.
+
+### Ai dùng hệ thống
+
+Ba role với phân quyền rõ ràng:
+
+- **`super_admin`** — toàn quyền, không thể bị xóa hoặc reset bởi admin. Seeded từ env khi khởi động lần đầu.
+- **`admin`** — quản lý user, market group, command RBAC, trigger train/crawl, xem pipeline reports và backup.
+- **`user`** — chỉ xem market data và prediction của các thị trường được gán qua market group. Không thể trigger train hay crawl.
+
+Phân quyền thị trường hoạt động qua **market group**: admin tạo nhóm, gán các market key (GOLD/NASDAQ/CRYPTO/SP500) cho nhóm, rồi thêm user vào nhóm. JWT trả về claim `accessible_markets`; frontend ẩn tab thị trường không được phép.
+
+**Command RBAC** (dành cho CLI): admin khai báo command (handler + args cố định), nhóm chúng lại, và gán user vào nhóm command — user chỉ chạy được command trong nhóm của mình. `super_admin` và `admin` bypass tất cả.
+
+### User story điển hình
+
+1. Admin tạo market group "Vietnam Desk", gán GOLD + CRYPTO, thêm analyst vào nhóm.
+2. Analyst đăng nhập web dashboard — chỉ thấy tab Gold và Crypto. Xem chart dự đoán, direction accuracy từng thuật toán, leaderboard bot.
+3. Cron chạy tự động mỗi giờ: crawl → predict → reconcile → ghi pipeline report.
+4. Admin xem Settings → Lịch cron: thay đổi giờ crawl crypto từ `:00` sang `:30` không cần restart.
+5. Super admin SSH vào cli-svc từ server headless: `ssh admin@host -p 2345`, gõ `get market.predictions --market gold`, xem bảng dự đoán mới nhất.
+
+## Business logic chính
+
+### Pipeline mỗi giờ
+
+Mỗi lần cron job (`crawler_gold`, `crawler_nasdaq`, ...) chạy, hàm `_run_pipeline` trong `prediction-svc/src/scheduler/jobs.py` thực hiện:
+
+1. **Crawl** — bỏ qua nếu `is_market_open()` trả False (ví dụ Gold cuối tuần, NASDAQ ngoài giờ Mỹ). Có sanity guard hai lớp: `check_update()` giữ giá pending nếu lệch ngưỡng (xác nhận ở lần crawl kế tiếp), `batch_outlier_mask()` lọc spike cô lập trong chuỗi intraday.
+2. **Train** (mỗi 10 lần crawl) — `train_for_market()` retrain tất cả thuật toán của market đó.
+3. **Predict** — `run_for_market()` chạy 13 thuật toán; lưu `target_date = now + 1h`. NASDAQ/SP500 skip nếu `is_intraday_open()` False.
+4. **Reconcile** — `reconcile_predictions()` chấm hướng cho mọi prediction có `target_date <= now`: lấy giá live mới nhất làm `actual`, so sánh dấu với `predicted`. Frozen-actual guard: nếu giá live chưa thay đổi kể từ lúc entry (`actual == current`), để `NULL` (pending) thay vì chấm sai — tránh batch bị chấm 0% do đóng phiên sau target hoặc crawl trễ trên bảng daily-live.
+5. **Ghi pipeline report** — 1 row vào `pipeline_reports`, retention tự động 7 ngày.
+
+### Direction accuracy
+
+Cột `direction_correct` (`NULL` | `true` | `false`) trong cả 4 bảng prediction:
+- `NULL` — chưa reconcile.
+- `true` — thuật toán dự đoán đúng hướng (tăng/giảm).
+- `false` — sai hướng.
+
+Orchestrator đọc rolling direction accuracy (K=40 lần gần nhất) để set trọng số Ensemble mỗi lần chạy. API `GET /api/predictions/direction-accuracy?market=GOLD` trả bảng per-algorithm.
+
+### Market calendar
+
+- **CRYPTO** — 24/7, không đóng.
+- **GOLD** — 24/5 (đóng thứ Bảy và Chủ nhật — theo lịch XAU/USD spot).
+- **NASDAQ / S&P 500** — chỉ trong giờ phiên Mỹ (khoảng 20:30–03:00 ICT), đóng cuối tuần và ngày lễ NYSE.
+
+Guard `is_market_open()` (ngày) và `is_intraday_open()` (giờ phiên) nằm trong `market_calendar.py`, không phụ thuộc thư viện ngoài.
+
+### Mô phỏng bot giao dịch
+
+Mỗi bot gắn với một thuật toán và một thị trường; chạy qua `simulation/bot.py`. Có nhiều chiến thuật:
+
+| Chiến thuật | Bot | Cơ chế |
+|-------------|-----|--------|
+| **Threshold** | Mọi algo trừ rl/meta/transformer | Ngưỡng % giá predict > sl_pct/tp_pct để vào/thoát lệnh |
+| **Trailing stop** | `_v11` (tight 3%), `_v12` (wide 6%) | SL tính từ đỉnh giá intraday kể từ entry, không phải entry cố định |
+| **RL DQN** | `rl_dqn` (1/market) | Action policy trực tiếp từ mạng Dueling Double-DQN; BUY gate softmax confidence ≥ 0.38 |
+| **Conviction** | `transformer_nn` | BUY/SELL theo P(up) từ direction head của Transformer (floor 0.52/0.48) |
+| **Meta-stack** | `meta_stack` (1/market) | LightGBM classifier tổng hợp dự đoán các algo + rolling direction acc → P(up) calibrate isotonic; size theo conviction |
+
+KPI leaderboard: `return_pct`, `unrealized_pnl`, `open_positions`, `win_rate` (chỉ lệnh SELL đã đóng), `profit_factor`, Sharpe, max drawdown. Bot NASDAQ/SP500 split-aware: khi tái dựng vị thế mở qua split, quantity × ratio và entry_price / ratio được điều chỉnh (`engine.py _restore_portfolio_state`).
+
+## Kiến trúc hệ thống
+
+![Architecture](docs/architecture.svg)
+
+Hệ thống gồm 6 service chính được viết bằng 4 ngôn ngữ khác nhau (Go, Python, Java, Rust), giao tiếp qua gRPC (nội bộ) và HTTP (qua gateway). Phần còn lại:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                          Docker Compose                                  │
+│                          Docker Compose / Kubernetes                     │
 │                                                                          │
 │  Browser ──► gateway-svc :80/:443 (Rust) ──► api-svc :8118 (Go)       │
 │                      │                              │                    │
-│                      │                              ├──gRPC──► auth-svc :8120
-│                      │                              │       (Java Spring)│
+│                      │                      ┌───────┤                   │
+│                      │                      │       │                   │
+│                      │              gRPC :8120  gRPC :8119              │
+│                      │             auth-svc    prediction-svc           │
+│                      │             (Java)      (Python)                 │
 │                      │                              │                    │
-│                      │                              └──gRPC──► prediction-svc :8119
-│                      │                                         (Python)  │
-│                      │                                              │    │
-│                      └──► web-svc :3000 (internal)                │    │
-│                              (React + Vite, static nginx)          │    │
-│                                                                    │    │
-│              TimescaleDB :5432 ◄───────────────────────────────────┘    │
-│              (PostgreSQL 16)                                             │
+│                      └──► web-svc :3000 (React)    │                    │
+│                                                     │                    │
+│              TimescaleDB :5432 ◄────────────────────┘                   │
+│              3 databases: auth_db | market_db | registry_db             │
+│              4 least-privilege roles (1 per service)                     │
 │                                                                          │
 │  SSH ──► cli-svc :2345 (Go, wish+bubbletea) ──HTTP──► gateway-svc :80  │
 │  pgAdmin 127.0.0.1:8081                                                  │
 │                                                                          │
-│  service-mgt :8121 (optional, gRPC) — registry/discovery for            │
-│    api-svc, auth-svc, prediction-svc, gateway-svc when                  │
-│    SERVICE_MGT_ENABLED=true (default: false, static endpoints used)      │
+│  MinIO (k8s) ──► /models bucket — checkpoint RL/Transformer/meta        │
+│  OTel Collector → Tempo + Prometheus + Grafana (ns observability)        │
+│                                                                          │
+│  service-mgt :8121 (optional, gRPC) — registry/discovery                │
+│    SERVICE_MGT_ENABLED=false (default) — static endpoints used           │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Polyglot:** Gateway (Rust Axum) xử lý TLS + routing; API Backend (Go) là thin proxy cho auth và trigger cho prediction; Auth Service (Java Spring Boot 3) sở hữu toàn bộ RBAC; Prediction Service (Python PyTorch/statsmodels) chứa toàn bộ ML. Không service nào cross-call trực tiếp ngoài luồng đã định nghĩa trong proto.
+
+**Database-per-service:** Một TimescaleDB instance nhưng ba database tách biệt (`auth_db`, `market_db`, `registry_db`), mỗi service dùng dedicated least-privilege role. `auth_db` chỉ do Flyway trong `auth-svc` quản lý — không service nào khác có quyền vào. `api-svc` kết nối `market_db` với role `api_svc` (SELECT tất cả + INSERT/UPDATE/DELETE chỉ trên `cron_schedules` và `sim_bots`). Credential không bao giờ nằm trong image.
+
+**Model Store:** Compose dùng Docker volume local (`MODEL_STORE_BACKEND=local`). K8s dùng MinIO S3-compatible (`MODEL_STORE_BACKEND=s3`, bucket `models`), cho phép `prediction-svc` chạy `replicas=2` stateless — checkpoint RL DQN/Transformer/meta_stack được upload lên MinIO sau training, download về khi pod restart.
+
+**Observability:** OpenTelemetry distributed tracing xuyên 6 service (gateway → api-svc → auth-svc/prediction-svc), Prometheus metrics, Grafana + Tempo — đặt trong namespace `observability` độc lập với vòng đời app. `X-Request-ID` correlation cho phép `grep request_id=<uuid>` ra toàn bộ hành trình một request qua log của cả 6 service.
 
 ## Services
 
@@ -59,7 +153,7 @@ Internal DNS (between containers): `api-svc:8118`, `prediction-svc:8119`, `auth-
 ## Features
 
 - **RBAC with market groups:** Three roles — `super_admin` (full access), `admin` (manage users and market groups), `user` (access only assigned markets). JWT includes `accessible_markets` claim; sidebar hides inaccessible market tabs.
-- **Data collection:** Gold SJC/XAU/USD every hour; NASDAQ and S&P 500 every hour weekdays (skips NYSE holidays); Crypto BTC/ETH/SOL every 2 hours.
+- **Data collection:** Gold SJC/XAU/USD every hour (24/5); NASDAQ every hour weekdays (minute 15, skips NYSE holidays); S&P 500 every 30 minutes weekdays; Crypto BTC/ETH/SOL every hour (24/7).
 - **13 ML algorithms:** Moving Average, EMA/MACD, LSTM (PyTorch), GRU (PyTorch), ARIMA-GARCH, EGARCH, SARIMA, LightGBM (Optuna tuned), XGBoost (Optuna tuned), Random Forest, Ensemble, RL DQN (Dueling Double-DQN), Transformer (PatchTST-lite).
 - **Observability (15-factor #14):** OpenTelemetry distributed tracing across all 6 services (gateway→api-svc→{auth-svc, prediction-svc}) → OTLP → Tempo; Prometheus metrics (`/metrics` per service + domain metrics like `predictions_total`, `crawl_total`, `direction_accuracy`); Grafana + Tempo dashboards in a separate `observability` namespace.
 - **Request correlation (trace-log):** every request carries an `X-Request-ID` propagated through all 6 services (HTTP header + gRPC metadata) and stamped into each service's structured logs for end-to-end log correlation.
@@ -488,16 +582,19 @@ Stored in the `cron_schedules` DB table. Edit live via `PUT /api/schedules/{key}
 | `crawler_gold` | `0 0 * * * *` | Gold pipeline: crawl → train every 10 runs → predict |
 | `crawler_nasdaq` | `0 15 * * * 1-5` | NASDAQ pipeline (weekdays, minute 15) |
 | `crawler_sp500` | `0 0,30 * * * 1-5` | S&P 500 pipeline (weekdays, minutes 0 and 30) |
-| `crawler_crypto` | `0 0 */2 * * *` | Crypto pipeline (every 2 hours) |
+| `crawler_crypto` | `0 0 * * * *` | Crypto pipeline (every hour, 24/7) |
 | `train_gold` | `0 0 3 * * 0` | Retrain Gold models (Sunday 3 AM) |
 | `train_nasdaq` | `0 0 4 * * 0` | Retrain NASDAQ models (Sunday 4 AM) |
 | `train_crypto` | `0 0 5 * * 0` | Retrain Crypto models (Sunday 5 AM) |
 | `train_sp500` | `0 0 7 * * 0` | Retrain S&P 500 models (Sunday 7 AM) |
-| `daily_reconcile` | `0 0 6 * * *` | Reconcile predictions with actual prices |
-| `simulation_daily` | `0 0 20 * * *` | Bot trading step (8 PM) |
-| `daily_backup` | `0 0 3 * * *` | `pg_dumpall` (superuser) — all 3 databases + roles in one archive; compose: ofelia on `db` container; k8s: `cronjob-backup.yaml` → PVC `backup-data` |
+| `train_meta` | `0 0 8 * * 0` | Retrain Meta-Stack LightGBM classifier cho 4 markets (Sunday 8 AM) |
+| `train_transformer` | `0 30 2 * * 1,3,5` | Refresh Transformer (PatchTST) trên intraday bars (Mon/Wed/Fri 2:30 AM) |
+| `crawler_fundamentals` | `0 0 6 * * 6` | Crawl báo cáo tài chính (yfinance → `stock_fundamentals`, Saturday 6 AM) — dùng bởi transformer_nn |
+| `daily_reconcile` | `0 0 6 * * *` | Reconcile predictions với actual prices (catch-all) |
+| `simulation_daily` | `0 0 20 * * *` | Bot trading step (8 PM ICT); NASDAQ/SP500 skip nếu thị trường không mở |
+| `daily_backup` | `0 0 3 * * *` | `pg_dumpall` (superuser) — all 3 databases + roles; compose: ofelia trên `db`; k8s: `cronjob-backup.yaml` → PVC `backup-data` |
 
-## ML Algorithms (11)
+## ML Algorithms (13)
 
 | Key | Name | Notes |
 |-----|------|-------|
@@ -511,9 +608,69 @@ Stored in the `cron_schedules` DB table. Edit live via `PUT /api/schedules/{key}
 | `lightgbm` | LightGBM | ~30 features; Optuna (30 trials, 120 s timeout, ≥200 data points) |
 | `xgboost` | XGBoost | ~30 features; Optuna (30 trials, 120 s timeout, ≥200 data points) |
 | `random_forest` | Random Forest | n_estimators=200, max_depth=8; no Optuna |
-| `ensemble` | Ensemble | Equal-weight average of the 10 base models above |
+| `ensemble` | Ensemble | Accuracy-weighted ensemble 10 base models; fallback equal-weight. Không gồm rl_dqn/transformer |
+| `rl_dqn` | RL DQN | Dueling Double-DQN v3 (LayerNorm+128+64, PER+3-step+Polyak); walk-forward val; checkpoint `rl_dqn_{market}.pt`; không trong Ensemble |
+| `transformer_nn` | Transformer (PatchTST-lite) | Patch attention trên log-returns + static context từ `stock_fundamentals`; checkpoint `transformer_{market}.pt`; không trong Ensemble |
 
 Market-aware price-change clamp: GOLD/SP500 ±15%, NASDAQ100 ±20%, CRYPTO ±50%.
+
+## Nguyên tắc 12-Factor (và hơn thế)
+
+Hệ thống tuân theo The Twelve-Factor App methodology và mở rộng thêm một số nguyên tắc bổ sung cho môi trường production-grade.
+
+**I. Codebase** — Một mono-repo, mỗi service có image Docker riêng (`deploy/<svc>.Dockerfile`). Không có code dùng chung ngoài proto files; `service-mgt` được import qua Go replace directive (`replace => ../service-mgt`) thay vì shared library.
+
+**II. Dependencies** — Mỗi service khai báo dependency tường minh: Go (`api-svc/go.mod`, `service-mgt/go.mod`), Python (`prediction-svc/pyproject.toml`), Java (`auth-svc/pom.xml`), Rust (`gateway-svc/Cargo.toml`). Không assume môi trường hệ thống.
+
+**III. Config** — Mọi config qua env var. Compose dùng `.env` + `--env-file`. K8s dùng ConfigMap (non-secret) + Secret (credential). Không có secret nào hardcode trong image — Helm `required` guards fail-fast nếu để trống. `SUPER_ADMIN_PASSWORD` trống → auth-svc từ chối khởi động.
+
+**IV. Backing services** — Postgres, MinIO, OTel Collector đều là attached resource có thể swap qua env. `MODEL_STORE_BACKEND=local|s3` chuyển đổi giữa Docker volume và MinIO không cần sửa code. `GRPC_TARGET`, `AUTH_GRPC_TARGET` cho phép trỏ sang địa chỉ bất kỳ.
+
+**V. Build / Release / Run** — Multi-stage Dockerfile (proto-builder → slim runtime cho prediction-svc; builder → distroless/gcr cho Go). Helm release versioned theo `imageTag` (git SHA từ `make`). Run là container bất biến; không patch in-place.
+
+**VI. Processes** — Tất cả service stateless trừ DB. State nằm trong TimescaleDB (`market_db`) và MinIO (checkpoint). `prediction-svc` chạy `replicas: 2` stateless trong k8s vì checkpoint ở MinIO (`ensure_local()` download về `emptyDir` khi pod khởi động). Simulation portfolio state tái dựng từ DB mỗi step.
+
+**VII. Port binding** — Mỗi service bind port riêng và expose qua Service k8s hoặc Compose port mapping. `gateway-svc` là edge proxy duy nhất nhận traffic public (`:80`/`:443`). `cli-svc` SSH `:2345` expose trực tiếp (gateway không hỗ trợ SSH). Không service nào assume mình chạy trên port cố định trong code — tất cả đọc từ env.
+
+**VIII. Concurrency** — Scale out theo replica (HPA trên `api-svc` và `gateway-svc`). Batch workload (train, crawl, reconcile) chạy qua k8s CronJob hoặc `ofelia` (compose) — không block main service. `PER_SYMBOL_WORKERS=0` → `os.cpu_count()` worker cho per-symbol training.
+
+**IX. Disposability** — Khởi động nhanh: Go service vài giây, Rust gateway vài giây; prediction-svc có `startupProbe` 150s vì PyTorch import chậm. Graceful shutdown: SIGTERM → drain gRPC, close DB connection, stop scheduler. K8s probes readiness + liveness đủ 6 service. CronJob pod tạo và hủy từng batch, không để zombie.
+
+**X. Dev/prod parity** — Cùng image Docker cho compose và k8s. Cron jobs dùng cùng binary (`python -m src.jobs_cli <job>`): `ofelia` gọi trực tiếp trong compose, CronJob k8s gọi y hệt. Không có code path riêng cho dev — chỉ khác env var (`SCHEDULER_ENABLED`, `MODEL_STORE_BACKEND`).
+
+**XI. Logs** — Mỗi service in một dòng/event ra stdout, structured, có màu ANSI (forced kể cả Docker). Không ghi file log từ app — log capture qua `log-sidecar` (`tail -f`) trong k8s ambassador pattern. Format: zerolog (Go), structlog ConsoleRenderer (Python), logback single-line (Java), tracing compact+ansi (Rust). `X-Request-ID` stamped vào mọi dòng log của request hiện tại (Go: `logger.Ctx(ctx)`; Java: SLF4J MDC `%X{requestId}`; Python: `structlog.contextvars`).
+
+**XII. Admin processes** — Run once: `python -m src.jobs_cli <job_key>` là entrypoint cho mọi tác vụ quản trị (crawl, train, reconcile, backup). Không cần SSH vào container production. CLI SSH (`cli-svc`) cung cấp thêm interface tương tác với RBAC. Trigger thủ công qua `POST /api/trigger/*` (admin JWT).
+
+### Hơn 12 factors
+
+**Observability (factor 14)** — OTel tracing phân tán xuyên 6 service (gateway → api-svc → auth-svc/prediction-svc), Prometheus metrics (9 business metric trong prediction-svc: `predictions_total`, `crawl_total`, `direction_accuracy`, `bot_portfolio_value`...), Grafana + Tempo trong namespace `observability` độc lập. `X-Request-ID` correlation log xuyên 6 service (độc lập với OTel `trace_id`).
+
+**Security** — NetworkPolicy default-deny (bootstrap chart) + allow-rule tối thiểu. RBAC k8s pod-reader least-priv. Non-root containers (prediction-svc, service-mgt `appuser`, api-svc `runAsNonRoot`). `cli-svc` nginx ambassador override `runAsUser: 0` riêng vì nginx cần ghi `/run/nginx.pid`. Database-per-service với dedicated login role — không service nào truy cập DB của service khác.
+
+**Scheduler unification (factor 10)** — Compose: `SCHEDULER_ENABLED=false` tắt APScheduler in-app, `ofelia` container đảm nhận toàn bộ cron. K8s: `SCHEDULER_ENABLED=false` tắt APScheduler, k8s CronJob đảm nhận. Cả hai mode gọi cùng binary `python -m src.jobs_cli`, đảm bảo parity.
+
+## Giới hạn đã biết
+
+Danh sách dưới đây mô tả các hạn chế thực tế, được ghi nhận để tránh nhầm lẫn khi vận hành.
+
+**Direction accuracy không phải edge thật.** Phần lớn thuật toán có direction accuracy xấp xỉ 50% hoặc bias theo trend thị trường — không phải kỹ năng dự đoán thật sự. Chỉ `ema` và `moving_average` trên GOLD và CRYPTO ghi nhận chút edge nhất quán. Các mô hình deep learning (LSTM, GRU, Transformer) và RL DQN cần đủ dữ liệu và checkpoint tốt để thoát khỏi bias ngẫu nhiên.
+
+**Predictions là short-horizon và biên độ nhỏ.** Dự đoán "giờ kế tiếp" trên chuỗi daily-live (1 điểm/ngày, ghi đè mỗi lần crawl) — biên độ thực tế thường ±0.1–0.3%, không phải swing lớn. Bot threshold dùng ngưỡng % giá theo scale ngày (0.5%+) sẽ không bao giờ vào lệnh với prediction loại này; chỉ bot conviction/RL/meta-stack mới ra quyết định hợp lý.
+
+**Crawl phụ thuộc nguồn công khai.** Yahoo Finance, CoinGecko, BTMC có thể thay đổi API hoặc áp rate limit bất cứ lúc nào. Trong môi trường kind/k8s, DNS ndots mặc định (`ndots:5`) kết hợp ISP NXDOMAIN hijacking có thể khiến crawl timeout; cần `dnsConfig.ndots: "1"` trong pod spec (đã có trong Helm chart).
+
+**Shared DB instance, chưa phải instance-per-service.** Ba database (`auth_db`, `market_db`, `registry_db`) tách biệt về credential và DDL, nhưng vẫn cùng một TimescaleDB instance. Một service OOM hoặc query nặng có thể ảnh hưởng shared pool. Tách instance hoàn toàn là bước tiếp theo nếu cần hard isolation.
+
+**`api-svc` vẫn đọc `market_db` trực tiếp.** Trong kiến trúc microservice thuần túy, `api-svc` nên lấy data qua gRPC facade từ `prediction-svc` thay vì kết nối DB trực tiếp. Hiện tại `api-svc` dùng role `api_svc` read-limited — đây là Phase-1. Phase-2 (gRPC facade hoàn toàn) đang được thiết kế (`DESIGN.md`).
+
+**DB init chỉ chạy trên volume trống.** Script `00-init-databases.sh` và schema SQL chỉ được chạy bởi TimescaleDB khi `/var/lib/postgresql/data` chưa có dữ liệu (volume mới). Data cũ không tự migrate khi schema thay đổi — cần apply DDL thay đổi thủ công hoặc `pg_dump` + restore.
+
+**Backtest không record business metrics.** Các lần chạy `historical-backtest` không ghi vào Prometheus (tránh ghi đè gauge live). KPI backtest chỉ xem qua `pipeline_reports` hoặc leaderboard bot.
+
+**RL DQN và Transformer cần checkpoint.** Khi `RL_MODEL_DIR` thiếu checkpoint (`rl_dqn_{market}.pt`, `transformer_{market}.pt`), bot RL/conviction fallback về hành vi hold. Cần chạy ít nhất một lần `POST /api/trigger/train` (hoặc `train_gold/nasdaq/crypto/sp500` job) để khởi tạo checkpoint.
+
+**Transformer direction label có lịch sử bug.** Direction head từng dùng ngưỡng chuẩn hóa sai (`ret > r_mean` thay vì `ret > 0`), gây bias "giảm" 95% trên một số market. Đã sửa (xem `docs/incidents/2026-07-transformer-direction-bias.md`). Checkpoint cũ cần retrain để phản ánh fix.
 
 ## Extending the System
 

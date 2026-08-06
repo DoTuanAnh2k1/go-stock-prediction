@@ -13,8 +13,8 @@
 set -uo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost}"
-USER="${USER:-admin}"
-PASS="${PASS:-admin123}"
+USER="${USER:-chon}"
+PASS="${PASS:?set PASS=<super_admin password> for smoke-test}"
 FAIL=0
 pass() { echo "  PASS  $1"; }
 fail() { echo "  FAIL  $1"; FAIL=1; }
