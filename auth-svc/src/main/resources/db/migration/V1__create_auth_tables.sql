@@ -1,5 +1,20 @@
--- Flyway V1: create market groups tables (users table owned by GORM/Go API)
--- Note: user_id has no FK to users because GORM AutoMigrate may run after Flyway
+-- Flyway V1: create users + market group tables.
+-- Database-per-service: auth-svc owns auth_db 100% (api-svc is DB-less), so Flyway
+-- creates `users` here (base columns; V2 adds profile fields). Previously `users`
+-- was created by database.sql/GORM — that gap only surfaced on a fresh auth_db.
+CREATE TABLE IF NOT EXISTS users (
+    id            BIGSERIAL    PRIMARY KEY,
+    created_at    TIMESTAMP    NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMP    NOT NULL DEFAULT NOW(),
+    deleted_at    TIMESTAMP,
+    username      VARCHAR(50)  NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role          VARCHAR(255) NOT NULL DEFAULT 'user'
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username   ON users(username);
+CREATE INDEX        IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);
+
+-- Note: user_id has no FK to users to avoid migration-order coupling.
 
 CREATE TABLE IF NOT EXISTS market_groups (
     id          BIGSERIAL    PRIMARY KEY,

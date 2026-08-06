@@ -117,8 +117,15 @@ def _coerce(val: Any) -> Any:
 def _parse_dt(s: str | None) -> datetime | None:
     if not s:
         return None
-    # Accept ISO dates "2026-01-01" or datetimes with or without T
+    # Accept ISO dates "2026-01-01" or datetimes, with or without a timezone
+    # offset (grpcstore sends RFC3339 "+07:00"). DB stores naive ICT wallclock,
+    # so drop any tzinfo (the wallclock is already ICT).
     s = s.strip().replace(" ", "T")
+    try:
+        dt = datetime.fromisoformat(s)  # handles "+07:00", "Z", and offset-less
+        return dt.replace(tzinfo=None) if dt.tzinfo is not None else dt
+    except ValueError:
+        pass
     for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d"):
         try:
             return datetime.strptime(s, fmt)

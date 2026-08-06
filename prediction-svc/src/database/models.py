@@ -39,6 +39,7 @@ class GoldPrice(Base):
     currency = Column(String(3), nullable=False, default="VND")
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    deleted_at = Column(DateTime)  # soft-delete column (present in table + Go model)
 
 
 class GoldPrediction(Base):
@@ -80,6 +81,7 @@ class NasdaqPrice(Base):
     currency = Column(String(3), nullable=False, default="USD")
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    deleted_at = Column(DateTime)  # soft-delete column (present in table + Go model)
     deleted_at = Column(DateTime)
 
 
@@ -121,6 +123,7 @@ class SP500Price(Base):
     currency = Column(String(3), nullable=False, default="USD")
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    deleted_at = Column(DateTime)  # soft-delete column (present in table + Go model)
     deleted_at = Column(DateTime)
 
 
@@ -163,6 +166,7 @@ class CryptoPrice(Base):
     currency = Column(String(3), nullable=False, default="USD")
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    deleted_at = Column(DateTime)  # soft-delete column (present in table + Go model)
     deleted_at = Column(DateTime)
 
 

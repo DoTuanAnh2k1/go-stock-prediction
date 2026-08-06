@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from prediction import prediction_pb2 as prediction_dot_prediction__pb2
+from src.proto.prediction import prediction_pb2 as prediction_dot_prediction__pb2
 
 GRPC_GENERATED_VERSION = '1.70.0'
 GRPC_VERSION = grpc.__version__
