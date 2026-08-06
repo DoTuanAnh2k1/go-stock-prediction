@@ -283,6 +283,31 @@ class PredictionServicer:
             return pb2.TriggerResponse(success=False, error=str(exc))
 
     # -------------------------------------------------------------------
+    # Generic Query RPC — DB-less phase 2
+    # -------------------------------------------------------------------
+
+    def Query(self, request, context):
+        """Dispatch a named query to the query_handlers module.
+
+        request.method      — handler name (string)
+        request.params_json — JSON-encoded parameter dict (string)
+
+        Returns QueryResponse(result_json=<json>, error="") on success,
+        or QueryResponse(result_json="", error=<msg>) on failure.
+        """
+        pb2, _ = _get_pb()
+        method = request.method or ""
+        params_json = request.params_json or "{}"
+        log.debug("grpc.Query", method=method)
+        try:
+            from src.grpc_server.query_handlers import dispatch
+            result_json, error = dispatch(method, params_json)
+            return pb2.QueryResponse(result_json=result_json, error=error)
+        except Exception as exc:
+            log.error("grpc.Query.error", method=method, error=str(exc))
+            return pb2.QueryResponse(result_json="", error=str(exc))
+
+    # -------------------------------------------------------------------
     # Rebuild & Replay
     # -------------------------------------------------------------------
 

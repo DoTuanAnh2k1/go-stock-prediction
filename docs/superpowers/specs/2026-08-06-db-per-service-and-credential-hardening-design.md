@@ -21,12 +21,23 @@ via a new gRPC query API on `prediction-svc`. That query API is a port of ~115 r
 ~20 RPCs + DTO builders from Go to Python — a large migration that cannot be completed **and
 verified end-to-end** in a single pass without risking the passing build.
 
-What was **delivered and verified** instead: `api-svc` connects to `market_db` as a dedicated
-**read-only least-privilege role `api_svc`** — `SELECT` on everything, plus `INSERT/UPDATE/DELETE`
-on the only two tables api-svc writes (`cron_schedules`, `sim_bots`). It has **no access at all**
-to `auth_db` or `registry_db` (auth is already gRPC). This is genuine database-per-service data
-isolation, requires **zero api-svc code change**, and is fully demonstrable (see Verification).
-The fully-DB-less gRPC facade remains a clean **follow-up** (Phase 2) on top of this.
+**Phase 1 (on `main`):** `api-svc` connects to `market_db` as a dedicated **read-only
+least-privilege role `api_svc`** — `SELECT` + `INSERT/UPDATE/DELETE` on only `cron_schedules`
+and `sim_bots`; no access to `auth_db`/`registry_db`. Zero api-svc code change; fully verified.
+
+**Phase 2 (branch `phase2/api-svc-dbless`) — DELIVERED, mechanically verified:** `api-svc` is now
+**fully DB-less** (`DB_DRIVER=grpc`, holds no Postgres credentials). Implemented via the repository
+pattern: a new `pkg/store/grpcstore` implements the entire `DatabaseStore` interface by delegating
+every read to prediction-svc over one generic RPC — `Query(method, params_json) → result_json` —
+and unmarshalling `result_json` back into the SAME Go model types the handlers already use (so the
+JSON keys are the Go json tags = DB columns, and **handlers/DTOs/JSON output are untouched** — the
+api-svc handler tests, which mock `DatabaseStore`, still pass unchanged). prediction-svc dispatches
+the 63 methods api-svc actually calls against `market_db` (`src/grpc_server/query_handlers.py`);
+the ~54 write methods are compile-time stubs (api-svc never calls them). Serialization matches Go:
+Decimal→string, datetime→RFC3339 `+07:00` (ICT). Verified: `go build`/`go vet`/`go test -short`
+green, Python `py_compile`/ruff clean, helm+compose render clean. **Remaining before merge:** live
+smoke-test of the dashboard (JSON field-level parity — decimal/time formats, exact query results —
+can only be confirmed against a running stack).
 
 Auth/RBAC data is reached via gRPC to `auth-svc` (pre-existing); user/RBAC tables never leave
 `auth_db`.
