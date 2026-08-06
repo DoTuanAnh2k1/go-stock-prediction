@@ -33,6 +33,12 @@ jwt:
   secret: ${JWT_SECRET:change-me-in-production}
   expiration-ms: 86400000      # 24h
 
+# Super-admin seed — supplied at deploy time via Secret, NEVER hardcoded.
+# Blank/weak values fail startup (see SuperAdminSeeder).
+superadmin:
+  username: ${SUPER_ADMIN_USERNAME:}
+  password: ${SUPER_ADMIN_PASSWORD:}
+
 # =============================================================================
 # Actuator (factor 14 — metrics + health probes).
 # auth-svc là gRPC-only → thêm spring-boot-starter-web cấp Tomcat, chạy HTTP trên

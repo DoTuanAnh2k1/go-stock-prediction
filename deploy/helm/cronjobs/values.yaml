@@ -3,7 +3,7 @@
 # Image = prediction-svc (chạy `python -m src.jobs_cli <job>`); imageTag khớp với
 # imageTag của chart prediction-svc để pipeline dùng đúng bản đã deploy.
 # =============================================================================
-imageTag: dev
+imageTag: "1.0.0"            # release tag; CI overrides: --set imageTag=$(git rev-parse --short HEAD)
 image: prediction-svc
 
 # job-manual.yaml — Job chạy tay 1 market ngay khi cài. Default OFF; bật:

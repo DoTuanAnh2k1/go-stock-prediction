@@ -8,6 +8,7 @@ metadata:
   name: auth-config
   namespace: {{ .Release.Namespace }}
 data:
+  SUPER_ADMIN_USERNAME: "chon"
   DB_HOST: "db"
   DB_PORT: "5432"
   DB_NAME: go_stock_prediction

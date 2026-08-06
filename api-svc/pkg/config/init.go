@@ -17,8 +17,6 @@ func InitConfig(filenames ...string) {
 			Host:       env.GetEnv("SERVER_HOST", "0.0.0.0"),
 			Port:       env.GetEnv("SERVER_PORT", "8118"),
 			APIKey:        env.GetEnv("API_KEY", ""),
-			AdminUsername: env.GetEnv("ADMIN_USERNAME", "admin"),
-			AdminPassword: env.GetEnv("ADMIN_PASSWORD", "admin123"),
 			JWTSecret:     env.GetEnv("JWT_SECRET", "change-me-in-production"),
 			InternalSecret: env.GetEnv("INTERNAL_SECRET", ""),
 		},

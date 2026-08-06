@@ -29,8 +29,6 @@ type ServerConfig struct {
 	Host           string
 	Port           string
 	APIKey         string
-	AdminUsername  string
-	AdminPassword  string
 	JWTSecret      string
 	InternalSecret string
 }

@@ -139,6 +139,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       GRPC_PORT: "8120"
       INTERNAL_SECRET: "${INTERNAL_SECRET}"
+      SUPER_ADMIN_USERNAME: "${SUPER_ADMIN_USERNAME:?set SUPER_ADMIN_USERNAME in .env}"
+      SUPER_ADMIN_PASSWORD: "${SUPER_ADMIN_PASSWORD:?set SUPER_ADMIN_PASSWORD in .env}"
       SERVICE_MGT_ENABLED: "${SERVICE_MGT_ENABLED:-false}"
       REGISTRY_GRPC_TARGET: "service-mgt:8121"
     expose:
@@ -207,8 +209,6 @@ services:
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
       DB_LOG_LEVEL: "${DB_LOG_LEVEL:-WARN}"
       API_KEY: ""
-      ADMIN_USERNAME: "admin"
-      ADMIN_PASSWORD: "${ADMIN_PASSWORD}"
       JWT_SECRET: "${JWT_SECRET}"
       BACKUP_DIR: "/backups"
       # Parity với k8s: KHÔNG chạy BackupScheduler in-app. Backup do ofelia gọi
@@ -283,8 +283,8 @@ services:
     ports:
       - "127.0.0.1:8081:80"
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@local.dev
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: "${PGADMIN_DEFAULT_EMAIL:-admin@local.dev}"
+      PGADMIN_DEFAULT_PASSWORD: "${PGADMIN_DEFAULT_PASSWORD:?set PGADMIN_DEFAULT_PASSWORD in .env}"
     networks:
       - app-network
 

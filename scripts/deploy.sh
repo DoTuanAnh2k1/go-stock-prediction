@@ -24,7 +24,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 NS="${NS:-stock}"
-TAG="${TAG:-dev}"
+TAG="${TAG:-1.0.0}"                        # release tag; CI: TAG=$(git rev-parse --short HEAD)
 HELM="${HELM:-helm}"
 command -v "$HELM" >/dev/null 2>&1 || HELM="$HOME/.local/bin/helm"   # helm hay ngoài PATH
 

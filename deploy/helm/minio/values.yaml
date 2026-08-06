@@ -1,6 +1,7 @@
 # =============================================================================
 # minio — S3-compatible object store. Self-contained values (không còn global:).
 # =============================================================================
+# secrets: provided at deploy time via -f values-secret.yaml (see values-secret.yaml.example); no weak defaults shipped.
 secrets:
-  minioRootUser: minioadmin
-  minioRootPassword: minioadmin123
+  minioRootUser: ""
+  minioRootPassword: ""

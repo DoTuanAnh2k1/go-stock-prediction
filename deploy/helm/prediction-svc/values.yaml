@@ -1,8 +1,9 @@
 # Cấu hình self-contained cho prediction-svc (chart độc lập, không còn global: của umbrella).
 replicas: 2
-imageTag: dev
+imageTag: "1.0.0"            # release tag; CI overrides: --set imageTag=$(git rev-parse --short HEAD)
 image: prediction-svc
+# secrets: provided at deploy time via -f values-secret.yaml (see values-secret.yaml.example); no weak defaults shipped.
 secrets:
   postgresPassword: "123"
-  s3AccessKey: minioadmin
-  s3SecretKey: minioadmin123
+  s3AccessKey: ""
+  s3SecretKey: ""

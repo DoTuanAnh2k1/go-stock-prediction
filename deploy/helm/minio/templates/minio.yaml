@@ -26,9 +26,8 @@ metadata:
   labels: { app: minio }
 type: Opaque
 stringData:
-  # Plaintext OK — project education (factor #15 chủ động bỏ qua).
-  MINIO_ROOT_USER: {{ .Values.secrets.minioRootUser | quote }}
-  MINIO_ROOT_PASSWORD: {{ .Values.secrets.minioRootPassword | quote }}
+  MINIO_ROOT_USER: {{ required "minio: secrets.minioRootUser is required (provide via -f values-secret.yaml)" .Values.secrets.minioRootUser | quote }}
+  MINIO_ROOT_PASSWORD: {{ required "minio: secrets.minioRootPassword is required (provide via -f values-secret.yaml)" .Values.secrets.minioRootPassword | quote }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

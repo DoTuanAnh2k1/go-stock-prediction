@@ -18,7 +18,6 @@ data:
   SERVICE_MGT_ENABLED: "false"
   LOG_LEVEL: INFO
   DB_LOG_LEVEL: WARN
-  ADMIN_USERNAME: admin
   BACKUP_DIR: /backups
   DOCS_ROOT: /repo
   ALLOWED_ORIGINS: "https://localhost"
