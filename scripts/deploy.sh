@@ -7,12 +7,12 @@
 # cli) mang dependency library `common` (file://../common) → chạy `helm dependency
 # build` trước khi install (vendor common vào charts/).
 #
-#   ./scripts/deploy.sh                       # ns stock, tag dev, toggle demo ON
+#   ./scripts/deploy.sh                       # ns stock, tag 1.0.0, toggle demo ON
 #   NS=stock TAG=v2 ./scripts/deploy.sh
 #   DEMO_TOGGLES=0 ./scripts/deploy.sh        # giữ default chart (hpa/ingress/netpol OFF)
 #   SECRET_FILE=deploy/helm/secrets.yaml ./scripts/deploy.sh   # override secrets (-f)
 #
-# Tự tạo namespace + db-schema ConfigMap (ngoài Helm) trước khi helm upgrade --install.
+# Tự tạo namespace + db-init/db-schemas ConfigMaps (ngoài Helm) trước khi helm upgrade --install.
 # Cần: kubectl (context trỏ cluster đích) + helm v3.
 #
 # Vòng đời độc lập per-service — upgrade/rollback MỘT chart, ví dụ:
@@ -46,7 +46,7 @@ has_imagetag() {
 # Chart có block secrets (nhận -f secret override).
 has_secrets() {
   case "$1" in
-    db|minio|service-mgt|prediction-svc|auth-svc|api-svc|cli-svc|pgadmin) return 0 ;;
+    db|minio|service-mgt|prediction-svc|auth-svc|api-svc|cli-svc|pgadmin|cronjobs) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -70,9 +70,14 @@ demo_args() {  # $1 = chart name; echo extra --set flags
 echo ">> namespace ${NS}"
 kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
 
-echo ">> db-schema ConfigMap (schema init cho db pod — KHÔNG do Helm quản)"
-kubectl create configmap db-schema -n "$NS" \
-  --from-file=01-schema.sql=database.sql \
+echo ">> db-init + db-schemas ConfigMaps (database-per-service init — KHÔNG do Helm quản)"
+# db-init  = the bootstrap script mounted at /docker-entrypoint-initdb.d
+# db-schemas = the per-database schema files, referenced by the script from /schemas
+kubectl create configmap db-init -n "$NS" \
+  --from-file=deploy/db-init/00-init-databases.sh \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create configmap db-schemas -n "$NS" \
+  --from-file=deploy/db-init/schemas/ \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo ">> helm dependency build (vendor 'common' vào backend chart)"

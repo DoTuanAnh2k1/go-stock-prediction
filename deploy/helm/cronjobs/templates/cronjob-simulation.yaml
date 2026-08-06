@@ -36,8 +36,11 @@ spec:
               imagePullPolicy: IfNotPresent
               env:
                 - { name: API_BASE, value: "http://api-svc:8118" }
-                - { name: ADMIN_USER, value: "chon" }          # super_admin (education plaintext)
-                - { name: ADMIN_PASS, value: "Ch1nch2n@" }
+                # super_admin creds sourced from Secret (no committed plaintext).
+                - name: ADMIN_USER
+                  valueFrom: { secretKeyRef: { name: cronjobs-secret, key: SUPER_ADMIN_USERNAME } }
+                - name: ADMIN_PASS
+                  valueFrom: { secretKeyRef: { name: cronjobs-secret, key: SUPER_ADMIN_PASSWORD } }
               command:
                 - sh
                 - -c

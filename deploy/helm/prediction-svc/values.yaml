@@ -4,6 +4,6 @@ imageTag: "1.0.0"            # release tag; CI overrides: --set imageTag=$(git r
 image: prediction-svc
 # secrets: provided at deploy time via -f values-secret.yaml (see values-secret.yaml.example); no weak defaults shipped.
 secrets:
-  postgresPassword: "123"
+  postgresPassword: ""    # prediction_svc role password for market_db — provide via -f values-secret.yaml
   s3AccessKey: ""
   s3SecretKey: ""

@@ -8,12 +8,12 @@ class Settings(BaseSettings):
     # gRPC
     grpc_server_port: int = 8119
 
-    # Database — PostgreSQL
+    # Database — PostgreSQL (database-per-service: prediction-svc owns market_db as role prediction_svc)
     postgres_host: str = "localhost"
     postgres_port: int = 5432
-    postgres_user: str = "postgres"
-    postgres_password: str = "123"
-    postgres_db: str = "go_stock_prediction"
+    postgres_user: str = "prediction_svc"
+    postgres_password: str = ""
+    postgres_db: str = "market_db"
     postgres_debug: bool = False
 
     # Deprecated MySQL vars — kept so docker-compose .env files with MYSQL_* don't error

@@ -60,8 +60,10 @@ spec:
                   export PGPASSWORD="$POSTGRES_PASSWORD"
                   ts=$(date +%Y%m%d_%H%M%S)
                   out="/backups/backup_${ts}.sql.gz"
-                  echo "pg_dump -> $out"
-                  pg_dump -h db -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" | gzip > "$out"
+                  echo "pg_dumpall -> $out"
+                  # database-per-service: pg_dumpall (superuser) captures ALL three
+                  # databases (auth_db/market_db/registry_db) + roles in one archive.
+                  pg_dumpall -h db -p 5432 -U "$POSTGRES_USER" | gzip > "$out"
                   echo "backup done: $(ls -lh "$out" | awk '{print $5}')"
                   # retention: giữ 10 file mới nhất
                   ls -1t /backups/backup_*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f

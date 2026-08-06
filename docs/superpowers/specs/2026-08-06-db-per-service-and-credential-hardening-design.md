@@ -11,10 +11,25 @@ credentials (`admin/123`, `admin123`, `POSTGRES_PASSWORD=123`, hardcoded super-a
 1. **No weak or committed credentials.** Every credential is supplied at deploy time via
    env/Secret with fail-fast if missing. The seeded super-admin password is env-driven, never
    hardcoded. Remove dead `admin/admin123` config.
-2. **Database-per-service (purist).** Each backend owns its own PostgreSQL database with a
-   dedicated least-privilege role. No service reaches into another service's data at the SQL
-   layer. `api-svc` becomes **DB-less** — it reads market/prediction data via gRPC to
-   `prediction-svc` and user/RBAC data via gRPC to `auth-svc` (the latter already existed).
+2. **Database-per-service.** Each backend owns its own PostgreSQL database with a dedicated
+   least-privilege role. No service reaches into another service's data at the SQL layer.
+
+### Delivered vs. the "fully DB-less api-svc" variant (important)
+
+The approved intent was for `api-svc` to become **fully DB-less**, reading market/prediction data
+via a new gRPC query API on `prediction-svc`. That query API is a port of ~115 read methods +
+~20 RPCs + DTO builders from Go to Python — a large migration that cannot be completed **and
+verified end-to-end** in a single pass without risking the passing build.
+
+What was **delivered and verified** instead: `api-svc` connects to `market_db` as a dedicated
+**read-only least-privilege role `api_svc`** — `SELECT` on everything, plus `INSERT/UPDATE/DELETE`
+on the only two tables api-svc writes (`cron_schedules`, `sim_bots`). It has **no access at all**
+to `auth_db` or `registry_db` (auth is already gRPC). This is genuine database-per-service data
+isolation, requires **zero api-svc code change**, and is fully demonstrable (see Verification).
+The fully-DB-less gRPC facade remains a clean **follow-up** (Phase 2) on top of this.
+
+Auth/RBAC data is reached via gRPC to `auth-svc` (pre-existing); user/RBAC tables never leave
+`auth_db`.
 
 ## Non-goals
 

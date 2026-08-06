@@ -13,8 +13,8 @@ data:
   GRPC_PORT: "8121"
   POSTGRES_HOST: "db"
   POSTGRES_PORT: "5432"
-  POSTGRES_USER: postgres
-  POSTGRES_DB: go_stock_prediction
+  POSTGRES_USER: service_mgt
+  POSTGRES_DB: registry_db
   LOG_FORMAT: console
   # ---- OpenTelemetry tracing (OTLP/gRPC → collector in ns observability) ----
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability:4317"

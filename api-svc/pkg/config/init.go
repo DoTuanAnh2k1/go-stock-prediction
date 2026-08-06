@@ -36,11 +36,12 @@ func InitConfig(filenames ...string) {
 				Debug:    env.GetEnv("MYSQL_DEBUG", "false") == "true",
 			},
 			Pgsql: models_config.PostgresConfig{
+				// database-per-service: api-svc reads market_db as the read-only role api_svc.
 				Host:     env.GetEnv("POSTGRES_HOST", "localhost"),
 				Port:     env.GetEnv("POSTGRES_PORT", "5432"),
-				User:     env.GetEnv("POSTGRES_USER", "postgres"),
-				Password: env.GetEnv("POSTGRES_PASSWORD", "123"),
-				DbName:   env.GetEnv("POSTGRES_DB", "go_stock_prediction"),
+				User:     env.GetEnv("POSTGRES_USER", "api_svc"),
+				Password: env.GetEnv("POSTGRES_PASSWORD", ""),
+				DbName:   env.GetEnv("POSTGRES_DB", "market_db"),
 				Debug:    env.GetEnv("POSTGRES_DEBUG", "false") == "true",
 			},
 		},

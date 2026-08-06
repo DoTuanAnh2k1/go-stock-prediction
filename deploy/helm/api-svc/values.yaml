@@ -4,7 +4,7 @@ imageTag: "1.0.0"            # release tag; CI overrides: --set imageTag=$(git r
 image: api-svc
 # secrets: provided at deploy time via -f values-secret.yaml (see values-secret.yaml.example); no weak defaults shipped.
 secrets:
-  postgresPassword: "123"
+  postgresPassword: ""
   jwtSecret: ""
   internalSecret: ""
 bluegreen:

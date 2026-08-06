@@ -45,13 +45,13 @@ Financial asset price prediction system with RBAC — crawls Gold SJC/XAU, NASDA
 | Service (dir) | Tech | Port | Role |
 |---------------|------|------|------|
 | `gateway-svc/` | Rust, Axum 0.8, rustls | `:80` / `:443` (public) | TLS termination; longest-prefix routing: `/swagger` → block, `/api` → `api-svc:8118`, `/health` → `api-svc:8118`, `/` → `web-svc:3000`; gateway-local `/healthz` and `/readyz` |
-| `api-svc/` | Go 1.25+, net/http, gRPC, GORM v2, ZeroLog | `:8118` (internal) | HTTP API; thin auth proxy to `auth-svc` via gRPC; direct DB reads for market data; triggers `prediction-svc` via gRPC; backup scheduler |
-| `auth-svc/` | Java 21, Spring Boot 3, gRPC, Flyway, bcrypt | `:8120` (internal) | Owns all RBAC: login, JWT generation (HMAC256, 24 h), user CRUD, market groups; Flyway V1: auth + RBAC tables; V2: `full_name`/`email`/`phone` profile fields; seeds `chon/super_admin` on startup |
+| `api-svc/` | Go 1.25+, net/http, gRPC, GORM v2, ZeroLog | `:8118` (internal) | HTTP API; thin auth proxy to `auth-svc` via gRPC; connects to `market_db` as read-only role `api_svc`; triggers `prediction-svc` via gRPC; backup scheduler |
+| `auth-svc/` | Java 21, Spring Boot 3, gRPC, Flyway, bcrypt | `:8120` (internal) | Owns all RBAC: login, JWT generation (HMAC256, 24 h), user CRUD, market groups; Flyway V1: auth + RBAC tables in `auth_db`; V2: `full_name`/`email`/`phone`; V3: command RBAC; seeds super_admin from env `SUPER_ADMIN_USERNAME`/`SUPER_ADMIN_PASSWORD` (fail-fast if blank/weak) |
 | `prediction-svc/` | Python 3.12, PyTorch, statsmodels, LightGBM, XGBoost, scikit-learn, APScheduler, SQLAlchemy | `:8119` (internal) | gRPC service: crawling, 13 ML algorithms, training, cron scheduler |
 | `web-svc/` | React, TypeScript, Vite, nginx | `:3000` (internal) | Static SPA served by nginx; accessed only through `gateway-svc` |
 | `cli-svc/` | Go 1.26, charmbracelet/wish + bubbletea, go-pretty | `:2345` (public, SSH) | Interactive SSH shell for headless servers; renders API data as tables; `get`/`set`/`update`/`delete` verbs; per-command RBAC enforced client-side; calls the API through `gateway-svc` at a static `API_BASE_URL` (no service discovery) |
 | `service-mgt/` | Go 1.25, gRPC, GORM v2, ZeroLog | `:8121` (internal) | Central service registry/discovery: services register on boot, renew a lease via heartbeat (push/lease-TTL), and resolve peers via Discover; write-through cache (Postgres `service_instances` = source of truth, in-memory cache = read layer). Disabled by default (`SERVICE_MGT_ENABLED=false`). |
-| `db` | TimescaleDB (PostgreSQL 16) | `:5432` (internal) | Shared DB for all services; hypertables for price/prediction time-series; schema auto-init from `database.sql` |
+| `db` | TimescaleDB (PostgreSQL 16) | `:5432` (internal) | One instance, three isolated databases (`auth_db`, `market_db`, `registry_db`); each service uses a dedicated least-privilege role; schema init via `deploy/db-init/` scripts |
 | `pgadmin` | pgAdmin 4 | `127.0.0.1:8081` | PostgreSQL web administration UI |
 
 Internal DNS (between containers): `api-svc:8118`, `prediction-svc:8119`, `auth-svc:8120`, `service-mgt:8121`, `web-svc:3000`, `db:5432`. The `cli-svc` SSH port `2345` is exposed directly (the gateway speaks HTTP only); `cli-svc` reaches the API at `http://gateway-svc/api`.
@@ -70,11 +70,12 @@ Internal DNS (between containers): `api-svc:8118`, `prediction-svc:8119`, `auth-
 - **Pipeline monitoring:** `/api/monitoring/overview` — crawl freshness, per-algo prediction counts, bot win/loss stats (JWT required, 30 s cache).
 - **Trading simulation:** Bot leaderboard, per-bot trades and portfolio snapshots, live-step and backtest modes.
 - **Pipeline reports:** Per-pipeline run records with step-level status, stored 7 days (`GET /api/pipeline-reports`).
-- **Auto backup:** Daily `pg_dump` at 3 AM into `BACKUP_DIR`; owned by `api-svc` (`backup_scheduler.go`).
+- **Auto backup:** Daily `pg_dumpall` (superuser) at 3 AM — captures all three databases plus roles in one archive. In compose: run by `ofelia` on the `db` container. In k8s: dedicated CronJob (`cronjob-backup.yaml`). `api-svc` is not involved when `BACKUP_SCHEDULER_ENABLED=false`.
 - **Interactive CLI over SSH (`cli-svc`):** `ssh <user>@<host> -p 2345` (dashboard credentials) opens a shell that renders API data as tables. Four verbs `get`/`set`/`update`/`delete`, tab-completion, multi-session.
 - **Command RBAC:** Admins declare commands (a cli handler + fixed args), group them, and assign users to groups — a user may execute only the commands in their groups (`super_admin` runs all). Managed from the web dashboard (`/admin/commands`, `/admin/command-groups`) or the CLI. RBAC lives in `auth-svc` (Flyway V3); `cli-svc` enforces it client-side.
 - **Service discovery (optional, `SERVICE_MGT_ENABLED`):** When enabled, `api-svc`, `auth-svc`, `prediction-svc`, and `gateway-svc` register with `service-mgt` and resolve peers dynamically (client-side discovery, push lease-TTL heartbeat). Disabled by default — services use static endpoints. Always falls back to static targets if the registry is unreachable. `cli-svc` (HTTP via gateway) and `web-svc` (static nginx) do not register.
 - **Request correlation ID (`X-Request-ID`):** Every log line carries a `request_id` (UUID v4) so a single transaction can be traced across all six services with `grep request_id=<id>`. The gateway mints/forwards `x-request-id`; each service reads it (HTTP header or gRPC metadata), binds it to its logger (Go `logger.Ctx(ctx)`, Java SLF4J MDC → `%X{requestId}`, Python `structlog.contextvars`), and re-injects it on outbound gRPC/HTTP calls. Background cron jobs mint their own id per run. Independent of OpenTelemetry tracing (`trace_id` still chains to Tempo separately).
+- **Database-per-service:** One TimescaleDB instance, three isolated databases, each owned by a dedicated least-privilege login role. `auth_db` (role `auth_svc`) holds all RBAC tables — managed exclusively by Flyway inside `auth-svc`. `market_db` (role `prediction_svc` R/W; role `api_svc` read-limited) holds all price, prediction, simulation, pipeline, and cron data. `registry_db` (role `service_mgt`) holds only `service_instances`. `api-svc` connects to `market_db` as the `api_svc` role: full SELECT plus INSERT/UPDATE/DELETE only on `cron_schedules` and `sim_bots`. Inter-service auth/RBAC queries remain via gRPC as before. Init: `deploy/db-init/00-init-databases.sh` creates roles and databases; `deploy/db-init/schemas/10-market_db.sql` and `20-registry_db.sql` apply the DDL. Backup uses `pg_dumpall` (superuser) to capture all three databases plus roles in one archive.
 
 ## Repository Layout
 
@@ -101,9 +102,14 @@ go-stock-prediction/
 │   ├── proto/registry/    # registry.proto + generated Go stubs
 │   ├── client/            # Go client SDK — imported by api-svc (replace sibling module)
 │   └── internal/          # config/, store/ (service_instances table), registry/ (lease/reaper), grpcserver/
-├── deploy/                # All Dockerfiles and Compose files (flat layout)
+├── deploy/                # All Dockerfiles and Compose files
 │   ├── docker-compose.yaml
-│   ├── docker-compose.test.yml
+│   ├── docker-compose.test.yml      # uses database.sql (single-DB test harness only)
+│   ├── db-init/                     # Database-per-service init
+│   │   ├── 00-init-databases.sh     # Creates 3 DBs + 4 least-privilege roles + grants
+│   │   └── schemas/
+│   │       ├── 10-market_db.sql     # market_db DDL (hypertables, sim, pipeline, ...)
+│   │       └── 20-registry_db.sql   # registry_db DDL (service_instances)
 │   ├── api-svc.Dockerfile           # build context = repo root (imports service-mgt/)
 │   ├── auth-svc.Dockerfile
 │   ├── prediction-svc.Dockerfile    # build context = repo root (needs api-svc/proto/)
@@ -111,7 +117,7 @@ go-stock-prediction/
 │   ├── gateway-svc.Dockerfile
 │   ├── cli-svc.Dockerfile           # build context = ../cli-svc (standalone, no service-mgt import)
 │   └── service-mgt.Dockerfile       # build context = ../service-mgt
-├── database.sql           # Full PostgreSQL/TimescaleDB schema (authoritative)
+├── database.sql           # Legacy monolithic schema (kept for integration test harness only)
 ├── Makefile               # Root convenience targets (see below)
 └── .env                   # Environment variables — stays at repo root
 ```
@@ -140,7 +146,7 @@ make up
 make reset
 ```
 
-The `db` container auto-initialises the schema from `database.sql` on first startup via `/docker-entrypoint-initdb.d/01-schema.sql`. No manual import is needed.
+The `db` container auto-initialises on first startup via `deploy/db-init/00-init-databases.sh` (creates three databases and four least-privilege roles) plus the SQL files under `deploy/db-init/schemas/`. No manual import is needed. See [Database-per-service](#database-per-service) below.
 
 ### Access
 
@@ -151,15 +157,15 @@ The `db` container auto-initialises the schema from `database.sql` on first star
 | `http://localhost:8081` | pgAdmin (127.0.0.1 only) |
 | `http://localhost:8118/swagger/` | Swagger UI (direct to `api-svc`, bypasses Gateway) |
 
-**Default credentials:** `chon` / `super_admin` — seeded by `auth-svc` on first startup.
+**Default credentials:** Set via env `SUPER_ADMIN_USERNAME` / `SUPER_ADMIN_PASSWORD` — seeded by `auth-svc` on first startup (fail-fast if blank or weak; no hardcoded default).
 
 ### First-run data load
 
 ```bash
-# Get a JWT token (super_admin seeded by auth-svc)
+# Get a JWT token (use credentials from SUPER_ADMIN_USERNAME/SUPER_ADMIN_PASSWORD in .env)
 TOKEN=$(curl -s -X POST http://localhost/api/x/grant \
   -H "Content-Type: application/json" \
-  -H "X-Token: $(printf '%s' 'chon:super_admin' | base64)" \
+  -H "X-Token: $(printf '%s' "${SUPER_ADMIN_USERNAME}:${SUPER_ADMIN_PASSWORD}" | base64)" \
   -d '{"request":""}' | jq -r '.token')
 
 # Crawl initial data for all markets
@@ -196,8 +202,8 @@ command lives in [`docs/ckad-checklist.md`](docs/ckad-checklist.md).
 ### Deploy (scripted)
 
 ```bash
-./scripts/build.sh                 # build 7 images :dev + kind load into cluster "ckad"
-./scripts/deploy.sh                # ns stock + db-schema ConfigMap + helm install (demo toggles ON)
+./scripts/build.sh                 # build 7 images (imageTag from git SHA) + kind load into cluster "ckad"
+./scripts/deploy.sh                # ns stock + db-init/db-schemas ConfigMaps + helm install (demo toggles ON)
 ./scripts/smoke-test.sh            # E2E: login → /api/version → monitoring (via gateway/ingress)
 ./scripts/run-labs.sh              # run all CKAD day 1–5 labs (handles NetworkPolicy toggle)
 ```
@@ -208,8 +214,9 @@ Full deploy + verify walkthrough (English + Vietnamese): **[VERIFY.md](VERIFY.md
 
 ```bash
 kubectl create namespace stock
-# db-schema ConfigMap is NOT Helm-managed — create it first
-kubectl create configmap db-schema -n stock --from-file=01-schema.sql=database.sql
+# db-init and db-schemas ConfigMaps are NOT Helm-managed — deploy.sh creates them automatically:
+#   kubectl create configmap db-init    -n stock --from-file=deploy/db-init/00-init-databases.sh
+#   kubectl create configmap db-schemas -n stock --from-file=deploy/db-init/schemas/
 
 # scripts/deploy.sh installs every chart in dependency order:
 #   bootstrap → db → minio → service-mgt → prediction-svc → auth-svc → api-svc
@@ -290,8 +297,7 @@ kubectl apply -k deploy/k8s/kustomize/overlays/dev         # apply into ns stock
 
 - `bluegreen.enabled` (on the `api-svc` chart) must stay **true** — gateway-svc hard-routes
   `/api → api-svc-<color>`.
-- Each chart's `values.yaml` secrets are **dev placeholders only**; real credentials go in a
-  gitignored per-chart secret file overridden with `-f` at `helm upgrade`.
+- Each chart's `values.yaml` secrets have **empty defaults** (Helm `required` guards prevent deploy without real values). Provide credentials via a gitignored `values-secret.yaml` overridden with `-f` at `helm upgrade`. The `db` chart's four role passwords (`authDbPassword`, `marketDbPassword`, `apiDbPassword`, `registryDbPassword`) must match the corresponding `secrets.postgresPassword` in each service chart.
 - prediction-svc uses a `startupProbe` (~150s for torch import); gRPC health is a `tcpSocket` probe.
 
 ## Configuration
@@ -309,16 +315,29 @@ AUTH_GRPC_TARGET=auth-svc:8120        # use localhost:8120 when running api-svc 
 
 # Auth
 JWT_SECRET=change-me-in-production    # required — shared between api-svc and auth-svc
-ADMIN_PASSWORD=admin123               # legacy seed fallback
+SUPER_ADMIN_USERNAME=                 # seeded by auth-svc on first start (fail-fast if blank)
+SUPER_ADMIN_PASSWORD=                 # no hardcoded default — set a strong value
 
-# Database (TimescaleDB / PostgreSQL 16)
-DB_DRIVER=postgresql
+# Database — database-per-service (one TimescaleDB instance, three databases)
 POSTGRES_HOST=db                      # Docker internal; use localhost when running locally
 POSTGRES_PORT=5432
+
+# Superuser (used only by the db container init and backup pg_dumpall)
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=123
-POSTGRES_DB=go_stock_prediction
-POSTGRES_DEBUG=false
+POSTGRES_PASSWORD=                    # superuser password
+
+# auth-svc (auth_db, role auth_svc)
+AUTH_DB_PASSWORD=
+
+# prediction-svc / jobs_cli (market_db, role prediction_svc)
+MARKET_DB_PASSWORD=
+POSTGRES_DEBUG=false                  # true = SQLAlchemy echo SQL
+
+# api-svc (market_db, role api_svc — read-only + cron_schedules/sim_bots writes)
+API_DB_PASSWORD=
+
+# service-mgt (registry_db, role service_mgt)
+REGISTRY_DB_PASSWORD=
 
 # Logging
 LOG_LEVEL=INFO
@@ -476,7 +495,7 @@ Stored in the `cron_schedules` DB table. Edit live via `PUT /api/schedules/{key}
 | `train_sp500` | `0 0 7 * * 0` | Retrain S&P 500 models (Sunday 7 AM) |
 | `daily_reconcile` | `0 0 6 * * *` | Reconcile predictions with actual prices |
 | `simulation_daily` | `0 0 20 * * *` | Bot trading step (8 PM) |
-| `daily_backup` | `0 0 3 * * *` | `pg_dump` to `BACKUP_DIR` — run by **api-svc** (`backup_scheduler.go`), not Python |
+| `daily_backup` | `0 0 3 * * *` | `pg_dumpall` (superuser) — all 3 databases + roles in one archive; compose: ofelia on `db` container; k8s: `cronjob-backup.yaml` → PVC `backup-data` |
 
 ## ML Algorithms (11)
 
@@ -512,7 +531,7 @@ For tree-based models, reuse `build_enhanced_features()` from `prediction-svc/sr
 
 ### Add a new market
 
-1. Add DB model: Go GORM struct in `api-svc/pkg/models/models_db/` and Python ORM model in `prediction-svc/src/database/models.py`. Add the table definition to `database.sql` (create as a hypertable if it holds time-series data).
+1. Add DB model: Go GORM struct in `api-svc/pkg/models/models_db/` and Python ORM model in `prediction-svc/src/database/models.py`. Add the table DDL to `deploy/db-init/schemas/10-market_db.sql` (price/prediction tables are hypertables in `market_db`).
 2. Add repository methods in `prediction-svc/src/database/repository.py` and, as needed, in `api-svc/pkg/store/repository/repository.go` + `api-svc/pkg/store/postgres/`.
 3. Create a crawler in `prediction-svc/src/crawlers/<name>.py` implementing `BaseCrawler`.
 4. Register a cron pipeline job in `prediction-svc/src/scheduler/jobs.py` and wire it in `prediction-svc/src/orchestrator/runner.py`.
@@ -522,11 +541,11 @@ For tree-based models, reuse `build_enhanced_features()` from `prediction-svc/sr
 
 **ICT-at-rest timezone:** All `TIMESTAMP` columns store ICT (Asia/Ho_Chi_Minh, UTC+7) wallclock time — not UTC. Python: use `datetime.now()` only (container has `TZ=Asia/Ho_Chi_Minh`), never `datetime.utcnow()`. Go: `time.Local` is set to `Asia/Ho_Chi_Minh` in `api-svc/cmd/main.go`.
 
-**AutoMigrate is disabled:** Schema is managed exclusively by `database.sql`. GORM `AutoMigrate` is off because TimescaleDB hypertable composite PKs conflict with it. Schema is auto-applied on first container startup; for subsequent changes, write a migration and apply manually.
+**AutoMigrate is disabled:** GORM `AutoMigrate` is off because TimescaleDB hypertable composite PKs conflict with it. `market_db` schema is managed by `deploy/db-init/schemas/10-market_db.sql`; `auth_db` schema is managed by Flyway inside `auth-svc`. For subsequent changes, update the relevant file and apply manually (or extend Flyway for auth tables).
 
 **prediction-svc build context is the repo root:** The `prediction-svc` Dockerfile needs `api-svc/proto/` for proto stub generation. The other four services use `context: ../<svc-dir>` with `dockerfile: ../deploy/<svc>.Dockerfile`.
 
-**Cron schedules source of truth:** `DEFAULT_SCHEDULES` in `prediction-svc/src/scheduler/manager.py` is the authoritative source for Python-managed jobs. On each `prediction-svc` startup, `upsert_cron_schedule()` runs a true upsert — it overwrites DB values that differ from the code defaults. The `daily_backup` job is the exception: it is seeded (insert-if-not-exists, never overwritten) and polled by `api-svc/pkg/server/backup_scheduler.go`.
+**Cron schedules source of truth:** `DEFAULT_SCHEDULES` in `prediction-svc/src/scheduler/manager.py` is the authoritative source for Python-managed jobs. On each `prediction-svc` startup, `upsert_cron_schedule()` runs a true upsert — it overwrites DB values that differ from the code defaults. The `daily_backup` job entry in `cron_schedules` is reference-only; actual execution is by `ofelia` (compose) or `cronjob-backup.yaml` (k8s), not by `api-svc`.
 
 **Go module name unchanged:** The Go module path remains `go-stock-prediction` (declared in `api-svc/go.mod`) despite the directory rename from `api/` to `api-svc/`.
 
