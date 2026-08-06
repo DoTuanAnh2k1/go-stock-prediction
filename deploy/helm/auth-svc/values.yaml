@@ -1,0 +1,8 @@
+# Cấu hình self-contained cho auth-svc (chart độc lập, không còn global: của umbrella).
+replicas: 2
+imageTag: dev
+image: auth-svc
+secrets:
+  postgresPassword: "123"
+  jwtSecret: change-me-in-dev
+  internalSecret: change-me-in-dev

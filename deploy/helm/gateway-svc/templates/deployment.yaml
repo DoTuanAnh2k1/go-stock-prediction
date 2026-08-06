@@ -1,0 +1,71 @@
+# =============================================================================
+# gateway-svc — Rust Axum reverse proxy (:80/:443). Điểm vào của hệ thống.
+# Routing: /api -> api-svc:8118, / -> web-svc:3000, /swagger -> 404.
+#
+# Build & load image:
+#   docker build -t gateway-svc:dev -f deploy/gateway-svc.Dockerfile gateway-svc
+#   kind load docker-image gateway-svc:dev --name ckad
+#
+# TLS: docker-entrypoint.sh tự sinh self-signed cert vào /etc/gateway/certs nếu
+# chưa có => dùng emptyDir (không cần PVC, cert tạo lại mỗi lần khởi động).
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway-svc
+  namespace: {{ .Release.Namespace }}
+  labels: { app: gateway-svc }
+spec:
+  {{- if not .Values.hpa.enabled }}
+  replicas: {{ .Values.replicas }}   # CKAD 2.3: HPA on → HPA sở hữu replicas (omit để tránh flapping)
+  {{- end }}
+  selector:
+    matchLabels: { app: gateway-svc }
+  template:
+    metadata:
+      labels: { app: gateway-svc }
+      annotations:
+        # Prometheus scrapes /metrics on the admin port :9100 (kubernetes_sd).
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+        prometheus.io/path: "/metrics"
+    spec:
+      tolerations:                          # HA: cho phép chạy trên node control-plane (dùng cả 3 node)
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      topologySpreadConstraints:            # HA: rải pod đều các node (kubernetes.io/hostname)
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule     # hard: ép mỗi pod khác node
+          matchLabelKeys: [pod-template-hash]  # spread theo từng ReplicaSet → rollout không kẹt
+          labelSelector:
+            matchLabels: { app: gateway-svc }
+      serviceAccountName: gateway-svc   # RBAC cho blue/green controller (rbac.yaml)
+      containers:
+        - name: gateway-svc
+          image: "{{ .Values.image }}:{{ .Values.imageTag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http,    containerPort: 80 }
+            - { name: https,   containerPort: 443 }
+            - { name: metrics, containerPort: 9100 }
+          envFrom:
+            - configMapRef: { name: gateway-config }
+          resources:
+            requests: { cpu: "50m", memory: "32Mi" }
+            limits:   { cpu: "250m", memory: "128Mi" }
+          readinessProbe:
+            httpGet: { path: /readyz, port: 80 }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 80 }
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          volumeMounts:
+            - name: certs
+              mountPath: /etc/gateway/certs
+      volumes:
+        - name: certs
+          emptyDir: {}

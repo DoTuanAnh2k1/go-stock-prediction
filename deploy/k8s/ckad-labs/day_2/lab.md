@@ -130,21 +130,22 @@ nhìn thấy được thì phải rebuild image có thay đổi. Cơ chế rollo
 
 > Bối cảnh: Service chung `api-svc`/`web-svc` trước đây selector chỉ `{app: api-svc}` (KHÔNG color)
 > → **hit CẢ blue lẫn green cùng lúc** (4 endpoints) ⇒ KHÔNG phải blue/green thật; blue hỏng vẫn
-> nhận 50% traffic. Đã sửa: selector kèm `color=<activeColor>` (driven `global.bluegreen.activeColor`,
-> default green) → Service chung trỏ ĐÚNG 1 màu, **cutover = FLIP selector, rollback = flip lại**.
+> nhận 50% traffic. Đã sửa: selector kèm `color=<activeColor>` (driven `.Values.bluegreen.activeColor`
+> của chart api-svc/web-svc, default green) → Service chung trỏ ĐÚNG 1 màu, **cutover = FLIP selector,
+> rollback = flip lại**.
 
-Sửa `charts/{api-svc,web-svc}/templates/service.yaml` (selector thêm `color` khi bluegreen bật) +
-`values.yaml` (`global.bluegreen.activeColor: green`).
+Sửa `{api-svc,web-svc}/templates/service.yaml` (selector thêm `color` khi bluegreen bật) +
+`values.yaml` (`bluegreen.activeColor: green`).
 
 ```bash
-helm upgrade stock deploy/helm/stock -n stock          # rev18
+helm upgrade api-svc deploy/helm/api-svc -n stock          # chart api-svc (revision riêng)
 kubectl get svc api-svc -n stock -o jsonpath='{.spec.selector}'
 #   {"app":"api-svc","color":"green"}          ← kèm color
 kubectl get endpoints api-svc -n stock
 #   api-svc   10.244.1.32:18118,10.244.2.75:18118    ← CHỈ 2 green pod (không còn 4)
 
 # CUTOVER green→blue:
-#   declarative: helm upgrade ... --set global.bluegreen.activeColor=blue   (bền qua helm upgrade)
+#   declarative: helm upgrade api-svc deploy/helm/api-svc -n stock --set bluegreen.activeColor=blue   (bền qua helm upgrade)
 #   imperative : kubectl patch svc api-svc -n stock -p '{"spec":{"selector":{"app":"api-svc","color":"blue"}}}'
 kubectl get endpoints api-svc -n stock
 #   api-svc   10.244.1.31:18118,10.244.2.73:18118    ← đổi sang blue pods (cutover tức thời)
@@ -172,10 +173,10 @@ kubectl logs -n stock -l app=api-svc,color=green -c api-svc --tail=150 | grep -c
 
 Điểm chốt:
 - Đây là **blue/green kinh điển**: 2 Deployment `api-svc-blue` + `api-svc-green` (đã deploy sẵn bởi
-  Helm `global.bluegreen.enabled=true`) DÙNG CHUNG 1 Service `api-svc` selector `{app, color}` + FLIP.
+  chart api-svc `bluegreen.enabled=true`) DÙNG CHUNG 1 Service `api-svc` selector `{app, color}` + FLIP.
   Cả 2 màu Ready sẵn ⇒ cutover **tức thời zero-downtime**; rollback = flip lại (không rebuild/rollout).
 - ⚠️ **Imperative-patch vs declarative-apply:** `kubectl patch` selector chỉ BỀN tới lần `helm upgrade`
-  kế (helm reset selector về `activeColor`). Cutover LÂU DÀI phải `--set global.bluegreen.activeColor`.
+  kế (helm reset selector về `activeColor`). Cutover LÂU DÀI phải `--set bluegreen.activeColor` (chart api-svc).
 - **Ingress (Lab 4.2) route `/api`→Service chung `api-svc`** ⇒ nay tự động theo màu active (trước hit cả 2).
 - Song song với **gateway-native blue/green** (Rust controller + ConfigMap `gateway-bluegreen-state`,
   route per-color `api-svc-<color>` cho `/api`,`/`). Hai cơ chế độc lập — giữ `activeColor` khớp ConfigMap
@@ -270,11 +271,12 @@ scaleUp nhanh (stab 0s) / scaleDown chậm bất-đối-xứng (stab **300s**) �
 
 `cpu-burn` (hpa-example) chỉ là app demo CPU-bound để kích HPA. Service project **I/O-bound/idle**
 (api 1m, gateway 1-2m CPU vs requests 100m/50m ≈ 1-2%) nên CPU-HPA chỉ scale khi **traffic spike
-thật** — vẫn áp được như feature HA. Gated Helm template `deploy/helm/stock/templates/hpa.yaml`
-(`global.hpa.enabled`, default off):
+thật** — vẫn áp được như feature HA. Gated Helm template `api-svc/templates/hpa.yaml` +
+`gateway-svc/templates/hpa.yaml` (`.Values.hpa.enabled` mỗi chart, default off):
 
 ```bash
-helm upgrade stock deploy/helm/stock -n stock --set global.hpa.enabled=true
+helm upgrade api-svc     deploy/helm/api-svc     -n stock --set hpa.enabled=true
+helm upgrade gateway-svc deploy/helm/gateway-svc -n stock --set hpa.enabled=true
 kubectl get hpa -n stock
 #   api-svc-blue    Deployment/api-svc-blue    cpu: 1%/60%   2   6   2
 #   api-svc-green   Deployment/api-svc-green   cpu: 1%/60%   2   6   2
@@ -282,7 +284,7 @@ kubectl get hpa -n stock
 ```
 Điểm chốt (áp HPA lên deployment ĐÃ có):
 - **HPA SỞ HỮU `.spec.replicas`** → deployment phải **OMIT `replicas`** khi HPA bật (template dùng
-  `{{ if not .Values.global.hpa.enabled }}replicas: ...{{ end }}`). Nếu vẫn hardcode replicas thì
+  `{{ if not .Values.hpa.enabled }}replicas: ...{{ end }}`). Nếu vẫn hardcode replicas thì
   mỗi `helm upgrade` giành lại → **flapping** với HPA.
 - ⚠️ Omit replicas ⇒ lúc BẬT lần đầu deployment default về **1** (2→1) rồi HPA `minReplicas=2` kéo
   lại 2 (self-heal ~vài giây). Các upgrade sau không đụng replicas nữa → ổn định.

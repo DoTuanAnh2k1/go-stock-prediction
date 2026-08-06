@@ -19,7 +19,7 @@ set -uo pipefail          # KHÔNG set -e: có curl/wait cố tình fail (endpoi
 NS=stock
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$DIR/../../../.." && pwd)"           # repo root
-CHART="$ROOT/deploy/helm/stock"
+HELMDIR="$ROOT/deploy/helm"                        # per-service charts
 ONLY="${ONLY:-all}"
 HELM=/home/chronical/.local/bin/helm
 
@@ -46,7 +46,7 @@ ctx="$(kubectl config current-context 2>/dev/null || true)"
 [ "$ctx" = "kind-ckad" ] || { printf '%sContext hiện tại = "%s" (mong đợi kind-ckad). Đổi: kubectl config use-context kind-ckad%s\n' "$R" "$ctx" "$X"; exit 1; }
 kubectl get ns "$NS" >/dev/null 2>&1 || { printf '%sKhông thấy namespace %s%s\n' "$R" "$NS" "$X"; exit 1; }
 [ -x "$HELM" ] || { printf '%sKhông thấy helm tại %s%s\n' "$R" "$HELM" "$X"; exit 1; }
-[ -d "$CHART" ] || { printf '%sKhông thấy Helm chart tại %s%s\n' "$R" "$CHART" "$X"; exit 1; }
+[ -d "$HELMDIR/gateway-svc" ] || { printf '%sKhông thấy Helm charts tại %s%s\n' "$R" "$HELMDIR" "$X"; exit 1; }
 
 # =============================================================================
 lab_4_1(){
@@ -87,8 +87,8 @@ if [ -z "$_ctrl" ]; then
   return
 fi
 
-note "2) Bật Ingress (gated template ingress.yaml: host stock.local, / → web-svc, /api → api-svc)"
-runhelm "$HELM" upgrade stock "$CHART" -n "$NS" --reuse-values --set global.ingress.enabled=true
+note "2) Bật Ingress (gated template gateway-svc/ingress.yaml: host stock.local, / → web-svc, /api → api-svc)"
+runhelm "$HELM" upgrade gateway-svc "$HELMDIR/gateway-svc" -n "$NS" --reuse-values --set ingress.enabled=true
 run kubectl get ingress -n "$NS"
 
 note "3) Verify routing — kind nodeIP không routable từ host → port-forward controller (background)"
@@ -128,8 +128,10 @@ note "   → đã kill port-forward (kèm pkill fallback, không để orphan gi
 lab_4_3(){
 title "LAB 4.3 — NetworkPolicy Isolation (kindnet ENFORCE thật — bật → demo → TẮT LẠI)"
 
-note "1) Bật NetworkPolicy (+ ingress để giữ /api tới được) — 5 policy default-deny + allow-*"
-runhelm "$HELM" upgrade stock "$CHART" -n "$NS" --reuse-values --set global.networkPolicy.enabled=true --set global.ingress.enabled=true
+note "1) Bật NetworkPolicy (graph tách 2 chart: bootstrap = default-deny + multi-target, db = allow-backends-to-db) + ingress giữ /api tới được — 5 policy"
+runhelm "$HELM" upgrade bootstrap   "$HELMDIR/bootstrap"   -n "$NS" --reuse-values --set networkPolicy.enabled=true
+runhelm "$HELM" upgrade db          "$HELMDIR/db"          -n "$NS" --reuse-values --set networkPolicy.enabled=true
+runhelm "$HELM" upgrade gateway-svc "$HELMDIR/gateway-svc" -n "$NS" --reuse-values --set ingress.enabled=true
 run kubectl get networkpolicy -n "$NS"
 
 note "2) ISOLATION — pod lạ (app=np-test, KHÔNG trong allow-list) curl api-svc → BỊ CHẶN (timeout)"
@@ -147,8 +149,9 @@ run kubectl logs np-test -n "$NS"
 note "   → 'download timed out' + wget_exit=1 = default-deny chặn app=np-test (không có allow) — chặn THẬT"
 kubectl delete pod np-test -n "$NS" --ignore-not-found >/dev/null 2>&1
 
-note "3) TẮT LẠI NetworkPolicy (restore state an toàn — default-deny cắt nhầm Prometheus scrape :9464)"
-runhelm "$HELM" upgrade stock "$CHART" -n "$NS" --reuse-values --set global.networkPolicy.enabled=false --set global.ingress.enabled=true
+note "3) TẮT LẠI NetworkPolicy (restore state an toàn — default-deny cắt nhầm Prometheus scrape :9464) — CẢ bootstrap + db"
+runhelm "$HELM" upgrade bootstrap "$HELMDIR/bootstrap" -n "$NS" --reuse-values --set networkPolicy.enabled=false
+runhelm "$HELM" upgrade db        "$HELMDIR/db"        -n "$NS" --reuse-values --set networkPolicy.enabled=false
 run kubectl get networkpolicy -n "$NS"
 note "   → networkpolicy đã gỡ (No resources / rỗng) = metrics scrape không bị chặn"
 }

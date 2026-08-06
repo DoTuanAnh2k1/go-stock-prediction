@@ -47,7 +47,7 @@ Financial asset price prediction system with RBAC — crawls Gold SJC/XAU, NASDA
 | `gateway-svc/` | Rust, Axum 0.8, rustls | `:80` / `:443` (public) | TLS termination; longest-prefix routing: `/swagger` → block, `/api` → `api-svc:8118`, `/health` → `api-svc:8118`, `/` → `web-svc:3000`; gateway-local `/healthz` and `/readyz` |
 | `api-svc/` | Go 1.25+, net/http, gRPC, GORM v2, ZeroLog | `:8118` (internal) | HTTP API; thin auth proxy to `auth-svc` via gRPC; direct DB reads for market data; triggers `prediction-svc` via gRPC; backup scheduler |
 | `auth-svc/` | Java 21, Spring Boot 3, gRPC, Flyway, bcrypt | `:8120` (internal) | Owns all RBAC: login, JWT generation (HMAC256, 24 h), user CRUD, market groups; Flyway V1: auth + RBAC tables; V2: `full_name`/`email`/`phone` profile fields; seeds `chon/super_admin` on startup |
-| `prediction-svc/` | Python 3.12, PyTorch, statsmodels, LightGBM, XGBoost, scikit-learn, APScheduler, SQLAlchemy | `:8119` (internal) | gRPC service: crawling, 11 ML algorithms, training, cron scheduler |
+| `prediction-svc/` | Python 3.12, PyTorch, statsmodels, LightGBM, XGBoost, scikit-learn, APScheduler, SQLAlchemy | `:8119` (internal) | gRPC service: crawling, 13 ML algorithms, training, cron scheduler |
 | `web-svc/` | React, TypeScript, Vite, nginx | `:3000` (internal) | Static SPA served by nginx; accessed only through `gateway-svc` |
 | `cli-svc/` | Go 1.26, charmbracelet/wish + bubbletea, go-pretty | `:2345` (public, SSH) | Interactive SSH shell for headless servers; renders API data as tables; `get`/`set`/`update`/`delete` verbs; per-command RBAC enforced client-side; calls the API through `gateway-svc` at a static `API_BASE_URL` (no service discovery) |
 | `service-mgt/` | Go 1.25, gRPC, GORM v2, ZeroLog | `:8121` (internal) | Central service registry/discovery: services register on boot, renew a lease via heartbeat (push/lease-TTL), and resolve peers via Discover; write-through cache (Postgres `service_instances` = source of truth, in-memory cache = read layer). Disabled by default (`SERVICE_MGT_ENABLED=false`). |
@@ -60,7 +60,9 @@ Internal DNS (between containers): `api-svc:8118`, `prediction-svc:8119`, `auth-
 
 - **RBAC with market groups:** Three roles — `super_admin` (full access), `admin` (manage users and market groups), `user` (access only assigned markets). JWT includes `accessible_markets` claim; sidebar hides inaccessible market tabs.
 - **Data collection:** Gold SJC/XAU/USD every hour; NASDAQ and S&P 500 every hour weekdays (skips NYSE holidays); Crypto BTC/ETH/SOL every 2 hours.
-- **11 ML algorithms:** Moving Average, EMA/MACD, LSTM (PyTorch), GRU (PyTorch), ARIMA-GARCH, EGARCH, SARIMA, LightGBM (Optuna tuned), XGBoost (Optuna tuned), Random Forest, Ensemble.
+- **13 ML algorithms:** Moving Average, EMA/MACD, LSTM (PyTorch), GRU (PyTorch), ARIMA-GARCH, EGARCH, SARIMA, LightGBM (Optuna tuned), XGBoost (Optuna tuned), Random Forest, Ensemble, RL DQN (Dueling Double-DQN), Transformer (PatchTST-lite).
+- **Observability (15-factor #14):** OpenTelemetry distributed tracing across all 6 services (gateway→api-svc→{auth-svc, prediction-svc}) → OTLP → Tempo; Prometheus metrics (`/metrics` per service + domain metrics like `predictions_total`, `crawl_total`, `direction_accuracy`); Grafana + Tempo dashboards in a separate `observability` namespace.
+- **Request correlation (trace-log):** every request carries an `X-Request-ID` propagated through all 6 services (HTTP header + gRPC metadata) and stamped into each service's structured logs for end-to-end log correlation.
 - **Walk-forward backtest:** Historical backtesting via `POST /api/trigger/historical-backtest`.
 - **Automated training:** Per-market weekly training jobs (Sunday 3–7 AM).
 - **Daily reconcile:** 6 AM updates `direction_correct` for past predictions.

@@ -257,20 +257,20 @@ const DATA = {
     },
     {
       id:"2.2", title:"Blue/Green Switch", domain:"App Deployment (20%)", duration:"~45m", status:"done",
-      prep:["<code>api-svc-blue</code> + <code>api-svc-green</code> ĐÃ deploy sẵn qua Helm (<code>global.bluegreen.enabled=true</code>). Kiểm: <code>kubectl get deploy -n stock -l app=api-svc -L color</code> (cả 2 màu Ready). Gateway controller: <code>kubectl get cm gateway-bluegreen-state -n stock -o jsonpath='{.data}'</code>."],
-      cleanup:["Rollback selector về màu ban đầu (green): <code>kubectl patch svc api-svc -n stock -p '{\"spec\":{\"selector\":{\"app\":\"api-svc\",\"color\":\"green\"}}}'</code>.","Declarative BỀN: <code>helm upgrade stock deploy/helm/stock -n stock --set global.bluegreen.activeColor=green</code>.","Bẫy kẹt color: <code>kubectl patch svc api-svc --type=json -p '[{\"op\":\"remove\",\"path\":\"/spec/selector/color\"}]'</code> — chỉ khi cần reset hẳn."],
-      request:"Blue/green trên app CÓ SẴN <code>api-svc</code>: 2 Deployment <code>api-svc-blue</code> + <code>api-svc-green</code> ĐÃ deploy sẵn (Helm <code>global.bluegreen.enabled</code>), CHUNG 1 Service <code>api-svc</code> có selector <code>{app, color}</code>. Cutover = flip selector <code>color</code>. Chứng minh route đúng bằng APP LOG (Go zerolog) — KHÔNG tạo manifest mới.",
+      prep:["<code>api-svc-blue</code> + <code>api-svc-green</code> ĐÃ deploy sẵn qua chart api-svc (<code>bluegreen.enabled=true</code>). Kiểm: <code>kubectl get deploy -n stock -l app=api-svc -L color</code> (cả 2 màu Ready). Gateway controller: <code>kubectl get cm gateway-bluegreen-state -n stock -o jsonpath='{.data}'</code>."],
+      cleanup:["Rollback selector về màu ban đầu (green): <code>kubectl patch svc api-svc -n stock -p '{\"spec\":{\"selector\":{\"app\":\"api-svc\",\"color\":\"green\"}}}'</code>.","Declarative BỀN: <code>helm upgrade api-svc deploy/helm/api-svc -n stock --set bluegreen.activeColor=green</code>.","Bẫy kẹt color: <code>kubectl patch svc api-svc --type=json -p '[{\"op\":\"remove\",\"path\":\"/spec/selector/color\"}]'</code> — chỉ khi cần reset hẳn."],
+      request:"Blue/green trên app CÓ SẴN <code>api-svc</code>: 2 Deployment <code>api-svc-blue</code> + <code>api-svc-green</code> ĐÃ deploy sẵn (chart api-svc <code>bluegreen.enabled</code>), CHUNG 1 Service <code>api-svc</code> có selector <code>{app, color}</code>. Cutover = flip selector <code>color</code>. Chứng minh route đúng bằng APP LOG (Go zerolog) — KHÔNG tạo manifest mới.",
       steps:[
         "Xác nhận 2 màu ĐÃ có sẵn: <code>kubectl get deploy -n stock -l app=api-svc -L color</code> → thấy <code>api-svc-blue</code> + <code>api-svc-green</code> đều Ready.",
         "Xem selector hiện tại của Service chung: <code>kubectl get svc api-svc -n stock -o jsonpath='{.spec.selector}'</code> → <code>{\"app\":\"api-svc\",\"color\":\"green\"}</code>.",
         "Cutover sang blue: <code>kubectl patch svc api-svc -n stock -p '{\"spec\":{\"selector\":{\"app\":\"api-svc\",\"color\":\"blue\"}}}'</code>; verify <code>get endpoints api-svc</code> = IP pod blue.",
         "Chứng minh route bằng APP LOG: curl 5× vào path độc nhất <code>/api/version-labtest01</code> xuyên qua Service chung, rồi grep APP LOG container <code>api-svc</code> (Go zerolog) từng màu: <code>kubectl logs -n stock -l app=api-svc,color=blue -c api-svc --tail=150 | grep -c version-labtest01</code> → 5; màu green → 0.",
         "FLIP sang green: patch selector <code>color=green</code>; rollback = flip lại về blue.",
-        "Cutover lâu dài (BỀN qua helm upgrade): <code>helm upgrade stock deploy/helm/stock -n stock --set global.bluegreen.activeColor=blue</code>."
+        "Cutover lâu dài (BỀN qua helm upgrade): <code>helm upgrade api-svc deploy/helm/api-svc -n stock --set bluegreen.activeColor=blue</code>."
       ],
       knowledge:[
         "Service route theo <code>selector</code> (L4, kube-proxy). Đổi selector ⇒ Endpoints trỏ pod set khác NGAY = switch tức thời, zero-downtime (bộ pod mới đã Ready sẵn).",
-        "<b>api-svc-blue/green ĐÃ có sẵn (Helm bluegreen)</b> — KHÔNG phải tạo mới. Helm <code>global.bluegreen.enabled=true</code> (default) sinh 2 Deployment mỗi màu + Service CHUNG <code>api-svc</code> selector <code>{app, color: activeColor}</code>. Lab chỉ FLIP selector Service — KHÔNG tạo manifest mới.",
+        "<b>api-svc-blue/green ĐÃ có sẵn (chart api-svc bluegreen)</b> — KHÔNG phải tạo mới. Chart api-svc <code>bluegreen.enabled=true</code> (default) sinh 2 Deployment mỗi màu + Service CHUNG <code>api-svc</code> selector <code>{app, color: activeColor}</code>. Lab chỉ FLIP selector Service — KHÔNG tạo manifest mới.",
         "⚠️ <b>Bẫy patch↔apply:</b> <code>color</code> thêm bằng <code>kubectl patch</code> thì <code>kubectl apply</code> manifest gốc KHÔNG xoá được (apply chỉ quản key trong last-applied) ⇒ selector kẹt <code>{app, color:green}</code>, pod không màu ⇒ Endpoints RỖNG. Phải xoá tay: <code>kubectl patch svc api-svc --type=json -p '[{\"op\":\"remove\",\"path\":\"/spec/selector/color\"}]'</code>.",
         "Verify bằng <code>kubectl get endpoints api-svc</code> — IP đổi sang pod set màu mới; đối chiếu với <code>get pods -l color=blue -o wide</code>.",
         "<b>Chứng minh route bằng APP LOG (mấu chốt):</b> curl 5× path độc nhất <code>/api/version-&lt;marker&gt;</code> → Go zerolog ghi <code>request method=GET path=/api/version-&lt;marker&gt; status=404 dur_ms=0</code>. Grep app-log từng màu: màu active hits=5, màu kia=0 — không thể giả mạo.",
@@ -278,7 +278,7 @@ const DATA = {
         "<b>━━ NÂNG CAO: gateway-native blue/green tự động</b> (bỏ <code>kubectl patch</code> tay). Bản chất = canary/progressive delivery tự viết (mini-Flagger): gateway watch Deployment (kube-rs, edge-triggered khi <code>set image</code> màu idle), lật 100% traffic NỘI BỘ, đo success-rate 60s, tự <b>promote</b> hoặc <b>rollback</b>. Khác cách tay: KHÔNG đụng selector Service (né bẫy patch↔apply); gateway giữ <code>active</code> trong bộ nhớ + persist ConfigMap <code>gateway-bluegreen-state</code>.",
         "State machine gateway: Stable → Flip → Analyzing 60s (rollback SỚM nếu fail rate vượt ngưỡng) → Promote/Rollback. Fail = HTTP≥500/proxy error (4xx=success); ngưỡng success 99%, min 20 req. RBAC: SA <code>gateway-svc</code> get/list/watch/patch deployments + configmaps.",
         "2 bug tìm khi tích hợp: (1) edge bị consume khi candidate còn mid-rollout → mất trigger; (2) promote patch màu còn lại → tick sau tưởng candidate mới → <b>ping-pong</b> (fix: cập nhật <code>last_seen[old]</code> sau patch). Code <code>gateway-svc/src/bluegreen/</code>; spec+plan ở <code>docs/specs|plans/2026-07-11-gateway-bluegreen-*</code>.",
-        "<b>━━ SỬA (2026-07-24): Service CHUNG <code>api-svc</code>/<code>web-svc</code> nay kèm <code>color</code></b> — trước selector chỉ <code>{app}</code> ⇒ hit CẢ 2 màu (blue hỏng vẫn nhận 50% traffic, KHÔNG phải blue/green). Nay <code>{app, color: activeColor}</code> (<code>global.bluegreen.activeColor</code>, default green) ⇒ trỏ ĐÚNG 1 màu; cutover = <b>FLIP selector</b> (declarative <code>--set global.bluegreen.activeColor=blue</code> BỀN qua helm upgrade, hoặc <code>kubectl patch</code> tạm). Đây là blue/green KINH ĐIỂN. Ingress (Lab 4.2) route <code>/api</code>→Service chung ⇒ nay tự theo màu active. Song song gateway-native (per-color, ConfigMap) — giữ activeColor khớp ConfigMap gateway."
+        "<b>━━ SỬA (2026-07-24): Service CHUNG <code>api-svc</code>/<code>web-svc</code> nay kèm <code>color</code></b> — trước selector chỉ <code>{app}</code> ⇒ hit CẢ 2 màu (blue hỏng vẫn nhận 50% traffic, KHÔNG phải blue/green). Nay <code>{app, color: activeColor}</code> (<code>bluegreen.activeColor</code> của chart api-svc/web-svc, default green) ⇒ trỏ ĐÚNG 1 màu; cutover = <b>FLIP selector</b> (declarative <code>--set bluegreen.activeColor=blue</code> BỀN qua helm upgrade, hoặc <code>kubectl patch</code> tạm). Đây là blue/green KINH ĐIỂN. Ingress (Lab 4.2) route <code>/api</code>→Service chung ⇒ nay tự theo màu active. Song song gateway-native (per-color, ConfigMap) — giữ activeColor khớp ConfigMap gateway."
       ],
       commands:[
         {cmd:"kubectl get deploy -n stock -l app=api-svc -L color", note:"2 màu ĐÃ có sẵn (Helm bluegreen) — KHÔNG tạo mới", out:"NAME             READY   UP-TO-DATE   AVAILABLE   COLOR\napi-svc-blue     2/2     2            2           blue\napi-svc-green    2/2     2            2           green"},
@@ -286,7 +286,7 @@ const DATA = {
         {cmd:"kubectl patch svc api-svc -n stock -p '{\"spec\":{\"selector\":{\"app\":\"api-svc\",\"color\":\"blue\"}}}'\nkubectl get endpoints api-svc -n stock", note:"cutover sang BLUE — flip selector", out:"service/api-svc patched\nendpoints: 10.244.1.31,10.244.2.73   ← đúng IP pod blue"},
         {cmd:"# CHỨNG MINH ROUTE bằng APP LOG (Go zerolog)\nMARKER=version-labtest01\nfor i in $(seq 5); do kubectl exec -n stock deploy/api-svc-blue -- wget -qO- http://api-svc:8118/api/$MARKER 2>/dev/null; done\nkubectl logs -n stock -l app=api-svc,color=blue  -c api-svc --tail=150 | grep -c $MARKER\nkubectl logs -n stock -l app=api-svc,color=green -c api-svc --tail=150 | grep -c $MARKER", note:"curl 5× path độc nhất → grep app-log từng màu; KHÔNG giả được", out:"# BLUE  → 5   (request method=GET path=/api/version-labtest01 status=404 dur_ms=0)\n# GREEN → 0   ← KHÔNG nhận request nào"},
         {cmd:"# FLIP sang GREEN (rollback = flip lại)\nkubectl patch svc api-svc -n stock -p '{\"spec\":{\"selector\":{\"app\":\"api-svc\",\"color\":\"green\"}}}'\nkubectl get endpoints api-svc -n stock", note:"lật selector color=green; rollback = patch lại blue", out:"service/api-svc patched\nendpoints: 10.244.1.32,10.244.2.75   ← đổi sang IP pod green"},
-        {cmd:"# Cutover LÂU DÀI (BỀN qua helm upgrade)\nhelm upgrade stock deploy/helm/stock -n stock --set global.bluegreen.activeColor=blue", note:"declarative — không bị kubectl apply ghi đè", out:"Release \"stock\" has been upgraded. Happy Helming!"},
+        {cmd:"# Cutover LÂU DÀI (BỀN qua helm upgrade)\nhelm upgrade api-svc deploy/helm/api-svc -n stock --set bluegreen.activeColor=blue", note:"declarative — không bị kubectl apply ghi đè", out:"Release \"api-svc\" has been upgraded. Happy Helming!"},
         {cmd:"# ━━ NÂNG CAO (gateway tự động, bỏ patch tay) ━━\nkubectl logs -n stock deploy/gateway-svc | grep bluegreen", note:"controller đã bật khi gateway start", out:"Loaded 2 route(s), 2 bluegreen app(s)\nbluegreen controller started (2 app(s))\nbluegreen.controller.ready app=api-svc active=green"},
         {cmd:"kubectl set image deploy/api-svc-blue api-svc=api-svc:v2 -n stock", note:"HAPPY PATH: set image màu IDLE → gateway TỰ flip→analyze→promote", out:"bluegreen.rollout.start app=api-svc from=\"green\" to=\"blue\" image=Some(\"api-svc:v2\")\nbluegreen.flip         app=api-svc color=\"blue\"\nbluegreen.promote      app=api-svc total=1019 fail=0"},
         {cmd:"# ROLLBACK THẬT: candidate Ready-nhưng-503\nkubectl patch deploy api-svc-blue -n stock --type=strategic -p '{...503 conf + /healthz readiness...}'", note:"gateway đo fail → tự rollback", out:"bluegreen.flip     app=api-svc color=\"blue\"\nbluegreen.rollback app=api-svc total=155 fail=39   ← 25% fail > 1% → lật về green (~6s)"},
@@ -315,7 +315,7 @@ const DATA = {
         "<b>Scale-DOWN chậm bất đối xứng:</b> <code>scaleDown.stabilizationWindowSeconds</code> mặc định <b>300s</b> — giữ đỉnh 5 phút rồi mới hạ về minReplicas. scaleUp stab=0s (nhanh) / scaleDown stab=300s (chậm). Đo thật: CPU về 1% lúc ~20:51 nhưng tới ~20:55:40 mới <code>New size 1</code>.",
         "<code>--cpu-percent</code> đã <b>DEPRECATED</b> (kubectl mới) → dùng <code>--cpu=50%</code>. Imperative tương đương: <code>kubectl autoscale deploy/cpu-burn --cpu=50% --min=1 --max=10 -n stock</code>. Khuyến nghị declarative (commit <code>cpu-burn-hpa.yaml</code> giống 2.1/2.2).",
         "Tải qua Service ClusterIP (loadgen chạy IN-CLUSTER, không port-forward vốn ghim 1 pod) ⇒ kube-proxy trải đều mọi pod Ready = đúng cho HPA (average utilization). ⚠️ <code>kubectl top</code> là ảnh point-in-time đã smoothing 15s — xem xu hướng, đừng chấp số lẻ. control-plane có taint NoSchedule ⇒ 10 pod chỉ lên 2 worker; image registry.k8s.io public ⇒ node chưa cache vẫn PULL được (không ImagePullBackOff).",
-        "<b>Áp HPA lên service THẬT (api-svc blue/green + gateway-svc):</b> HPA sở hữu <code>.spec.replicas</code> ⇒ deployment phải OMIT <code>replicas</code> khi HPA bật (template <code>{{ if not .Values.global.hpa.enabled }}</code>) — nếu không mỗi <code>helm upgrade</code> giành lại → <b>flapping</b>. ⚠️ Omit ⇒ lúc bật lần đầu default về 1 rồi <code>minReplicas</code> kéo lại. Service project I/O-bound (idle 1-2% CPU) ⇒ CPU-HPA CHỈ scale khi traffic spike THẬT — demo phải HẠ target 60→10% (request <code>/api/version</code> quá rẻ không đẩy nổi 60%; đúng lý do lab dùng cpu-burn). Blue/green: HPA mỗi màu, chỉ màu ACTIVE scale theo tải, màu idle nằm ở min."
+        "<b>Áp HPA lên service THẬT (api-svc blue/green + gateway-svc — mỗi chart có HPA riêng, <code>hpa.enabled</code>):</b> HPA sở hữu <code>.spec.replicas</code> ⇒ deployment phải OMIT <code>replicas</code> khi HPA bật (template <code>{{ if not .Values.hpa.enabled }}</code>) — nếu không mỗi <code>helm upgrade</code> giành lại → <b>flapping</b>. ⚠️ Omit ⇒ lúc bật lần đầu default về 1 rồi <code>minReplicas</code> kéo lại. Service project I/O-bound (idle 1-2% CPU) ⇒ CPU-HPA CHỈ scale khi traffic spike THẬT — demo phải HẠ target 60→10% (request <code>/api/version</code> quá rẻ không đẩy nổi 60%; đúng lý do lab dùng cpu-burn). Blue/green: HPA mỗi màu, chỉ màu ACTIVE scale theo tải, màu idle nằm ở min."
       ],
       commands:[
         {cmd:"kubectl scale deploy/cpu-burn --replicas=10 -n stock\nkubectl get deploy cpu-burn -n stock", note:"obj 1 — scale tay (CHƯA có HPA)", out:"deployment.apps/cpu-burn scaled\nNAME       READY   UP-TO-DATE   AVAILABLE\ncpu-burn   10/10   10           10"},
@@ -326,7 +326,7 @@ const DATA = {
         {cmd:"kubectl describe hpa cpu-burn -n stock   # Events", note:"scale-UP theo BẬC (không 1→10)", out:"SuccessfulRescale  New size: 4    reason: cpu utilization above target\nSuccessfulRescale  New size: 8    (~15s sau)\nSuccessfulRescale  New size: 10   (~15s sau) ← chạm maxReplicas"},
         {cmd:"# sau khi tải dừng — theo dõi scale-DOWN\nkubectl describe hpa cpu-burn -n stock   # Events", note:"giữ 10 tới ~5 phút (window 300s) rồi về 1", out:"# CPU về 1%/50% NGAY nhưng REPLICAS giữ 10 tới ~20:55:40\nSuccessfulRescale  New size: 1  reason: All metrics below target"},
         {cmd:"kubectl delete hpa cpu-burn -n stock", note:"cleanup (manifest đã commit để re-apply)", out:"horizontalpodautoscaler.autoscaling \"cpu-burn\" deleted\n→ cpu-burn về baseline 1/1"},
-        {cmd:"# ÁP HPA THẬT: helm upgrade ... --set global.hpa.enabled=true\nkubectl get hpa api-svc-blue api-svc-green gateway-svc -n stock", note:"HPA trên service project (gated global.hpa.enabled)", out:"NAME            REFERENCE                  TARGETS      MINPODS MAXPODS REPLICAS\napi-svc-blue    Deployment/api-svc-blue    cpu: 1%/60%  2       6       2\napi-svc-green   Deployment/api-svc-green   cpu: 1%/60%  2       6       2\ngateway-svc     Deployment/gateway-svc     cpu: 2%/60%  2       5       2"},
+        {cmd:"# ÁP HPA THẬT (per-chart): helm upgrade api-svc ... --set hpa.enabled=true ; helm upgrade gateway-svc ... --set hpa.enabled=true\nkubectl get hpa api-svc-blue api-svc-green gateway-svc -n stock", note:"HPA trên service project (gated hpa.enabled mỗi chart api-svc + gateway-svc)", out:"NAME            REFERENCE                  TARGETS      MINPODS MAXPODS REPLICAS\napi-svc-blue    Deployment/api-svc-blue    cpu: 1%/60%  2       6       2\napi-svc-green   Deployment/api-svc-green   cpu: 1%/60%  2       6       2\ngateway-svc     Deployment/gateway-svc     cpu: 2%/60%  2       5       2"},
         {cmd:"# demo up→down trên HPA THẬT (hạ target 10%, bắn HTTP load qua gateway 150 luồng)\nkubectl describe hpa gateway-svc -n stock | grep 'New size'", note:"gateway 2→4→5; api-green 2→3; api-blue(idle) giữ 2; scale-down sau ~300s", out:"New size: 4  reason: cpu resource utilization above target\nNew size: 5\n# tải dừng → CPU 1-2% NGAY nhưng giữ đỉnh ~300s (stabilizationWindow) →\nNew size: 2  reason: All metrics below target   ← scale-DOWN về min, KHÔI PHỤC target 60% sau demo"}
       ],
       tool:"# tab A (mở TRƯỚC): xem HPA scale REPLICAS/TARGETS\n./e2e-test.sh watch-hpa cpu-burn\n# tab B: sinh tải 30 luồng x150s qua Service ClusterIP\nNS=stock ./e2e-test.sh loadgen cpu-burn 80 30 150 /"
@@ -392,15 +392,15 @@ const DATA = {
     },
     {
       id:"3.2", title:"Security Context Lockdown", domain:"App Environment, Config & Security (25%)", duration:"~45m", status:"done",
-      prep:["Hardening gom vào library chart <code>charts/common/templates/_ambassador.tpl</code> (nginx/sidecar/wait-db dùng chung) + app container inline per-service."],
-      cleanup:["Không có object nháp — áp thẳng lên 5 backend qua <code>helm upgrade</code>; rollback bằng <code>helm rollback stock &lt;rev&gt;</code>."],
+      prep:["Hardening gom vào library chart <code>common/templates/_ambassador.tpl</code> (nginx/sidecar/wait-db dùng chung) + app container inline per-service."],
+      cleanup:["Không có object nháp — áp thẳng lên 5 backend qua <code>helm upgrade &lt;svc&gt; deploy/helm/&lt;svc&gt;</code> (mỗi chart riêng); rollback bằng <code>helm rollback &lt;svc&gt; &lt;rev&gt;</code>."],
       request:"Run Pod as non-root + read-only rootfs + drop all capabilities + disable privilege escalation — áp lên CẢ 5 backend (api/auth/prediction/service-mgt/cli). Pod-level seccomp RuntimeDefault; app/nginx/sidecar/init mỗi cái siết theo khả năng của image.",
       steps:[
         "Pod-level: <code>seccompProfile: RuntimeDefault</code> cho cả 5 backend.",
         "App container: <code>allowPrivilegeEscalation:false</code> + <code>drop:[ALL]</code>; <code>runAsNonRoot+runAsUser</code> CHỈ nơi image có UID SỐ (prediction 1000, cli 10001); <code>readOnlyRootFilesystem</code> nơi ghi được (service-mgt + <code>/tmp</code> emptyDir).",
         "nginx ambassador: drop ALL nhưng <code>add: [CHOWN, SETUID, SETGID]</code> (official image cần).",
         "log-sidecar + init wait-db: drop ALL, sidecar readOnlyRootFS (chỉ <code>tail -f</code>).",
-        "<code>helm upgrade stock deploy/helm/stock -n stock</code> → verify securityContext trên pod live."
+        "<code>for c in api-svc auth-svc prediction-svc service-mgt cli-svc; do helm upgrade $c deploy/helm/$c -n stock; done</code> → verify securityContext trên pod live."
       ],
       knowledge:[
         "<b>⚠️ Bẫy nginx CAP_CHOWN:</b> <code>drop:[ALL]</code> làm official nginx CrashLoopBackOff (<code>chown(\"/var/cache/nginx/client_temp\",101) failed: Operation not permitted</code>) — entrypoint root chown cache sang uid 101 lúc start cần <code>CAP_CHOWN</code>. Fix: giữ drop-ALL nhưng <code>add: [CHOWN, SETUID, SETGID]</code> (SETUID/SETGID để master hạ quyền worker). Cổng >1024 nên KHÔNG cần <code>NET_BIND_SERVICE</code>.",
@@ -411,7 +411,7 @@ const DATA = {
         "Kết quả: 5 backend <code>2/2</code> Available, mọi pod <code>3/3</code> Running, 0 restart — hardening không vỡ runtime."
       ],
       commands:[
-        {cmd:"helm upgrade stock deploy/helm/stock -n stock", note:"rev6 (sau fix CAP_CHOWN); rollout zero-downtime maxUnavailable:0", out:"Release \"stock\" has been upgraded. Happy Helming!\nREVISION: 6"},
+        {cmd:"helm upgrade prediction-svc deploy/helm/prediction-svc -n stock  # (lặp cho api/auth/service-mgt/cli)", note:"chart prediction-svc rev6 (sau fix CAP_CHOWN); rollout zero-downtime maxUnavailable:0", out:"Release \"prediction-svc\" has been upgraded. Happy Helming!\nREVISION: 6"},
         {cmd:"p=$(kubectl get pod -n stock -l app=prediction-svc \\\n  -o jsonpath='{.items[0].metadata.name}')\n# NOTE: describe pod KHÔNG show securityContext container (chỉ SeccompProfile ở pod-level)\n# Dùng yaml|grep để đọc đầy đủ:\nkubectl get pod $p -n stock -o yaml | grep -E \\\n  'securityContext:|fsGroup:|runAsNonRoot:|runAsUser:|allowPrivilegeEscalation:|readOnlyRootFilesystem:|drop:|add:|- ALL|- CHOWN|- SETUID|- SETGID'", note:"yaml+grep dễ nhớ hơn jsonpath; bắt đủ mọi field securityContext", out:"  securityContext:          # pod-level\n    fsGroup: 2000\n    seccompProfile:\n      type: RuntimeDefault\n  securityContext:          # prediction-svc (app)\n    allowPrivilegeEscalation: false\n    capabilities:\n      drop:\n      - ALL\n    runAsNonRoot: true\n    runAsUser: 1000\n  securityContext:          # nginx ambassador\n    allowPrivilegeEscalation: false\n    capabilities:\n      add:\n      - CHOWN\n      - SETUID\n      - SETGID\n      drop:\n      - ALL\n  securityContext:          # log-sidecar\n    allowPrivilegeEscalation: false\n    capabilities:\n      drop:\n      - ALL\n    readOnlyRootFilesystem: true"},
         {cmd:"# BẪY (rev5, trước fix): pod 2/3 CrashLoopBackOff — chỉ nginx chết\nkubectl logs $p -n stock -c nginx --previous", note:"lỗi thiếu CAP_CHOWN", out:"[emerg] 1#1: chown(\"/var/cache/nginx/client_temp\", 101) failed (1: Operation not permitted)"},
         {cmd:"kubectl get pods -n stock -l app=prediction-svc", note:"sau fix — 3/3 Running, 0 restart", out:"NAME                     READY   STATUS    RESTARTS\nprediction-svc-...-hs826 3/3     Running   0"}
@@ -419,13 +419,13 @@ const DATA = {
     },
     {
       id:"3.3", title:"ServiceAccount & RBAC", domain:"App Environment, Config & Security (25%)", duration:"~60m", status:"done",
-      prep:["Template <code>deploy/helm/stock/templates/serviceaccounts.yaml</code> — 5 SA per-service (automount:false) + SA <code>pod-reader</code> + Role + RoleBinding."],
-      cleanup:["<code>helm rollback</code> hoặc <code>--set global.rbac.enabled=false</code>. gateway-svc GIỮ SA+Role riêng (thực sự gọi API) — không đụng."],
+      prep:["Per-service SA (automount:false) trong chart service của nó (<code>&lt;svc&gt;/templates/serviceaccount.yaml</code>) + SA <code>pod-reader</code> + Role + RoleBinding ở chart <code>bootstrap</code> (<code>bootstrap/templates/rbac.yaml</code>)."],
+      cleanup:["<code>helm rollback &lt;chart&gt;</code> hoặc <code>helm upgrade bootstrap deploy/helm/bootstrap -n stock --set rbac.enabled=false</code> (tắt pod-reader). gateway-svc GIỮ SA+Role riêng (thực sự gọi API) — không đụng."],
       request:"Create ServiceAccount, Role, RoleBinding; Pod dùng SA token list Pods trong ns qua API. Đồng thời hardening thật: mỗi backend 1 SA riêng với <code>automountServiceAccountToken:false</code> (trước dùng <code>default</code> SA token tự mount dù không service nào gọi API).",
       steps:[
         "(A) Per-service SA + <code>automountServiceAccountToken:false</code> → không còn projected token; wire <code>serviceAccountName: &lt;svc&gt;</code> vào từng deployment.",
         "(B) SA <code>pod-reader</code> + Role chỉ <code>get/list/watch</code> <code>pods/services/endpoints</code> (scope ns stock) + RoleBinding.",
-        "<code>helm upgrade stock deploy/helm/stock -n stock</code> (rev8).",
+        "Per-service SA: <code>for c in api-svc auth-svc prediction-svc service-mgt cli-svc; do helm upgrade $c deploy/helm/$c -n stock; done</code>. pod-reader RBAC: <code>helm upgrade bootstrap deploy/helm/bootstrap -n stock --set rbac.enabled=true</code>.",
         "Verify token KHÔNG còn mount (pod không có volume <code>kube-api-access-*</code>).",
         "Verify RBAC scope bằng <code>kubectl auth can-i --as=&lt;SA&gt;</code>."
       ],
@@ -435,10 +435,10 @@ const DATA = {
         "<code>kubectl auth can-i list pods --as=system:serviceaccount:stock:pod-reader</code> = oracle nhanh (yes/no). <code>kubectl get pods --as=...</code> = impersonation THẬT — trả danh sách pod thật hoặc Forbidden tùy Role.",
         "Impersonation <code>--as=system:serviceaccount:&lt;ns&gt;:&lt;sa&gt;</code> demo RBAC thật: <code>pod-reader</code> đọc OK / xóa bị chặn; SA không bind Role → Forbidden — minh chứng rõ hơn chỉ <code>can-i</code>.",
         "Trước đây 5 backend chạy SA <code>default</code> có token API tự mount dù CHÚNG chỉ nói chuyện qua Service DNS + gRPC — không service nào gọi k8s API ⇒ token thừa = bề mặt tấn công. Per-service SA + automount:false loại bỏ.",
-        "gateway-svc là ngoại lệ: GIỮ SA + Role riêng vì blue/green controller THỰC SỰ patch Deployment qua API (<code>charts/gateway-svc/templates/rbac.yaml</code>)."
+        "gateway-svc là ngoại lệ: GIỮ SA + Role riêng vì blue/green controller THỰC SỰ patch Deployment qua API (<code>gateway-svc/templates/rbac.yaml</code>)."
       ],
       commands:[
-        {cmd:"helm upgrade stock deploy/helm/stock -n stock", note:"rev8 — per-service SA + pod-reader RBAC", out:"Release \"stock\" has been upgraded. Happy Helming!\nREVISION: 8"},
+        {cmd:"# per-service SA (mỗi service chart) + pod-reader RBAC (chart bootstrap):\nfor c in api-svc auth-svc prediction-svc service-mgt cli-svc; do helm upgrade $c deploy/helm/$c -n stock; done\nhelm upgrade bootstrap deploy/helm/bootstrap -n stock --set rbac.enabled=true", note:"per-service SA + pod-reader RBAC (revision per-chart)", out:"Release \"api-svc\" has been upgraded. Happy Helming!\n... (mỗi chart REVISION riêng)\nRelease \"bootstrap\" has been upgraded. Happy Helming!"},
         {cmd:"p=$(kubectl get pod -n stock -l app=prediction-svc \\\n  -o jsonpath='{.items[0].metadata.name}')\nkubectl describe pod $p -n stock | grep -iE 'Service Account:|kube-api-access'", note:"Service Account name; không thấy kube-api-access = token không còn mount", out:"Service Account:  prediction-svc\n# (không có dòng kube-api-access-* trong Mounts)"},
         {cmd:"kubectl get sa prediction-svc -n stock -o yaml | grep automount", note:"xác nhận automountServiceAccountToken tắt tại SA object", out:"automountServiceAccountToken: false"},
         {cmd:"kubectl auth can-i --list --as=system:serviceaccount:stock:pod-reader -n stock", note:"liệt kê toàn bộ quyền của pod-reader SA", out:"Resources               Non-Resource URLs   Resource Names   Verbs\npods                    []                  []               [get list watch]\nservices                []                  []               [get list watch]\nendpoints               []                  []               [get list watch]"},
@@ -449,13 +449,13 @@ const DATA = {
     },
     {
       id:"3.4", title:"Namespace Quotas", domain:"App Environment, Config & Security (25%)", duration:"~45m", status:"done",
-      prep:["Template <code>deploy/helm/stock/templates/quota.yaml</code> — LimitRange + ResourceQuota áp vào ns <code>stock</code> THẬT (đang chạy 26 pod), size ~2.5–3x an toàn."],
-      cleanup:["<code>--set global.quota.enabled=false</code> hoặc <code>helm rollback</code> để tắt quota. Lab 3.4 tạo pod <code>noreq-test</code> THẬT và tự xóa trong bước cuối; nếu bị gián đoạn thì chạy <code>kubectl delete pod noreq-test -n stock --ignore-not-found</code>."],
+      prep:["Template <code>bootstrap/templates/quota.yaml</code> (chart <code>bootstrap</code>) — LimitRange + ResourceQuota áp vào ns <code>stock</code> THẬT (đang chạy 26 pod), size ~2.5–3x an toàn."],
+      cleanup:["<code>helm upgrade bootstrap deploy/helm/bootstrap -n stock --set quota.enabled=false</code> hoặc <code>helm rollback bootstrap</code> để tắt quota. Lab 3.4 tạo pod <code>noreq-test</code> THẬT và tự xóa trong bước cuối; nếu bị gián đoạn thì chạy <code>kubectl delete pod noreq-test -n stock --ignore-not-found</code>."],
       request:"Apply ResourceQuota + LimitRange; quan sát Pod bị reject THẬT khi vượt quota; chứng minh default injection qua pod tạo THẬT. Vì áp lên ns live 26 pod, phải size quota để KHÔNG chặn rollout/blue-green; LimitRange bắt buộc đi kèm để tiêm default request cho pod không khai resources (init/CronJob).",
       steps:[
         "Apply LimitRange <code>stock-defaults</code> (defaultRequest 50m/64Mi · default 250m/256Mi · max 2/3Gi).",
         "Apply ResourceQuota <code>stock-quota</code> (requests.cpu=6 mem=10Gi · limits.cpu=30 mem=24Gi · pods=60).",
-        "<code>helm upgrade</code> (rev7) → <code>describe quota</code> + <code>describe limitrange</code> xác nhận used dưới trần.",
+        "<code>helm upgrade bootstrap deploy/helm/bootstrap -n stock --set quota.enabled=true</code> → <code>describe quota</code> + <code>describe limitrange</code> xác nhận used dưới trần.",
         "REJECT THẬT — <code>kubectl create</code> THẬT (không <code>--dry-run</code>) → admission từ chối tại API server → pod KHÔNG được tạo: (a) 2 container cpu=2 → vượt ResourceQuota; (b) 1 container cpu=3 → vượt LimitRange max.",
         "ADMIT THẬT + default injection — tạo pod <code>noreq-test</code> THẬT không khai resources → LimitRange vá default; verify bằng <code>get pod -o yaml | grep resources</code> và <code>describe quota</code> (Used requests.cpu tăng +50m); cuối cùng xóa pod để dọn."
       ],
@@ -467,10 +467,10 @@ const DATA = {
         "Default injection: pod không khai resources → LimitRange tự vá <code>{requests:50m/64Mi, limits:250m/256Mi}</code> ⇒ thoả quota; chỉ chứng minh được bằng pod THẬT (dry-run cũng thấy nhưng không tăng Used trên <code>describe quota</code>)."
       ],
       commands:[
-        {cmd:"helm upgrade stock deploy/helm/stock -n stock", note:"rev7 — LimitRange + ResourceQuota", out:"Release \"stock\" has been upgraded. Happy Helming!\nREVISION: 7"},
-        {cmd:"kubectl describe quota stock-quota -n stock", note:"used đều dưới trần", out:"requests.cpu     2250m/6\nrequests.memory  3840Mi/10Gi\nlimits.cpu       13200m/30\npods             26/60"},
+        {cmd:"helm upgrade bootstrap deploy/helm/bootstrap -n stock --set quota.enabled=true", note:"chart bootstrap — LimitRange + ResourceQuota", out:"Release \"bootstrap\" has been upgraded. Happy Helming!\nREVISION: 3"},
+        {cmd:"kubectl describe quota stock-quota -n stock", note:"used đều dưới trần", out:"requests.cpu     2170m/6\nrequests.memory  3776Mi/10Gi\nlimits.cpu       12700m/30\npods             22/60"},
         {cmd:"kubectl describe limitrange stock-defaults -n stock", note:"xem default + max per-Container", out:"Type        Resource  Min   Max  Default Request  Default Limit\nContainer   cpu       -     2     50m              250m\nContainer   memory    -     3Gi   64Mi             256Mi"},
-        {cmd:"# (a) REJECT THẬT — vượt ResourceQuota (2 container × cpu=2 → tổng requests.cpu=4):\nkubectl create -n stock -f quota-test.yaml", note:"kubectl create THẬT (không --dry-run); admission từ chối → không persist", out:"Error from server (Forbidden): pods \"quota-test\" is forbidden: exceeded quota: stock-quota, requested: requests.cpu=4, used: requests.cpu=2250m, limited: requests.cpu=6"},
+        {cmd:"# (a) REJECT THẬT — vượt ResourceQuota (2 container × cpu=2 → tổng requests.cpu=4):\nkubectl create -n stock -f quota-test.yaml", note:"kubectl create THẬT (không --dry-run); admission từ chối → không persist", out:"Error from server (Forbidden): pods \"quota-test\" is forbidden: exceeded quota: stock-quota, requested: requests.cpu=4, used: requests.cpu=2170m, limited: requests.cpu=6"},
         {cmd:"# (b) REJECT THẬT — vượt LimitRange max (1 container cpu=3 > max 2):\nkubectl create -n stock -f max-test.yaml", note:"LimitRange max per-Container bắt trước Quota", out:"Error from server (Forbidden): pods \"max-test\" is forbidden: maximum cpu usage per Container is 2, but limit is 3"},
         {cmd:"# ADMIT THẬT — pod noreq-test không khai resources → LimitRange vá default:\nkubectl create -n stock -f - <<'EOF'\napiVersion: v1\nkind: Pod\nmetadata:\n  name: noreq-test\nspec:\n  containers:\n  - name: nginx\n    image: nginx\nEOF", note:"tạo pod THẬT; không khai resources → LimitRange inject default", out:"pod/noreq-test created"},
         {cmd:"kubectl get pod noreq-test -n stock -o yaml | grep -A4 'resources:'", note:"xác nhận LimitRange đã vá default requests + limits", out:"    resources:\n      limits:\n        cpu: 250m\n        memory: 256Mi\n      requests:\n        cpu: 50m\n        memory: 64Mi"},
@@ -507,11 +507,11 @@ const DATA = {
     {
       id:"4.2", title:"Ingress Routing", domain:"Services & Networking (20%)", duration:"~60m", status:"done",
       prep:["Cluster kind CHƯA có ingress controller → cài <code>ingress-nginx</code> (baremetal/NodePort, kind không map hostPort 80/443)."],
-      cleanup:["<code>--set global.ingress.enabled=false</code>; gỡ controller: <code>kubectl delete -f .../baremetal/deploy.yaml</code> nếu muốn."],
-      request:"Route <code>/</code> → frontend và <code>/api</code> → backend qua Ingress; verify qua ingress controller endpoint. Ingress = gated Helm template (host <code>stock.local</code>, KHÔNG rewrite path), bật bằng <code>--set global.ingress.enabled=true</code>.",
+      cleanup:["<code>helm upgrade gateway-svc deploy/helm/gateway-svc -n stock --set ingress.enabled=false</code>; gỡ controller: <code>kubectl delete -f .../baremetal/deploy.yaml</code> nếu muốn."],
+      request:"Route <code>/</code> → frontend và <code>/api</code> → backend qua Ingress; verify qua ingress controller endpoint. Ingress = gated Helm template chart gateway-svc (host <code>stock.local</code>, KHÔNG rewrite path), bật bằng <code>--set ingress.enabled=true</code> (chart gateway-svc).",
       steps:[
         "Cài ingress-nginx (baremetal manifest) → controller 1/1, 2 admission Job Completed; Service NodePort http/https.",
-        "Bật Ingress: <code>helm upgrade ... --set global.ingress.enabled=true</code> → <code>get ingress</code> (host stock.local).",
+        "Bật Ingress: <code>helm upgrade gateway-svc deploy/helm/gateway-svc -n stock --set ingress.enabled=true</code> → <code>get ingress</code> (host stock.local).",
         "Verify routing: <code>port-forward</code> controller + curl với header <code>Host: stock.local</code> tới <code>/api/version</code> = 200.",
         "Host không khớp (<code>nope.invalid</code>) → 404 default backend."
       ],
@@ -523,18 +523,18 @@ const DATA = {
       ],
       commands:[
         {cmd:"kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/baremetal/deploy.yaml\nkubectl get svc ingress-nginx-controller -n ingress-nginx", note:"cài controller (baremetal NodePort)", out:"controller 1/1 Running; 2 admission Job Completed\ningress-nginx-controller  NodePort  http=31825  https=30376"},
-        {cmd:"helm upgrade stock deploy/helm/stock -n stock --set global.ingress.enabled=true\nkubectl get ingress -n stock", note:"bật Ingress gated template", out:"stock   nginx   stock.local   80"},
+        {cmd:"helm upgrade gateway-svc deploy/helm/gateway-svc -n stock --set ingress.enabled=true\nkubectl get ingress -n stock", note:"bật Ingress gated template (chart gateway-svc)", out:"stock   nginx   stock.local   80"},
         {cmd:"kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 18080:80 &\ncurl -s -H \"Host: stock.local\" http://localhost:18080/api/version", note:"route /api → api-svc = 200", out:"{\"service\":\"api-svc\",\"git_sha\":\"unknown\",...,\"consistent\":true}   HTTP 200 ✅"},
         {cmd:"curl -s -H \"Host: nope.invalid\" http://localhost:18080/api/version -o /dev/null -w '%{http_code}\\n'", note:"host không khớp → default backend", out:"404   ← host không khớp rule"}
       ]
     },
     {
       id:"4.3", title:"NetworkPolicy Isolation", domain:"Services & Networking (20%)", duration:"~45m", status:"done",
-      prep:["NetworkPolicy = gated template <code>networkpolicy.yaml</code> (default off vì default-deny cần allow đủ traffic hợp lệ — Prometheus scrape :9464...). 5 policy."],
+      prep:["NetworkPolicy = gated template tách 2 chart (default off vì default-deny cần allow đủ traffic hợp lệ — Prometheus scrape :9464...): <code>bootstrap/templates/networkpolicy.yaml</code> (default-deny + 3 multi-target) + <code>db/templates/networkpolicy.yaml</code> (allow-backends-to-db). 5 policy."],
       cleanup:["Đã TẮT lại (default off) sau demo để không chặn Prometheus scrape. Xoá pod nháp: <code>kubectl delete pod np-test -n stock</code>."],
       request:"Allow frontend → backend traffic only; deny backend egress ra internet (0.0.0.0/0). 5 policy: default-deny-ingress + allow gateway/ingress-nginx→frontend + api→auth/prediction + backends→db + deny-backend-egress-internet.",
       steps:[
-        "Bật NetworkPolicy + Ingress: <code>--set global.networkPolicy.enabled=true --set global.ingress.enabled=true</code> → 5 policy.",
+        "Bật NetworkPolicy (CẢ bootstrap + db) + Ingress (gateway-svc): <code>helm upgrade bootstrap ... --set networkPolicy.enabled=true</code>, <code>helm upgrade db ... --set networkPolicy.enabled=true</code>, <code>helm upgrade gateway-svc ... --set ingress.enabled=true</code> → 5 policy.",
         "(A) Ingress vẫn 200 vì template ĐÃ allow ns <code>ingress-nginx</code> (namespaceSelector).",
         "(B) ISOLATION: pod lạ <code>app=np-test</code> (không trong allow-list) curl api-svc → wget TIMEOUT (bị chặn).",
         "Tắt lại (default off) sau demo."
@@ -547,7 +547,7 @@ const DATA = {
         "<code>deny-backend-egress-internet</code> (auth-svc/service-mgt): egress chỉ intra-cluster (10.0.0.0/8) + DNS :53 → chặn ra ngoài. KHÔNG áp prediction-svc (nó crawl external thật)."
       ],
       commands:[
-        {cmd:"helm upgrade stock deploy/helm/stock -n stock --set global.networkPolicy.enabled=true --set global.ingress.enabled=true\nkubectl get networkpolicy -n stock", note:"5 policy", out:"default-deny-ingress\nallow-gateway-to-frontend\nallow-api-to-backends\nallow-backends-to-db\ndeny-backend-egress-internet"},
+        {cmd:"# netpol graph tách 2 chart → bật CẢ bootstrap + db (+ ingress ở gateway-svc):\nhelm upgrade bootstrap   deploy/helm/bootstrap   -n stock --set networkPolicy.enabled=true\nhelm upgrade db          deploy/helm/db          -n stock --set networkPolicy.enabled=true\nhelm upgrade gateway-svc deploy/helm/gateway-svc -n stock --set ingress.enabled=true\nkubectl get networkpolicy -n stock", note:"5 policy (bootstrap: 4 · db: allow-backends-to-db)", out:"default-deny-ingress\nallow-gateway-to-frontend\nallow-api-to-backends\nallow-backends-to-db\ndeny-backend-egress-internet"},
         {cmd:"curl -s -H \"Host: stock.local\" http://localhost:18082/api/version -w '\\nHTTP %{http_code}\\n'", note:"(A) Ingress vẫn qua (allow ns ingress-nginx)", out:"{\"service\":\"api-svc\",...}   HTTP 200   ← allow-gateway-to-frontend cho ingress-nginx qua"},
         {cmd:"# (B) pod lạ app=np-test (ngoài allow-list) curl api-svc:\nkubectl run np-test --image=nginx:1.27-alpine --restart=Never -n stock --labels=app=np-test \\\n  --command -- sh -c 'wget -T 5 -qO- http://api-svc:8118/health/ready; echo \"wget_exit=$?\"'\nkubectl logs np-test -n stock", note:"BỊ CHẶN → timeout", out:"wget: download timed out\nwget_exit=1              ← default-deny + không allow app=np-test → TIMEOUT (chặn thật)"}
       ]
@@ -581,12 +581,12 @@ const DATA = {
     {
       id:"5.1", title:"Self-Healing App (Probes)", domain:"Observability & Maintenance (15%)", duration:"~45m", status:"done",
       prep:["Probe đã phủ 6 service từ day trước (HTTP liveness/readiness, native gRPC probe, tcpSocket). Bài này BỔ SUNG startupProbe cho container slow-start."],
-      cleanup:["Không có object nháp — áp thẳng qua <code>helm upgrade</code>; rollback bằng <code>helm rollback</code>."],
+      cleanup:["Không có object nháp — áp thẳng qua <code>helm upgrade prediction-svc deploy/helm/prediction-svc</code>; rollback bằng <code>helm rollback prediction-svc</code>."],
       request:"Configure HTTP liveness + file-based readiness + startupProbe cho slow-start container. auth-svc đã có startupProbe (JVM+Flyway); THÊM mới startupProbe cho prediction-svc (torch import + ML init ~30–120s) gate liveness/readiness.",
       steps:[
         "Xác nhận probe sẵn có: api-svc <code>/health/*</code>, auth-svc Actuator <code>/actuator/health/{liveness,readiness}</code>, service-mgt native <code>grpc:8121</code>, prediction-svc tcpSocket :8119.",
         "THÊM startupProbe prediction-svc: <code>tcpSocket:8119, periodSeconds:5, failureThreshold:30</code> (~150s).",
-        "<code>helm upgrade</code> (rev8) → verify startupProbe trên pod.",
+        "<code>helm upgrade prediction-svc deploy/helm/prediction-svc -n stock</code> → verify startupProbe trên pod.",
         "Xác nhận thứ tự probe: startup → (readiness ∥ liveness)."
       ],
       knowledge:[
@@ -596,7 +596,7 @@ const DATA = {
         "prediction-svc chậm vì torch import + ML init + DB connect; auth-svc chậm vì JVM boot + Flyway migrate — cả hai cần startupProbe để không bị giết oan."
       ],
       commands:[
-        {cmd:"helm upgrade stock deploy/helm/stock -n stock", note:"rev8 (gộp với 3.3)", out:"Release \"stock\" has been upgraded. Happy Helming!\nREVISION: 8"},
+        {cmd:"helm upgrade prediction-svc deploy/helm/prediction-svc -n stock", note:"chart prediction-svc (revision riêng)", out:"Release \"prediction-svc\" has been upgraded. Happy Helming!\nREVISION: 8"},
         {cmd:"p=$(kubectl get pod -n stock -l app=prediction-svc \\\n  -o jsonpath='{.items[0].metadata.name}')\nkubectl get pod $p -n stock -o jsonpath='{.spec.containers[?(@.name==\"prediction-svc\")].startupProbe}'", note:"startupProbe đã set", out:"{\"failureThreshold\":30,\"periodSeconds\":5,\"successThreshold\":1,\"tcpSocket\":{\"port\":8119},\"timeoutSeconds\":1}"},
         {cmd:"kubectl get pods -n stock -l app=prediction-svc", note:"2/2 Available, 0 restart", out:"NAME                     READY   STATUS    RESTARTS\nprediction-svc-...       3/3     Running   0"}
       ]
@@ -649,27 +649,28 @@ const DATA = {
     },
     {
       id:"5.4", title:"Helm Deploy & Rollback", domain:"App Deployment (20%)", duration:"~45m", status:"done",
-      prep:["Release <code>stock</code> thật (helm v3.16.2 local). Toàn bộ Day 3/4 tạo lịch sử revision thật (rev5–14)."],
-      cleanup:["Sau demo rollback: <code>helm upgrade stock deploy/helm/stock -n stock</code> để restore đủ state từ chart."],
-      request:"Install Helm chart với value overrides; upgrade release và rollback về revision trước. Trên release stock thật — Day 3/4 đã tạo lịch sử revision là chất liệu cho lab này.",
+      prep:["Mỗi service = 1 chart độc lập (helm v3.16.2 local) → upgrade/rollback vòng đời RIÊNG, <code>helm history</code> per-chart. Day 2/3 tạo lịch sử revision thật cho từng chart (vd api-svc rev1–4)."],
+      cleanup:["Sau demo rollback: <code>helm upgrade api-svc deploy/helm/api-svc -n stock</code> để restore đủ state từ chart (chỉ chart api-svc, không đụng chart anh em)."],
+      request:"Install Helm chart với value overrides; upgrade release và rollback về revision trước — trên MỘT chart per-service thật (vd api-svc). Day 2/3 đã tạo lịch sử revision cho chart đó là chất liệu cho lab này.",
       steps:[
-        "Xem <code>helm history stock</code> — rev5(3.2)→6(fix)→7(quota)→8(SA+5.1)→...→14.",
-        "Value override lúc upgrade: <code>--set global.ingress.enabled=true</code>, <code>--set global.imageTag=v2</code>.",
-        "ROLLBACK: <code>helm rollback stock 7</code> → tạo REVISION MỚI (rev15 Rollback to 7).",
-        "Quan sát bẫy: rollback về 7 XOÁ luôn SA của rev8 → restore bằng <code>helm upgrade</code> từ chart."
+        "Xem <code>helm history api-svc</code> — mỗi chart per-service có lịch sử revision riêng (rev1 install → 2 hardening → 3 blue/green → 4 --set hpa.enabled).",
+        "Value override lúc upgrade (trên chart api-svc): <code>--set hpa.enabled=true</code>, <code>--set imageTag=v2</code>.",
+        "ROLLBACK: <code>helm rollback api-svc 2</code> → tạo REVISION MỚI (Rollback to 2).",
+        "Quan sát bẫy: rollback api-svc về rev2 hoàn nguyên selector blue/green (thêm ở rev3) → restore bằng <code>helm upgrade</code> từ chart."
       ],
       knowledge:[
-        "<b>⚠️ Bẫy rollback revert TOÀN BỘ state:</b> <code>helm rollback stock 7</code> = revert về đúng snapshot rev7, KHÔNG phải 'undo lệnh cuối'. Rev7 chưa có 3.3 (SA thêm ở rev8) → rollback về 7 XOÁ luôn 6 SA + RBAC (<code>get sa | grep -c pod-reader → 0</code>). Restore: <code>helm upgrade</code> từ chart (có đủ lại).",
-        "<b>Rollback là toàn-cục, không chọn lọc</b>: resource thêm ở revision SAU bị XOÁ khi lùi về revision TRƯỚC. GitOps: prefer re-apply/upgrade từ chart thay vì rollback khi muốn giữ 1 phần.",
-        "<b>Mỗi upgrade/rollback = 1 revision</b> (<code>helm history</code>); <code>helm rollback &lt;rev&gt;</code> nhảy về snapshot đó và TẠO revision mới (audit trail liền mạch, không xoá lịch sử).",
-        "<code>helm upgrade --set k=v</code> (hoặc <code>-f values-prod.yaml</code>) = override value; <code>--reuse-values</code> giữ set cũ (⚠️ dễ nhầm — dùng <code>--reset-values</code> hoặc upgrade sạch khi muốn chuẩn).",
-        "<code>helm rollback</code> an toàn hơn <code>kubectl rollout undo</code> ở chỗ revert CẢ manifest set (không lệch last-applied) — nhưng chính vì 'cả set' nên phải hiểu nó xoá gì."
+        "<b>⚠️ Bẫy rollback revert TOÀN BỘ state của CHART đó:</b> <code>helm rollback api-svc 2</code> = revert về đúng snapshot rev2, KHÔNG phải 'undo lệnh cuối'. Rev2 chưa có blue/green color selector (thêm ở rev3) → rollback về 2 hoàn nguyên selector chart api-svc. Restore: <code>helm upgrade</code> từ chart.",
+        "<b>Ưu điểm per-service charts:</b> rollback <code>api-svc</code> KHÔNG đụng chart khác (bootstrap RBAC/quota, db, prediction-svc...) — blast radius gói gọn 1 chart, khác umbrella cũ (1 rollback revert cả stack). Cần lùi nhiều service → rollback từng chart.",
+        "<b>Rollback là toàn-cục TRONG CHART, không chọn lọc</b>: resource thêm ở revision SAU bị XOÁ khi lùi về revision TRƯỚC — nhưng chỉ trong phạm vi chart đó. GitOps: prefer re-apply/upgrade từ chart khi muốn giữ 1 phần.",
+        "<b>Mỗi upgrade/rollback = 1 revision</b> (<code>helm history &lt;chart&gt;</code>); <code>helm rollback &lt;chart&gt; &lt;rev&gt;</code> nhảy về snapshot đó và TẠO revision mới (audit trail liền mạch, không xoá lịch sử).",
+        "<code>helm upgrade --set k=v</code> (hoặc <code>-f &lt;chart&gt;-secret.yaml</code>) = override value; <code>--reuse-values</code> giữ set cũ (⚠️ dễ nhầm — dùng <code>--reset-values</code> hoặc upgrade sạch khi muốn chuẩn).",
+        "<code>helm rollback</code> an toàn hơn <code>kubectl rollout undo</code> ở chỗ revert CẢ manifest set của chart (không lệch last-applied) — nhưng chính vì 'cả set' nên phải hiểu nó xoá gì."
       ],
       commands:[
-        {cmd:"helm history stock -n stock", note:"lịch sử revision (Day 3/4 tạo ra)", out:"5   Upgrade complete   (3.2 lần đầu — nginx crashloop CAP_CHOWN)\n6   Upgrade complete   (3.2 fix)\n7   Upgrade complete   (3.4 quota)\n8   Upgrade complete   (3.3 SA + 5.1)\n...\n14  deployed           (ingress on / NP off)"},
-        {cmd:"helm upgrade stock deploy/helm/stock -n stock --set global.ingress.enabled=true\nhelm upgrade stock deploy/helm/stock -n stock --set global.imageTag=v2", note:"value override (--set ghi đè values.yaml)", out:"Release \"stock\" has been upgraded. Happy Helming!"},
-        {cmd:"helm rollback stock 7 -n stock\nhelm history stock -n stock | tail -1", note:"rollback tạo REVISION MỚI", out:"Rollback was a success! Happy Helming!\n15  Rollback to 7      ← rollback tạo revision mới (không xoá lịch sử)"},
-        {cmd:"# BẪY — rollback về 7 XOÁ SA của rev8:\nkubectl get sa -n stock | grep -c pod-reader\nhelm upgrade stock deploy/helm/stock -n stock   # restore từ chart", note:"rollback toàn-cục xoá resource rev sau", out:"0    ← SA của rev8 bị XOÁ khi lùi về rev7!\n→ SA về 6 sau khi upgrade lại từ chart"}
+        {cmd:"helm history api-svc -n stock", note:"lịch sử revision per-chart (Day 2/3 tạo ra)", out:"1   Install complete   (cài lần đầu)\n2   Upgrade complete   (3.2 securityContext hardening)\n3   Upgrade complete   (blue/green color selector)\n4   deployed           (--set hpa.enabled=true)"},
+        {cmd:"helm upgrade api-svc deploy/helm/api-svc -n stock --set hpa.enabled=true\nhelm upgrade api-svc deploy/helm/api-svc -n stock --set imageTag=v2", note:"value override (--set ghi đè values.yaml chart api-svc)", out:"Release \"api-svc\" has been upgraded. Happy Helming!"},
+        {cmd:"helm rollback api-svc 2 -n stock\nhelm history api-svc -n stock | tail -1", note:"rollback tạo REVISION MỚI (chỉ chart api-svc)", out:"Rollback was a success! Happy Helming!\n5   Rollback to 2      ← rollback tạo revision mới (không xoá lịch sử)"},
+        {cmd:"# BẪY — rollback về 2 hoàn nguyên selector blue/green của rev3:\nkubectl get svc api-svc -n stock -o jsonpath='{.spec.selector}'\nhelm upgrade api-svc deploy/helm/api-svc -n stock   # restore từ chart", note:"rollback toàn-cục TRONG chart xoá resource rev sau (blast radius gói 1 chart)", out:"{\"app\":\"api-svc\"}    ← mất 'color' (selector rev2) sau rollback!\n→ selector đủ lại sau khi upgrade từ chart"}
       ]
     }
   ]

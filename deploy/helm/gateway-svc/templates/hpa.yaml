@@ -1,0 +1,28 @@
+{{- if .Values.hpa.enabled }}
+# =============================================================================
+# CKAD Lab 2.3 (áp THẬT) — HorizontalPodAutoscaler cho gateway-svc (proxy edge).
+# autoscaling/v2, CPU %. (HPA api-svc + blue/green nằm ở chart api-svc.)
+#
+# ⚠️ Service project chủ yếu I/O-bound / idle → CPU-HPA CHỈ scale khi có traffic
+#    spike THẬT; lúc thường nằm ở minReplicas (giữ HA). Default TẮT (hpa.enabled=false).
+#
+# HPA sở hữu .spec.replicas ⇒ deployment ĐÃ omit `replicas` khi hpa.enabled (tránh helm
+# upgrade giành lại → flapping).
+# =============================================================================
+{{- $g := .Values.hpa.gatewaySvc }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gateway-svc
+  namespace: {{ .Release.Namespace }}
+  labels: { app: gateway-svc }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: gateway-svc }
+  minReplicas: {{ $g.minReplicas }}
+  maxReplicas: {{ $g.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: {{ $g.targetCPU }} }
+{{- end }}

@@ -1,0 +1,15 @@
+# =============================================================================
+# bootstrap — ns governance cho ns "stock". Self-contained values (không còn global:).
+# Cài ĐẦU TIÊN, trước mọi service chart.
+# =============================================================================
+quota:
+  enabled: true            # LimitRange stock-defaults + ResourceQuota stock-quota
+rbac:
+  enabled: true            # pod-reader SA + Role + RoleBinding (demo RBAC)
+pdb:
+  enabled: true            # PodDisruptionBudget mọi service + db/minio (+ pgadmin nếu bật)
+networkPolicy:
+  enabled: false           # default-deny + allow multi-target. Bật demo:
+                           #   --set networkPolicy.enabled=true (cả bootstrap VÀ db)
+pgadmin:
+  enabled: true            # chỉ để render PDB của pgadmin (pgadmin cài riêng, tách chart)

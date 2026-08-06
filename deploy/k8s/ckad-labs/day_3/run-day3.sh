@@ -14,7 +14,8 @@
 #   ONLY=3.2 ./run-day3.sh           # chỉ 1 lab: 3.1 | 3.2 | 3.3 | 3.4
 #   KEEP=1 ./run-day3.sh             # giữ pod noreq-test (nếu 3.4 dừng giữa chừng) — bình thường tự dọn
 #
-# Yêu cầu: context=kind-ckad, ns=stock, hardening đã helm upgrade (rev6/7/8).
+# Yêu cầu: context=kind-ckad, ns=stock, hardening đã helm upgrade per-chart
+#          (securityContext trên 5 backend chart; SA per-service chart; quota/RBAC ở chart bootstrap).
 #          helm KHÔNG trên PATH → dùng /home/chronical/.local/bin/helm.
 # =============================================================================
 set -uo pipefail          # KHÔNG set -e: 3.4 có lệnh create CỐ TÌNH bị reject (runx)
@@ -51,13 +52,29 @@ title "LAB 3.1 — ConfigMap & Secret Injection (đã hiện thực sẵn trong 
 note "1) Liệt kê ConfigMap + Secret của ns stock (nginx.conf ambassador, config, secret per-service)"
 runsh "kubectl get cm,secret -n $NS | grep -E 'nginx|config|secret'"
 
-note "2) Secret+ConfigMap → env: 'describe deploy | grep' phần Environment (dễ nhớ hơn -o jsonpath)"
+P="$(kubectl get pod -n "$NS" -l app=prediction-svc -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)"
+
+note "2) Secret+ConfigMap → env: 'describe deploy | grep' phần Environment (khai báo envFrom)"
 runsh "kubectl describe deploy prediction-svc -n $NS | grep -A2 'Environment Variables from'"
 note "   → prediction-config (ConfigMap) + prediction-secret (Secret) = envFrom nạp cả ConfigMap lẫn Secret vào env"
+if [ -n "$P" ]; then
+  note "   PROOF — exec vào container app, đọc env THẬT trong pod đang chạy (không chỉ 'describe'):"
+  runsh "kubectl exec -n $NS $P -c prediction-svc -- sh -c 'env | grep -E \"^(POSTGRES_HOST|LOG_LEVEL|MODEL_STORE_BACKEND|S3_ACCESS_KEY|S3_BUCKET)=\" | sort'"
+  note "   → POSTGRES_HOST/LOG_LEVEL/MODEL_STORE_BACKEND (ConfigMap) + S3_ACCESS_KEY/S3_BUCKET (Secret) = giá trị ĐÃ inject thật"
+else
+  note "   (không thấy pod prediction-svc đang chạy — skip phần exec proof)"
+fi
 
 note "3) ConfigMap → mounted volume: nginx.conf mount subPath — 'describe deploy | grep nginx.conf'"
 runsh "kubectl describe deploy prediction-svc -n $NS | grep 'nginx.conf'"
 note "   → /etc/nginx/nginx.conf from nginx-conf (ConfigMap <svc>-nginx mount subPath, read-only)"
+if [ -n "$P" ]; then
+  note "   PROOF — exec vào container nginx, cat file ĐÃ MOUNT trong pod:"
+  runsh "kubectl exec -n $NS $P -c nginx -- head -6 /etc/nginx/nginx.conf"
+  note "   so khớp 6 dòng đầu của ConfigMap prediction-svc-nginx (nguồn của mount):"
+  runsh "kubectl get cm prediction-svc-nginx -n $NS -o jsonpath='{.data.nginx\.conf}' | head -6"
+  note "   → file trong pod TRÙNG data ConfigMap ⇒ ConfigMap→volume mount THẬT (không chỉ khai báo trong deploy)"
+fi
 }
 
 # =============================================================================

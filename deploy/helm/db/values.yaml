@@ -1,0 +1,13 @@
+# =============================================================================
+# db — TimescaleDB/Postgres. Self-contained values (không còn global: umbrella).
+# =============================================================================
+secrets:
+  postgresUser: postgres
+  postgresPassword: "123"
+  postgresDb: go_stock_prediction
+
+# NetworkPolicy allow-backends-to-db (single-target, podSelector app=db).
+# Default OFF — chỉ bật khi demo netpol; PHẢI bật cùng bootstrap:
+#   --set networkPolicy.enabled=true  (cả bootstrap và db)
+networkPolicy:
+  enabled: false

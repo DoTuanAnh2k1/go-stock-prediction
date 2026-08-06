@@ -130,7 +130,7 @@ Items marked **Required** must appear in your submitted cluster state and reposi
 | P3 | One advanced strategy demo: **blue/green** (Service selector flip) **or** canary (weighted replicas / second Deployment) | **Required** (choose one) |
 | P4 | HPA on at least one Deployment (CPU target; metrics-server available) | **Required** |
 | P5 | Kustomize: `base/` + ≥1 overlay (e.g. `dev` / `prod`) patching image and/or replicas | **Required** |
-| P6 | Helm: chart (own or wrapped) installable with values override; show upgrade + rollback | **Required** (may package the whole app or one critical service) |
+| P6 | Helm: chart (own or wrapped) installable with values override; show upgrade + rollback | **Required** — here as **per-service independent charts** (`deploy/helm/<svc>/`); upgrade + rollback demonstrated on a single critical service chart (e.g. `helm upgrade api-svc ... --set imageTag=v2` → `helm history api-svc` → `helm rollback api-svc <rev>`) |
 
 ### 4.3 Application Environment, Configuration & Security (25%)
 
@@ -205,7 +205,7 @@ A Git repository accessible to the instructor, containing:
 │   ├── quota/                # ResourceQuota, LimitRange
 │   └── storage/              # PVC(s)
 ├── helm/
-│   └── <chart>/              # Application or service chart
+│   └── <chart>/              # Per-service chart (one per service) + common/bootstrap/cronjobs
 └── scripts/
     ├── build.sh              # Build & tag images
     ├── deploy.sh             # Apply Kustomize/Helm into namespace

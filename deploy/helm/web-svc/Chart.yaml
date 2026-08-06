@@ -1,0 +1,5 @@
+apiVersion: v2
+name: web-svc
+description: React frontend (nginx :3000) — chart độc lập, cài/upgrade/rollback riêng.
+type: application
+version: 0.1.0

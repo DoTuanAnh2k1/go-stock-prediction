@@ -70,3 +70,10 @@ deploy/helm/**/values-secret.yaml
 deploy/helm/**/values-prod.yaml
 !**/values-secret.yaml.example
 !**/values-prod.yaml.example
+
+# AI-assistant config — kept local only, not published to the public repo.
+/CLAUDE.md
+.claude/
+
+# External review file — local only.
+/feedback.md

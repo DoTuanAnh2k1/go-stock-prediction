@@ -1,9 +1,10 @@
 # Day 4 — Networking & storage
 
-> Cách tiếp cận: áp/verify trên stack THẬT (ns stock). Ingress + NetworkPolicy là
-> **gated Helm template** trong chart `stock` (default off), bật bằng
-> `--set global.{ingress,networkPolicy}.enabled=true`. Drill selector/PVC dùng object
-> nháp (throwaway) rồi dọn. Helm local: `/home/chronical/.local/bin/helm`.
+> Cách tiếp cận: áp/verify trên stack THẬT (ns stock). Ingress là gated template chart
+> `gateway-svc`; NetworkPolicy tách 2 chart — default-deny + policy multi-target ở chart
+> `bootstrap`, `allow-backends-to-db` ở chart `db` (đều default off), bật bằng
+> `--set ingress.enabled=true` (gateway-svc) và `--set networkPolicy.enabled=true` (CẢ bootstrap
+> + db). Drill selector/PVC dùng object nháp (throwaway) rồi dọn. Helm local: `/home/chronical/.local/bin/helm`.
 
 ## Lab 4.1 — ClusterIP & NodePort
 Duration: ~45 min | CKAD domain: Services and Networking (20%)
@@ -57,10 +58,10 @@ kubectl get pods -n ingress-nginx     # controller 1/1 Running; 2 admission Job 
 kubectl get svc  ingress-nginx-controller -n ingress-nginx   # NodePort http=31825 https=30376
 ```
 
-Ingress = **gated Helm template** `deploy/helm/stock/templates/ingress.yaml` (host `stock.local`,
+Ingress = **gated Helm template** `gateway-svc/templates/ingress.yaml` (host `stock.local`,
 `/`→web-svc:3000, `/api`→api-svc:8118, KHÔNG rewrite path). Bật:
 ```bash
-helm upgrade stock deploy/helm/stock -n stock --set global.ingress.enabled=true
+helm upgrade gateway-svc deploy/helm/gateway-svc -n stock --set ingress.enabled=true
 kubectl get ingress -n stock
 #   stock   nginx   stock.local   80
 ```
@@ -93,13 +94,17 @@ Deny backend egress to internet (0.0.0.0/0)
 > **200**. ⇒ kindnet của cluster này **enforce thật**. (Bài học: chạy lệnh kiểm chứng, đừng tin
 > giả định.)
 
-NetworkPolicy = gated template `deploy/helm/stock/templates/networkpolicy.yaml` (default off vì
-default-deny cần allow đủ mọi traffic hợp lệ — Prometheus scrape :9464... — nếu không sẽ cắt
-nhầm metrics). 5 policy: `default-deny-ingress` + allow gateway/ingress-nginx→frontend +
-api→auth/prediction + backends→db + deny-backend-egress-internet.
+NetworkPolicy = gated template tách 2 chart (default off vì default-deny cần allow đủ mọi traffic
+hợp lệ — Prometheus scrape :9464... — nếu không sẽ cắt nhầm metrics): `bootstrap/templates/networkpolicy.yaml`
+(default-deny + 3 policy multi-target) và `db/templates/networkpolicy.yaml` (`allow-backends-to-db`).
+5 policy: `default-deny-ingress` + allow gateway/ingress-nginx→frontend + api→auth/prediction +
+backends→db + deny-backend-egress-internet.
 
 ```bash
-helm upgrade stock deploy/helm/stock -n stock --set global.networkPolicy.enabled=true --set global.ingress.enabled=true
+# netpol graph tách 2 chart → bật CẢ hai (thiếu 1 thì db bị default-deny chặn):
+helm upgrade bootstrap   deploy/helm/bootstrap   -n stock --set networkPolicy.enabled=true
+helm upgrade db          deploy/helm/db          -n stock --set networkPolicy.enabled=true
+helm upgrade gateway-svc deploy/helm/gateway-svc -n stock --set ingress.enabled=true
 kubectl get networkpolicy -n stock     # 5 policy
 
 # (A) Ingress vẫn 200 vì template ĐÃ allow ns ingress-nginx (namespaceSelector):

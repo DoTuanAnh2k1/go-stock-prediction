@@ -1,0 +1,36 @@
+bootstrap — namespace governance for ns "{{ .Release.Namespace }}" is installed.
+
+It provisions ns-global singletons that belong to no single service:
+  - ResourceQuota + LimitRange   (quota.enabled={{ .Values.quota.enabled }})
+  - pod-reader SA/Role/RoleBinding (rbac.enabled={{ .Values.rbac.enabled }})
+  - PodDisruptionBudgets for every service (pdb.enabled={{ .Values.pdb.enabled }})
+  - NetworkPolicies: default-deny + multi-target allow (networkPolicy.enabled={{ .Values.networkPolicy.enabled }})
+
+PRE-REQ (NOT Helm-managed) — create the db schema ConfigMap BEFORE installing the db chart:
+
+  kubectl create configmap db-schema -n {{ .Release.Namespace }} \
+    --from-file=01-schema.sql=database.sql
+
+INSTALL ORDER (each chart is independent — install in this sequence so deps are up first):
+
+  1.  bootstrap        (this chart — install FIRST)
+  2.  db
+  3.  minio
+  4.  service-mgt
+  5.  prediction-svc
+  6.  auth-svc
+  7.  api-svc
+  8.  gateway-svc
+  9.  web-svc
+  10. cli-svc
+  11. pgadmin          (optional — install only if you want the DB admin UI)
+  12. cronjobs
+
+  helm install <name> deploy/helm/<name> -n {{ .Release.Namespace }} [--set imageTag=<tag>]
+
+NETWORKPOLICY DEMO:
+  The allow-backends-to-db policy lives in the `db` chart (single-target). To enable the
+  netpol demo you MUST set the flag on BOTH bootstrap AND db, or db will be isolated:
+
+    helm upgrade bootstrap deploy/helm/bootstrap -n {{ .Release.Namespace }} --set networkPolicy.enabled=true
+    helm upgrade db        deploy/helm/db        -n {{ .Release.Namespace }} --set networkPolicy.enabled=true

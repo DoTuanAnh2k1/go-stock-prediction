@@ -1,0 +1,33 @@
+{{- if .Values.hpa.enabled }}
+# =============================================================================
+# CKAD Lab 2.3 (áp THẬT) — HorizontalPodAutoscaler cho api-svc (HTTP dashboard +
+# SSE). autoscaling/v2, CPU %. (HPA gateway-svc nằm ở chart gateway-svc.)
+#
+# ⚠️ Service project chủ yếu I/O-bound / idle (1-4m CPU vs requests 50-100m) → CPU-HPA
+#    CHỈ scale khi có traffic spike THẬT; lúc thường nằm ở minReplicas (giữ HA). Muốn thấy
+#    scale-up phải sinh tải thật (xem day_2 loadgen). Default TẮT (hpa.enabled=false).
+#
+# HPA sở hữu .spec.replicas ⇒ deployment ĐÃ omit `replicas` khi hpa.enabled (tránh helm
+# upgrade giành lại → flapping). api-svc blue/green: HPA mỗi màu (màu idle nằm ở min).
+# =============================================================================
+{{- $a := .Values.hpa.apiSvc }}
+{{- $apiTargets := ternary (list "api-svc-blue" "api-svc-green") (list "api-svc") .Values.bluegreen.enabled }}
+{{- range $name := $apiTargets }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels: { app: api-svc }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: {{ $name }} }
+  minReplicas: {{ $a.minReplicas }}
+  maxReplicas: {{ $a.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: {{ $a.targetCPU }} }
+---
+{{- end }}
+{{- end }}

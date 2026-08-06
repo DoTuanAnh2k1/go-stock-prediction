@@ -1,2 +1,0 @@
-# Cấu hình riêng của web-svc. Giá trị chung (imageTag/images/secrets/toggles) ở global: của umbrella.
-replicas: 3

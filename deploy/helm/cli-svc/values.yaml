@@ -1,0 +1,6 @@
+# Cấu hình self-contained cho cli-svc (chart độc lập, không còn global: của umbrella).
+replicas: 2
+imageTag: dev
+image: cli-svc
+secrets:
+  internalSecret: change-me-in-dev

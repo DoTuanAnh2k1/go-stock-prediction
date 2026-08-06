@@ -1,0 +1,6 @@
+# =============================================================================
+# minio — S3-compatible object store. Self-contained values (không còn global:).
+# =============================================================================
+secrets:
+  minioRootUser: minioadmin
+  minioRootPassword: minioadmin123

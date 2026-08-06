@@ -19,7 +19,8 @@ set -uo pipefail          # KHÔNG set -e: 5.3 apply broken.yaml CỐ TÌNH bị
 NS=stock
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$DIR/../../../.." && pwd)"           # repo root
-CHART="$ROOT/deploy/helm/stock"
+DEMO_CHART="${DEMO_CHART:-api-svc}"                # chart per-service dùng minh hoạ upgrade/rollback
+CHART="$ROOT/deploy/helm/$DEMO_CHART"
 BROKEN="$DIR/broken.yaml"
 ONLY="${ONLY:-all}"
 HELM=/home/chronical/.local/bin/helm
@@ -125,24 +126,24 @@ note "Điểm chốt: selector≠template = admission · image sai = runtime · 
 
 # =============================================================================
 lab_5_4(){
-title "LAB 5.4 — Helm Deploy & Rollback (READ-ONLY + --dry-run — KHÔNG rollback thật)"
+title "LAB 5.4 — Helm Deploy & Rollback per-service (READ-ONLY + --dry-run — KHÔNG rollback thật; release '$DEMO_CHART')"
 
-note "1) helm history — lịch sử revision thật (Day 3/4 sinh ra qua các lần upgrade)"
-run "$HELM" history stock -n "$NS"
+note "1) helm history — lịch sử revision thật của CHART '$DEMO_CHART' (Day 2/3 sinh ra qua các lần upgrade)"
+run "$HELM" history "$DEMO_CHART" -n "$NS"
 
-note "2) helm get values — value đang áp cho release stock"
-run "$HELM" get values stock -n "$NS"
+note "2) helm get values — value đang áp cho release '$DEMO_CHART'"
+run "$HELM" get values "$DEMO_CHART" -n "$NS"
 
 note "3) value override demo — --dry-run (KHÔNG apply thật, chỉ render để đối chiếu)"
-runhelm "$HELM" upgrade stock "$CHART" -n "$NS" --set global.imageTag=dev --dry-run
+runhelm "$HELM" upgrade "$DEMO_CHART" "$CHART" -n "$NS" --set imageTag=dev --dry-run
 note "   → --dry-run render manifest với imageTag override NHƯNG không đổi release live (full manifest ở \$HELMLOG)"
 
 note "Điểm chốt (KHÔNG chạy helm rollback thật trong script — an toàn release live):"
-note " - helm upgrade --set k=v = override value; mỗi upgrade/rollback = 1 revision (helm history)"
-note " - helm rollback <rev> = revert TOÀN BỘ state về snapshot rev đó (KHÔNG phải undo lệnh cuối)"
-note " - BẪY: rollback về rev cũ XOÁ resource thêm ở rev sau (vd rollback→7 xoá 6 SA thêm ở rev8)"
+note " - helm upgrade --set k=v = override value; mỗi upgrade/rollback = 1 revision (helm history <chart>)"
+note " - helm rollback <chart> <rev> = revert TOÀN BỘ state của CHART đó về snapshot rev (KHÔNG phải undo lệnh cuối)"
+note " - BẪY: rollback về rev cũ XOÁ resource thêm ở rev sau — nhưng chỉ trong phạm vi chart đó (per-service = blast radius gọn)"
 note " - GitOps: prefer re-apply/upgrade từ chart thay vì rollback khi muốn giữ 1 phần state"
-note "   (chạy tay khi cần: $HELM rollback stock <rev> -n $NS)"
+note "   (chạy tay khi cần: $HELM rollback $DEMO_CHART <rev> -n $NS)"
 }
 
 # =============================================================================

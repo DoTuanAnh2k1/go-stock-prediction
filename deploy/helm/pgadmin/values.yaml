@@ -1,0 +1,9 @@
+# =============================================================================
+# pgadmin — Self-contained values (không còn global:). Cài-hay-không thay cho
+# toggle pgadmin.enabled cũ: chỉ `helm install pgadmin` khi cần quản trị DB.
+# Image dpage/pgadmin4:latest hardcode trong deployment (upstream, không tự build)
+# → KHÔNG có imageTag/image ở đây.
+# =============================================================================
+replicas: 2
+secrets:
+  pgadminPassword: admin

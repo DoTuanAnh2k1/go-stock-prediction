@@ -1,0 +1,15 @@
+# api-svc — chart độc lập, self-contained values (không còn global: của umbrella).
+replicas: 2
+imageTag: dev
+image: api-svc
+secrets:
+  postgresPassword: "123"
+  jwtSecret: change-me-in-dev
+  internalSecret: change-me-in-dev
+  adminPassword: admin123
+bluegreen:
+  enabled: true
+  activeColor: green
+hpa:
+  enabled: false
+  apiSvc: { minReplicas: 2, maxReplicas: 6, targetCPU: 60 }

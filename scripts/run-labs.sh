@@ -19,14 +19,18 @@ LABS="deploy/k8s/ckad-labs"
 
 HELM="${HELM:-helm}"
 command -v "$HELM" >/dev/null 2>&1 || HELM="$HOME/.local/bin/helm"
-CHART="deploy/helm/stock"
 
+# Umbrella "stock" đã bỏ — NetworkPolicy graph tách giữa 2 chart: bootstrap giữ
+# default-deny + 3 policy multi-target, db giữ allow-backends-to-db (single-target).
+# Toggle phải áp CHO CẢ HAI, nếu không graph khuyết (bật default-deny mà thiếu
+# allow-db → db treo).
 netpol() {  # $1 = true|false
   [ "${KEEP_NETPOL:-0}" = "1" ] && return 0
-  "$HELM" upgrade stock "$CHART" -n stock \
-    --set global.hpa.enabled=true --set global.ingress.enabled=true \
-    --set "global.networkPolicy.enabled=$1" >/dev/null 2>&1 \
-    && echo ">> NetworkPolicy set enabled=$1"
+  "$HELM" upgrade bootstrap deploy/helm/bootstrap -n stock \
+    --set "networkPolicy.enabled=$1" >/dev/null 2>&1
+  "$HELM" upgrade db deploy/helm/db -n stock \
+    --set "networkPolicy.enabled=$1" >/dev/null 2>&1 \
+    && echo ">> NetworkPolicy set enabled=$1 (bootstrap + db)"
 }
 
 run_day() {  # $1 = day number

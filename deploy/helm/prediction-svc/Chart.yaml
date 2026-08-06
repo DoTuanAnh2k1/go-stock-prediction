@@ -1,0 +1,9 @@
+apiVersion: v2
+name: prediction-svc
+description: Python prediction service (gRPC :8119) — chart độc lập, cài riêng.
+type: application
+version: 0.1.0
+dependencies:
+  - name: common
+    version: 0.1.0
+    repository: "file://../common"

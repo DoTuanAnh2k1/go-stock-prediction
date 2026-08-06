@@ -33,6 +33,7 @@ export GIT_DIRTY  := $(shell test -z "$$(git status --porcelain 2>/dev/null)" &&
         cli-build cli-test \
         proto-go proto-auth proto-auth-sync proto-auth-check proto-py proto \
         test-db-up test-db-down \
+        helm-deps \
         stats stats-watch \
         versions versions-logs
 
@@ -88,6 +89,10 @@ help:
 	@echo "  make proto-go         Go stubs (prediction + auth)"
 	@echo "  make proto-auth       Go auth stubs only"
 	@echo "  make proto-py         Python prediction stubs"
+	@echo ""
+	@echo "Helm deploy (deploy/helm/<svc>, per-service charts):"
+	@echo "  make helm-deps        helm dependency build for the 5 backend charts (vendor 'common')"
+	@echo "                        then: ./scripts/deploy.sh (per-chart helm upgrade --install)"
 	@echo ""
 	@echo "Resource metrics (scripts/svc-metrics.sh):"
 	@echo "  make stats            One-shot CPU/RAM snapshot sorted by memory desc + TOTAL"
@@ -275,6 +280,22 @@ test-db-up:
 
 test-db-down:
 	$(COMPOSE_TEST) down -v
+
+# ===========================================================================
+# Helm — per-service independent charts (deploy/helm/<svc>)
+# ===========================================================================
+# The 5 backend charts (api/auth/prediction/service-mgt/cli) declare the `common`
+# library chart as a file://../common dependency. Vendor it into each chart's
+# charts/ dir before `helm install`/`template`/`lint`. scripts/deploy.sh runs the
+# same loop; this target is the standalone escape hatch. helm may be off PATH.
+HELM ?= $(shell command -v helm 2>/dev/null || echo $(HOME)/.local/bin/helm)
+HELM_BACKEND_CHARTS = api-svc auth-svc prediction-svc service-mgt cli-svc
+
+helm-deps:
+	@for c in $(HELM_BACKEND_CHARTS); do \
+		echo ">> helm dependency build deploy/helm/$$c"; \
+		$(HELM) dependency build deploy/helm/$$c; \
+	done
 
 # ===========================================================================
 # Backward-compatible aliases (old short names still work)

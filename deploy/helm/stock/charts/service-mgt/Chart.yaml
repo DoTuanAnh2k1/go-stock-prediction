@@ -1,5 +1,0 @@
-apiVersion: v2
-name: service-mgt
-description: Go service registry/discovery (gRPC :8121) — subchart của umbrella "stock".
-type: application
-version: 0.1.0

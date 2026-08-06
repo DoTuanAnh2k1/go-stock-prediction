@@ -1,0 +1,84 @@
+{{- if .Values.networkPolicy.enabled }}
+# =============================================================================
+# CKAD Lab 4.3 — NetworkPolicy Isolation (áp cho ns stock THẬT).
+#
+# ✅ kindnet của cluster kind này CÓ enforce NetworkPolicy (đã verify: bật default-deny
+#    → Ingress /api trả 000 vì ingress-nginx không nằm allow-list; tắt → 200). Đây là
+#    isolation THẬT, không phải no-op.
+#
+# ⚠️ Vì enforce thật, default-deny CẦN allow ĐỦ mọi traffic hợp lệ nếu không sẽ cắt
+#    nhầm: Prometheus (ns observability) scrape :9464, cross-ns... → default TẮT
+#    (networkPolicy.enabled=false) để tránh gãy metrics khi bật vô ý. Bật demo:
+#    --set networkPolicy.enabled=true (xem lab.md: chứng minh enforce + isolation).
+#
+# LƯU Ý: policy single-target allow-backends-to-db ĐÃ CHUYỂN về chart db (db là
+# podSelector target duy nhất). Khi bật demo netpol PHẢI set
+# --set networkPolicy.enabled=true cho CẢ bootstrap và db.
+#
+# Mô hình: default-deny-ingress + allow theo call-graph thật + deny egress internet.
+# =============================================================================
+# (1) Default deny MỌI ingress vào mọi pod trong ns (nền tảng zero-trust).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {}          # mọi pod
+  policyTypes: ["Ingress"]
+  # không có ingress: → deny tất cả (trừ policy allow bên dưới cộng dồn)
+---
+# (2) api-svc + web-svc nhận ingress từ: gateway-svc (proxy Rust) VÀ ingress-nginx
+#     controller (ns ingress-nginx, Lab 4.2). Không có allow ingress-nginx → Ingress 000.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-to-frontend
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app, operator: In, values: ["api-svc", "web-svc"] }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: gateway-svc } }
+        # ingress controller ns (label auto kubernetes.io/metadata.name) — cho Lab 4.2 coexist
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress-nginx } }
+---
+# (3) api-svc → auth-svc / prediction-svc (backend chỉ nhận từ api-svc + cùng service).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-to-backends
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app, operator: In, values: ["auth-svc", "prediction-svc"] }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: api-svc } }
+---
+# (4) Deny backend egress ra INTERNET (0.0.0.0/0), chỉ cho intra-cluster + DNS.
+#     Đúng objective "Deny backend egress to internet". prediction-svc crawl external
+#     nên KHÔNG áp cho nó (chọn auth-svc + service-mgt — thuần nội bộ).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-backend-egress-internet
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app, operator: In, values: ["auth-svc", "service-mgt"] }
+  policyTypes: ["Egress"]
+  egress:
+    - to:                                   # cho phép mọi đích TRONG cluster (pod CIDR)
+        - ipBlock: { cidr: 10.0.0.0/8 }
+    - to: []                                # DNS tới kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+{{- end }}

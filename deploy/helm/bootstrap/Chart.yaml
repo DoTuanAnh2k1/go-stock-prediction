@@ -1,0 +1,12 @@
+apiVersion: v2
+name: bootstrap
+description: >-
+  Namespace governance chart cho ns "stock" — CÀI ĐẦU TIÊN. Gom các tài nguyên
+  ns-global singleton KHÔNG thuộc riêng service nào: ResourceQuota + LimitRange
+  (quota), pod-reader Role/RoleBinding (rbac demo), PodDisruptionBudget của mọi
+  service, và NetworkPolicy nền (default-deny + các policy multi-target). Policy
+  single-target (allow-backends-to-db) nằm ở chart db. Toggle: quota/rbac/pdb/
+  networkPolicy.enabled trong values.yaml.
+type: application
+version: 0.1.0
+appVersion: "dev"

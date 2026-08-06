@@ -1,9 +1,11 @@
 # Day 3 — Configuration & security
 
-> Cách tiếp cận (như day 1/2): **áp thẳng lên deploy THẬT** trong Helm chart `stock`
-> (subchart per-service + library `common`), KHÔNG tạo pod demo cô lập. Mọi thay đổi
-> qua `helm upgrade stock deploy/helm/stock -n stock` rồi verify trên pod đang chạy.
-> Helm CLI local: `/home/chronical/.local/bin/helm` (v3.16.2).
+> Cách tiếp cận (như day 1/2): **áp thẳng lên deploy THẬT** qua các Helm chart per-service
+> độc lập (`deploy/helm/<svc>/` + library `common` + chart governance `bootstrap`), KHÔNG tạo
+> pod demo cô lập. Mọi thay đổi qua `helm upgrade <chart> deploy/helm/<chart> -n stock` rồi
+> verify trên pod đang chạy. Helm CLI local: `/home/chronical/.local/bin/helm` (v3.16.2).
+> **Lưu ý:** revision Helm nay là **per-chart** (mỗi chart có history riêng) — các số rev
+> trong doc là minh hoạ lịch sử của chart tương ứng.
 
 ## Lab 3.1 — ConfigMap & Secret Injection
 Duration: ~45 min | CKAD domain: Application Environment, Configuration & Security (25%)
@@ -14,7 +16,7 @@ Inject Secret as env var and ConfigMap as mounted volume in one Pod
 
 Cả HAI nửa của bài đã nằm trong mọi backend pod — không cần thêm:
 
-- **Secret → env var**: mỗi service có `secret.yaml` (`charts/<svc>/templates/secret.yaml`)
+- **Secret → env var**: mỗi service có `secret.yaml` (`<svc>/templates/secret.yaml`)
   nạp qua `envFrom.secretRef` trong deployment (vd `api-secret`, `prediction-secret`).
 - **ConfigMap → mounted volume**: `nginx.conf` của ambassador là ConfigMap
   (`<svc>-nginx`) **mount làm volume** vào container nginx:
@@ -36,6 +38,17 @@ kubectl describe deploy prediction-svc -n stock | grep -A2 'Environment Variable
 # ConfigMap → mounted volume (nginx.conf):
 kubectl describe deploy prediction-svc -n stock | grep 'nginx.conf'
 #   /etc/nginx/nginx.conf from nginx-conf (rw,path="nginx.conf")
+
+# PROOF — exec vào pod đọc giá trị THẬT (không chỉ 'describe'):
+P=$(kubectl get pod -n stock -l app=prediction-svc -o jsonpath='{.items[0].metadata.name}')
+# (a) Secret+ConfigMap → env: giá trị đã inject trong container app
+kubectl exec -n stock $P -c prediction-svc -- sh -c 'env | grep -E "^(POSTGRES_HOST|LOG_LEVEL|MODEL_STORE_BACKEND|S3_ACCESS_KEY|S3_BUCKET)=" | sort'
+#   POSTGRES_HOST=db / LOG_LEVEL=INFO / MODEL_STORE_BACKEND=s3  (ConfigMap)
+#   S3_ACCESS_KEY=minioadmin / S3_BUCKET=models                (Secret)
+# (b) ConfigMap → volume: file MOUNT trong container nginx == data ConfigMap
+kubectl exec -n stock $P -c nginx -- head -6 /etc/nginx/nginx.conf
+kubectl get cm prediction-svc-nginx -n stock -o jsonpath='{.data.nginx\.conf}' | head -6
+#   hai output TRÙNG nhau ⇒ ConfigMap→volume mount THẬT (không chỉ khai báo trong deploy)
 ```
 
 ## Lab 3.2 — Security Context Lockdown
@@ -45,7 +58,7 @@ Drop all capabilities; disable privilege escalation
 
 ### ✅ Đã thực hiện (2026-07-24) — áp lên CẢ 5 backend (api/auth/prediction/service-mgt/cli)
 
-Hardening gom vào **library chart** `charts/common/templates/_ambassador.tpl` (dùng chung
+Hardening gom vào **library chart** `common/templates/_ambassador.tpl` (dùng chung
 cho nginx/sidecar/wait-db) + app container inline per-service (vì UID/khả năng readOnly
 KHÁC nhau theo image).
 
@@ -86,7 +99,10 @@ lại đúng 3 cap official image cần: `CHOWN` (entrypoint chown cache), `SETU
 (master hạ quyền worker). Listen cổng cao (>1024) nên KHÔNG cần `NET_BIND_SERVICE`.
 
 ```bash
-helm upgrade stock deploy/helm/stock -n stock          # rev6 (sau fix)
+# securityContext hardening áp per-chart cho 5 backend (chạy cho từng chart):
+for c in api-svc auth-svc prediction-svc service-mgt cli-svc; do
+  helm upgrade $c deploy/helm/$c -n stock          # mỗi chart revision riêng (vd prediction-svc rev6 sau fix)
+done
 # rollout zero-downtime (maxUnavailable:0 giữ pod cũ tới khi pod mới Ready)
 ```
 
@@ -135,7 +151,7 @@ Duration: ~60 min | CKAD domain: Application Environment, Configuration & Securi
 Create ServiceAccount, Role, RoleBinding
 Pod uses SA token to list Pods in namespace via API
 
-### ✅ Đã thực hiện (2026-07-24) — `deploy/helm/stock/templates/serviceaccounts.yaml`
+### ✅ Đã thực hiện (2026-07-24) — per-service SA trong `<svc>/templates/serviceaccount.yaml` + pod-reader RBAC trong `bootstrap/templates/rbac.yaml`
 
 **(A) Per-service SA + automountServiceAccountToken:false (hardening thật):** 5 backend
 trước chạy SA `default` với token k8s API **tự động mount** vào pod dù KHÔNG service nào
@@ -146,7 +162,12 @@ gọi API (chúng chỉ nói chuyện qua Service DNS + gRPC). → mỗi service
 `get/list/watch` `pods/services/endpoints` (đọc, scope ns stock) + RoleBinding.
 
 ```bash
-helm upgrade stock deploy/helm/stock -n stock          # rev8
+# (A) per-service SA sinh trong chart service của nó → upgrade từng backend chart:
+for c in api-svc auth-svc prediction-svc service-mgt cli-svc; do
+  helm upgrade $c deploy/helm/$c -n stock
+done
+# (B) pod-reader SA/Role/RoleBinding nằm ở chart bootstrap:
+helm upgrade bootstrap deploy/helm/bootstrap -n stock --set rbac.enabled=true
 
 # ── (A) Token KHÔNG còn mount vào pod (automount:false) ────────────────────────
 p=$(kubectl get pod -n stock -l app=prediction-svc -o name | head -1)
@@ -187,7 +208,7 @@ kubectl delete pod $(basename $p) --as=system:serviceaccount:stock:pod-reader -n
   (Role chỉ get/list/watch); SA khác (`auth-svc`, không bind Role) **list cũng Forbidden**
   → least-privilege quan sát trực tiếp. `--dry-run=server` cho lệnh delete chạy đủ admission
   RBAC mà không thực xóa.
-- gateway-svc GIỮ SA + Role riêng (`charts/gateway-svc/templates/rbac.yaml`) vì nó THỰC SỰ
+- gateway-svc GIỮ SA + Role riêng (`gateway-svc/templates/rbac.yaml`) vì nó THỰC SỰ
   gọi API (blue/green controller patch Deployment) — không đụng.
 
 ## Lab 3.4 — Namespace Quotas
@@ -195,7 +216,7 @@ Duration: ~45 min | CKAD domain: Application Environment, Configuration & Securi
 Apply ResourceQuota and LimitRange
 Observe Pod rejection when quota exceeded
 
-### ✅ Đã thực hiện (2026-07-24) — `deploy/helm/stock/templates/quota.yaml`
+### ✅ Đã thực hiện (2026-07-24) — `bootstrap/templates/quota.yaml`
 
 Áp **LimitRange + ResourceQuota vào ns `stock` THẬT** (không dùng ns nháp). Vì ns live đang
 chạy 26 pod, phải size quota an toàn để KHÔNG chặn rollout/blue-green.
@@ -210,7 +231,7 @@ ResourceQuota stock-quota:  requests.cpu=6 requests.memory=10Gi limits.cpu=30 li
 ```
 
 ```bash
-helm upgrade stock deploy/helm/stock -n stock          # rev7
+helm upgrade bootstrap deploy/helm/bootstrap -n stock --set quota.enabled=true    # chart bootstrap
 kubectl describe quota stock-quota -n stock
 #   requests.cpu 2250m/6 · requests.memory 3840Mi/10Gi · limits.cpu 13200m/30 · pods 26/60   (đều dưới trần)
 ```
@@ -260,12 +281,14 @@ kubectl delete pod noreq-test -n stock            # dọn → trả quota về 2
 
 ---
 
-### Tổng kết Day 3 (helm revisions)
+### Tổng kết Day 3 (helm revisions — nay per-chart)
 ```
-rev5  3.2 (lần đầu — nginx crashloop do drop CAP_CHOWN)
-rev6  3.2 fix (nginx add CHOWN/SETUID/SETGID) → xanh
-rev7  3.4 LimitRange + ResourceQuota
-rev8  3.3 per-service SA + pod-reader RBAC  (gộp 5.1 startupProbe — xem day_5)
+prediction-svc  rev5  3.2 (lần đầu — nginx crashloop do drop CAP_CHOWN)
+prediction-svc  rev6  3.2 fix (nginx add CHOWN/SETUID/SETGID) → xanh
+bootstrap       ...   3.4 LimitRange + ResourceQuota (quota.enabled)
+<svc> + bootstrap ... 3.3 per-service SA (mỗi service chart) + pod-reader RBAC (bootstrap)
+                      (5.1 startupProbe của prediction-svc — xem day_5)
 ```
-Rollback bất kỳ bước: `helm rollback stock <rev> -n stock` (xem Lab 5.4).
-Tắt từng feature: `--set global.quota.enabled=false` / `--set global.rbac.enabled=false`.
+> Revision Helm nay tách theo chart — mỗi chart có `helm history` riêng.
+Rollback bất kỳ bước: `helm rollback <chart> <rev> -n stock` (xem Lab 5.4).
+Tắt từng feature (chart bootstrap): `--set quota.enabled=false` / `--set rbac.enabled=false`.

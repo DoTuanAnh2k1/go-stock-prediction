@@ -15,7 +15,7 @@ phần còn thiếu: **startupProbe cho container slow-start**.
 - **auth-svc** (Java, JVM + Flyway migrate) — ĐÃ có `startupProbe` từ trước
   (`failureThreshold:30 periodSeconds:5` ≈ 150s cho JVM boot).
 - **prediction-svc** (Python, torch import + ML init + DB connect ~30–120s) — **THÊM mới**
-  (`charts/prediction-svc/templates/deployment.yaml`): startupProbe gate liveness/readiness
+  (`prediction-svc/templates/deployment.yaml`): startupProbe gate liveness/readiness
   nên liveness KHÔNG giết pod oan lúc khởi động chậm; bỏ được `initialDelaySeconds` dài trên
   readiness/liveness.
 
@@ -27,7 +27,7 @@ startupProbe:
 ```
 
 ```bash
-helm upgrade stock deploy/helm/stock -n stock          # rev8 (gộp với 3.3)
+helm upgrade prediction-svc deploy/helm/prediction-svc -n stock    # chart prediction-svc (revision riêng)
 p=$(kubectl get pod -n stock -l app=prediction-svc -o jsonpath='{.items[0].metadata.name}')
 kubectl get pod $p -n stock -o jsonpath='{.spec.containers[?(@.name=="prediction-svc")].startupProbe}'
 #   {"failureThreshold":30,"periodSeconds":5,"successThreshold":1,"tcpSocket":{"port":8119},"timeoutSeconds":1}
@@ -123,42 +123,45 @@ Duration: ~45 min | CKAD domain: Application Deployment (20%)
 Install Helm chart with value overrides
 Upgrade release and rollback to previous revision
 
-### ✅ Đã thực hiện (2026-07-24) — trên release `stock` THẬT (helm v3.16.2 local)
+### ✅ Đã thực hiện (2026-07-24) — trên MỘT chart per-service THẬT (vd `api-svc`, helm v3.16.2 local)
 
-Toàn bộ Day 3/4 tạo ra **lịch sử revision thật** (cùng cơ chế lab này):
+Nay mỗi service = 1 chart độc lập → upgrade/rollback vòng đời riêng, `helm history` **per-chart**.
+Day 2/3 tạo ra **lịch sử revision thật** cho từng chart (cùng cơ chế lab này):
 ```bash
-helm history stock -n stock
-#   5   Upgrade complete   (3.2 lần đầu — nginx crashloop CAP_CHOWN)
-#   6   Upgrade complete   (3.2 fix)
-#   7   Upgrade complete   (3.4 quota)
-#   8   Upgrade complete   (3.3 SA + 5.1)
-#   ...
-#   14  deployed           (ingress on / NP off)
+helm history api-svc -n stock
+#   1   Install complete   (cài lần đầu)
+#   2   Upgrade complete   (3.2 securityContext hardening)
+#   3   Upgrade complete   (blue/green color selector)
+#   4   deployed           (--set hpa.enabled=true)
 
-# value override lúc upgrade (--set ghi đè values.yaml):
-helm upgrade stock deploy/helm/stock -n stock --set global.ingress.enabled=true
-helm upgrade stock deploy/helm/stock -n stock --set global.imageTag=v2   # bump tag mọi image
+# value override lúc upgrade (--set ghi đè values.yaml của chart đó):
+helm upgrade api-svc deploy/helm/api-svc -n stock --set hpa.enabled=true
+helm upgrade api-svc deploy/helm/api-svc -n stock --set imageTag=v2   # bump tag image chart này
 
-# ROLLBACK về revision trước:
-helm rollback stock 7 -n stock
+# ROLLBACK về revision trước (chỉ ảnh hưởng chart api-svc):
+helm rollback api-svc 2 -n stock
 #   Rollback was a success! Happy Helming!
-helm history stock -n stock | tail -1
-#   15  Rollback to 7      ← rollback tạo REVISION MỚI (không xoá lịch sử)
+helm history api-svc -n stock | tail -1
+#   5   Rollback to 2      ← rollback tạo REVISION MỚI (không xoá lịch sử)
 ```
 
-**⚠️ Bẫy đã gặp thật (bài học quan trọng):** `helm rollback stock 7` = **revert TOÀN BỘ state về
-đúng snapshot rev7**, KHÔNG phải "undo lệnh cuối". Rev7 chưa có 3.3 (ServiceAccounts thêm ở rev8)
-→ rollback về 7 **XOÁ luôn 6 SA + RBAC**:
+**⚠️ Bẫy quan trọng (bài học):** `helm rollback api-svc 2` = **revert TOÀN BỘ state của CHART đó về
+đúng snapshot rev2**, KHÔNG phải "undo lệnh cuối". Rev2 chưa có blue/green color selector (thêm ở
+rev3) → rollback về 2 **hoàn nguyên selector của chart api-svc**:
 ```bash
-kubectl get sa -n stock | grep -c pod-reader   # sau rollback→7: 0  (SA của rev8 bị xoá!)
-helm upgrade stock deploy/helm/stock -n stock    # restore từ chart (có đủ lại) → SA về 6
+kubectl get svc api-svc -n stock -o jsonpath='{.spec.selector}'   # sau rollback→2: mất color
+helm upgrade api-svc deploy/helm/api-svc -n stock    # restore từ chart (có đủ lại)
 ```
+> Ưu điểm per-service charts: rollback `api-svc` KHÔNG đụng chart khác (bootstrap RBAC/quota,
+> db, prediction-svc...) — blast radius gói gọn trong 1 chart, khác hẳn umbrella cũ (1 rollback
+> revert cả stack). Nếu cần lùi nhiều service → rollback từng chart.
+
 Điểm chốt:
-- `helm upgrade --set k=v` (hoặc `-f values-prod.yaml`) = override value; `--reuse-values` giữ
+- `helm upgrade --set k=v` (hoặc `-f <chart>-secret.yaml`) = override value; `--reuse-values` giữ
   set cũ (⚠️ dễ nhầm — dùng `--reset-values` hoặc upgrade sạch từ chart khi muốn chuẩn).
-- **Mỗi upgrade/rollback = 1 revision** (`helm history`); `helm rollback <rev>` nhảy về snapshot
-  đó và **tạo revision mới** (audit trail liền mạch).
-- **Rollback là toàn-cục, không chọn lọc**: resource thêm ở revision sau bị XOÁ khi lùi về
-  revision trước. GitOps: prefer re-apply/upgrade từ chart thay vì rollback khi muốn giữ 1 phần.
-- `helm rollback` an toàn hơn `kubectl rollout undo` ở chỗ nó revert CẢ manifest set (không lệch
-  last-applied) — nhưng chính vì "cả set" nên phải hiểu nó xoá gì.
+- **Mỗi upgrade/rollback = 1 revision** (`helm history <chart>`); `helm rollback <chart> <rev>` nhảy
+  về snapshot đó và **tạo revision mới** (audit trail liền mạch).
+- **Rollback là toàn-cục TRONG CHART, không chọn lọc**: resource thêm ở revision sau bị XOÁ khi lùi
+  về revision trước — nhưng chỉ trong phạm vi chart đó (không chạm chart anh em).
+- `helm rollback` an toàn hơn `kubectl rollout undo` ở chỗ nó revert CẢ manifest set của chart
+  (không lệch last-applied) — nhưng chính vì "cả set" nên phải hiểu nó xoá gì.

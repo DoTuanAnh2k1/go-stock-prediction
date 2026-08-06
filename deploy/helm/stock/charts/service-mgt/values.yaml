@@ -1,3 +1,0 @@
-# Cấu hình riêng của service-mgt. Giá trị chung (imageTag, images, secrets, toggles)
-# nằm ở global: của umbrella (deploy/helm/stock/values.yaml).
-replicas: 2

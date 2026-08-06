@@ -1,0 +1,45 @@
+{{- if .Values.rbac.enabled }}
+# =============================================================================
+# CKAD Lab 3.3 — ServiceAccount & RBAC (pod-reader demo).
+#
+# pod-reader SA + Role + RoleBinding — artifact RBAC minh hoạ "Pod dùng SA token
+# list Pod trong namespace qua API". Role chỉ get/list/watch (đọc), scope ns stock.
+# Verify: `kubectl auth can-i list pods --as=system:serviceaccount:stock:pod-reader -n stock`
+# = yes; cùng lệnh với SA khác (auth-svc) = no → RBAC scope đúng.
+#
+# LƯU Ý: các per-service ServiceAccount (api/auth/prediction/service-mgt/cli, automount
+# =false) ĐÃ CHUYỂN về từng service chart (mỗi chart tự tạo SA của mình). bootstrap
+# chỉ còn giữ pod-reader.
+#
+# Toggle: rbac.enabled (default true).
+# =============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pod-reader
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]      # CHỈ đọc — không create/delete/patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-reader
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: pod-reader
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

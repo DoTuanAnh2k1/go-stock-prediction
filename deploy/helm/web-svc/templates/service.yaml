@@ -1,0 +1,19 @@
+# =============================================================================
+# web-svc — ClusterIP :3000 (gateway route "/" -> web-svc:3000).
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-svc
+  namespace: {{ .Release.Namespace }}
+spec:
+  # Blue/green KINH ĐIỂN: bluegreen bật → selector kèm color=<activeColor> (Service chung trỏ 1 màu).
+  # Cutover = FLIP color; rollback = flip lại. Single mode: chỉ {app}.
+  selector:
+    app: web-svc
+    {{- if .Values.bluegreen.enabled }}
+    color: {{ .Values.bluegreen.activeColor }}
+    {{- end }}
+  ports:
+    - port: 3000
+      targetPort: 3000

@@ -1,0 +1,28 @@
+{{- if .Values.networkPolicy.enabled }}
+# =============================================================================
+# CKAD Lab 4.3 — NetworkPolicy Isolation (single-target: db).
+#
+# Policy này TÁCH RIÊNG về chart db vì db là podSelector target duy nhất của nó.
+# Default-deny + các policy multi-target nằm ở chart bootstrap. Khi bật demo netpol
+# PHẢI set --set networkPolicy.enabled=true cho CẢ bootstrap và db — nếu chỉ bật
+# bootstrap (default-deny) mà thiếu allow-db thì db treo (backend không connect được).
+#
+# db chỉ nhận từ backend (api/auth/prediction/service-mgt) + CronJob pipeline (app:
+# pipeline — chạy image prediction-svc qua jobs_cli, cần db để crawl/predict/reconcile
+# + pg_dump backup) trên :5432. CronJob pod chỉ có label auto job-name → PHẢI gắn thêm
+# app: pipeline ở pod template (chart cronjobs) nếu không default-deny chặn → wait-db treo.
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backends-to-db
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: { matchLabels: { app: db } }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: { matchExpressions: [{ key: app, operator: In, values: ["api-svc","auth-svc","prediction-svc","service-mgt","pipeline"] }] }
+      ports:
+        - { protocol: TCP, port: 5432 }
+{{- end }}

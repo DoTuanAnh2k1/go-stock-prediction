@@ -1,0 +1,11 @@
+# =============================================================================
+# pgadmin — email đăng nhập (không nhạy cảm). Tùy chọn, chỉ để quản trị DB.
+# Cài-hay-không thay cho toggle: chỉ `helm install pgadmin` khi cần.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgadmin-config
+  namespace: {{ .Release.Namespace }}
+data:
+  PGADMIN_DEFAULT_EMAIL: admin@local.dev

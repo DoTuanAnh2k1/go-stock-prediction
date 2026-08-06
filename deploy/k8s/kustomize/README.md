@@ -1,7 +1,8 @@
 # App-level Kustomize — CKAD P5 (image api-svc thật)
 
 Minh hoạ kỹ năng Kustomize **base + overlay** (§4.2 P5) trên **image `api-svc` thật**,
-song song với Helm umbrella (`deploy/helm/stock/`). Khác lab `day_2/kustomize/` (dùng nginx demo).
+song song với các Helm chart per-service (`deploy/helm/<svc>/`, ví dụ `deploy/helm/api-svc/`).
+Khác lab `day_2/kustomize/` (dùng nginx demo).
 
 ```
 base/                 name=api-kz · replicas=2 · image=api-svc:dev · KHÔNG namespace

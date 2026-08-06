@@ -1,0 +1,12 @@
+# gateway-svc — chart độc lập, self-contained values (không còn global: của umbrella).
+replicas: 2
+imageTag: dev
+image: gateway-svc
+bluegreen: { enabled: true }
+hpa:
+  enabled: false
+  gatewaySvc: { minReplicas: 2, maxReplicas: 5, targetCPU: 60 }
+ingress:
+  enabled: false
+  className: nginx
+  host: stock.local

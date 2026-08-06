@@ -1,0 +1,8 @@
+# Cấu hình self-contained cho prediction-svc (chart độc lập, không còn global: của umbrella).
+replicas: 2
+imageTag: dev
+image: prediction-svc
+secrets:
+  postgresPassword: "123"
+  s3AccessKey: minioadmin
+  s3SecretKey: minioadmin123

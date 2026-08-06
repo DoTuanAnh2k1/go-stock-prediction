@@ -1,0 +1,51 @@
+{{- if .Values.quota.enabled }}
+# =============================================================================
+# CKAD Lab 3.4 — Namespace Quotas: LimitRange + ResourceQuota cho ns stock (THẬT).
+#
+# LimitRange (stock-defaults): tiêm default request/limit vào container KHÔNG khai
+#   resources (init wait-db, CronJob pod, pod demo...) → chúng luôn có requests →
+#   thỏa ResourceQuota. `max` = trần/​container (guard). BẮT BUỘC đi kèm ResourceQuota:
+#   nếu chỉ có quota mà pod thiếu requests → quota REJECT; LimitRange vá lỗ đó.
+#
+# ResourceQuota (stock-quota): trần TỔNG toàn ns. Size ~2.5–3x mức đang dùng
+#   (đo lúc set: requests 2.25 core/3.75Gi, limits 13.2 core/11Gi, 26 pod) để KHÔNG
+#   chặn rollout (surge) hay blue/green. Vượt trần → pod mới bị API server từ chối
+#   (forbidden: exceeded quota) — xem lab.md phần demo reject.
+#
+# Toggle: quota.enabled (default true) — tắt: --set quota.enabled=false
+# =============================================================================
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: stock-defaults
+  namespace: {{ .Release.Namespace }}
+  labels: { app.kubernetes.io/managed-by: helm }
+spec:
+  limits:
+    - type: Container
+      default:              # LIMIT mặc định khi container không khai
+        cpu: "250m"
+        memory: "256Mi"
+      defaultRequest:       # REQUEST mặc định khi container không khai (thỏa quota)
+        cpu: "50m"
+        memory: "64Mi"
+      max:                  # trần mỗi container — trên mức lớn nhất hiện có (prediction 1500m/2Gi)
+        cpu: "2"
+        memory: "3Gi"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: stock-quota
+  namespace: {{ .Release.Namespace }}
+  labels: { app.kubernetes.io/managed-by: helm }
+spec:
+  hard:
+    requests.cpu: "6"          # ~2.7x mức requests hiện tại (2.25 core)
+    requests.memory: 10Gi      # ~2.7x (3.75Gi)
+    limits.cpu: "30"           # ~2.3x (13.2 core) — cap, không phải reservation
+    limits.memory: 24Gi        # ~2.2x (11Gi)
+    pods: "60"                 # hiện 26 pod (blue/green + CronJob spike)
+    persistentvolumeclaims: "12"
+    services: "40"
+{{- end }}

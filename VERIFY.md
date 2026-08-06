@@ -17,7 +17,7 @@
 | **CKAD day labs 1–5** | [`deploy/k8s/ckad-labs/`](deploy/k8s/ckad-labs/) | `day_1..day_5/` each has `run-dayN.sh` + `lab.md`; `DEMO.md` runbook; `index.html` viewer |
 | **§4 checklist** (req → resource → verify) | [`docs/ckad-checklist.md`](docs/ckad-checklist.md) | maps every mandatory item |
 | **Capstone requirements** | [`deploy/k8s/ckad-labs/capstone-requirements.md`](deploy/k8s/ckad-labs/capstone-requirements.md) | the graded spec |
-| **Helm umbrella chart** | [`deploy/helm/stock/`](deploy/helm/stock/) | 12 subcharts; toggles in `values.yaml` |
+| **Helm per-service charts** | [`deploy/helm/`](deploy/helm/) | one chart per service + `common` (library) + `bootstrap` (ns governance) + `cronjobs`; per-chart `values.yaml` |
 | **Kustomize (P5)** | [`deploy/k8s/kustomize/`](deploy/k8s/kustomize/) | base + overlays dev/prod |
 | **Design / Implementation** | [`DESIGN.md`](DESIGN.md) · [`IMPLEMENTATION.md`](IMPLEMENTATION.md) | architecture + code map |
 
@@ -97,7 +97,7 @@ kubectl get hpa,ingress,netpol -n stock          # P4/N3/N4
 kubectl get resourcequota,limitrange -n stock    # C5
 kubectl auth can-i list pods --as=system:serviceaccount:stock:pod-reader -n stock   # C4 → yes
 kubectl get pvc -n stock                         # D5
-helm history stock -n stock                      # P6
+helm history api-svc -n stock                    # P6 — per-chart upgrade/rollback trail
 # Ingress from host (add "stock.local" resolves to 127.0.0.1, or use --resolve):
 curl -H 'Host: stock.local' http://localhost/api/version   # → 200 (api-svc)
 curl -H 'Host: stock.local' http://localhost/              # → 200 (web-svc)
@@ -121,7 +121,7 @@ The checklist is language-neutral (codes + `kubectl`) and shared by both section
 | **P3** | Blue/green (or canary) | ✅ | flip `svc/api-svc` selector color |
 | **P4** | HPA | ✅ | `kubectl get hpa -n stock` (3, live CPU%) |
 | **P5** | Kustomize base + overlay | ✅ | `deploy/k8s/kustomize/` dev(1)/prod(5, tag v2) |
-| **P6** | Helm upgrade + rollback | ✅ | `helm history stock -n stock` |
+| **P6** | Helm upgrade + rollback | ✅ | per-chart, e.g. `helm history api-svc -n stock` |
 | **C1** | ConfigMap injected | ✅ | `kubectl get cm -n stock` |
 | **C2** | Secret (no plaintext in git) | ✅ | `kubectl get secret -n stock`; real secrets via `values-secret.yaml` (gitignored) |
 | **C3** | SecurityContext lockdown | ✅ | `runAsNonRoot`+`allowPrivilegeEscalation:false`+drop `ALL` |
@@ -133,14 +133,45 @@ The checklist is language-neutral (codes + `kubectl`) and shared by both section
 | **N3** | Ingress ≥2 rules | ✅ | `/api`→api-svc, `/`→web-svc — both 200 from host |
 | **N4** | NetworkPolicy | ✅ | 5 policies (default-deny + allow-graph); kindnet enforces |
 | **N5** | No orphan endpoints | ✅ | `kubectl get endpoints -n stock` (no `<none>`) |
-| **O1** | Liveness probe | ✅ | every long-running Deployment |
-| **O2** | Readiness probe | ✅ | every long-running Deployment |
-| **O3** | Startup probe (slow start) | ✅ | prediction-svc `failureThreshold:30` (torch ~150s) |
+| **O1** | Liveness probe | ✅ | every long-running Deployment (incl. web-svc httpGet `/`, cli-svc tcp:2345, pgadmin tcp:80) |
+| **O2** | Readiness probe | ✅ | every long-running Deployment (incl. cli-svc tcp:2345, pgadmin `/misc/ping`) |
+| **O3** | Startup probe (slow start) | ✅ | prediction-svc `failureThreshold:30` (torch ~150s); pgadmin `failureThreshold:48` (init ~90s); auth-svc |
 | **O4** | Debug runbook | ✅ | README "Debug runbook (O4)" |
 | **O5** | Current stable APIs | ✅ | `apps/v1`, `networking.k8s.io/v1`, `autoscaling/v2` |
 
 **Automatic-fail conditions:** all cleared — ≥3 independent services, real K8s Deployments
-(not compose-only), no plaintext secrets in git, Ingress + NodePort exposure, Pods Ready in `stock`.
+(not compose-only), no plaintext Secret manifests in git, Ingress + NodePort exposure, Pods Ready in `stock`.
+
+### 15-Factor App checklist (Beyond the Twelve-Factor App)
+
+Design doc: [`docs/superpowers/specs/2026-07-16-15-factor-cloud-native-design.md`](docs/superpowers/specs/2026-07-16-15-factor-cloud-native-design.md).
+Compliance **14/15** — factor 15 (secrets) deliberately kept as dev-defaults for education.
+
+| # | Factor | ✔ | Where / verify |
+|---|--------|---|----------------|
+| 1 | One codebase, one app | ✅ | monorepo, 1 image per service (`deploy/*.Dockerfile`) |
+| 2 | API first | ✅ | 6 `.proto` contracts + REST + Swagger + gateway routing |
+| 3 | Dependency management | ✅ | go.mod / pyproject / pom.xml / Cargo.toml; multi-stage builds |
+| 4 | Design, build, release, run | ✅ | image tags + `GIT_SHA` baked; per-chart Helm release + rollback |
+| 5 | Config, credentials, code | ◑ | config externalized (ConfigMap/Secret/env) ✅; **credentials = factor 15 gap** |
+| 6 | Logs | ✅ | structured 1-line stdout + `log-sidecar` |
+| 7 | Disposability | ✅ | startup probe + `preStop` + graceful SIGTERM |
+| 8 | Backing services | ✅ | DB/MinIO/service-mgt via env+DNS; `MODEL_STORE_BACKEND` swap local↔s3 |
+| 9 | Environment parity | ✅ | compose ≈ k8s (scheduler unification; same images) |
+| 10 | Administrative processes | ✅ | `jobs_cli` CronJobs + backup + one-off Job |
+| 11 | Port binding | ✅ | each service self-binds; nginx ambassador |
+| 12 | Stateless processes | ✅ | prediction-svc checkpoint→MinIO, `replicas: 2`, `/models` emptyDir |
+| 13 | Concurrency | ✅ | replicas + HPA (api-svc/gateway-svc) + per-symbol workers |
+| 14 | Telemetry | ✅ | OTel traces (6 svc) + Prometheus metrics + Grafana/Tempo + business metrics |
+| 15 | AuthN/AuthZ + Secrets | ◑ | Auth/RBAC strong (Java auth, JWT, per-svc SA, NetworkPolicy) — but secret **default creds committed** in chart `values.yaml`; production override via gitignored `deploy/helm/secrets.yaml`. Close by emptying defaults + forcing override |
+
+```bash
+# quick 15-factor spot-checks
+kubectl get cm,secret -n stock                                  # 5: config externalized
+kubectl exec <prediction-pod> -n stock -c prediction-svc -- env | grep MODEL_STORE   # 8: backing svc swap
+kubectl get deploy prediction-svc -n stock -o jsonpath='{.spec.replicas}'   # 12: stateless (2)
+curl -s http://172.21.0.2:30300/api/health                      # 14: Grafana/telemetry up
+```
 
 ## 3. Run the CKAD day labs (1–5)
 
