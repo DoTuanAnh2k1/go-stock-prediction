@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1bprediction/prediction.proto\x12\nprediction\"\x07\n\x05\x45mpty\"B\n\x0fTriggerResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t\"(\n\x13TriggerTrainRequest\x12\x11\n\talgorithm\x18\x01 \x01(\t\"[\n\x14TriggerTrainResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\x12\r\n\x05\x65rror\x18\x04 \x01(\t\"N\n\x0f\x42\x61\x63ktestRequest\x12\x14\n\x0ctrain_window\x18\x01 \x01(\x05\x12\x11\n\tstep_size\x18\x02 \x01(\x05\x12\x12\n\nmarket_key\x18\x03 \x01(\t\"\x9f\x01\n\x16TrainingStatusResponse\x12\x13\n\x0bis_training\x18\x01 \x01(\x08\x12\x14\n\x0clast_trained\x18\x02 \x01(\t\x12\x10\n\x08progress\x18\x03 \x01(\x01\x12\x15\n\rcurrent_phase\x18\x04 \x01(\t\x12\x18\n\x10total_algorithms\x18\x05 \x01(\x05\x12\x17\n\x0f\x64one_algorithms\x18\x06 \x01(\x05\"I\n\x11SimulationRequest\x12\x0e\n\x06\x62ot_id\x18\x01 \x01(\t\x12\x12\n\nstart_date\x18\x02 \x01(\t\x12\x10\n\x08\x65nd_date\x18\x03 \x01(\t\"]\n\x10PipelineLogEvent\x12\r\n\x05level\x18\x01 \x01(\t\x12\x0b\n\x03msg\x18\x02 \x01(\t\x12\x10\n\x08progress\x18\x03 \x01(\x02\x12\x0c\n\x04\x64one\x18\x04 \x01(\x08\x12\r\n\x05\x65rror\x18\x05 \x01(\t\">\n\x14RebuildReplayRequest\x12\x13\n\x0b\x63utoff_date\x18\x01 \x01(\t\x12\x11\n\tstep_size\x18\x02 \x01(\x05\x32\xf7\x0c\n\x11PredictionService\x12\x44\n\x12TriggerGoldCrawler\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12Q\n\x0cTriggerTrain\x12\x1f.prediction.TriggerTrainRequest\x1a .prediction.TriggerTrainResponse\x12\x42\n\x10TriggerReconcile\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x44\n\x12TriggerGoldHistory\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x44\n\x12TriggerGoldPredict\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12U\n\x19TriggerHistoricalBacktest\x12\x1b.prediction.BacktestRequest\x1a\x1b.prediction.TriggerResponse\x12J\n\x11GetTrainingStatus\x12\x11.prediction.Empty\x1a\".prediction.TrainingStatusResponse\x12\x46\n\x14TriggerNasdaqCrawler\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x46\n\x14TriggerNasdaqPredict\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x46\n\x14TriggerCryptoCrawler\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x46\n\x14TriggerCryptoPredict\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x46\n\x14TriggerCryptoHistory\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x45\n\x13TriggerSP500Crawler\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x45\n\x13TriggerSP500Predict\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12W\n\x19TriggerSimulationBacktest\x12\x1d.prediction.SimulationRequest\x1a\x1b.prediction.TriggerResponse\x12K\n\x19TriggerSimulationLiveStep\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12>\n\x0cResetSimBots\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x46\n\x11StreamGoldPredict\x12\x11.prediction.Empty\x1a\x1c.prediction.PipelineLogEvent0\x01\x12H\n\x13StreamNasdaqPredict\x12\x11.prediction.Empty\x1a\x1c.prediction.PipelineLogEvent0\x01\x12H\n\x13StreamCryptoPredict\x12\x11.prediction.Empty\x1a\x1c.prediction.PipelineLogEvent0\x01\x12G\n\x12StreamSP500Predict\x12\x11.prediction.Empty\x1a\x1c.prediction.PipelineLogEvent0\x01\x12U\n\x14TriggerRebuildReplay\x12 .prediction.RebuildReplayRequest\x1a\x1b.prediction.TriggerResponseB&Z$go-stock-prediction/proto/predictionb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1bprediction/prediction.proto\x12\nprediction\"3\n\x0cQueryRequest\x12\x0e\n\x06method\x18\x01 \x01(\t\x12\x13\n\x0bparams_json\x18\x02 \x01(\t\"3\n\rQueryResponse\x12\x13\n\x0bresult_json\x18\x01 \x01(\t\x12\r\n\x05\x65rror\x18\x02 \x01(\t\"\x07\n\x05\x45mpty\"B\n\x0fTriggerResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t\"(\n\x13TriggerTrainRequest\x12\x11\n\talgorithm\x18\x01 \x01(\t\"[\n\x14TriggerTrainResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\x12\r\n\x05\x65rror\x18\x04 \x01(\t\"N\n\x0f\x42\x61\x63ktestRequest\x12\x14\n\x0ctrain_window\x18\x01 \x01(\x05\x12\x11\n\tstep_size\x18\x02 \x01(\x05\x12\x12\n\nmarket_key\x18\x03 \x01(\t\"\x9f\x01\n\x16TrainingStatusResponse\x12\x13\n\x0bis_training\x18\x01 \x01(\x08\x12\x14\n\x0clast_trained\x18\x02 \x01(\t\x12\x10\n\x08progress\x18\x03 \x01(\x01\x12\x15\n\rcurrent_phase\x18\x04 \x01(\t\x12\x18\n\x10total_algorithms\x18\x05 \x01(\x05\x12\x17\n\x0f\x64one_algorithms\x18\x06 \x01(\x05\"I\n\x11SimulationRequest\x12\x0e\n\x06\x62ot_id\x18\x01 \x01(\t\x12\x12\n\nstart_date\x18\x02 \x01(\t\x12\x10\n\x08\x65nd_date\x18\x03 \x01(\t\"]\n\x10PipelineLogEvent\x12\r\n\x05level\x18\x01 \x01(\t\x12\x0b\n\x03msg\x18\x02 \x01(\t\x12\x10\n\x08progress\x18\x03 \x01(\x02\x12\x0c\n\x04\x64one\x18\x04 \x01(\x08\x12\r\n\x05\x65rror\x18\x05 \x01(\t\">\n\x14RebuildReplayRequest\x12\x13\n\x0b\x63utoff_date\x18\x01 \x01(\t\x12\x11\n\tstep_size\x18\x02 \x01(\x05\x32\xb5\r\n\x11PredictionService\x12\x44\n\x12TriggerGoldCrawler\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12Q\n\x0cTriggerTrain\x12\x1f.prediction.TriggerTrainRequest\x1a .prediction.TriggerTrainResponse\x12\x42\n\x10TriggerReconcile\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x44\n\x12TriggerGoldHistory\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x44\n\x12TriggerGoldPredict\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12U\n\x19TriggerHistoricalBacktest\x12\x1b.prediction.BacktestRequest\x1a\x1b.prediction.TriggerResponse\x12J\n\x11GetTrainingStatus\x12\x11.prediction.Empty\x1a\".prediction.TrainingStatusResponse\x12\x46\n\x14TriggerNasdaqCrawler\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x46\n\x14TriggerNasdaqPredict\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x46\n\x14TriggerCryptoCrawler\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x46\n\x14TriggerCryptoPredict\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x46\n\x14TriggerCryptoHistory\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x45\n\x13TriggerSP500Crawler\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x45\n\x13TriggerSP500Predict\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12W\n\x19TriggerSimulationBacktest\x12\x1d.prediction.SimulationRequest\x1a\x1b.prediction.TriggerResponse\x12K\n\x19TriggerSimulationLiveStep\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12>\n\x0cResetSimBots\x12\x11.prediction.Empty\x1a\x1b.prediction.TriggerResponse\x12\x46\n\x11StreamGoldPredict\x12\x11.prediction.Empty\x1a\x1c.prediction.PipelineLogEvent0\x01\x12H\n\x13StreamNasdaqPredict\x12\x11.prediction.Empty\x1a\x1c.prediction.PipelineLogEvent0\x01\x12H\n\x13StreamCryptoPredict\x12\x11.prediction.Empty\x1a\x1c.prediction.PipelineLogEvent0\x01\x12G\n\x12StreamSP500Predict\x12\x11.prediction.Empty\x1a\x1c.prediction.PipelineLogEvent0\x01\x12U\n\x14TriggerRebuildReplay\x12 .prediction.RebuildReplayRequest\x1a\x1b.prediction.TriggerResponse\x12<\n\x05Query\x12\x18.prediction.QueryRequest\x1a\x19.prediction.QueryResponseB&Z$go-stock-prediction/proto/predictionb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,24 +32,28 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'prediction.prediction_pb2',
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z$go-stock-prediction/proto/prediction'
-  _globals['_EMPTY']._serialized_start=43
-  _globals['_EMPTY']._serialized_end=50
-  _globals['_TRIGGERRESPONSE']._serialized_start=52
-  _globals['_TRIGGERRESPONSE']._serialized_end=118
-  _globals['_TRIGGERTRAINREQUEST']._serialized_start=120
-  _globals['_TRIGGERTRAINREQUEST']._serialized_end=160
-  _globals['_TRIGGERTRAINRESPONSE']._serialized_start=162
-  _globals['_TRIGGERTRAINRESPONSE']._serialized_end=253
-  _globals['_BACKTESTREQUEST']._serialized_start=255
-  _globals['_BACKTESTREQUEST']._serialized_end=333
-  _globals['_TRAININGSTATUSRESPONSE']._serialized_start=336
-  _globals['_TRAININGSTATUSRESPONSE']._serialized_end=495
-  _globals['_SIMULATIONREQUEST']._serialized_start=497
-  _globals['_SIMULATIONREQUEST']._serialized_end=570
-  _globals['_PIPELINELOGEVENT']._serialized_start=572
-  _globals['_PIPELINELOGEVENT']._serialized_end=665
-  _globals['_REBUILDREPLAYREQUEST']._serialized_start=667
-  _globals['_REBUILDREPLAYREQUEST']._serialized_end=729
-  _globals['_PREDICTIONSERVICE']._serialized_start=732
-  _globals['_PREDICTIONSERVICE']._serialized_end=2387
+  _globals['_QUERYREQUEST']._serialized_start=43
+  _globals['_QUERYREQUEST']._serialized_end=94
+  _globals['_QUERYRESPONSE']._serialized_start=96
+  _globals['_QUERYRESPONSE']._serialized_end=147
+  _globals['_EMPTY']._serialized_start=149
+  _globals['_EMPTY']._serialized_end=156
+  _globals['_TRIGGERRESPONSE']._serialized_start=158
+  _globals['_TRIGGERRESPONSE']._serialized_end=224
+  _globals['_TRIGGERTRAINREQUEST']._serialized_start=226
+  _globals['_TRIGGERTRAINREQUEST']._serialized_end=266
+  _globals['_TRIGGERTRAINRESPONSE']._serialized_start=268
+  _globals['_TRIGGERTRAINRESPONSE']._serialized_end=359
+  _globals['_BACKTESTREQUEST']._serialized_start=361
+  _globals['_BACKTESTREQUEST']._serialized_end=439
+  _globals['_TRAININGSTATUSRESPONSE']._serialized_start=442
+  _globals['_TRAININGSTATUSRESPONSE']._serialized_end=601
+  _globals['_SIMULATIONREQUEST']._serialized_start=603
+  _globals['_SIMULATIONREQUEST']._serialized_end=676
+  _globals['_PIPELINELOGEVENT']._serialized_start=678
+  _globals['_PIPELINELOGEVENT']._serialized_end=771
+  _globals['_REBUILDREPLAYREQUEST']._serialized_start=773
+  _globals['_REBUILDREPLAYREQUEST']._serialized_end=835
+  _globals['_PREDICTIONSERVICE']._serialized_start=838
+  _globals['_PREDICTIONSERVICE']._serialized_end=2555
 # @@protoc_insertion_point(module_scope)

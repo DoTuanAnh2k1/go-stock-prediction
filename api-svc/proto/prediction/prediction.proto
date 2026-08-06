@@ -56,6 +56,22 @@ service PredictionService {
   // from cutoff+1 → today (out-of-sample), retrain meta, replay bots.
   // Runs in background; returns immediately (202-style).
   rpc TriggerRebuildReplay(RebuildReplayRequest) returns (TriggerResponse);
+
+  // Query — generic read facade so api-svc can be DB-less. api-svc's gRPC-backed
+  // DatabaseStore serializes params to JSON, calls Query(method, params_json), and
+  // unmarshals result_json back into the Go model types (json tags = DB columns).
+  // prediction-svc owns market_db and dispatches by method name.
+  rpc Query(QueryRequest) returns (QueryResponse);
+}
+
+message QueryRequest {
+  string method = 1;       // DatabaseStore method name, e.g. "GetLatestGoldPrices"
+  string params_json = 2;  // JSON object of named params, e.g. {"limit":10}
+}
+
+message QueryResponse {
+  string result_json = 1;  // JSON matching the Go return type (Decimal as string, time RFC3339 +07:00)
+  string error = 2;        // non-empty on failure
 }
 
 message Empty {}

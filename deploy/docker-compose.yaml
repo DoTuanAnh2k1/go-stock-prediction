@@ -208,12 +208,9 @@ services:
       GRPC_TARGET: "prediction-svc:8119"
       SERVICE_MGT_ENABLED: "${SERVICE_MGT_ENABLED:-false}"
       REGISTRY_GRPC_TARGET: "service-mgt:8121"
-      DB_DRIVER: postgresql
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: api_svc
-      POSTGRES_PASSWORD: ${API_DB_PASSWORD:?set API_DB_PASSWORD in .env}
-      POSTGRES_DB: market_db
+      # Phase 2 — api-svc is DB-less: reads via prediction-svc gRPC (DB_DRIVER=grpc),
+      # holds no Postgres credentials.
+      DB_DRIVER: grpc
       POSTGRES_DEBUG: "${POSTGRES_DEBUG:-false}"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
       DB_LOG_LEVEL: "${DB_LOG_LEVEL:-WARN}"
