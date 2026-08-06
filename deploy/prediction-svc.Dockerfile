@@ -71,7 +71,7 @@ COPY prediction-svc/pyproject.toml pyproject.toml
 # timeout khi tải. Sau đó `-e .[ml]` thấy torch>=2.5.0 đã thỏa → không tải lại.
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --timeout 120 --retries 10 torch --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --timeout 120 --retries 10 -e ".[dev,ml,observability,s3]"
+    pip install --timeout 120 --retries 10 -e ".[dev,ml,observability,s3,kafka]"
 
 # Copy pre-generated proto stubs (committed to repo alongside prediction.proto)
 # To regenerate: python -m grpc_tools.protoc -Iapi-svc/proto --python_out=prediction-svc/src/proto

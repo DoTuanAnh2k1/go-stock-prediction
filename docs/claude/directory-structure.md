@@ -302,6 +302,8 @@ deploy/
 │   ├── minio/                   # templates/minio.yaml — Secret+PVC+Deployment+Service+createbucket Job (bucket models). secrets{minioRootUser,minioRootPassword}
 │   ├── pgadmin/                 # {deployment,configmap,secret,service} — cài-hay-không (bỏ toggle enabled). secrets{pgadminPassword}
 │   ├── cronjobs/                # cronjob-{gold,nasdaq,crypto,sp500,train,weekly,backup,simulation}.yaml + job-manual.yaml (gated `.Values.manualJob.enabled`). imageTag, image=prediction-svc
+│   ├── kafka/                   # Zookeeper StatefulSet + Kafka StatefulSet + Services + topic-init Job (3 topics). Cài riêng khi KAFKA_ENABLED=true
+│   ├── kafka-consumers/         # 3 Deployment (predict-consumer/reconcile-consumer/simulation-consumer); image=prediction-svc; gated `--set enabled=true`
 │   └── observability/           # Chart ns observability — vòng đời độc lập
 │       ├── Chart.yaml
 │       ├── values.yaml

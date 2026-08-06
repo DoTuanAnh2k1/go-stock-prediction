@@ -337,6 +337,204 @@ services:
     networks:
       - app-network
 
+  # ---------------------------------------------------------------------------
+  # Kafka infrastructure (optional — only started with: --profile kafka)
+  # Broker address on the compose network: kafka:9092
+  # Enable: docker compose --env-file .env -f deploy/docker-compose.yaml --profile kafka up -d
+  # ---------------------------------------------------------------------------
+  zookeeper:
+    image: bitnami/zookeeper:3.9
+    container_name: zookeeper
+    profiles: ["kafka"]
+    restart: unless-stopped
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: "yes"
+      ZOO_SERVER_ID: "1"
+    healthcheck:
+      test: ["CMD-SHELL", "zkServer.sh status 2>/dev/null | grep -E 'Mode: (standalone|leader|follower)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    volumes:
+      - zookeeper_data:/bitnami/zookeeper
+    networks:
+      - app-network
+
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: kafka
+    profiles: ["kafka"]
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      # Classic Zookeeper mode (KAFKA_CFG_PROCESS_ROLES not set = ZK mode)
+      KAFKA_CFG_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_CFG_LISTENERS: "PLAINTEXT://:9092,EXTERNAL://:9094"
+      # Inside the compose network all services reach kafka:9092.
+      # localhost:9094 is the optional external listener for tooling on the host.
+      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      # Disable auto topic creation — kafka-init creates them explicitly
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # Single broker
+      KAFKA_CFG_DEFAULT_REPLICATION_FACTOR: "1"
+      KAFKA_CFG_MIN_INSYNC_REPLICAS: "1"
+      KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    ports:
+      - "9092:9092"       # internal compose listener
+      - "9094:9094"       # optional host access (tools / debugging)
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 40s
+    volumes:
+      - kafka_data:/bitnami/kafka
+    networks:
+      - app-network
+
+  kafka-init:
+    image: bitnami/kafka:3.7
+    container_name: kafka-init
+    profiles: ["kafka"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        BROKER="kafka:9092"
+        echo "creating topics (--if-not-exists, idempotent) ..."
+        for TOPIC in market.crawled predictions.ready predictions.reconciled; do
+          kafka-topics.sh \
+            --bootstrap-server "$${BROKER}" \
+            --create \
+            --if-not-exists \
+            --topic "$${TOPIC}" \
+            --partitions 4 \
+            --replication-factor 1
+          echo "topic $${TOPIC} OK"
+        done
+        echo "listing topics:"
+        kafka-topics.sh --bootstrap-server "$${BROKER}" --list
+        echo "done"
+    networks:
+      - app-network
+
+  # ---------------------------------------------------------------------------
+  # Kafka consumers — event-driven pipeline mode (optional — profile kafka).
+  # Start together with Kafka infra:
+  #   docker compose --env-file .env -f deploy/docker-compose.yaml --profile kafka up -d
+  # Each consumer calls prediction-svc business logic that hits market_db, and
+  # consumes / produces Kafka topics (market.crawled → predictions.ready → ...).
+  # ---------------------------------------------------------------------------
+  predict-consumer:
+    build:
+      context: ..
+      dockerfile: deploy/prediction-svc.Dockerfile
+    container_name: predict-consumer
+    profiles: ["kafka"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["python", "-m", "src.events.consumers.predict"]
+    environment:
+      KAFKA_ENABLED: "true"
+      KAFKA_BROKERS: "kafka:9092"
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: prediction_svc
+      POSTGRES_PASSWORD: ${MARKET_DB_PASSWORD:?set MARKET_DB_PASSWORD in .env}
+      POSTGRES_DB: market_db
+      POSTGRES_DEBUG: "${POSTGRES_DEBUG:-false}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      LOG_FORMAT: "${LOG_FORMAT:-console}"
+      RL_MODEL_DIR: "${RL_MODEL_DIR:-/models}"
+      SCHEDULER_ENABLED: "false"
+      TZ: "Asia/Ho_Chi_Minh"
+    volumes:
+      - rl_models:/models
+    networks:
+      - app-network
+
+  reconcile-consumer:
+    build:
+      context: ..
+      dockerfile: deploy/prediction-svc.Dockerfile
+    container_name: reconcile-consumer
+    profiles: ["kafka"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["python", "-m", "src.events.consumers.reconcile"]
+    environment:
+      KAFKA_ENABLED: "true"
+      KAFKA_BROKERS: "kafka:9092"
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: prediction_svc
+      POSTGRES_PASSWORD: ${MARKET_DB_PASSWORD:?set MARKET_DB_PASSWORD in .env}
+      POSTGRES_DB: market_db
+      POSTGRES_DEBUG: "${POSTGRES_DEBUG:-false}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      LOG_FORMAT: "${LOG_FORMAT:-console}"
+      RL_MODEL_DIR: "${RL_MODEL_DIR:-/models}"
+      SCHEDULER_ENABLED: "false"
+      TZ: "Asia/Ho_Chi_Minh"
+    volumes:
+      - rl_models:/models
+    networks:
+      - app-network
+
+  simulation-consumer:
+    build:
+      context: ..
+      dockerfile: deploy/prediction-svc.Dockerfile
+    container_name: simulation-consumer
+    profiles: ["kafka"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["python", "-m", "src.events.consumers.simulation"]
+    environment:
+      KAFKA_ENABLED: "true"
+      KAFKA_BROKERS: "kafka:9092"
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: prediction_svc
+      POSTGRES_PASSWORD: ${MARKET_DB_PASSWORD:?set MARKET_DB_PASSWORD in .env}
+      POSTGRES_DB: market_db
+      POSTGRES_DEBUG: "${POSTGRES_DEBUG:-false}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      LOG_FORMAT: "${LOG_FORMAT:-console}"
+      RL_MODEL_DIR: "${RL_MODEL_DIR:-/models}"
+      SCHEDULER_ENABLED: "false"
+      TZ: "Asia/Ho_Chi_Minh"
+    volumes:
+      - rl_models:/models
+    networks:
+      - app-network
+
 networks:
   app-network:
     driver: bridge
@@ -346,6 +544,8 @@ volumes:
   backup_data:
   cli_keys:
   rl_models:
+  kafka_data:
+  zookeeper_data:
   # Shared version stamps — each service writes /versions/<service>.json at startup;
   # api-svc reads them all for GET /api/version. See Makefile (GIT_SHA/BUILD_TIME/GIT_DIRTY).
   version_data:

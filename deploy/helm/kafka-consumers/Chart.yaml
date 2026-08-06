@@ -1,0 +1,9 @@
+apiVersion: v2
+name: kafka-consumers
+description: >
+  Kafka consumer Deployments for event-driven pipeline mode.
+  Three consumers (predict, reconcile, simulation) run from the prediction-svc
+  image and connect to market_db + Kafka. Opt-in chart — install after kafka
+  and prediction-svc are running.
+type: application
+version: 0.1.0

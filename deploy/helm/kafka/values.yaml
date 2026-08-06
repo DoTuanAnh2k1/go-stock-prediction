@@ -1,0 +1,42 @@
+# =============================================================================
+# kafka — single-broker Kafka + single Zookeeper (RF=1, classic ZK mode).
+# Self-contained values (no global:). Designed for kind/single-node clusters.
+#
+# Broker address in-cluster : kafka:9092  (PLAINTEXT)
+# Broker address compose    : kafka:9092  (same service name on compose network)
+# =============================================================================
+
+zookeeper:
+  image: bitnami/zookeeper
+  tag: "3.9"
+  # bitnami/zookeeper listens on 2181; ALLOW_ANONYMOUS_LOGIN=yes for dev
+  port: 2181
+  storage: 1Gi
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "300m"
+      memory: "512Mi"
+
+kafka:
+  image: bitnami/kafka
+  # bitnami/kafka:3.7 ships with Zookeeper support (classic mode, NOT KRaft default)
+  tag: "3.7"
+  port: 9092
+  storage: 2Gi
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "768Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+# Topics created by the post-install Job (--if-not-exists, idempotent).
+# partitions=4, replication-factor=1 (single broker — RF>1 would fail).
+topics:
+  - market.crawled
+  - predictions.ready
+  - predictions.reconciled

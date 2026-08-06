@@ -11,6 +11,8 @@ deploy/helm/
 │                    #   PDBs, netpol default-deny + 3 policy multi-target
 ├── db/              # StatefulSet TimescaleDB + netpol allow-backends-to-db (single-target)
 ├── minio/           # object storage (bucket models)
+├── kafka/           # [OPTIONAL] single-broker Kafka + Zookeeper (RF=1); topics Job; install after db
+├── kafka-consumers/ # [OPTIONAL] 3 consumer Deployments (predict/reconcile/simulation); install after kafka + prediction-svc
 ├── service-mgt/     # gRPC registry
 ├── prediction-svc/  # Python ML/crawl (replicas 2)
 ├── auth-svc/        # Java auth
@@ -58,7 +60,7 @@ make helm-deps      # = helm dependency build cho api/auth/prediction/service-mg
 
 Namespace `stock` phải có TRƯỚC (để tạo `db-schema` ConfigMap — KHÔNG do Helm quản, DB StatefulSet
 mount từ nó). Các chart cài theo THỨ TỰ phụ thuộc:
-`bootstrap → db → minio → service-mgt → prediction-svc → auth-svc → api-svc → gateway-svc → web-svc → cli-svc → pgadmin → cronjobs`.
+`bootstrap → db → minio → [kafka] → [kafka-consumers] → service-mgt → prediction-svc → auth-svc → api-svc → gateway-svc → web-svc → cli-svc → pgadmin → cronjobs`.
 
 ```bash
 # 1) namespace + schema DB (pre-req cho db StatefulSet)
@@ -81,6 +83,50 @@ helm install observability deploy/helm/observability -n observability --create-n
 
 pgAdmin nay là **cài-hay-không** — muốn có thì `helm install pgadmin deploy/helm/pgadmin -n stock`;
 không thì đơn giản bỏ qua (không còn `--set pgadmin.enabled`).
+
+### Kafka (optional — event-driven pipeline)
+
+Chart `kafka/` cài **sau db, trước consumer service**. RF=1, single-broker — thiết kế cho kind cluster. Không phụ thuộc vào chart nào khác trong stack; consumer service sẽ wire `KAFKA_BOOTSTRAP_SERVERS=kafka:9092`.
+
+```bash
+# Install
+helm install kafka deploy/helm/kafka -n stock
+
+# Upgrade (e.g. thêm topic vào values.yaml)
+helm upgrade kafka deploy/helm/kafka -n stock
+
+# Install Kafka consumers (opt-in — event-driven pipeline mode)
+# Requires: kafka + prediction-svc already installed; prediction-config + kafka-consumers-secret available.
+helm install kafka-consumers deploy/helm/kafka-consumers -n stock \
+  -f deploy/helm/kafka-consumers/values-secret.yaml
+
+# Upgrade consumers (e.g. new image)
+helm upgrade kafka-consumers deploy/helm/kafka-consumers -n stock --set imageTag=<sha>
+
+# List topics sau khi Job chạy xong
+kubectl exec -n stock kafka-0 -- \
+  kafka-topics.sh --bootstrap-server kafka:9092 --list
+
+# Console consume topic market.crawled
+kubectl exec -it -n stock kafka-0 -- \
+  kafka-console-consumer.sh --bootstrap-server kafka:9092 \
+    --topic market.crawled --from-beginning
+
+# Uninstall (PVCs giữ lại — xóa tay nếu cần reset data)
+helm uninstall kafka -n stock
+```
+
+**Compose (profile kafka):**
+
+```bash
+# Khởi động chỉ kafka infra (không ảnh hưởng service hiện tại)
+docker compose --env-file .env -f deploy/docker-compose.yaml --profile kafka up -d
+
+# Dừng
+docker compose --env-file .env -f deploy/docker-compose.yaml --profile kafka down
+```
+
+**Broker address:** `kafka:9092` (cả k8s lẫn compose). Topics: `market.crawled`, `predictions.ready`, `predictions.reconciled` (partitions=4, RF=1).
 
 ## Chỉnh sửa về sau (chỉ helm upgrade — per chart)
 
@@ -142,8 +188,8 @@ helm rollback api-svc 1 -n stock                                      # lùi v�
 
 ```bash
 # uninstall từng chart (thứ tự ngược lại tuỳ ý — Helm không ép)
-for c in cronjobs pgadmin cli-svc web-svc gateway-svc api-svc auth-svc prediction-svc service-mgt minio db bootstrap; do
-  helm uninstall $c -n stock
+for c in cronjobs pgadmin cli-svc web-svc gateway-svc api-svc auth-svc prediction-svc service-mgt kafka-consumers kafka minio db bootstrap; do
+  helm uninstall $c -n stock 2>/dev/null || true
 done
 helm uninstall observability -n observability
 kubectl delete configmap db-schema -n stock      # không do Helm quản
@@ -153,7 +199,7 @@ kubectl delete namespace stock observability      # PVC reclaim Delete tự dọ
 ## Verify chart
 
 ```bash
-for c in bootstrap common db minio service-mgt prediction-svc auth-svc api-svc gateway-svc web-svc cli-svc pgadmin cronjobs; do
+for c in bootstrap common db minio kafka kafka-consumers service-mgt prediction-svc auth-svc api-svc gateway-svc web-svc cli-svc pgadmin cronjobs; do
   helm lint deploy/helm/$c
 done
 helm lint deploy/helm/observability

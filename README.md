@@ -60,6 +60,19 @@ Mỗi lần cron job (`crawler_gold`, `crawler_nasdaq`, ...) chạy, hàm `_run_
 4. **Reconcile** — `reconcile_predictions()` chấm hướng cho mọi prediction có `target_date <= now`: lấy giá live mới nhất làm `actual`, so sánh dấu với `predicted`. Frozen-actual guard: nếu giá live chưa thay đổi kể từ lúc entry (`actual == current`), để `NULL` (pending) thay vì chấm sai — tránh batch bị chấm 0% do đóng phiên sau target hoặc crawl trễ trên bảng daily-live.
 5. **Ghi pipeline report** — 1 row vào `pipeline_reports`, retention tự động 7 ngày.
 
+**Hai chế độ chạy pipeline (toggle `KAFKA_ENABLED`):**
+
+- **Tuần tự (mặc định, `KAFKA_ENABLED=false`)** — `_run_pipeline` chạy cả 5 bước trên **trong một tiến trình**, theo thứ tự, do cron/ofelia/CronJob kích hoạt. Đơn giản, không cần broker.
+- **Event-driven qua Kafka (`KAFKA_ENABLED=true`)** — pipeline được **tách thành producer/consumer decoupled** (async pub/sub thật). Cron chỉ **crawl (+train mỗi 10 lần)** rồi **publish event `market.crawled`** và dừng; các bước sau do consumer độc lập xử lý bất đồng bộ:
+
+  ```
+  crawl  ──▶ market.crawled ──▶ predict-consumer   ──▶ predictions.ready
+                                predictions.ready  ──▶ reconcile-consumer   (chấm hướng)
+                                predictions.ready  ──▶ simulation-consumer  (bot trading)
+  ```
+
+  Mỗi consumer là một Deployment/service riêng → **scale độc lập, retry, replay** (at-least-once, mỗi message một `request_id` xuyên suốt). Đây là nghiệp vụ **giống hệt** chế độ tuần tự — chỉ khác cách điều phối (event thay vì gọi hàm trực tiếp). Chi tiết topic/triển khai: xem mục [Pipeline event-driven Kafka](#pipeline-event-driven-kafka-tùy-chọn).
+
 ### Direction accuracy
 
 Cột `direction_correct` (`NULL` | `true` | `false`) trong cả 4 bảng prediction:
@@ -703,7 +716,7 @@ Hệ thống tuân theo The Twelve-Factor App methodology và mở rộng thêm 
 
 **III. Config** — Mọi config qua env var. Compose dùng `.env` + `--env-file`. K8s dùng ConfigMap (non-secret) + Secret (credential). Không có secret nào hardcode trong image — Helm `required` guards fail-fast nếu để trống. `SUPER_ADMIN_PASSWORD` trống → auth-svc từ chối khởi động.
 
-**IV. Backing services** — Postgres, MinIO, OTel Collector đều là attached resource có thể swap qua env. `MODEL_STORE_BACKEND=local|s3` chuyển đổi giữa Docker volume và MinIO không cần sửa code. `GRPC_TARGET`, `AUTH_GRPC_TARGET` cho phép trỏ sang địa chỉ bất kỳ.
+**IV. Backing services** — Postgres, MinIO, OTel Collector, và Kafka đều là attached resource có thể swap qua env. `MODEL_STORE_BACKEND=local|s3` chuyển đổi giữa Docker volume và MinIO không cần sửa code. `GRPC_TARGET`, `AUTH_GRPC_TARGET` cho phép trỏ sang địa chỉ bất kỳ. Kafka là backing service tùy chọn: `KAFKA_ENABLED=true` kích hoạt broker `KAFKA_BROKERS` (mặc định `kafka:9092`) như message bus cho pipeline event-driven; `false` = Kafka không được dùng, không crash.
 
 **V. Build / Release / Run** — Multi-stage Dockerfile (proto-builder → slim runtime cho prediction-svc; builder → distroless/gcr cho Go). Helm release versioned theo `imageTag` (git SHA từ `make`). Run là container bất biến; không patch in-place.
 
@@ -711,7 +724,7 @@ Hệ thống tuân theo The Twelve-Factor App methodology và mở rộng thêm 
 
 **VII. Port binding** — Mỗi service bind port riêng và expose qua Service k8s hoặc Compose port mapping. `gateway-svc` là edge proxy duy nhất nhận traffic public (`:80`/`:443`). `cli-svc` SSH `:2345` expose trực tiếp (gateway không hỗ trợ SSH). Không service nào assume mình chạy trên port cố định trong code — tất cả đọc từ env.
 
-**VIII. Concurrency** — Scale out theo replica (HPA trên `api-svc` và `gateway-svc`). Batch workload (train, crawl, reconcile) chạy qua k8s CronJob hoặc `ofelia` (compose) — không block main service. `PER_SYMBOL_WORKERS=0` → `os.cpu_count()` worker cho per-symbol training.
+**VIII. Concurrency** — Scale out theo replica (HPA trên `api-svc` và `gateway-svc`). Batch workload (train, crawl, reconcile) chạy qua k8s CronJob hoặc `ofelia` (compose) — không block main service. `PER_SYMBOL_WORKERS=0` → `os.cpu_count()` worker cho per-symbol training. Khi `KAFKA_ENABLED=true`, ba consumer process (`predict-consumer`, `reconcile-consumer`, `simulation-consumer`) là process độc lập — scale replica riêng qua chart `kafka-consumers` (k8s) hoặc service riêng trong compose profile `kafka`.
 
 **IX. Disposability** — Khởi động nhanh: Go service vài giây, Rust gateway vài giây; prediction-svc có `startupProbe` 150s vì PyTorch import chậm. Graceful shutdown: SIGTERM → drain gRPC, close DB connection, stop scheduler. K8s probes readiness + liveness đủ 6 service. CronJob pod tạo và hủy từng batch, không để zombie.
 
@@ -729,11 +742,54 @@ Hệ thống tuân theo The Twelve-Factor App methodology và mở rộng thêm 
 
 **Scheduler unification (factor 10)** — Compose: `SCHEDULER_ENABLED=false` tắt APScheduler in-app, `ofelia` container đảm nhận toàn bộ cron. K8s: `SCHEDULER_ENABLED=false` tắt APScheduler, k8s CronJob đảm nhận. Cả hai mode gọi cùng binary `python -m src.jobs_cli`, đảm bảo parity.
 
+### Pipeline event-driven Kafka (tùy chọn)
+
+Khi `KAFKA_ENABLED=true`, pipeline chuyển từ tuần tự sang publish/subscribe — mỗi giai đoạn là producer hoặc consumer độc lập. Mặc định `false` — hành vi tuần tự hiện tại không thay đổi.
+
+**Topics:**
+
+| Topic | Key | Payload | Producer | Consumer(s) |
+|-------|-----|---------|----------|-------------|
+| `market.crawled` | market | `{market, crawled, trained, ts}` | `_run_pipeline` (sau crawl) | `predict-consumer` |
+| `predictions.ready` | market | `{market, predictions, ts}` | `predict-consumer` | `reconcile-consumer`, `simulation-consumer` |
+| `predictions.reconciled` | market | `{market, scored, ts}` | `reconcile-consumer` | (metrics/audit) |
+
+**Flow khi `KAFKA_ENABLED=true`:**
+
+```
+cron/trigger → _run_pipeline: crawl → (mỗi 10 lần) train → PUBLISH market.crawled → return
+   market.crawled ──► predict-consumer:    run_for_market(market, run_sim=False) → PUBLISH predictions.ready
+   predictions.ready ──► reconcile-consumer: reconcile_predictions(only_market=market) → PUBLISH predictions.reconciled
+   predictions.ready ──► simulation-consumer: run_live_step_for_market(market)
+```
+
+`_run_pipeline` không chạy inline predict/reconcile khi Kafka bật — toàn bộ phần sau crawl do consumer nắm. Khi `KAFKA_ENABLED=false`, `_run_pipeline` vẫn chạy đầy đủ crawl→train→predict(+sim)→reconcile tuần tự như cũ.
+
+**Code:** `prediction-svc/src/events/` — `producer.py` (singleton `confluent_kafka.Producer`, no-op an toàn khi disabled hoặc thư viện thiếu), `consumers/base.py` (poll loop, at-least-once, mỗi message có `request_id` riêng, graceful SIGTERM), `consumers/{predict,reconcile,simulation}.py` (thin handler gọi hàm orchestrator hiện có). Entrypoint: `python -m src.events.consumers.predict|reconcile|simulation`. Thư viện: `confluent-kafka` (pyproject `[kafka]` extra, đã cài trong image prediction-svc).
+
+**Bật trong compose:**
+
+```bash
+docker compose --env-file .env -f deploy/docker-compose.yaml --profile kafka up -d
+# Services thêm (profile kafka): zookeeper, kafka, kafka-init (topic init), predict-consumer, reconcile-consumer, simulation-consumer
+# Đặt KAFKA_ENABLED=true trong .env trước khi chạy
+```
+
+**Bật trong k8s:**
+
+```bash
+helm install kafka deploy/helm/kafka -n stock          # Zookeeper + Kafka StatefulSets + topic-init Job
+helm install kafka-consumers deploy/helm/kafka-consumers -n stock --set enabled=true
+# Kafka consumers dùng image prediction-svc, envFrom prediction-config/secret + KAFKA_*
+```
+
 ## Giới hạn đã biết
 
 Danh sách dưới đây mô tả các hạn chế thực tế, được ghi nhận để tránh nhầm lẫn khi vận hành.
 
 **Direction accuracy không phải edge thật.** Phần lớn thuật toán có direction accuracy xấp xỉ 50% hoặc bias theo trend thị trường — không phải kỹ năng dự đoán thật sự. Chỉ `ema` và `moving_average` trên GOLD và CRYPTO ghi nhận chút edge nhất quán. Các mô hình deep learning (LSTM, GRU, Transformer) và RL DQN cần đủ dữ liệu và checkpoint tốt để thoát khỏi bias ngẫu nhiên.
+
+**Pipeline event-driven (Kafka) là tùy chọn opt-in.** Khi `KAFKA_ENABLED=false` (mặc định), pipeline chạy tuần tự trong một process (`_run_pipeline`: crawl → train → predict → reconcile — không thay đổi). Khi `KAFKA_ENABLED=true`, các giai đoạn trở thành producer/consumer Kafka độc lập (xem mục Kafka bên dưới). Chưa bật mặc định vì broker Kafka + Zookeeper tốn thêm RAM (Kafka ~768Mi, ZK ~256Mi) — không phù hợp với môi trường kind tài nguyên chật.
 
 **Predictions là short-horizon và biên độ nhỏ.** Dự đoán "giờ kế tiếp" trên chuỗi daily-live (1 điểm/ngày, ghi đè mỗi lần crawl) — biên độ thực tế thường ±0.1–0.3%, không phải swing lớn. Bot threshold dùng ngưỡng % giá theo scale ngày (0.5%+) sẽ không bao giờ vào lệnh với prediction loại này; chỉ bot conviction/RL/meta-stack mới ra quyết định hợp lý.
 

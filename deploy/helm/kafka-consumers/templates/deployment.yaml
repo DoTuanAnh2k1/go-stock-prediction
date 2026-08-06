@@ -1,0 +1,132 @@
+# =============================================================================
+# kafka-consumers — THREE Deployments (predict, reconcile, simulation).
+#
+# Each consumer runs from the same prediction-svc image but with a different
+# entrypoint: python -m src.events.consumers.<module>
+#
+# DB access: market_db as role prediction_svc (same creds as prediction-svc).
+# Kafka access: KAFKA_ENABLED=true + KAFKA_BROKERS from values.
+#
+# Env wiring:
+#   envFrom prediction-config  — carries POSTGRES_HOST/PORT/DB/USER, RL_MODEL_DIR,
+#                                 LOG_LEVEL/FORMAT, TZ is set via env.TZ explicitly.
+#   envFrom kafka-consumers-secret — carries POSTGRES_PASSWORD.
+#   env (explicit) — KAFKA_ENABLED, KAFKA_BROKERS, TZ, SCHEDULER_ENABLED.
+#
+# No ports exposed (consumer-only). No ambassador needed.
+# Liveness: exec pgrep to detect dead process (no ports to probe).
+# securityContext: consistent with prediction-svc (runAsNonRoot, uid 1000).
+# =============================================================================
+{{- $consumers := list
+  (dict "name" "predict"    "module" "predict")
+  (dict "name" "reconcile"  "module" "reconcile")
+  (dict "name" "simulation" "module" "simulation")
+}}
+{{- range $consumers }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-consumer-{{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: kafka-consumer-{{ .name }}
+    app.kubernetes.io/component: kafka-consumer
+spec:
+  replicas: {{ $.Values.replicas }}
+  selector:
+    matchLabels:
+      app: kafka-consumer-{{ .name }}
+  template:
+    metadata:
+      labels:
+        app: kafka-consumer-{{ .name }}
+        app.kubernetes.io/component: kafka-consumer
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
+      # dnsConfig ndots:1 — ép FQDN query trước; tránh ISP NXDOMAIN hijack
+      # trên external hostnames mà consumers có thể query (ML deps, model stores).
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
+      initContainers:
+        - name: wait-db
+          image: timescale/timescaledb:latest-pg16
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -c
+            - |
+              echo "waiting for db:5432 ..."
+              until pg_isready -h db -p 5432 -U postgres; do
+                echo "db not ready, retry in 2s"; sleep 2
+              done
+              echo "db is ready"
+      containers:
+        - name: consumer
+          image: "{{ $.Values.image }}:{{ $.Values.imageTag }}"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command: ["python", "-m", "src.events.consumers.{{ .module }}"]
+          envFrom:
+            # prediction-config carries: POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB,
+            # POSTGRES_USER (prediction_svc), RL_MODEL_DIR, LOG_LEVEL, LOG_FORMAT, ...
+            - configMapRef: { name: prediction-config }
+            # kafka-consumers-secret carries POSTGRES_PASSWORD for prediction_svc role.
+            - secretRef:    { name: kafka-consumers-secret }
+          env:
+            - name: KAFKA_ENABLED
+              value: "true"
+            - name: KAFKA_BROKERS
+              value: {{ $.Values.kafkaBrokers | quote }}
+            - name: TZ
+              value: "Asia/Ho_Chi_Minh"
+            # Consumers never run the APScheduler — explicit override even if
+            # prediction-config does not carry this key.
+            - name: SCHEDULER_ENABLED
+              value: "false"
+          resources:
+            requests:
+              cpu: {{ $.Values.resources.requests.cpu | quote }}
+              memory: {{ $.Values.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ $.Values.resources.limits.cpu | quote }}
+              memory: {{ $.Values.resources.limits.memory | quote }}
+          # No network ports — consumers pull from Kafka, no incoming traffic.
+          # liveness: verify process is alive (exec probe, no port dependency).
+          livenessProbe:
+            exec:
+              command:
+                - pgrep
+                - -f
+                - src.events.consumers.{{ .module }}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            - name: models
+              mountPath: /models
+      volumes:
+        - name: models
+          # emptyDir cache — model files downloaded from MinIO (MODEL_STORE_BACKEND=s3)
+          # on first access via model_store.ensure_local().
+          emptyDir: {}
+{{- end }}

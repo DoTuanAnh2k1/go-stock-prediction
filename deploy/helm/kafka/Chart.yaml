@@ -1,0 +1,8 @@
+apiVersion: v2
+name: kafka
+description: >
+  Single-broker Apache Kafka + single Zookeeper (RF=1, classic ZK mode).
+  Creates topics market.crawled / predictions.ready / predictions.reconciled.
+  Optional infrastructure — install after db, before any consumer service.
+type: application
+version: 0.1.0

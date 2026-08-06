@@ -1,0 +1,43 @@
+kafka-consumers installed in namespace {{ .Release.Namespace }}.
+
+Three consumer Deployments are running:
+  kafka-consumer-predict      — python -m src.events.consumers.predict
+  kafka-consumer-reconcile    — python -m src.events.consumers.reconcile
+  kafka-consumer-simulation   — python -m src.events.consumers.simulation
+
+Each consumer connects to:
+  Kafka: {{ .Values.kafkaBrokers }}
+  DB:    market_db @ db:5432 (role: prediction_svc)
+
+--- Scaling a single consumer ---
+
+  kubectl scale deployment kafka-consumer-predict    -n {{ .Release.Namespace }} --replicas=3
+  kubectl scale deployment kafka-consumer-reconcile  -n {{ .Release.Namespace }} --replicas=2
+
+  Or via Helm (affects all three equally):
+  helm upgrade kafka-consumers deploy/helm/kafka-consumers -n {{ .Release.Namespace }} --set replicas=2
+
+  For fine-grained scaling, set replicas in values.yaml per-consumer or override at runtime with kubectl.
+
+--- Watching the event flow ---
+
+  # Tail all consumer logs at once
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=kafka-consumer -f --max-log-requests=10
+
+  # Tail a specific consumer
+  kubectl logs -n {{ .Release.Namespace }} -l app=kafka-consumer-predict -f
+
+  # Watch Kafka topics from inside the cluster (requires kafka chart installed)
+  kubectl exec -it -n {{ .Release.Namespace }} kafka-0 -- \
+    kafka-console-consumer.sh --bootstrap-server kafka:9092 \
+      --topic predictions.ready --from-beginning
+
+  # Check consumer group lag (inside kafka pod)
+  kubectl exec -it -n {{ .Release.Namespace }} kafka-0 -- \
+    kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
+      --describe --all-groups
+
+--- Upgrade image ---
+
+  helm upgrade kafka-consumers deploy/helm/kafka-consumers -n {{ .Release.Namespace }} \
+    --set imageTag=<new-sha> -f deploy/helm/kafka-consumers/values-secret.yaml

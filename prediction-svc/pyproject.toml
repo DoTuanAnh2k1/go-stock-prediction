@@ -57,6 +57,10 @@ observability = [
 s3 = [
     "boto3>=1.34.0",
 ]
+# Kafka event-driven pipeline (opt-in via KAFKA_ENABLED) — installed in production image
+kafka = [
+    "confluent-kafka>=2.3.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

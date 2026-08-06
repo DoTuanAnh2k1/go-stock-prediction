@@ -1,0 +1,35 @@
+Kafka (single-broker, RF=1) deployed in namespace {{ .Release.Namespace }}.
+
+Broker address (in-cluster):  kafka:9092
+Zookeeper address:             zookeeper:2181
+
+Topics created by kafka-create-topics Job:
+{{- range .Values.topics }}
+  - {{ . }}
+{{- end }}
+
+--- List topics ---
+kubectl exec -n {{ .Release.Namespace }} kafka-0 -- \
+  kafka-topics.sh --bootstrap-server kafka:9092 --list
+
+--- Console consumer (tail a topic) ---
+# Replace <topic> with one of the topics above, e.g. market.crawled
+kubectl exec -it -n {{ .Release.Namespace }} kafka-0 -- \
+  kafka-console-consumer.sh \
+    --bootstrap-server kafka:9092 \
+    --topic market.crawled \
+    --from-beginning
+
+--- Console producer (send a test message) ---
+kubectl exec -it -n {{ .Release.Namespace }} kafka-0 -- \
+  kafka-console-producer.sh \
+    --bootstrap-server kafka:9092 \
+    --topic market.crawled
+
+--- Describe a topic ---
+kubectl exec -n {{ .Release.Namespace }} kafka-0 -- \
+  kafka-topics.sh --bootstrap-server kafka:9092 \
+    --describe --topic predictions.ready
+
+--- Check broker logs ---
+kubectl logs -n {{ .Release.Namespace }} kafka-0

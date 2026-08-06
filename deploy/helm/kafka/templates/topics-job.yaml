@@ -1,0 +1,66 @@
+# =============================================================================
+# topics-job — post-install Job that creates the 3 required topics.
+# Uses the same bitnami/kafka image (ships kafka-topics.sh).
+# --if-not-exists makes it safe to re-run (idempotent).
+# Partitions=4, RF=1 (single broker).
+# Waits for the broker to be ready before issuing kafka-topics.sh commands.
+# ttlSecondsAfterFinished=600 cleans up the pod automatically.
+# =============================================================================
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-create-topics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: kafka
+    chart: kafka
+  annotations:
+    # Run on every helm install/upgrade so new topics are created if missing
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: kafka
+        job: kafka-create-topics
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: kafka-topics
+          image: "{{ .Values.kafka.image }}:{{ .Values.kafka.tag }}"
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              BROKER="kafka.{{ .Release.Namespace }}.svc:{{ .Values.kafka.port }}"
+              echo "waiting for kafka broker at ${BROKER} ..."
+              until kafka-topics.sh --bootstrap-server "${BROKER}" --list >/dev/null 2>&1; do
+                echo "broker not ready, retrying in 5s ..."
+                sleep 5
+              done
+              echo "broker ready — creating topics (--if-not-exists) ..."
+              {{- range .Values.topics }}
+              kafka-topics.sh \
+                --bootstrap-server "${BROKER}" \
+                --create \
+                --if-not-exists \
+                --topic {{ . | quote }} \
+                --partitions 4 \
+                --replication-factor 1
+              echo "topic {{ . }} OK"
+              {{- end }}
+              echo "listing all topics:"
+              kafka-topics.sh --bootstrap-server "${BROKER}" --list
+              echo "done"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"

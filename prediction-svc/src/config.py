@@ -33,6 +33,15 @@ class Settings(BaseSettings):
     service_mgt_enabled: bool = False
     registry_grpc_target: str = "service-mgt:8121"
 
+    # Kafka event-driven pipeline (factor toggle; default off = legacy sequential
+    # pipeline). When true: _run_pipeline publishes market.crawled and the predict/
+    # reconcile/simulation consumers drive the rest via Kafka topics.
+    kafka_enabled: bool = False
+    kafka_brokers: str = "kafka:9092"
+    kafka_topic_crawled: str = "market.crawled"
+    kafka_topic_predictions: str = "predictions.ready"
+    kafka_topic_reconciled: str = "predictions.reconciled"
+
     # Per-symbol models (additive, coexists with pooled per-market models)
     # When enabled: each (symbol × algorithm) gets its own trained model, its
     # predictions are written with the "__ps" algorithm_name suffix, and a
