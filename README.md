@@ -60,6 +60,19 @@ Mỗi lần cron job (`crawler_gold`, `crawler_nasdaq`, ...) chạy, hàm `_run_
 4. **Reconcile** — `reconcile_predictions()` chấm hướng cho mọi prediction có `target_date <= now`: lấy giá live mới nhất làm `actual`, so sánh dấu với `predicted`. Frozen-actual guard: nếu giá live chưa thay đổi kể từ lúc entry (`actual == current`), để `NULL` (pending) thay vì chấm sai — tránh batch bị chấm 0% do đóng phiên sau target hoặc crawl trễ trên bảng daily-live.
 5. **Ghi pipeline report** — 1 row vào `pipeline_reports`, retention tự động 7 ngày.
 
+**Hai chế độ chạy pipeline (toggle `KAFKA_ENABLED`):**
+
+- **Tuần tự (mặc định, `KAFKA_ENABLED=false`)** — `_run_pipeline` chạy cả 5 bước trên **trong một tiến trình**, theo thứ tự, do cron/ofelia/CronJob kích hoạt. Đơn giản, không cần broker.
+- **Event-driven qua Kafka (`KAFKA_ENABLED=true`)** — pipeline được **tách thành producer/consumer decoupled** (async pub/sub thật). Cron chỉ **crawl (+train mỗi 10 lần)** rồi **publish event `market.crawled`** và dừng; các bước sau do consumer độc lập xử lý bất đồng bộ:
+
+  ```
+  crawl  ──▶ market.crawled ──▶ predict-consumer   ──▶ predictions.ready
+                                predictions.ready  ──▶ reconcile-consumer   (chấm hướng)
+                                predictions.ready  ──▶ simulation-consumer  (bot trading)
+  ```
+
+  Mỗi consumer là một Deployment/service riêng → **scale độc lập, retry, replay** (at-least-once, mỗi message một `request_id` xuyên suốt). Đây là nghiệp vụ **giống hệt** chế độ tuần tự — chỉ khác cách điều phối (event thay vì gọi hàm trực tiếp). Chi tiết topic/triển khai: xem mục [Pipeline event-driven Kafka](#pipeline-event-driven-kafka-tùy-chọn).
+
 ### Direction accuracy
 
 Cột `direction_correct` (`NULL` | `true` | `false`) trong cả 4 bảng prediction:
