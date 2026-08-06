@@ -40,9 +40,9 @@ type nasdaqPredictionsResponse struct {
 //	@Router       /api/nasdaq/predictions/latest [get]
 func GetNasdaqPredictionsLatest(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
-	preds, err := store.GetLatestNasdaqPredictions()
+	preds, err := store.GetLatestNasdaqPredictions(r.Context())
 	if err != nil {
-		logger.Logger.Errorf("[api/nasdaq/predictions/latest] Failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/nasdaq/predictions/latest] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get latest NASDAQ predictions")
 		return
 	}
@@ -77,9 +77,9 @@ func GetNasdaqPredictionsLatest(w http.ResponseWriter, r *http.Request) {
 //	@Router       /api/nasdaq/predictions/latest-results [get]
 func GetNasdaqPredictionsLatestResults(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
-	preds, err := store.GetLatestConfirmedNasdaqPredictions()
+	preds, err := store.GetLatestConfirmedNasdaqPredictions(r.Context())
 	if err != nil {
-		logger.Logger.Errorf("[api/nasdaq/predictions/latest-results] Failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/nasdaq/predictions/latest-results] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get latest confirmed NASDAQ predictions")
 		return
 	}
@@ -144,9 +144,9 @@ func GetNasdaqPredictionsChart(w http.ResponseWriter, r *http.Request) {
 	to := time.Now()
 	from := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, to.Location()).AddDate(0, 0, -(days - 1))
 
-	preds, err := store.GetNasdaqPredictionsByDateRange(symbol, from, to)
+	preds, err := store.GetNasdaqPredictionsByDateRange(r.Context(), symbol, from, to)
 	if err != nil {
-		logger.Logger.Errorf("[api/nasdaq/predictions/chart] Failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/nasdaq/predictions/chart] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get NASDAQ prediction chart data")
 		return
 	}
@@ -226,9 +226,9 @@ func GetNasdaqPredictions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store := repository.GetSingleton()
-	preds, total, err := store.GetNasdaqPredictionsPage(page, limit, symbol, algorithm, statusFilter, sortBy, sortDir)
+	preds, total, err := store.GetNasdaqPredictionsPage(r.Context(), page, limit, symbol, algorithm, statusFilter, sortBy, sortDir)
 	if err != nil {
-		logger.Logger.Errorf("[api/nasdaq/predictions] Failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/nasdaq/predictions] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get NASDAQ predictions")
 		return
 	}

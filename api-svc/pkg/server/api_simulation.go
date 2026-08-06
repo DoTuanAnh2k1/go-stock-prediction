@@ -467,9 +467,10 @@ func sortLeaderboardEntries(entries []leaderboardEntry, sortBy, sortDir string) 
 //	@Router       /api/simulation/bots [get]
 func GetSimBots(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
-	bots, err := store.GetAllSimBots()
+	ctx := r.Context()
+	bots, err := store.GetAllSimBots(ctx)
 	if err != nil {
-		logger.Logger.Errorf("GetSimBots: %v", err)
+		logger.Ctx(r.Context()).Errorf("GetSimBots: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "failed to fetch bots")
 		return
 	}
@@ -478,9 +479,9 @@ func GetSimBots(w http.ResponseWriter, r *http.Request) {
 	for _, bot := range bots {
 		item := simBotListItem{simBotJSON: botToJSON(bot)}
 
-		sess, err := store.GetLatestLiveSimSession(bot.ID)
+		sess, err := store.GetLatestLiveSimSession(ctx, bot.ID)
 		if err != nil || sess == nil {
-			sess, err = store.GetLatestSimSession(bot.ID)
+			sess, err = store.GetLatestSimSession(ctx, bot.ID)
 		}
 		if err == nil && sess != nil {
 			item.LastSession = &simSessionSummary{
@@ -490,7 +491,7 @@ func GetSimBots(w http.ResponseWriter, r *http.Request) {
 				EndDate:   sess.EndDate,
 			}
 			// Quick KPI: last snapshot's total_return_pct + sell trade count
-			snaps, err := store.GetSimPortfolioSnapshots(sess.ID)
+			snaps, err := store.GetSimPortfolioSnapshots(ctx, sess.ID)
 			if err == nil && len(snaps) > 0 {
 				last := snaps[len(snaps)-1]
 				if last.TotalReturnPct != nil {
@@ -498,7 +499,7 @@ func GetSimBots(w http.ResponseWriter, r *http.Request) {
 					item.TotalReturnPct = v
 				}
 			}
-			trades, _, err := store.GetSimTrades(sess.ID, 0, 10000, false)
+			trades, _, err := store.GetSimTrades(ctx, sess.ID, 0, 10000, false)
 			if err == nil {
 				for _, t := range trades {
 					if t.Action == "SELL" {
@@ -541,7 +542,8 @@ func GetSimBot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store := repository.GetSingleton()
-	bot, err := store.GetSimBotByID(id)
+	ctx := r.Context()
+	bot, err := store.GetSimBotByID(ctx, id)
 	if err != nil {
 		ResponseError(w, http.StatusNotFound, "bot not found")
 		return
@@ -550,9 +552,9 @@ func GetSimBot(w http.ResponseWriter, r *http.Request) {
 	detail := simBotDetail{simBotJSON: botToJSON(*bot)}
 
 	// Use session with most snapshots for KPIs (backtest), fall back to latest
-	sess, err := store.GetBestSimSessionForChart(bot.ID)
+	sess, err := store.GetBestSimSessionForChart(ctx, bot.ID)
 	if err != nil || sess == nil {
-		sess, err = store.GetLatestSimSession(bot.ID)
+		sess, err = store.GetLatestSimSession(ctx, bot.ID)
 	}
 	if err == nil && sess != nil {
 		detail.LastSession = &simSessionSummary{
@@ -561,11 +563,11 @@ func GetSimBot(w http.ResponseWriter, r *http.Request) {
 			StartDate: sess.StartDate,
 			EndDate:   sess.EndDate,
 		}
-		snaps, err := store.GetSimPortfolioSnapshots(sess.ID)
+		snaps, err := store.GetSimPortfolioSnapshots(ctx, sess.ID)
 		if err != nil {
 			snaps = nil
 		}
-		trades, _, err := store.GetSimTrades(sess.ID, 0, 100000, false)
+		trades, _, err := store.GetSimTrades(ctx, sess.ID, 0, 100000, false)
 		if err != nil {
 			trades = nil
 		}
@@ -594,16 +596,17 @@ func GetSimBotVariants(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store := repository.GetSingleton()
+	ctx := r.Context()
 
-	src, err := store.GetSimBotByID(id)
+	src, err := store.GetSimBotByID(ctx, id)
 	if err != nil {
 		ResponseError(w, http.StatusNotFound, "bot not found")
 		return
 	}
 
-	siblings, err := store.GetSimBotsByMarketAlgo(src.Market, src.Algorithm)
+	siblings, err := store.GetSimBotsByMarketAlgo(ctx, src.Market, src.Algorithm)
 	if err != nil {
-		logger.Logger.Errorf("GetSimBotVariants: %v", err)
+		logger.Ctx(r.Context()).Errorf("GetSimBotVariants: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "failed to fetch variants")
 		return
 	}
@@ -612,13 +615,13 @@ func GetSimBotVariants(w http.ResponseWriter, r *http.Request) {
 	for _, bot := range siblings {
 		v := simBotVariant{simBotJSON: botToJSON(bot)}
 
-		sess, sessErr := store.GetBestSimSessionForChart(bot.ID)
+		sess, sessErr := store.GetBestSimSessionForChart(ctx, bot.ID)
 		if sessErr != nil || sess == nil {
-			sess, sessErr = store.GetLatestSimSession(bot.ID)
+			sess, sessErr = store.GetLatestSimSession(ctx, bot.ID)
 		}
 		if sessErr == nil && sess != nil {
-			snaps, _ := store.GetSimPortfolioSnapshots(sess.ID)
-			trades, _, _ := store.GetSimTrades(sess.ID, 0, 100000, false)
+			snaps, _ := store.GetSimPortfolioSnapshots(ctx, sess.ID)
+			trades, _, _ := store.GetSimTrades(ctx, sess.ID, 0, 100000, false)
 			v.KPIs = computeKPIs(snaps, trades)
 		}
 
@@ -673,7 +676,7 @@ func GetSimBotTrades(w http.ResponseWriter, r *http.Request) {
 	}
 	if sess == nil {
 		var sessErr error
-		sess, sessErr = store.GetLatestSimSession(id)
+		sess, sessErr = store.GetLatestSimSession(r.Context(), id)
 		if sessErr != nil {
 			// No session yet — return empty page (200) instead of 404
 			ResponseSuccess(w, http.StatusOK, simTradesPage{
@@ -689,9 +692,9 @@ func GetSimBotTrades(w http.ResponseWriter, r *http.Request) {
 	excludeHold := r.URL.Query().Get("exclude_hold") == "true"
 
 	offset := (page - 1) * limit
-	trades, total, err := store.GetSimTrades(sess.ID, offset, limit, excludeHold)
+	trades, total, err := store.GetSimTrades(r.Context(), sess.ID, offset, limit, excludeHold)
 	if err != nil {
-		logger.Logger.Errorf("GetSimBotTrades: %v", err)
+		logger.Ctx(r.Context()).Errorf("GetSimBotTrades: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "failed to fetch trades")
 		return
 	}
@@ -732,15 +735,16 @@ func GetSimBotChart(w http.ResponseWriter, r *http.Request) {
 
 	var sess *modelsdb.SimSession
 	var err error
+	ctx := r.Context()
 	if r.URL.Query().Get("mode") == "live" {
 		// Live mode: return the latest session (today's live trading)
-		sess, err = store.GetLatestSimSession(id)
+		sess, err = store.GetLatestSimSession(ctx, id)
 	} else {
 		// Default: prefer the session with the most snapshots (typically a completed backtest)
 		// instead of the latest session which may be a running live-step with only 1 point.
-		sess, err = store.GetBestSimSessionForChart(id)
+		sess, err = store.GetBestSimSessionForChart(ctx, id)
 		if err != nil || sess == nil {
-			sess, err = store.GetLatestSimSession(id)
+			sess, err = store.GetLatestSimSession(ctx, id)
 		}
 	}
 	if err != nil {
@@ -751,9 +755,9 @@ func GetSimBotChart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	snaps, err := store.GetSimPortfolioSnapshots(sess.ID)
+	snaps, err := store.GetSimPortfolioSnapshots(ctx, sess.ID)
 	if err != nil {
-		logger.Logger.Errorf("GetSimBotChart: %v", err)
+		logger.Ctx(r.Context()).Errorf("GetSimBotChart: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "failed to fetch snapshots")
 		return
 	}
@@ -880,9 +884,9 @@ func GetSimLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 	store := repository.GetSingleton()
 
-	rows, err := store.GetLeaderboardEntries()
+	rows, err := store.GetLeaderboardEntries(r.Context())
 	if err != nil {
-		logger.Logger.Errorf("GetSimLeaderboard: %v", err)
+		logger.Ctx(r.Context()).Errorf("GetSimLeaderboard: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "failed to fetch leaderboard")
 		return
 	}
@@ -1119,7 +1123,7 @@ func TriggerSimBotRun(w http.ResponseWriter, r *http.Request) {
 		EndDate:   body.EndDate,
 	})
 	if err != nil {
-		logger.Logger.Errorf("TriggerSimBotRun(%s): %v", id, err)
+		logger.Ctx(r.Context()).Errorf("TriggerSimBotRun(%s): %v", id, err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1160,7 +1164,7 @@ func TriggerSimRunAll(w http.ResponseWriter, r *http.Request) {
 		EndDate:   body.EndDate,
 	})
 	if err != nil {
-		logger.Logger.Errorf("TriggerSimRunAll: %v", err)
+		logger.Ctx(r.Context()).Errorf("TriggerSimRunAll: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -1196,7 +1200,8 @@ func UpdateSimBotConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store := repository.GetSingleton()
-	existing, err := store.GetSimBotByID(id)
+	ctx := r.Context()
+	existing, err := store.GetSimBotByID(ctx, id)
 	if err != nil {
 		ResponseError(w, http.StatusNotFound, "bot not found")
 		return
@@ -1219,8 +1224,8 @@ func UpdateSimBotConfig(w http.ResponseWriter, r *http.Request) {
 	existing.IsActive = req.IsActive
 	existing.UpdatedAt = time.Now()
 
-	if err := store.UpdateSimBotConfig(existing); err != nil {
-		logger.Logger.Errorf("UpdateSimBotConfig(%s): %v", id, err)
+	if err := store.UpdateSimBotConfig(ctx, existing); err != nil {
+		logger.Ctx(r.Context()).Errorf("UpdateSimBotConfig(%s): %v", id, err)
 		ResponseError(w, http.StatusInternalServerError, "failed to update bot config")
 		return
 	}
@@ -1254,7 +1259,8 @@ func ToggleSimBot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store := repository.GetSingleton()
-	existing, err := store.GetSimBotByID(id)
+	ctx := r.Context()
+	existing, err := store.GetSimBotByID(ctx, id)
 	if err != nil {
 		ResponseError(w, http.StatusNotFound, "bot not found")
 		return
@@ -1263,8 +1269,8 @@ func ToggleSimBot(w http.ResponseWriter, r *http.Request) {
 	existing.IsActive = !existing.IsActive
 	existing.UpdatedAt = time.Now()
 
-	if err := store.UpdateSimBotConfig(existing); err != nil {
-		logger.Logger.Errorf("ToggleSimBot(%s): %v", id, err)
+	if err := store.UpdateSimBotConfig(ctx, existing); err != nil {
+		logger.Ctx(r.Context()).Errorf("ToggleSimBot(%s): %v", id, err)
 		ResponseError(w, http.StatusInternalServerError, "failed to toggle bot")
 		return
 	}

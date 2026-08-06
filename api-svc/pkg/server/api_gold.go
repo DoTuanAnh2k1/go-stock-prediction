@@ -37,9 +37,9 @@ type goldLatestResponse struct {
 func GetGoldLatest(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 
-	prices, err := store.GetLatestGoldPrices()
+	prices, err := store.GetLatestGoldPrices(r.Context())
 	if err != nil {
-		logger.Logger.Errorf("[api/gold/latest] Failed to get latest gold prices: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/gold/latest] Failed to get latest gold prices: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get latest gold prices")
 		return
 	}
@@ -105,9 +105,9 @@ func GetGoldPrices(w http.ResponseWriter, r *http.Request) {
 	from := to.AddDate(0, 0, -days)
 	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
-	prices, err := store.GetGoldPricesByDateRange(source, productType, from, to)
+	prices, err := store.GetGoldPricesByDateRange(r.Context(), source, productType, from, to)
 	if err != nil {
-		logger.Logger.Errorf("[api/gold/prices] Failed to get gold prices: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/gold/prices] Failed to get gold prices: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get gold prices")
 		return
 	}
@@ -170,9 +170,9 @@ func GetGoldChart(w http.ResponseWriter, r *http.Request) {
 
 	if days == 1 {
 		from := to.Add(-24 * time.Hour)
-		intradayPrices, err := store.GetGoldIntradayByRange(source, from, to)
+		intradayPrices, err := store.GetGoldIntradayByRange(r.Context(), source, from, to)
 		if err != nil {
-			logger.Logger.Errorf("[api/gold/chart] Failed to get gold intraday prices: %v", err)
+			logger.Ctx(r.Context()).Errorf("[api/gold/chart] Failed to get gold intraday prices: %v", err)
 			ResponseError(w, http.StatusInternalServerError, "Failed to get gold intraday prices")
 			return
 		}
@@ -234,9 +234,9 @@ func GetGoldChart(w http.ResponseWriter, r *http.Request) {
 	from := to.AddDate(0, 0, -days)
 	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
-	prices, err := store.GetGoldPricesByDateRange(source, productType, from, to)
+	prices, err := store.GetGoldPricesByDateRange(r.Context(), source, productType, from, to)
 	if err != nil {
-		logger.Logger.Errorf("[api/gold/chart] Failed to get gold prices: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/gold/chart] Failed to get gold prices: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get gold prices")
 		return
 	}

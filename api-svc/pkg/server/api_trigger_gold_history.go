@@ -21,14 +21,14 @@ import (
 //	@Security     BearerAuth
 //	@Router       /api/trigger/gold-history [post]
 func TriggerGoldHistoryHandler(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Info("[trigger] gold-history import requested")
+	logger.Ctx(r.Context()).Info("[trigger] gold-history import requested")
 	client := requireGRPCClient(w)
 	if client == nil {
 		return
 	}
 	_, err := client.TriggerGoldHistory(r.Context(), &pb.Empty{})
 	if err != nil {
-		logger.Logger.Errorf("[trigger] gold-history failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[trigger] gold-history failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

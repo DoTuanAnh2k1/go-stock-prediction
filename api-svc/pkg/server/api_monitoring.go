@@ -161,15 +161,17 @@ func expectedAlgoKeys() []string {
 
 // buildMarketOverview constructs the monitoringMarket entry for one market key.
 func buildMarketOverview(
+	r *http.Request,
 	market string,
 	store repository.DatabaseStore,
 ) monitoringMarket {
+	ctx := r.Context()
 	// ── Crawl section ──────────────────────────────────────────────────────
 	crawlSection := monitoringCrawl{}
 
-	crawlStats, err := store.GetMarketCrawlStats(market)
+	crawlStats, err := store.GetMarketCrawlStats(ctx, market)
 	if err != nil {
-		logger.Logger.Errorf("GetMarketCrawlStats(%s): %v", market, err)
+		logger.Ctx(r.Context()).Errorf("GetMarketCrawlStats(%s): %v", market, err)
 	} else {
 		// Most recent activity across daily and intraday is the canonical "last crawl".
 		var lastCrawl *time.Time
@@ -200,9 +202,9 @@ func buildMarketOverview(
 
 	// Build a map from algo key → AlgoPredStats for quick lookup.
 	predStatsMap := make(map[string]modelsapi.AlgoPredStats)
-	allPredStats, err := store.GetMarketPredStats(market)
+	allPredStats, err := store.GetMarketPredStats(ctx, market)
 	if err != nil {
-		logger.Logger.Errorf("GetMarketPredStats(%s): %v", market, err)
+		logger.Ctx(r.Context()).Errorf("GetMarketPredStats(%s): %v", market, err)
 	} else {
 		for _, ps := range allPredStats {
 			predStatsMap[ps.AlgorithmName] = ps
@@ -210,9 +212,9 @@ func buildMarketOverview(
 	}
 
 	// Direction accuracy per algo.
-	dirAccRows, err := store.GetDirectionAccuracy(market)
+	dirAccRows, err := store.GetDirectionAccuracy(ctx, market)
 	if err != nil {
-		logger.Logger.Errorf("GetDirectionAccuracy(%s): %v", market, err)
+		logger.Ctx(r.Context()).Errorf("GetDirectionAccuracy(%s): %v", market, err)
 	}
 	dirAccMap := make(map[string]struct{ total, correct int64 })
 	for _, row := range dirAccRows {
@@ -278,24 +280,25 @@ func buildMarketOverview(
 // getBotDataCached returns the fully-computed bot table + summary, cached for 30s
 // under a single key so that paginating the bots table never re-runs the heavy
 // 4-query build. Both the overview handler and the paged bots handler share it.
-func getBotDataCached(store repository.DatabaseStore) botData {
+func getBotDataCached(r *http.Request, store repository.DatabaseStore) botData {
 	const cacheKey = "monitoring:bots:full"
 	if cached, ok := globalCache.Get(cacheKey); ok {
 		if bd, ok := cached.(botData); ok {
 			return bd
 		}
 	}
-	bd := buildBotData(store)
+	bd := buildBotData(r, store)
 	globalCache.Set(cacheKey, bd, 30*time.Second)
 	return bd
 }
 
 // buildBotData builds the bots table rows + summary using batch queries (N+1 → 4 queries).
 // Rows are returned sorted by win_rate desc, then total_pnl desc (the default order).
-func buildBotData(store repository.DatabaseStore) botData {
-	bots, err := store.GetAllSimBots()
+func buildBotData(r *http.Request, store repository.DatabaseStore) botData {
+	ctx := r.Context()
+	bots, err := store.GetAllSimBots(ctx)
 	if err != nil {
-		logger.Logger.Errorf("monitoring: GetAllSimBots: %v", err)
+		logger.Ctx(r.Context()).Errorf("monitoring: GetAllSimBots: %v", err)
 		return botData{
 			rows:    []monitoringBotTableRow{},
 			summary: monitoringBotSummary{ByMarket: []monitoringBotByMarket{}},
@@ -303,7 +306,7 @@ func buildBotData(store repository.DatabaseStore) botData {
 	}
 
 	// -- 1. Get all sessions with snap counts (1 query) --
-	allSessions, _ := store.GetAllSessionsWithSnapCount()
+	allSessions, _ := store.GetAllSessionsWithSnapCount(ctx)
 	sessionsByBot := make(map[string][]modelsdb.SimSessionWithCount)
 	for _, s := range allSessions {
 		sessionsByBot[s.BotID] = append(sessionsByBot[s.BotID], s)
@@ -321,8 +324,8 @@ func buildBotData(store repository.DatabaseStore) botData {
 	}
 
 	// -- 2. Batch trade stats + last snapshots (2 queries) --
-	tradeStats, _ := store.GetSessionTradeStatsBatch(sessionIDs)
-	lastSnaps, _ := store.GetLastSnapshotsBatch(sessionIDs)
+	tradeStats, _ := store.GetSessionTradeStatsBatch(ctx, sessionIDs)
+	lastSnaps, _ := store.GetLastSnapshotsBatch(ctx, sessionIDs)
 
 	// -- 3. Build table rows --
 	tableRows := make([]monitoringBotTableRow, 0, len(bots))
@@ -514,12 +517,12 @@ func GetMonitoringOverview(w http.ResponseWriter, r *http.Request) {
 	markets := []string{"GOLD", "NASDAQ", "CRYPTO", "SP500"}
 	marketResults := make([]monitoringMarket, 0, len(markets))
 	for _, mkt := range markets {
-		marketResults = append(marketResults, buildMarketOverview(mkt, store))
+		marketResults = append(marketResults, buildMarketOverview(r, mkt, store))
 	}
 
 	// The bots table is now served via the paginated /api/monitoring/bots
 	// endpoint, so the overview ships only the summary (cheap, small payload).
-	bd := getBotDataCached(store)
+	bd := getBotDataCached(r, store)
 
 	result := &monitoringOverviewResponse{
 		GeneratedAt: time.Now().Format(time.RFC3339),
@@ -589,7 +592,7 @@ func GetMonitoringBots(w http.ResponseWriter, r *http.Request) {
 		sortDir = "desc"
 	}
 
-	bd := getBotDataCached(repository.GetSingleton())
+	bd := getBotDataCached(r, repository.GetSingleton())
 
 	// ── Filter (copy so the cached slice is never mutated) ──────────────────
 	filtered := make([]monitoringBotTableRow, 0, len(bd.rows))

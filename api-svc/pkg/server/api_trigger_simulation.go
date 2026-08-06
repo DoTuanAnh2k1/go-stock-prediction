@@ -43,7 +43,7 @@ func TriggerSimulationBacktestHandler(w http.ResponseWriter, r *http.Request) {
 		EndDate:   body.EndDate,
 	})
 	if err != nil {
-		logger.Logger.Errorf("TriggerSimulationBacktest: %v", err)
+		logger.Ctx(r.Context()).Errorf("TriggerSimulationBacktest: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -70,7 +70,7 @@ func TriggerSimulationLiveStepHandler(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := client.TriggerSimulationLiveStep(r.Context(), &pb.Empty{})
 	if err != nil {
-		logger.Logger.Errorf("TriggerSimulationLiveStep: %v", err)
+		logger.Ctx(r.Context()).Errorf("TriggerSimulationLiveStep: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -97,7 +97,7 @@ func TriggerSimResetHandler(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := client.ResetSimBots(r.Context(), &pb.Empty{})
 	if err != nil {
-		logger.Logger.Errorf("TriggerSimReset: %v", err)
+		logger.Ctx(r.Context()).Errorf("TriggerSimReset: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

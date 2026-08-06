@@ -20,7 +20,7 @@ func StartHTTPServer() {
 	// (traceparent header, e.g. from the gateway) and starts a server span for
 	// every request so the trace continues into the outbound gRPC calls.
 	handler := otelhttp.NewHandler(
-		CORSMiddleware(JWTMiddleware(AccessLogMiddleware(mux))),
+		RequestIDMiddleware(CORSMiddleware(JWTMiddleware(AccessLogMiddleware(mux)))),
 		"api-svc",
 	)
 

@@ -48,7 +48,7 @@ func TriggerRebuildReplayHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&req) // both fields are optional; ignore decode errors
 	}
 
-	logger.Logger.Infof("Trigger rebuild-replay request: cutoff_date=%q step_size=%d", req.CutoffDate, req.StepSize)
+	logger.Ctx(r.Context()).Infof("Trigger rebuild-replay request: cutoff_date=%q step_size=%d", req.CutoffDate, req.StepSize)
 
 	client := requireGRPCClient(w)
 	if client == nil {
@@ -71,7 +71,7 @@ func TriggerRebuildReplayHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		logger.Logger.Errorf("Failed to trigger rebuild-replay: %v", err)
+		logger.Ctx(r.Context()).Errorf("Failed to trigger rebuild-replay: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to trigger rebuild-replay: "+err.Error())
 		return
 	}

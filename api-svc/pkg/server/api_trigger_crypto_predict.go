@@ -21,14 +21,14 @@ import (
 //	@Security     BearerAuth
 //	@Router       /api/trigger/crypto-predict [post]
 func TriggerCryptoPredictHandler(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Info("[trigger] Crypto predict handler called")
+	logger.Ctx(r.Context()).Info("[trigger] Crypto predict handler called")
 	client := requireGRPCClient(w)
 	if client == nil {
 		return
 	}
 	_, err := client.TriggerCryptoPredict(r.Context(), &pb.Empty{})
 	if err != nil {
-		logger.Logger.Errorf("[trigger] Crypto prediction failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[trigger] Crypto prediction failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

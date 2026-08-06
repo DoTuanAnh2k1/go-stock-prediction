@@ -60,12 +60,17 @@ WORKDIR /app
 
 # Install Python dependencies (split for layer caching).
 # observability = OTel tracing + prometheus-client (factor 14); s3 = boto3 for MinIO
-# model_store (factor 4/6/8). --timeout/--retries: torch is ~2-3GB from PyPI and the
-# host network (ISP NXDOMAIN hijack) can stall mid-download.
+# model_store (factor 4/6/8). --timeout/--retries: PyPI CDN can stall on big wheels.
 COPY prediction-svc/pyproject.toml pyproject.toml
-# BuildKit cache mount: wheel đã tải (torch ~2GB) giữ lại giữa các lần build → mạng
-# rớt giữa chừng thì retry chỉ tải phần thiếu, không tải lại từ đầu. KHÔNG --no-cache-dir.
+# BuildKit cache mount: wheel đã tải giữ lại giữa các lần build → mạng rớt giữa chừng
+# thì retry chỉ tải phần thiếu, không tải lại từ đầu. KHÔNG --no-cache-dir.
+#
+# CPU-only torch: service chạy inference trên CPU trong container (không GPU), nên cài
+# torch từ index CPU của PyTorch TRƯỚC. Bỏ hẳn ~2GB wheel CUDA nvidia (cudnn/cusparselt/
+# cuda_toolkit) mà bản torch mặc định trên PyPI kéo theo — chính mấy file to này hay
+# timeout khi tải. Sau đó `-e .[ml]` thấy torch>=2.5.0 đã thỏa → không tải lại.
 RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --timeout 120 --retries 10 torch --index-url https://download.pytorch.org/whl/cpu && \
     pip install --timeout 120 --retries 10 -e ".[dev,ml,observability,s3]"
 
 # Copy pre-generated proto stubs (committed to repo alongside prediction.proto)

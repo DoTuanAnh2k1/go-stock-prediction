@@ -110,7 +110,7 @@ func ListCommandsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := client.ListCommands(r.Context(), callerFromClaims(getClaims(r)))
 	if err != nil {
-		logger.Logger.Errorf("authclient.ListCommands: %v", err)
+		logger.Ctx(r.Context()).Errorf("authclient.ListCommands: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "auth service error")
 		return
 	}
@@ -248,7 +248,7 @@ func ListCommandHandlersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := client.ListHandlers(r.Context(), callerFromClaims(getClaims(r)))
 	if err != nil {
-		logger.Logger.Errorf("authclient.ListHandlers: %v", err)
+		logger.Ctx(r.Context()).Errorf("authclient.ListHandlers: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "auth service error")
 		return
 	}

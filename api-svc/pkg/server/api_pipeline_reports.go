@@ -68,16 +68,16 @@ func GetPipelineReports(w http.ResponseWriter, r *http.Request) {
 
 	store := repository.GetSingleton()
 
-	reports, err := store.GetPipelineReports(pipelineKey, limit)
+	reports, err := store.GetPipelineReports(r.Context(), pipelineKey, limit)
 	if err != nil {
-		logger.Logger.Errorf("[api/pipeline-reports] GetPipelineReports: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/pipeline-reports] GetPipelineReports: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get pipeline reports")
 		return
 	}
 
-	keys, err := store.GetDistinctPipelineKeys()
+	keys, err := store.GetDistinctPipelineKeys(r.Context())
 	if err != nil {
-		logger.Logger.Errorf("[api/pipeline-reports] GetDistinctPipelineKeys: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/pipeline-reports] GetDistinctPipelineKeys: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get pipeline keys")
 		return
 	}

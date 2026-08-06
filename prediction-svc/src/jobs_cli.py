@@ -37,6 +37,10 @@ try:
 except AttributeError:
     pass  # Windows không có tzset
 
+import uuid
+
+import structlog.contextvars
+
 from src.config import get_settings
 from src.database.connection import init_db
 from src.scheduler.jobs import JOB_FUNCTIONS
@@ -83,14 +87,24 @@ def main(argv: list[str]) -> int:
     log = get_logger("jobs_cli")
     init_db()  # chỉ cần DB cho job — KHÔNG gRPC, KHÔNG scheduler
 
-    log.info("jobs_cli.start", arg=arg, job_key=job_key)
+    # Mint a correlation id for this entire CLI invocation so all log lines
+    # (including the start/done lines below, plus everything inside the job)
+    # share one request_id.  JOB_FUNCTIONS callables also call bind_contextvars
+    # internally (via _with_request_id), but they re-use whatever is already
+    # bound; the finally inside them calls unbind_contextvars which removes just
+    # that key — safe because we re-bind it here in the outer scope first.
+    rid = uuid.uuid4().hex
+    structlog.contextvars.bind_contextvars(request_id=rid)
     try:
+        log.info("jobs_cli.start", arg=arg, job_key=job_key)
         JOB_FUNCTIONS[job_key]()  # job_crawl_* (pipeline) hoặc job_train_* / job_*
         log.info("jobs_cli.done", job_key=job_key)
         return 0
     except Exception as exc:
         log.error("jobs_cli.error", job_key=job_key, error=str(exc))
         return 1
+    finally:
+        structlog.contextvars.unbind_contextvars("request_id")
 
 
 if __name__ == "__main__":

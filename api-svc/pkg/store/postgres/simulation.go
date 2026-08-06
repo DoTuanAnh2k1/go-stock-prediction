@@ -1,22 +1,23 @@
 package postgres
 
 import (
+	"context"
 	"time"
 
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 )
 
 // GetAllSimBots returns all simulation bot configurations.
-func (c *Client) GetAllSimBots() ([]modelsdb.SimBot, error) {
+func (c *Client) GetAllSimBots(ctx context.Context) ([]modelsdb.SimBot, error) {
 	var bots []modelsdb.SimBot
-	err := c.Db.Find(&bots).Error
+	err := c.db(ctx).Find(&bots).Error
 	return bots, err
 }
 
 // GetSimBotByID returns a single bot by its string ID.
-func (c *Client) GetSimBotByID(id string) (*modelsdb.SimBot, error) {
+func (c *Client) GetSimBotByID(ctx context.Context, id string) (*modelsdb.SimBot, error) {
 	var bot modelsdb.SimBot
-	err := c.Db.Where("id = ?", id).First(&bot).Error
+	err := c.db(ctx).Where("id = ?", id).First(&bot).Error
 	if err != nil {
 		return nil, err
 	}
@@ -24,41 +25,41 @@ func (c *Client) GetSimBotByID(id string) (*modelsdb.SimBot, error) {
 }
 
 // GetActiveSimBots returns all bots where is_active = true.
-func (c *Client) GetActiveSimBots() ([]modelsdb.SimBot, error) {
+func (c *Client) GetActiveSimBots(ctx context.Context) ([]modelsdb.SimBot, error) {
 	var bots []modelsdb.SimBot
-	err := c.Db.Where("is_active = ?", true).Find(&bots).Error
+	err := c.db(ctx).Where("is_active = ?", true).Find(&bots).Error
 	return bots, err
 }
 
 // GetSimBotsByMarketAlgo returns all bots with the given market and algorithm,
 // ordered by ID for consistent display.
-func (c *Client) GetSimBotsByMarketAlgo(market, algorithm string) ([]modelsdb.SimBot, error) {
+func (c *Client) GetSimBotsByMarketAlgo(ctx context.Context, market, algorithm string) ([]modelsdb.SimBot, error) {
 	var bots []modelsdb.SimBot
-	err := c.Db.Where("market = ? AND algorithm = ?", market, algorithm).
+	err := c.db(ctx).Where("market = ? AND algorithm = ?", market, algorithm).
 		Order("id ASC").
 		Find(&bots).Error
 	return bots, err
 }
 
 // UpdateSimBotConfig saves (full replace) a bot configuration record.
-func (c *Client) UpdateSimBotConfig(bot *modelsdb.SimBot) error {
-	return c.Db.Save(bot).Error
+func (c *Client) UpdateSimBotConfig(ctx context.Context, bot *modelsdb.SimBot) error {
+	return c.db(ctx).Save(bot).Error
 }
 
 // CreateSimSession inserts a new simulation session.
-func (c *Client) CreateSimSession(s *modelsdb.SimSession) error {
-	return c.Db.Create(s).Error
+func (c *Client) CreateSimSession(ctx context.Context, s *modelsdb.SimSession) error {
+	return c.db(ctx).Create(s).Error
 }
 
 // UpdateSimSession saves (full replace) a simulation session.
-func (c *Client) UpdateSimSession(s *modelsdb.SimSession) error {
-	return c.Db.Save(s).Error
+func (c *Client) UpdateSimSession(ctx context.Context, s *modelsdb.SimSession) error {
+	return c.db(ctx).Save(s).Error
 }
 
 // GetLatestSimSession returns the most recently created session for a bot.
-func (c *Client) GetLatestSimSession(botID string) (*modelsdb.SimSession, error) {
+func (c *Client) GetLatestSimSession(ctx context.Context, botID string) (*modelsdb.SimSession, error) {
 	var s modelsdb.SimSession
-	err := c.Db.Where("bot_id = ?", botID).
+	err := c.db(ctx).Where("bot_id = ?", botID).
 		Order("created_at DESC").
 		First(&s).Error
 	if err != nil {
@@ -69,9 +70,9 @@ func (c *Client) GetLatestSimSession(botID string) (*modelsdb.SimSession, error)
 
 // GetBestSimSessionForChart returns the session with the most portfolio snapshots.
 // This avoids showing a nearly-empty running session when a completed backtest exists.
-func (c *Client) GetBestSimSessionForChart(botID string) (*modelsdb.SimSession, error) {
+func (c *Client) GetBestSimSessionForChart(ctx context.Context, botID string) (*modelsdb.SimSession, error) {
 	var s modelsdb.SimSession
-	err := c.Db.Raw(`
+	err := c.db(ctx).Raw(`
 		SELECT s.* FROM sim_sessions s
 		INNER JOIN (
 			SELECT session_id, COUNT(*) AS cnt
@@ -90,9 +91,9 @@ func (c *Client) GetBestSimSessionForChart(botID string) (*modelsdb.SimSession, 
 
 // GetLatestLiveSimSession returns the most recent running live session for a bot.
 // Returns nil error + nil session if none exists.
-func (c *Client) GetLatestLiveSimSession(botID string) (*modelsdb.SimSession, error) {
+func (c *Client) GetLatestLiveSimSession(ctx context.Context, botID string) (*modelsdb.SimSession, error) {
 	var s modelsdb.SimSession
-	err := c.Db.Where("bot_id = ? AND mode = 'live' AND status = 'running'", botID).
+	err := c.db(ctx).Where("bot_id = ? AND mode = 'live' AND status = 'running'", botID).
 		Order("id DESC").
 		First(&s).Error
 	if err != nil {
@@ -102,9 +103,9 @@ func (c *Client) GetLatestLiveSimSession(botID string) (*modelsdb.SimSession, er
 }
 
 // GetSimSessionsByBot returns sessions for a bot ordered newest-first, up to limit rows.
-func (c *Client) GetSimSessionsByBot(botID string, limit int) ([]modelsdb.SimSession, error) {
+func (c *Client) GetSimSessionsByBot(ctx context.Context, botID string, limit int) ([]modelsdb.SimSession, error) {
 	var sessions []modelsdb.SimSession
-	err := c.Db.Where("bot_id = ?", botID).
+	err := c.db(ctx).Where("bot_id = ?", botID).
 		Order("created_at DESC").
 		Limit(limit).
 		Find(&sessions).Error
@@ -112,17 +113,17 @@ func (c *Client) GetSimSessionsByBot(botID string, limit int) ([]modelsdb.SimSes
 }
 
 // CreateSimTrade inserts a new trade record.
-func (c *Client) CreateSimTrade(t *modelsdb.SimTrade) error {
-	return c.Db.Create(t).Error
+func (c *Client) CreateSimTrade(ctx context.Context, t *modelsdb.SimTrade) error {
+	return c.db(ctx).Create(t).Error
 }
 
 // GetSimTrades returns paginated trades for a session, ordered by trade_date ASC.
 // It also returns the total count (before pagination).
-func (c *Client) GetSimTrades(sessionID int64, offset, limit int, excludeHold bool) ([]modelsdb.SimTrade, int64, error) {
+func (c *Client) GetSimTrades(ctx context.Context, sessionID int64, offset, limit int, excludeHold bool) ([]modelsdb.SimTrade, int64, error) {
 	var trades []modelsdb.SimTrade
 	var total int64
 
-	query := c.Db.Model(&modelsdb.SimTrade{}).Where("session_id = ?", sessionID)
+	query := c.db(ctx).Model(&modelsdb.SimTrade{}).Where("session_id = ?", sessionID)
 	if excludeHold {
 		query = query.Where("action <> ?", "HOLD")
 	}
@@ -137,21 +138,21 @@ func (c *Client) GetSimTrades(sessionID int64, offset, limit int, excludeHold bo
 }
 
 // CreateSimPortfolioSnapshot inserts a daily portfolio snapshot.
-func (c *Client) CreateSimPortfolioSnapshot(s *modelsdb.SimPortfolioSnapshot) error {
-	return c.Db.Create(s).Error
+func (c *Client) CreateSimPortfolioSnapshot(ctx context.Context, s *modelsdb.SimPortfolioSnapshot) error {
+	return c.db(ctx).Create(s).Error
 }
 
 // GetSimPortfolioSnapshots returns all daily snapshots for a session ordered ASC.
-func (c *Client) GetSimPortfolioSnapshots(sessionID int64) ([]modelsdb.SimPortfolioSnapshot, error) {
+func (c *Client) GetSimPortfolioSnapshots(ctx context.Context, sessionID int64) ([]modelsdb.SimPortfolioSnapshot, error) {
 	var snaps []modelsdb.SimPortfolioSnapshot
-	err := c.Db.Where("session_id = ?", sessionID).
+	err := c.db(ctx).Where("session_id = ?", sessionID).
 		Order("snapshot_date ASC").
 		Find(&snaps).Error
 	return snaps, err
 }
 
 // GetAllSessionsWithSnapCount returns all sim sessions with their portfolio snapshot counts.
-func (c *Client) GetAllSessionsWithSnapCount() ([]modelsdb.SimSessionWithCount, error) {
+func (c *Client) GetAllSessionsWithSnapCount(ctx context.Context) ([]modelsdb.SimSessionWithCount, error) {
 	type rawRow struct {
 		ID        int64      `gorm:"column:id"`
 		BotID     string     `gorm:"column:bot_id"`
@@ -163,7 +164,7 @@ func (c *Client) GetAllSessionsWithSnapCount() ([]modelsdb.SimSessionWithCount, 
 		SnapCount int        `gorm:"column:snap_count"`
 	}
 	var rows []rawRow
-	err := c.Db.Raw(`
+	err := c.db(ctx).Raw(`
 		SELECT s.id, s.bot_id, s.start_date, s.end_date, s.status, s.mode, s.created_at,
 		       COALESCE(sc.cnt, 0) AS snap_count
 		FROM sim_sessions s
@@ -196,7 +197,7 @@ func (c *Client) GetAllSessionsWithSnapCount() ([]modelsdb.SimSessionWithCount, 
 }
 
 // GetSessionTradeStatsBatch returns pre-aggregated trade stats per session via SQL GROUP BY.
-func (c *Client) GetSessionTradeStatsBatch(sessionIDs []int64) (map[int64]modelsdb.SimTradeStats, error) {
+func (c *Client) GetSessionTradeStatsBatch(ctx context.Context, sessionIDs []int64) (map[int64]modelsdb.SimTradeStats, error) {
 	if len(sessionIDs) == 0 {
 		return map[int64]modelsdb.SimTradeStats{}, nil
 	}
@@ -211,7 +212,7 @@ func (c *Client) GetSessionTradeStatsBatch(sessionIDs []int64) (map[int64]models
 		LossPnl     float64 `gorm:"column:loss_pnl"`
 	}
 	var rows []rawRow
-	err := c.Db.Raw(`
+	err := c.db(ctx).Raw(`
 		SELECT
 		    session_id,
 		    COUNT(CASE WHEN action = 'SELL' THEN 1 END)                                             AS total_trades,
@@ -244,12 +245,12 @@ func (c *Client) GetSessionTradeStatsBatch(sessionIDs []int64) (map[int64]models
 }
 
 // GetLastSnapshotsBatch returns the last portfolio snapshot per session.
-func (c *Client) GetLastSnapshotsBatch(sessionIDs []int64) (map[int64]*modelsdb.SimPortfolioSnapshot, error) {
+func (c *Client) GetLastSnapshotsBatch(ctx context.Context, sessionIDs []int64) (map[int64]*modelsdb.SimPortfolioSnapshot, error) {
 	if len(sessionIDs) == 0 {
 		return map[int64]*modelsdb.SimPortfolioSnapshot{}, nil
 	}
 	var snaps []modelsdb.SimPortfolioSnapshot
-	err := c.Db.Raw(`
+	err := c.db(ctx).Raw(`
 		SELECT sp.*
 		FROM sim_portfolio_snapshots sp
 		INNER JOIN (
@@ -273,9 +274,9 @@ func (c *Client) GetLastSnapshotsBatch(sessionIDs []int64) (map[int64]*modelsdb.
 // GetLeaderboardEntries returns one row per bot using pre-computed KPI columns.
 // Picks the best session per bot: live+running > most snapshots > latest ID.
 // Results sorted by total_return_pct DESC NULLS LAST.
-func (c *Client) GetLeaderboardEntries() ([]modelsdb.LeaderboardEntry, error) {
+func (c *Client) GetLeaderboardEntries(ctx context.Context) ([]modelsdb.LeaderboardEntry, error) {
 	var rows []modelsdb.LeaderboardEntry
-	err := c.Db.Raw(`
+	err := c.db(ctx).Raw(`
 		SELECT
 			s.id              AS session_id,
 			b.id              AS bot_id,

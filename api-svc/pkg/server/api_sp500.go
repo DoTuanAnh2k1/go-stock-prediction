@@ -37,16 +37,17 @@ type sp500LatestResponse struct {
 func GetSP500Latest(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 
-	symbols, err := store.GetSP500Symbols()
+	ctx := r.Context()
+	symbols, err := store.GetSP500Symbols(ctx)
 	if err != nil {
-		logger.Logger.Errorf("[api/sp500/latest] Failed to get S&P 500 symbols: %v", err)
+		logger.Ctx(ctx).Errorf("[api/sp500/latest] Failed to get S&P 500 symbols: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get S&P 500 symbols")
 		return
 	}
 
 	items := make([]sp500LatestItem, 0, len(symbols))
 	for _, sym := range symbols {
-		p, err := store.GetLatestSP500Price(sym)
+		p, err := store.GetLatestSP500Price(ctx, sym)
 		if err != nil || p == nil {
 			continue
 		}
@@ -107,9 +108,10 @@ func GetSP500Prices(w http.ResponseWriter, r *http.Request) {
 	from := to.AddDate(0, 0, -days)
 	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
-	prices, err := store.GetSP500PricesByDateRange(symbol, from, to)
+	ctx := r.Context()
+	prices, err := store.GetSP500PricesByDateRange(ctx, symbol, from, to)
 	if err != nil {
-		logger.Logger.Errorf("[api/sp500/prices] Failed to get S&P 500 prices: %v", err)
+		logger.Ctx(ctx).Errorf("[api/sp500/prices] Failed to get S&P 500 prices: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get S&P 500 prices")
 		return
 	}
@@ -166,14 +168,15 @@ func GetSP500Chart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store := repository.GetSingleton()
+	ctx := r.Context()
 	to := time.Now()
 
 	if days == 1 {
 		// Use 96h window so weekends show the last trading day (Friday US close = Saturday ~03:00 VN)
 		from := to.Add(-96 * time.Hour)
-		intradayPrices, err := store.GetSP500IntradayByRange(symbol, from, to)
+		intradayPrices, err := store.GetSP500IntradayByRange(ctx, symbol, from, to)
 		if err != nil {
-			logger.Logger.Errorf("[api/sp500/chart] Failed to get S&P 500 intraday prices: %v", err)
+			logger.Ctx(ctx).Errorf("[api/sp500/chart] Failed to get S&P 500 intraday prices: %v", err)
 			ResponseError(w, http.StatusInternalServerError, "Failed to get S&P 500 intraday prices")
 			return
 		}
@@ -213,9 +216,9 @@ func GetSP500Chart(w http.ResponseWriter, r *http.Request) {
 	from := to.AddDate(0, 0, -days)
 	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
-	prices, err := store.GetSP500PricesByDateRange(symbol, from, to)
+	prices, err := store.GetSP500PricesByDateRange(ctx, symbol, from, to)
 	if err != nil {
-		logger.Logger.Errorf("[api/sp500/chart] Failed to get S&P 500 prices: %v", err)
+		logger.Ctx(ctx).Errorf("[api/sp500/chart] Failed to get S&P 500 prices: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get S&P 500 prices")
 		return
 	}

@@ -58,7 +58,7 @@ func ListCommandGroupsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := client.ListCommandGroups(r.Context(), callerFromClaims(getClaims(r)))
 	if err != nil {
-		logger.Logger.Errorf("authclient.ListCommandGroups: %v", err)
+		logger.Ctx(r.Context()).Errorf("authclient.ListCommandGroups: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "auth service error")
 		return
 	}

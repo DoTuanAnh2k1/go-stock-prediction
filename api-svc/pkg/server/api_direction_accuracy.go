@@ -41,9 +41,9 @@ func GetDirectionAccuracy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	db := repository.GetSingleton()
-	rows, err := db.GetDirectionAccuracy(market)
+	rows, err := db.GetDirectionAccuracy(r.Context(), market)
 	if err != nil {
-		logger.Logger.Errorf("GetDirectionAccuracy(%s): %v", market, err)
+		logger.Ctx(r.Context()).Errorf("GetDirectionAccuracy(%s): %v", market, err)
 		// Distinguish "unknown market" (user error) from real DB errors.
 		if strings.Contains(err.Error(), "unknown market") {
 			ResponseError(w, http.StatusBadRequest, err.Error())

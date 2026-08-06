@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -21,7 +22,7 @@ var marketTableMap = map[string]struct {
 
 // GetDirectionAccuracy returns per-algorithm direction accuracy stats for the given market.
 // Only rows where direction_correct IS NOT NULL are included in the totals.
-func (c *Client) GetDirectionAccuracy(market string) ([]modelsapi.DirectionAccuracyRow, error) {
+func (c *Client) GetDirectionAccuracy(ctx context.Context, market string) ([]modelsapi.DirectionAccuracyRow, error) {
 	info, ok := marketTableMap[strings.ToUpper(market)]
 	if !ok {
 		return nil, fmt.Errorf("unknown market: %q (valid: GOLD, NASDAQ, CRYPTO, SP500)", market)
@@ -48,7 +49,7 @@ func (c *Client) GetDirectionAccuracy(market string) ([]modelsapi.DirectionAccur
 	}
 
 	var rows []rawRow
-	if err := c.Db.Raw(query).Scan(&rows).Error; err != nil {
+	if err := c.db(ctx).Raw(query).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("GetDirectionAccuracy(%s): %w", market, err)
 	}
 

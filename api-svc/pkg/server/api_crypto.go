@@ -39,16 +39,16 @@ type cryptoLatestResponse struct {
 func GetCryptoLatest(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 
-	coins, err := store.GetCryptoCoins()
+	coins, err := store.GetCryptoCoins(r.Context())
 	if err != nil {
-		logger.Logger.Errorf("[api/crypto/latest] Failed to get crypto coins: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/crypto/latest] Failed to get crypto coins: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get crypto coins")
 		return
 	}
 
 	items := make([]cryptoLatestItem, 0, len(coins))
 	for _, c := range coins {
-		p, err := store.GetLatestCryptoPrice(c.CoinID)
+		p, err := store.GetLatestCryptoPrice(r.Context(), c.CoinID)
 		if err != nil || p == nil {
 			continue
 		}
@@ -109,9 +109,9 @@ func GetCryptoPrices(w http.ResponseWriter, r *http.Request) {
 	from := to.AddDate(0, 0, -days)
 	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
-	prices, err := store.GetCryptoPricesByDateRange(coinID, from, to)
+	prices, err := store.GetCryptoPricesByDateRange(r.Context(), coinID, from, to)
 	if err != nil {
-		logger.Logger.Errorf("[api/crypto/prices] Failed to get crypto prices: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/crypto/prices] Failed to get crypto prices: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get crypto prices")
 		return
 	}
@@ -170,9 +170,9 @@ func GetCryptoChart(w http.ResponseWriter, r *http.Request) {
 
 	if days == 1 {
 		from := to.Add(-24 * time.Hour)
-		intradayPrices, err := store.GetCryptoIntradayByRange(coinID, from, to)
+		intradayPrices, err := store.GetCryptoIntradayByRange(r.Context(), coinID, from, to)
 		if err != nil {
-			logger.Logger.Errorf("[api/crypto/chart] Failed to get crypto intraday prices: %v", err)
+			logger.Ctx(r.Context()).Errorf("[api/crypto/chart] Failed to get crypto intraday prices: %v", err)
 			ResponseError(w, http.StatusInternalServerError, "Failed to get crypto intraday prices")
 			return
 		}
@@ -229,9 +229,9 @@ func GetCryptoChart(w http.ResponseWriter, r *http.Request) {
 	from := to.AddDate(0, 0, -days)
 	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
-	prices, err := store.GetCryptoPricesByDateRange(coinID, from, to)
+	prices, err := store.GetCryptoPricesByDateRange(r.Context(), coinID, from, to)
 	if err != nil {
-		logger.Logger.Errorf("[api/crypto/chart] Failed to get crypto prices: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/crypto/chart] Failed to get crypto prices: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get crypto prices")
 		return
 	}

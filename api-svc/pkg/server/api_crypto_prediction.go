@@ -41,9 +41,9 @@ type cryptoPredictionsResponse struct {
 //	@Router       /api/crypto/predictions/latest [get]
 func GetCryptoPredictionsLatest(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
-	preds, err := store.GetLatestCryptoPredictions()
+	preds, err := store.GetLatestCryptoPredictions(r.Context())
 	if err != nil {
-		logger.Logger.Errorf("[api/crypto/predictions/latest] Failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/crypto/predictions/latest] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get latest crypto predictions")
 		return
 	}
@@ -79,9 +79,9 @@ func GetCryptoPredictionsLatest(w http.ResponseWriter, r *http.Request) {
 //	@Router       /api/crypto/predictions/latest-results [get]
 func GetCryptoPredictionsLatestResults(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
-	preds, err := store.GetLatestConfirmedCryptoPredictions()
+	preds, err := store.GetLatestConfirmedCryptoPredictions(r.Context())
 	if err != nil {
-		logger.Logger.Errorf("[api/crypto/predictions/latest-results] Failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/crypto/predictions/latest-results] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get latest confirmed crypto predictions")
 		return
 	}
@@ -147,9 +147,9 @@ func GetCryptoPredictionsChart(w http.ResponseWriter, r *http.Request) {
 	to := time.Now()
 	from := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, to.Location()).AddDate(0, 0, -(days - 1))
 
-	preds, err := store.GetCryptoPredictionsByDateRange(coinID, from, to)
+	preds, err := store.GetCryptoPredictionsByDateRange(r.Context(), coinID, from, to)
 	if err != nil {
-		logger.Logger.Errorf("[api/crypto/predictions/chart] Failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/crypto/predictions/chart] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get crypto prediction chart data")
 		return
 	}
@@ -229,9 +229,9 @@ func GetCryptoPredictions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store := repository.GetSingleton()
-	preds, total, err := store.GetCryptoPredictionsPage(page, limit, coinID, algorithm, statusFilter, sortBy, sortDir)
+	preds, total, err := store.GetCryptoPredictionsPage(r.Context(), page, limit, coinID, algorithm, statusFilter, sortBy, sortDir)
 	if err != nil {
-		logger.Logger.Errorf("[api/crypto/predictions] Failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/crypto/predictions] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get crypto predictions")
 		return
 	}

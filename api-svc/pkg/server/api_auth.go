@@ -80,7 +80,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		case codes.Unauthenticated:
 			ResponseError(w, http.StatusUnauthorized, "invalid credentials")
 		default:
-			logger.Logger.Errorf("authclient.Login error: %v", err)
+			logger.Ctx(r.Context()).Errorf("authclient.Login error: %v", err)
 			ResponseError(w, http.StatusInternalServerError, "auth service error")
 		}
 		return
@@ -162,7 +162,7 @@ func ChangePasswordHandler(w http.ResponseWriter, r *http.Request) {
 		case codes.InvalidArgument:
 			ResponseError(w, http.StatusBadRequest, st.Message())
 		default:
-			logger.Logger.Errorf("authclient.ChangePassword error: %v", err)
+			logger.Ctx(r.Context()).Errorf("authclient.ChangePassword error: %v", err)
 			ResponseError(w, http.StatusInternalServerError, "auth service error")
 		}
 		return

@@ -31,7 +31,7 @@ func GetMyCommandsHandler(w http.ResponseWriter, r *http.Request) {
 		UserId: int64(userIDFloat),
 	})
 	if err != nil {
-		logger.Logger.Errorf("authclient.GetUserCommands: %v", err)
+		logger.Ctx(r.Context()).Errorf("authclient.GetUserCommands: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "auth service error")
 		return
 	}

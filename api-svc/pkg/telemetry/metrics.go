@@ -36,10 +36,20 @@ var (
 		},
 		[]string{"method", "path"},
 	)
+
+	// triggerTotal counts calls to each /api/trigger/* endpoint so operators
+	// can track how often manual or automated triggers fire in production.
+	triggerTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "trigger_total",
+			Help: "Total number of calls to /api/trigger/* endpoints, by endpoint route.",
+		},
+		[]string{"endpoint"},
+	)
 )
 
 func init() {
-	prometheus.MustRegister(httpRequestsTotal, httpRequestDuration, httpRequestErrors)
+	prometheus.MustRegister(httpRequestsTotal, httpRequestDuration, httpRequestErrors, triggerTotal)
 }
 
 // MetricsHandler returns the Prometheus scrape handler for GET /metrics.
@@ -57,4 +67,10 @@ func ObserveHTTP(method, route string, status int, dur time.Duration) {
 	if status >= 500 {
 		httpRequestErrors.WithLabelValues(method, route).Inc()
 	}
+}
+
+// RecordTrigger increments trigger_total for the given route. It should be
+// called once per request whose matched route falls under /api/trigger/.
+func RecordTrigger(endpoint string) {
+	triggerTotal.WithLabelValues(endpoint).Inc()
 }

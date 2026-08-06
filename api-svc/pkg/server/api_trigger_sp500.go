@@ -26,7 +26,7 @@ func TriggerSP500CrawlerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := client.TriggerSP500Crawler(r.Context(), &pb.Empty{})
 	if err != nil {
-		logger.Logger.Errorf("TriggerSP500Crawler: %v", err)
+		logger.Ctx(r.Context()).Errorf("TriggerSP500Crawler: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -52,7 +52,7 @@ func TriggerSP500PredictHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := client.TriggerSP500Predict(r.Context(), &pb.Empty{})
 	if err != nil {
-		logger.Logger.Errorf("TriggerSP500Predict: %v", err)
+		logger.Ctx(r.Context()).Errorf("TriggerSP500Predict: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"context"
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 	"strings"
 	"time"
@@ -9,13 +10,13 @@ import (
 )
 
 // CreateGoldPrediction saves a new gold prediction record.
-func (c *Client) CreateGoldPrediction(pred *modelsdb.GoldPrediction) error {
+func (c *Client) CreateGoldPrediction(_ context.Context, pred *modelsdb.GoldPrediction) error {
 	return c.Db.Create(pred).Error
 }
 
 // GetGoldPredictions returns gold predictions filtered by source, productType, and algorithm.
 // Empty strings mean "no filter". Results are ordered by prediction_date DESC.
-func (c *Client) GetGoldPredictions(source, productType, algorithm string, limit int) ([]modelsdb.GoldPrediction, error) {
+func (c *Client) GetGoldPredictions(_ context.Context, source, productType, algorithm string, limit int) ([]modelsdb.GoldPrediction, error) {
 	var preds []modelsdb.GoldPrediction
 	query := c.Db.Order("prediction_date DESC")
 	if source != "" {
@@ -35,7 +36,7 @@ func (c *Client) GetGoldPredictions(source, productType, algorithm string, limit
 }
 
 // GetLatestGoldPredictions returns the most recent prediction per (source, product_type, algorithm_name).
-func (c *Client) GetLatestGoldPredictions() ([]modelsdb.GoldPrediction, error) {
+func (c *Client) GetLatestGoldPredictions(_ context.Context) ([]modelsdb.GoldPrediction, error) {
 	var preds []modelsdb.GoldPrediction
 	subQuery := c.Db.Model(&modelsdb.GoldPrediction{}).
 		Select("source, product_type, algorithm_name, MAX(prediction_date) as max_date").
@@ -52,7 +53,7 @@ func (c *Client) GetLatestGoldPredictions() ([]modelsdb.GoldPrediction, error) {
 // GetLatestConfirmedGoldPredictions returns the most recent prediction
 // per (source, product_type, algorithm_name), regardless of status.
 // Uses MAX(id) to avoid duplicates when multiple rows share the same prediction_date.
-func (c *Client) GetLatestConfirmedGoldPredictions() ([]modelsdb.GoldPrediction, error) {
+func (c *Client) GetLatestConfirmedGoldPredictions(_ context.Context) ([]modelsdb.GoldPrediction, error) {
 	var preds []modelsdb.GoldPrediction
 	subQuery := c.Db.Model(&modelsdb.GoldPrediction{}).
 		Select("MAX(id) as max_id").
@@ -68,7 +69,7 @@ func (c *Client) GetLatestConfirmedGoldPredictions() ([]modelsdb.GoldPrediction,
 // GetGoldPredictionsByDateRange returns gold predictions within a date range.
 // Filters by prediction_date (when the prediction was created) so intraday predictions
 // created today are included even though their target_date is tomorrow.
-func (c *Client) GetGoldPredictionsByDateRange(source, productType string, from, to time.Time) ([]modelsdb.GoldPrediction, error) {
+func (c *Client) GetGoldPredictionsByDateRange(_ context.Context, source, productType string, from, to time.Time) ([]modelsdb.GoldPrediction, error) {
 	var preds []modelsdb.GoldPrediction
 	query := c.Db.Where("prediction_date BETWEEN ? AND ?", from, to).Order("prediction_date ASC")
 	if source != "" {
@@ -82,7 +83,7 @@ func (c *Client) GetGoldPredictionsByDateRange(source, productType string, from,
 }
 
 // GetGoldPredictionsPage returns paginated gold predictions with optional filters.
-func (c *Client) GetGoldPredictionsPage(page, limit int, search, algorithm, status, sortBy, sortDir string) ([]modelsdb.GoldPrediction, int64, error) {
+func (c *Client) GetGoldPredictionsPage(_ context.Context, page, limit int, search, algorithm, status, sortBy, sortDir string) ([]modelsdb.GoldPrediction, int64, error) {
 	var preds []modelsdb.GoldPrediction
 	var total int64
 
@@ -131,14 +132,14 @@ func (c *Client) GetGoldPredictionsPage(page, limit int, search, algorithm, stat
 }
 
 // GetPendingGoldPredictions returns gold predictions where actual_price IS NULL and target_date <= cutoff.
-func (c *Client) GetPendingGoldPredictions(cutoff time.Time) ([]modelsdb.GoldPrediction, error) {
+func (c *Client) GetPendingGoldPredictions(_ context.Context, cutoff time.Time) ([]modelsdb.GoldPrediction, error) {
 	var preds []modelsdb.GoldPrediction
 	err := c.Db.Where("actual_price IS NULL AND target_date <= ? AND deleted_at IS NULL", cutoff).Find(&preds).Error
 	return preds, err
 }
 
 // UpdateGoldPredictionActual sets actual_price and accuracy for a gold prediction.
-func (c *Client) UpdateGoldPredictionActual(id uint, actual, accuracy *decimal.Decimal) error {
+func (c *Client) UpdateGoldPredictionActual(_ context.Context, id uint, actual, accuracy *decimal.Decimal) error {
 	return c.Db.Model(&modelsdb.GoldPrediction{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
@@ -148,11 +149,11 @@ func (c *Client) UpdateGoldPredictionActual(id uint, actual, accuracy *decimal.D
 }
 
 // DeleteGoldPredictionsBeforeDate deletes all gold predictions whose target_date < cutoff.
-func (c *Client) DeleteGoldPredictionsBeforeDate(cutoff time.Time) error {
+func (c *Client) DeleteGoldPredictionsBeforeDate(_ context.Context, cutoff time.Time) error {
 	return c.Db.Where("target_date < ? AND deleted_at IS NULL", cutoff).Delete(&modelsdb.GoldPrediction{}).Error
 }
 
 // BulkCreateGoldPredictions inserts multiple gold predictions in batches of 200.
-func (c *Client) BulkCreateGoldPredictions(preds []modelsdb.GoldPrediction) error {
+func (c *Client) BulkCreateGoldPredictions(_ context.Context, preds []modelsdb.GoldPrediction) error {
 	return c.Db.CreateInBatches(preds, 200).Error
 }

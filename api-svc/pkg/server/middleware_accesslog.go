@@ -81,6 +81,9 @@ func AccessLogMiddleware(next http.Handler) http.Handler {
 			route = r.URL.Path
 		}
 		telemetry.ObserveHTTP(r.Method, route, rec.status, elapsed)
+		if strings.HasPrefix(route, "/api/trigger/") {
+			telemetry.RecordTrigger(route)
+		}
 
 		user := "-"
 		if claims := getClaims(r); claims != nil {
@@ -94,13 +97,14 @@ func AccessLogMiddleware(next http.Handler) http.Handler {
 			r.Method, r.URL.Path, rec.status, dur, ip, user,
 		)
 
+		log := logger.Ctx(r.Context())
 		switch {
 		case rec.status >= 500:
-			logger.Logger.Errorf("request %s", line)
+			log.Errorf("request %s", line)
 		case rec.status >= 400:
-			logger.Logger.Warnf("request %s", line)
+			log.Warnf("request %s", line)
 		default:
-			logger.Logger.Infof("request %s", line)
+			log.Infof("request %s", line)
 		}
 	})
 }

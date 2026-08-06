@@ -21,14 +21,14 @@ import (
 //	@Security     BearerAuth
 //	@Router       /api/trigger/crypto-history [post]
 func TriggerCryptoHistoryHandler(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Info("[trigger] crypto-history import requested")
+	logger.Ctx(r.Context()).Info("[trigger] crypto-history import requested")
 	client := requireGRPCClient(w)
 	if client == nil {
 		return
 	}
 	_, err := client.TriggerCryptoHistory(r.Context(), &pb.Empty{})
 	if err != nil {
-		logger.Logger.Errorf("[trigger] crypto-history failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[trigger] crypto-history failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

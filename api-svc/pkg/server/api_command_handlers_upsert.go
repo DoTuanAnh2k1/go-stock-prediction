@@ -75,7 +75,7 @@ func UpsertCommandHandlersHandler(w http.ResponseWriter, r *http.Request) {
 		Handlers: handlers,
 	})
 	if err != nil {
-		logger.Logger.Errorf("authclient.UpsertHandlers: %v", err)
+		logger.Ctx(r.Context()).Errorf("authclient.UpsertHandlers: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "auth service error")
 		return
 	}

@@ -56,9 +56,9 @@ func GetGoldPredictions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store := repository.GetSingleton()
-	preds, err := store.GetGoldPredictions(source, productType, algorithm, limit)
+	preds, err := store.GetGoldPredictions(r.Context(), source, productType, algorithm, limit)
 	if err != nil {
-		logger.Logger.Errorf("[api/gold/predictions] Failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/gold/predictions] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get gold predictions")
 		return
 	}
@@ -94,9 +94,9 @@ func GetGoldPredictions(w http.ResponseWriter, r *http.Request) {
 //	@Router       /api/gold/predictions/latest [get]
 func GetLatestGoldPredictions(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
-	preds, err := store.GetLatestGoldPredictions()
+	preds, err := store.GetLatestGoldPredictions(r.Context())
 	if err != nil {
-		logger.Logger.Errorf("[api/gold/predictions/latest] Failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/gold/predictions/latest] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get latest gold predictions")
 		return
 	}
@@ -132,9 +132,9 @@ func GetLatestGoldPredictions(w http.ResponseWriter, r *http.Request) {
 //	@Router       /api/gold/predictions/latest-results [get]
 func GetGoldPredictionsLatestResults(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
-	preds, err := store.GetLatestConfirmedGoldPredictions()
+	preds, err := store.GetLatestConfirmedGoldPredictions(r.Context())
 	if err != nil {
-		logger.Logger.Errorf("[api/gold/predictions/latest-results] Failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/gold/predictions/latest-results] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get latest confirmed gold predictions")
 		return
 	}
@@ -202,9 +202,9 @@ func GetGoldPredictionChart(w http.ResponseWriter, r *http.Request) {
 	to := time.Now()
 	from := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, to.Location()).AddDate(0, 0, -(days - 1))
 
-	preds, err := store.GetGoldPredictionsByDateRange(source, productType, from, to)
+	preds, err := store.GetGoldPredictionsByDateRange(r.Context(), source, productType, from, to)
 	if err != nil {
-		logger.Logger.Errorf("[api/gold/predictions/chart] Failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/gold/predictions/chart] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get gold prediction chart data")
 		return
 	}
@@ -259,7 +259,7 @@ func TriggerGoldPredictHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err := client.TriggerGoldPredict(r.Context(), &pb.Empty{})
 	if err != nil {
-		logger.Logger.Errorf("Manual gold prediction failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("Manual gold prediction failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

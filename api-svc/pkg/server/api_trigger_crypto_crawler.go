@@ -21,14 +21,14 @@ import (
 //	@Security     BearerAuth
 //	@Router       /api/trigger/crypto-crawler [post]
 func TriggerCryptoCrawlerHandler(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Info("[trigger] Crypto crawler handler called")
+	logger.Ctx(r.Context()).Info("[trigger] Crypto crawler handler called")
 	client := requireGRPCClient(w)
 	if client == nil {
 		return
 	}
 	_, err := client.TriggerCryptoCrawler(r.Context(), &pb.Empty{})
 	if err != nil {
-		logger.Logger.Errorf("[trigger] Crypto crawler failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[trigger] Crypto crawler failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

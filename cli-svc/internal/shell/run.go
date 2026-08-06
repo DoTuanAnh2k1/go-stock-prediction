@@ -3,6 +3,7 @@ package shell
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 
 	"go-stock-prediction/cli-svc/internal/client"
@@ -42,6 +43,11 @@ func (r *Runner) Run(ctx context.Context, line string) (string, bool) {
 	if err != nil {
 		return "error: " + err.Error(), false
 	}
+	// Mint one correlation id per resolved command and thread it through ctx so
+	// every HTTP call this command makes shares the same X-Request-ID.
+	reqID := client.NewRequestID()
+	ctx = client.WithRequestID(ctx, reqID)
+	log.Printf("cli command request_id=%s cmd=%q handler=%s", reqID, h.Resource, h.Key)
 	raw, status, err := h.Execute(ctx, r.client, r.jwt, args)
 	if err != nil {
 		return "request failed: " + err.Error(), false

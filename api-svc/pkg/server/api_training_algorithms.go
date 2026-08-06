@@ -19,14 +19,14 @@ import (
 //	@Failure      500  {object}  ResponseFailure
 //	@Router       /api/training/algorithms [get]
 func GetTrainingAlgorithms(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Info("Getting training algorithms...")
+	logger.Ctx(r.Context()).Info("Getting training algorithms...")
 
 	store := repository.GetSingleton()
 
 	// Latest training log per algorithm
-	latestLogs, err := store.GetLatestTrainingLogByAlgorithm()
+	latestLogs, err := store.GetLatestTrainingLogByAlgorithm(r.Context())
 	if err != nil {
-		logger.Logger.Errorf("Failed to get latest training logs: %v", err)
+		logger.Ctx(r.Context()).Errorf("Failed to get latest training logs: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get training algorithm info")
 		return
 	}

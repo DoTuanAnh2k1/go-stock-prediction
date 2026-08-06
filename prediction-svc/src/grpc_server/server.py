@@ -579,8 +579,15 @@ def start_grpc_server(port: int) -> None:
     global _grpc_server
     pb2, pb2_grpc = _get_pb()
 
-    # Collect interceptors: OTel tracing (extracts W3C context) + Prometheus metrics.
+    # Collect interceptors (order matters — applied outermost-first):
+    #   1. RequestIdInterceptor  — binds x-request-id into structlog contextvars
+    #      so every log line inside any subsequent interceptor or handler carries it.
+    #   2. OTel tracing          — extracts W3C trace context.
+    #   3. Prometheus metrics    — records per-method RPC count / latency.
     interceptors: list[grpc.ServerInterceptor] = []
+
+    from src.grpc_server.request_id_interceptor import RequestIdInterceptor
+    interceptors.append(RequestIdInterceptor())
 
     from src.telemetry.tracing import get_grpc_server_interceptor
     otel_interceptor = get_grpc_server_interceptor()

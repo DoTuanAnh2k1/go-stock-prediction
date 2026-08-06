@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -11,7 +12,7 @@ import (
 // GetSessionDirAccuracy returns per-algorithm direction accuracy for predictions
 // created in [from, to) for the given market. Only reconciled rows (direction_correct
 // IS NOT NULL) are counted.
-func (c *Client) GetSessionDirAccuracy(market string, from, to time.Time) ([]modelsapi.SessionDirAccRow, error) {
+func (c *Client) GetSessionDirAccuracy(_ context.Context, market string, from, to time.Time) ([]modelsapi.SessionDirAccRow, error) {
 	info, ok := marketTableMap[strings.ToUpper(market)]
 	if !ok {
 		return nil, fmt.Errorf("unknown market: %q (valid: GOLD, NASDAQ, CRYPTO, SP500)", market)
@@ -59,7 +60,7 @@ func (c *Client) GetSessionDirAccuracy(market string, from, to time.Time) ([]mod
 
 // GetSessionBotTrades returns per-bot trade stats with portfolio snapshot data for SELL trades
 // closed in [from, to) for the given market. Results are ordered by session_pnl DESC.
-func (c *Client) GetSessionBotTrades(market string, from, to time.Time) ([]modelsapi.SessionBotDetail, error) {
+func (c *Client) GetSessionBotTrades(_ context.Context, market string, from, to time.Time) ([]modelsapi.SessionBotDetail, error) {
 	type rawRow struct {
 		BotID          string
 		DisplayName    string

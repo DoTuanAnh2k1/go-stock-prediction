@@ -16,6 +16,15 @@ pub async fn request_id_middleware(mut request: Request, next: Next) -> Response
 
     request.extensions_mut().insert(request_id.clone());
 
+    // Propagate the id onto the REQUEST headers so the proxied call to the
+    // backend carries `x-request-id` downstream. Skip gracefully if the value
+    // is not a valid header (same guard used for the response header below).
+    if let Ok(header_value) = HeaderValue::from_str(&request_id) {
+        request
+            .headers_mut()
+            .insert(REQUEST_ID_HEADER, header_value);
+    }
+
     let mut response = next.run(request).await;
 
     if let Ok(header_value) = HeaderValue::from_str(&request_id) {

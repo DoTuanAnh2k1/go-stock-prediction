@@ -29,6 +29,7 @@ from src.database.models import (
     TrainingLog,
 )
 from src.crawlers import sanity
+from src.telemetry import metrics as _metrics
 from src.utils.logger import get_logger
 
 log = get_logger("repository")
@@ -146,6 +147,7 @@ def upsert_gold_price(
             last=_last_close,
             reason=_reason,
         )
+        _metrics.record_crawl("GOLD", "reject")
         return
 
     with session_scope() as session:
@@ -180,6 +182,7 @@ def upsert_gold_price(
                     currency=currency,
                 )
             )
+    _metrics.record_crawl("GOLD", "saved")
 
 
 def get_gold_prices_asc(source: str, product_type: str, limit: int = 270) -> list[GoldPrice]:
@@ -351,6 +354,7 @@ def upsert_nasdaq_price(
             last=_last_close,
             reason=_reason,
         )
+        _metrics.record_crawl("NASDAQ100", "reject")
         return
 
     with session_scope() as session:
@@ -379,6 +383,7 @@ def upsert_nasdaq_price(
                     currency=currency,
                 )
             )
+    _metrics.record_crawl("NASDAQ100", "saved")
 
 
 def get_nasdaq_prices_asc(symbol: str, limit: int = 270) -> list[NasdaqPrice]:
@@ -573,6 +578,7 @@ def upsert_crypto_price(
             last=_last_close,
             reason=_reason,
         )
+        _metrics.record_crawl("CRYPTO", "reject")
         return
 
     with session_scope() as session:
@@ -607,6 +613,7 @@ def upsert_crypto_price(
                     currency=currency,
                 )
             )
+    _metrics.record_crawl("CRYPTO", "saved")
 
 
 def get_crypto_prices_asc(coin_id: str, limit: int = 270) -> list[CryptoPrice]:
@@ -778,6 +785,7 @@ def upsert_sp500_price(
             last=_last_close,
             reason=_reason,
         )
+        _metrics.record_crawl("SP500", "reject")
         return
 
     with session_scope() as session:
@@ -806,6 +814,7 @@ def upsert_sp500_price(
                     currency=currency,
                 )
             )
+    _metrics.record_crawl("SP500", "saved")
 
 
 def get_sp500_prices_asc(symbol: str, limit: int = 270) -> list[SP500Price]:

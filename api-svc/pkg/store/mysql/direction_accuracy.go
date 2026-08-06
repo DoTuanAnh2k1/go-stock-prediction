@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -21,7 +22,7 @@ var marketTableMap = map[string]struct {
 
 // GetDirectionAccuracy returns per-algorithm direction accuracy stats for the given market.
 // Only rows where direction_correct IS NOT NULL are included in the totals.
-func (c *Client) GetDirectionAccuracy(market string) ([]modelsapi.DirectionAccuracyRow, error) {
+func (c *Client) GetDirectionAccuracy(_ context.Context, market string) ([]modelsapi.DirectionAccuracyRow, error) {
 	info, ok := marketTableMap[strings.ToUpper(market)]
 	if !ok {
 		return nil, fmt.Errorf("unknown market: %q (valid: GOLD, NASDAQ, CRYPTO, SP500)", market)

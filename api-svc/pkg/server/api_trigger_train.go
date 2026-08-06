@@ -41,7 +41,7 @@ func TriggerTrainHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&req) // ignore decode error — algorithm field is optional
 	}
 
-	logger.Logger.Infof("Trigger train request: algorithm=%q", req.Algorithm)
+	logger.Ctx(r.Context()).Infof("Trigger train request: algorithm=%q", req.Algorithm)
 
 	if req.Algorithm != "" {
 		if err := validateAlgorithm(req.Algorithm); err != nil {
@@ -67,7 +67,7 @@ func TriggerTrainHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		logger.Logger.Errorf("Failed to start training: %v", err)
+		logger.Ctx(r.Context()).Errorf("Failed to start training: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to start training: "+err.Error())
 		return
 	}

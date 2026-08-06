@@ -4,17 +4,51 @@ import (
 	"context"
 
 	"go-stock-prediction/pkg/logger"
+	"go-stock-prediction/pkg/reqid"
 	"go-stock-prediction/pkg/telemetry"
 	authpb "go-stock-prediction/proto/auth"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 var (
 	conn       *grpc.ClientConn
 	authClient authpb.AuthServiceClient
 )
+
+// reqidUnaryInterceptor propagates the correlation ID from the context into
+// outbound gRPC unary call metadata as "x-request-id".
+func reqidUnaryInterceptor(
+	ctx context.Context,
+	method string,
+	req, reply interface{},
+	cc *grpc.ClientConn,
+	invoker grpc.UnaryInvoker,
+	opts ...grpc.CallOption,
+) error {
+	if id, ok := reqid.FromContext(ctx); ok {
+		ctx = metadata.AppendToOutgoingContext(ctx, reqid.MetaKey, id)
+	}
+	return invoker(ctx, method, req, reply, cc, opts...)
+}
+
+// reqidStreamInterceptor propagates the correlation ID from the context into
+// outbound gRPC streaming call metadata as "x-request-id".
+func reqidStreamInterceptor(
+	ctx context.Context,
+	desc *grpc.StreamDesc,
+	cc *grpc.ClientConn,
+	method string,
+	streamer grpc.Streamer,
+	opts ...grpc.CallOption,
+) (grpc.ClientStream, error) {
+	if id, ok := reqid.FromContext(ctx); ok {
+		ctx = metadata.AppendToOutgoingContext(ctx, reqid.MetaKey, id)
+	}
+	return streamer(ctx, desc, cc, method, opts...)
+}
 
 // Init creates a gRPC connection to the Java Auth Service at the given target
 // and initialises the singleton AuthServiceClient.
@@ -25,6 +59,9 @@ func Init(target string) {
 		// Injects the current trace context into outbound RPC metadata so the
 		// span chains into the Java auth service.
 		telemetry.GRPCClientDialOption(),
+		// Propagates the X-Request-ID correlation ID into outbound gRPC metadata.
+		grpc.WithChainUnaryInterceptor(reqidUnaryInterceptor),
+		grpc.WithChainStreamInterceptor(reqidStreamInterceptor),
 	)
 	if err != nil {
 		logger.Logger.Fatalf("authclient: failed to connect to %s: %v", target, err)

@@ -94,7 +94,7 @@ func ListBackupsHandler(w http.ResponseWriter, r *http.Request) {
 			ResponseSuccess(w, http.StatusOK, []BackupInfo{})
 			return
 		}
-		logger.Logger.Errorf("Failed to read backup directory %s: %v", backupDir, err)
+		logger.Ctx(r.Context()).Errorf("Failed to read backup directory %s: %v", backupDir, err)
 		ResponseError(w, http.StatusInternalServerError, "failed to read backup directory")
 		return
 	}
@@ -110,7 +110,7 @@ func ListBackupsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		info, err := entry.Info()
 		if err != nil {
-			logger.Logger.Errorf("Failed to stat backup file %s: %v", name, err)
+			logger.Ctx(r.Context()).Errorf("Failed to stat backup file %s: %v", name, err)
 			continue
 		}
 		backups = append(backups, BackupInfo{
@@ -187,7 +187,7 @@ func runBackup(ctx context.Context) (string, int64, error) {
 
 	backupDir := getBackupDir()
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
-		logger.Logger.Errorf("Failed to create backup directory %s: %v", backupDir, err)
+		logger.Ctx(ctx).Errorf("Failed to create backup directory %s: %v", backupDir, err)
 		return "", 0, fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
@@ -197,7 +197,7 @@ func runBackup(ctx context.Context) (string, int64, error) {
 
 	outFile, err := os.Create(filePath)
 	if err != nil {
-		logger.Logger.Errorf("Failed to create backup file %s: %v", filePath, err)
+		logger.Ctx(ctx).Errorf("Failed to create backup file %s: %v", filePath, err)
 		return "", 0, fmt.Errorf("failed to create backup file: %w", err)
 	}
 	defer outFile.Close()
@@ -226,26 +226,26 @@ func runBackup(ctx context.Context) (string, int64, error) {
 	var stderrBuf strings.Builder
 	cmd.Stderr = &stderrBuf
 
-	logger.Logger.Infof("Starting database backup to %s", filename)
+	logger.Ctx(ctx).Infof("Starting database backup to %s", filename)
 	if err := cmd.Run(); err != nil {
 		outFile.Close()
 		os.Remove(filePath)
-		logger.Logger.Errorf("pg_dump failed: %v — stderr: %s", err, stderrBuf.String())
+		logger.Ctx(ctx).Errorf("pg_dump failed: %v — stderr: %s", err, stderrBuf.String())
 		return "", 0, fmt.Errorf("pg_dump failed: %v", err)
 	}
 
 	if err := gzWriter.Close(); err != nil {
-		logger.Logger.Errorf("Failed to finalize gzip for %s: %v", filename, err)
+		logger.Ctx(ctx).Errorf("Failed to finalize gzip for %s: %v", filename, err)
 		return "", 0, fmt.Errorf("failed to finalize backup file: %w", err)
 	}
 
 	info, err := outFile.Stat()
 	if err != nil {
-		logger.Logger.Errorf("Failed to stat backup file %s: %v", filePath, err)
+		logger.Ctx(ctx).Errorf("Failed to stat backup file %s: %v", filePath, err)
 		return "", 0, fmt.Errorf("backup created but could not read file info: %w", err)
 	}
 
-	logger.Logger.Infof("Backup completed: %s (%s)", filename, formatSizeHuman(info.Size()))
+	logger.Ctx(ctx).Infof("Backup completed: %s (%s)", filename, formatSizeHuman(info.Size()))
 
 	cleanupOldBackups(backupDir, 10)
 
@@ -329,7 +329,7 @@ func DownloadBackupHandler(w http.ResponseWriter, r *http.Request) {
 			ResponseError(w, http.StatusNotFound, "backup file not found")
 			return
 		}
-		logger.Logger.Errorf("Failed to open backup file %s: %v", filePath, err)
+		logger.Ctx(r.Context()).Errorf("Failed to open backup file %s: %v", filePath, err)
 		ResponseError(w, http.StatusInternalServerError, "failed to open backup file")
 		return
 	}
@@ -337,7 +337,7 @@ func DownloadBackupHandler(w http.ResponseWriter, r *http.Request) {
 
 	info, err := f.Stat()
 	if err != nil {
-		logger.Logger.Errorf("Failed to stat backup file %s: %v", filePath, err)
+		logger.Ctx(r.Context()).Errorf("Failed to stat backup file %s: %v", filePath, err)
 		ResponseError(w, http.StatusInternalServerError, "failed to read backup file info")
 		return
 	}
@@ -348,7 +348,7 @@ func DownloadBackupHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := io.Copy(w, f); err != nil {
-		logger.Logger.Errorf("Failed to stream backup file %s: %v", filename, err)
+		logger.Ctx(r.Context()).Errorf("Failed to stream backup file %s: %v", filename, err)
 	}
 }
 
@@ -384,12 +384,12 @@ func DeleteBackupHandler(w http.ResponseWriter, r *http.Request) {
 			ResponseError(w, http.StatusNotFound, "backup file not found")
 			return
 		}
-		logger.Logger.Errorf("Failed to delete backup file %s: %v", filePath, err)
+		logger.Ctx(r.Context()).Errorf("Failed to delete backup file %s: %v", filePath, err)
 		ResponseError(w, http.StatusInternalServerError, "failed to delete backup file")
 		return
 	}
 
-	logger.Logger.Infof("Deleted backup file: %s", filename)
+	logger.Ctx(r.Context()).Infof("Deleted backup file: %s", filename)
 	ResponseSuccess(w, http.StatusOK, map[string]interface{}{
 		"message":  fmt.Sprintf("backup file %s deleted successfully", filename),
 		"filename": filename,

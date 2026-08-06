@@ -38,7 +38,17 @@ pub async fn proxy_handler(
         http.request.method = %method,
         url.path = %uri.path(),
         http.response.status_code = tracing::field::Empty,
+        request_id = tracing::field::Empty,
     );
+    // Correlation id: request_id_middleware has already resolved/minted it and
+    // written it onto the request headers, so read it back here to tag the span
+    // (and thus the "Routing request" log inside it).
+    if let Some(request_id) = headers
+        .get(crate::middleware::request_id::REQUEST_ID_HEADER)
+        .and_then(|v| v.to_str().ok())
+    {
+        span.record("request_id", request_id);
+    }
     let started = Instant::now();
     let method_label = method.as_str().to_string();
 

@@ -41,19 +41,20 @@ func GetTrainingDetail(w http.ResponseWriter, r *http.Request) {
 
 	store := repository.GetSingleton()
 
+	ctx := r.Context()
 	// Try as numeric ID first
 	if id, err := strconv.ParseUint(idStr, 10, 64); err == nil {
-		log, err := store.GetTrainingLogByID(uint(id))
+		log, err := store.GetTrainingLogByID(ctx, uint(id))
 		if err != nil {
-			logger.Logger.Errorf("Training log not found id=%d: %v", id, err)
+			logger.Ctx(r.Context()).Errorf("Training log not found id=%d: %v", id, err)
 			ResponseError(w, http.StatusNotFound, "Training log not found")
 			return
 		}
 
 		// Get all logs for this session
-		logs, err := store.GetTrainingLogsBySessionID(log.SessionID)
+		logs, err := store.GetTrainingLogsBySessionID(ctx, log.SessionID)
 		if err != nil {
-			logger.Logger.Errorf("Failed to get session details for session=%s: %v", log.SessionID, err)
+			logger.Ctx(r.Context()).Errorf("Failed to get session details for session=%s: %v", log.SessionID, err)
 			ResponseError(w, http.StatusInternalServerError, "Failed to get session details")
 			return
 		}
@@ -64,9 +65,9 @@ func GetTrainingDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Try as session ID (UUID string)
-	logs, err := store.GetTrainingLogsBySessionID(idStr)
+	logs, err := store.GetTrainingLogsBySessionID(ctx, idStr)
 	if err != nil || len(logs) == 0 {
-		logger.Logger.Errorf("Training session not found session_id=%s: %v", idStr, err)
+		logger.Ctx(r.Context()).Errorf("Training session not found session_id=%s: %v", idStr, err)
 		ResponseError(w, http.StatusNotFound, "Training session not found")
 		return
 	}

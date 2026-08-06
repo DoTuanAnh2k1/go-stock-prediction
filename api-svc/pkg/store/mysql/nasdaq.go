@@ -1,25 +1,26 @@
 package mysql
 
 import (
+	"context"
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 	"strings"
 	"time"
 )
 
 // CreateNasdaqPrice inserts a new NASDAQ price record.
-func (c *Client) CreateNasdaqPrice(p *modelsdb.NasdaqPrice) error {
+func (c *Client) CreateNasdaqPrice(_ context.Context, p *modelsdb.NasdaqPrice) error {
 	return c.Db.Create(p).Error
 }
 
 // UpsertNasdaqPrice creates or updates a NASDAQ price record identified by (symbol, trading_date).
-func (c *Client) UpsertNasdaqPrice(p *modelsdb.NasdaqPrice) error {
+func (c *Client) UpsertNasdaqPrice(_ context.Context, p *modelsdb.NasdaqPrice) error {
 	return c.Db.Where("symbol = ? AND trading_date = ?", p.Symbol, p.TradingDate).
 		Assign(p).
 		FirstOrCreate(p).Error
 }
 
 // GetNasdaqPricesByDateRange returns NASDAQ prices for a symbol within a date range, ordered DESC.
-func (c *Client) GetNasdaqPricesByDateRange(symbol string, from, to time.Time) ([]modelsdb.NasdaqPrice, error) {
+func (c *Client) GetNasdaqPricesByDateRange(_ context.Context, symbol string, from, to time.Time) ([]modelsdb.NasdaqPrice, error) {
 	var prices []modelsdb.NasdaqPrice
 	err := c.Db.Where("symbol = ? AND trading_date BETWEEN ? AND ?", symbol, from, to).
 		Order("trading_date DESC").
@@ -28,7 +29,7 @@ func (c *Client) GetNasdaqPricesByDateRange(symbol string, from, to time.Time) (
 }
 
 // GetLatestNasdaqPrice returns the most recent price record for a given symbol.
-func (c *Client) GetLatestNasdaqPrice(symbol string) (*modelsdb.NasdaqPrice, error) {
+func (c *Client) GetLatestNasdaqPrice(_ context.Context, symbol string) (*modelsdb.NasdaqPrice, error) {
 	var price modelsdb.NasdaqPrice
 	err := c.Db.Where("symbol = ?", symbol).
 		Order("trading_date DESC").
@@ -40,7 +41,7 @@ func (c *Client) GetLatestNasdaqPrice(symbol string) (*modelsdb.NasdaqPrice, err
 }
 
 // GetNasdaqSymbols returns all distinct symbols present in the nasdaq_prices table.
-func (c *Client) GetNasdaqSymbols() ([]string, error) {
+func (c *Client) GetNasdaqSymbols(_ context.Context) ([]string, error) {
 	var symbols []string
 	err := c.Db.Model(&modelsdb.NasdaqPrice{}).
 		Distinct("symbol").
@@ -49,32 +50,32 @@ func (c *Client) GetNasdaqSymbols() ([]string, error) {
 }
 
 // GetAllNasdaqPricesForSymbol returns all historical prices for a symbol, ordered DESC.
-func (c *Client) GetAllNasdaqPricesForSymbol(symbol string) ([]modelsdb.NasdaqPrice, error) {
+func (c *Client) GetAllNasdaqPricesForSymbol(_ context.Context, symbol string) ([]modelsdb.NasdaqPrice, error) {
 	var prices []modelsdb.NasdaqPrice
 	err := c.Db.Where("symbol = ?", symbol).Order("trading_date DESC").Find(&prices).Error
 	return prices, err
 }
 
 // BulkCreateNasdaqPredictions inserts multiple NASDAQ predictions using CreateInBatches.
-func (c *Client) BulkCreateNasdaqPredictions(preds []modelsdb.NasdaqPrediction) error {
+func (c *Client) BulkCreateNasdaqPredictions(_ context.Context, preds []modelsdb.NasdaqPrediction) error {
 	return c.Db.CreateInBatches(preds, 200).Error
 }
 
 // DeleteNasdaqPredictionsBeforeDate hard-deletes all NASDAQ predictions whose target_date < before
 // and that already have an actual_price (i.e. backtest rows).
-func (c *Client) DeleteNasdaqPredictionsBeforeDate(before time.Time) error {
+func (c *Client) DeleteNasdaqPredictionsBeforeDate(_ context.Context, before time.Time) error {
 	return c.Db.Where("target_date < ? AND actual_price IS NOT NULL", before).
 		Delete(&modelsdb.NasdaqPrediction{}).Error
 }
 
 // CreateNasdaqPrediction saves a new NASDAQ prediction record.
-func (c *Client) CreateNasdaqPrediction(p *modelsdb.NasdaqPrediction) error {
+func (c *Client) CreateNasdaqPrediction(_ context.Context, p *modelsdb.NasdaqPrediction) error {
 	return c.Db.Create(p).Error
 }
 
 // GetNasdaqPredictions returns predictions filtered by symbol and algorithm.
 // Empty strings mean no filter. Results are ordered by prediction_date DESC.
-func (c *Client) GetNasdaqPredictions(symbol, algorithm string, limit int) ([]modelsdb.NasdaqPrediction, error) {
+func (c *Client) GetNasdaqPredictions(_ context.Context, symbol, algorithm string, limit int) ([]modelsdb.NasdaqPrediction, error) {
 	var preds []modelsdb.NasdaqPrediction
 	query := c.Db.Order("prediction_date DESC")
 	if symbol != "" {
@@ -91,7 +92,7 @@ func (c *Client) GetNasdaqPredictions(symbol, algorithm string, limit int) ([]mo
 }
 
 // GetLatestNasdaqPredictions returns the most recent prediction per (symbol, algorithm_name).
-func (c *Client) GetLatestNasdaqPredictions() ([]modelsdb.NasdaqPrediction, error) {
+func (c *Client) GetLatestNasdaqPredictions(_ context.Context) ([]modelsdb.NasdaqPrediction, error) {
 	var preds []modelsdb.NasdaqPrediction
 	subQuery := c.Db.Model(&modelsdb.NasdaqPrediction{}).
 		Select("symbol, algorithm_name, MAX(prediction_date) as max_date").
@@ -108,7 +109,7 @@ func (c *Client) GetLatestNasdaqPredictions() ([]modelsdb.NasdaqPrediction, erro
 // GetLatestConfirmedNasdaqPredictions returns the most recent prediction
 // per (symbol, algorithm_name), regardless of status.
 // Uses MAX(id) to avoid duplicates when multiple rows share the same prediction_date.
-func (c *Client) GetLatestConfirmedNasdaqPredictions() ([]modelsdb.NasdaqPrediction, error) {
+func (c *Client) GetLatestConfirmedNasdaqPredictions(_ context.Context) ([]modelsdb.NasdaqPrediction, error) {
 	var preds []modelsdb.NasdaqPrediction
 	subQuery := c.Db.Model(&modelsdb.NasdaqPrediction{}).
 		Select("MAX(id) as max_id").
@@ -124,7 +125,7 @@ func (c *Client) GetLatestConfirmedNasdaqPredictions() ([]modelsdb.NasdaqPredict
 // GetNasdaqPredictionsByDateRange returns NASDAQ predictions for a symbol within a date range.
 // Filters by prediction_date (when the prediction was created) so intraday predictions
 // created today are included even though their target_date is tomorrow.
-func (c *Client) GetNasdaqPredictionsByDateRange(symbol string, from, to time.Time) ([]modelsdb.NasdaqPrediction, error) {
+func (c *Client) GetNasdaqPredictionsByDateRange(_ context.Context, symbol string, from, to time.Time) ([]modelsdb.NasdaqPrediction, error) {
 	var preds []modelsdb.NasdaqPrediction
 	query := c.Db.Where("prediction_date BETWEEN ? AND ?", from, to).Order("prediction_date ASC")
 	if symbol != "" {
@@ -135,7 +136,7 @@ func (c *Client) GetNasdaqPredictionsByDateRange(symbol string, from, to time.Ti
 }
 
 // GetNasdaqPredictionsPage returns paginated NASDAQ predictions with optional filters.
-func (c *Client) GetNasdaqPredictionsPage(page, limit int, search, algorithm, status, sortBy, sortDir string) ([]modelsdb.NasdaqPrediction, int64, error) {
+func (c *Client) GetNasdaqPredictionsPage(_ context.Context, page, limit int, search, algorithm, status, sortBy, sortDir string) ([]modelsdb.NasdaqPrediction, int64, error) {
 	var preds []modelsdb.NasdaqPrediction
 	var total int64
 

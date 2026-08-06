@@ -47,7 +47,7 @@ func ListUsersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := client.ListUsers(r.Context(), callerFromClaims(getClaims(r)))
 	if err != nil {
-		logger.Logger.Errorf("authclient.ListUsers error: %v", err)
+		logger.Ctx(r.Context()).Errorf("authclient.ListUsers error: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "auth service error")
 		return
 	}
@@ -100,7 +100,7 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		case codes.PermissionDenied:
 			ResponseError(w, http.StatusForbidden, st.Message())
 		default:
-			logger.Logger.Errorf("authclient.CreateUser error: %v", err)
+			logger.Ctx(r.Context()).Errorf("authclient.CreateUser error: %v", err)
 			ResponseError(w, http.StatusInternalServerError, "auth service error")
 		}
 		return
@@ -153,7 +153,7 @@ func DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
 		case codes.PermissionDenied:
 			ResponseError(w, http.StatusForbidden, st.Message())
 		default:
-			logger.Logger.Errorf("authclient.DeleteUser error: %v", err)
+			logger.Ctx(r.Context()).Errorf("authclient.DeleteUser error: %v", err)
 			ResponseError(w, http.StatusInternalServerError, "auth service error")
 		}
 		return
@@ -223,7 +223,7 @@ func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 		case codes.InvalidArgument:
 			ResponseError(w, http.StatusBadRequest, st.Message())
 		default:
-			logger.Logger.Errorf("authclient.UpdateUser error: %v", err)
+			logger.Ctx(r.Context()).Errorf("authclient.UpdateUser error: %v", err)
 			ResponseError(w, http.StatusInternalServerError, "auth service error")
 		}
 		return
@@ -283,7 +283,7 @@ func ResetPasswordHandler(w http.ResponseWriter, r *http.Request) {
 		case codes.InvalidArgument:
 			ResponseError(w, http.StatusBadRequest, st.Message())
 		default:
-			logger.Logger.Errorf("authclient.ResetPassword error: %v", err)
+			logger.Ctx(r.Context()).Errorf("authclient.ResetPassword error: %v", err)
 			ResponseError(w, http.StatusInternalServerError, "auth service error")
 		}
 		return

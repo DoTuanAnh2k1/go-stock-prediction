@@ -1,10 +1,13 @@
 package logger
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 	"time"
+
+	"go-stock-prediction/pkg/reqid"
 
 	"github.com/rs/zerolog"
 )
@@ -35,8 +38,8 @@ func Init() {
 	Logger = Newzrlog()
 }
 
-func Newzrlog() LoggerInterface {
-
+// newBaseOutput builds the shared ConsoleWriter with ANSI level colours.
+func newBaseOutput() zerolog.ConsoleWriter {
 	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
 	output.FormatLevel = func(i interface{}) string {
 		level := strings.ToLower(fmt.Sprintf("%s", i))
@@ -57,10 +60,29 @@ func Newzrlog() LoggerInterface {
 			return fmt.Sprintf("[%s]", level)
 		}
 	}
+	return output
+}
+
+func Newzrlog() LoggerInterface {
+	output := newBaseOutput()
 	zs := &zrlog{
 		Logger: zerolog.New(output).With().Timestamp().Logger().With().CallerWithSkipFrameCount(3).Logger(),
 	}
 	return zs
+}
+
+// Ctx returns a LoggerInterface that includes a "request_id" field when the
+// context carries a correlation ID (injected by RequestIDMiddleware).
+// When no ID is present it falls back to the context-free singleton Logger so
+// startup/background code is unaffected.
+func Ctx(ctx context.Context) LoggerInterface {
+	id, ok := reqid.FromContext(ctx)
+	if !ok {
+		return Logger
+	}
+	output := newBaseOutput()
+	zl := zerolog.New(output).With().Timestamp().Str("request_id", id).Logger().With().CallerWithSkipFrameCount(3).Logger()
+	return &zrlog{Logger: zl}
 }
 
 func (l *zrlog) Info(msg string, args ...interface{}) {

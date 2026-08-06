@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"context"
 	"time"
 
 	modelsdb "go-stock-prediction/pkg/models/models_db"
@@ -8,7 +9,7 @@ import (
 
 // GetPipelineReports returns pipeline reports ordered by created_at DESC.
 // If pipelineKey is non-empty only rows matching that key are included.
-func (c *Client) GetPipelineReports(pipelineKey string, limit int) ([]modelsdb.PipelineReport, error) {
+func (c *Client) GetPipelineReports(_ context.Context, pipelineKey string, limit int) ([]modelsdb.PipelineReport, error) {
 	var reports []modelsdb.PipelineReport
 	q := c.Db.Model(&modelsdb.PipelineReport{}).Order("created_at DESC").Limit(limit)
 	if pipelineKey != "" {
@@ -19,7 +20,7 @@ func (c *Client) GetPipelineReports(pipelineKey string, limit int) ([]modelsdb.P
 }
 
 // GetDistinctPipelineKeys returns all distinct pipeline_key values sorted alphabetically.
-func (c *Client) GetDistinctPipelineKeys() ([]string, error) {
+func (c *Client) GetDistinctPipelineKeys(_ context.Context) ([]string, error) {
 	var keys []string
 	err := c.Db.Model(&modelsdb.PipelineReport{}).
 		Distinct("pipeline_key").
@@ -30,7 +31,7 @@ func (c *Client) GetDistinctPipelineKeys() ([]string, error) {
 
 // DeletePipelineReportsBefore removes all rows whose created_at is before t.
 // Returns the number of rows deleted.
-func (c *Client) DeletePipelineReportsBefore(t time.Time) (int64, error) {
+func (c *Client) DeletePipelineReportsBefore(_ context.Context, t time.Time) (int64, error) {
 	result := c.Db.Where("created_at < ?", t).Delete(&modelsdb.PipelineReport{})
 	return result.RowsAffected, result.Error
 }

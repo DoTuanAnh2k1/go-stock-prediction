@@ -80,6 +80,9 @@ func (c *Client) Login(ctx context.Context, username, password string) (*LoginRe
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-Token", token)
+	// Login is a standalone request (not under a Runner command) — mint a fresh
+	// correlation id for it.
+	req.Header.Set(HeaderRequestID, requestIDFor(ctx))
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		return nil, err
@@ -184,6 +187,9 @@ func (c *Client) do(ctx context.Context, jwt, method, path string, query url.Val
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	// Correlation id: reuse the per-command id threaded through ctx (so all HTTP
+	// calls a single CLI command makes share one id); mint a fresh one otherwise.
+	req.Header.Set(HeaderRequestID, requestIDFor(ctx))
 	if jwt != "" {
 		req.Header.Set("Authorization", "Bearer "+jwt)
 	}

@@ -1,12 +1,13 @@
 package mysql
 
 import (
+	"context"
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 	"time"
 )
 
 // GetGoldPrices returns gold prices filtered by source and productType (empty = all), ordered by trading_date DESC.
-func (c *Client) GetGoldPrices(source, productType string, limit int) ([]modelsdb.GoldPrice, error) {
+func (c *Client) GetGoldPrices(_ context.Context, source, productType string, limit int) ([]modelsdb.GoldPrice, error) {
 	var prices []modelsdb.GoldPrice
 	query := c.Db.Order("trading_date DESC")
 	if source != "" {
@@ -23,7 +24,7 @@ func (c *Client) GetGoldPrices(source, productType string, limit int) ([]modelsd
 }
 
 // GetGoldPricesByDateRange returns gold prices within a date range.
-func (c *Client) GetGoldPricesByDateRange(source, productType string, from, to time.Time) ([]modelsdb.GoldPrice, error) {
+func (c *Client) GetGoldPricesByDateRange(_ context.Context, source, productType string, from, to time.Time) ([]modelsdb.GoldPrice, error) {
 	var prices []modelsdb.GoldPrice
 	query := c.Db.Where("trading_date BETWEEN ? AND ?", from, to).Order("trading_date DESC")
 	if source != "" {
@@ -37,7 +38,7 @@ func (c *Client) GetGoldPricesByDateRange(source, productType string, from, to t
 }
 
 // GetLatestGoldPrices returns the latest row per (source, product_type) combination.
-func (c *Client) GetLatestGoldPrices() ([]modelsdb.GoldPrice, error) {
+func (c *Client) GetLatestGoldPrices(_ context.Context) ([]modelsdb.GoldPrice, error) {
 	var prices []modelsdb.GoldPrice
 	subQuery := c.Db.Model(&modelsdb.GoldPrice{}).
 		Select("source, product_type, MAX(trading_date) as max_date").
@@ -51,7 +52,7 @@ func (c *Client) GetLatestGoldPrices() ([]modelsdb.GoldPrice, error) {
 }
 
 // UpsertGoldPrice creates or updates a gold price record.
-func (c *Client) UpsertGoldPrice(price *modelsdb.GoldPrice) error {
+func (c *Client) UpsertGoldPrice(_ context.Context, price *modelsdb.GoldPrice) error {
 	return c.Db.Where("source = ? AND product_type = ? AND trading_date = ?",
 		price.Source, price.ProductType, price.TradingDate).
 		Assign(price).
@@ -59,9 +60,9 @@ func (c *Client) UpsertGoldPrice(price *modelsdb.GoldPrice) error {
 }
 
 // BulkUpsertGoldPrices upserts multiple gold price records.
-func (c *Client) BulkUpsertGoldPrices(prices []modelsdb.GoldPrice) error {
+func (c *Client) BulkUpsertGoldPrices(ctx context.Context, prices []modelsdb.GoldPrice) error {
 	for i := range prices {
-		if err := c.UpsertGoldPrice(&prices[i]); err != nil {
+		if err := c.UpsertGoldPrice(ctx, &prices[i]); err != nil {
 			return err
 		}
 	}

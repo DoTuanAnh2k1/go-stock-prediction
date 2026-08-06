@@ -21,14 +21,14 @@ import (
 //	@Security     BearerAuth
 //	@Router       /api/trigger/nasdaq-crawler [post]
 func TriggerNasdaqCrawlerHandler(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Info("[trigger] NASDAQ crawler handler called")
+	logger.Ctx(r.Context()).Info("[trigger] NASDAQ crawler handler called")
 	client := requireGRPCClient(w)
 	if client == nil {
 		return
 	}
 	_, err := client.TriggerNasdaqCrawler(r.Context(), &pb.Empty{})
 	if err != nil {
-		logger.Logger.Errorf("[trigger] NASDAQ crawler failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[trigger] NASDAQ crawler failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

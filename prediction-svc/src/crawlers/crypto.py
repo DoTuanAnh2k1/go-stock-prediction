@@ -34,6 +34,7 @@ from src.crawlers import sanity
 from src.crawlers.base import DEFAULT_HEADERS, BaseCrawler
 from src.database import repository as repo
 from src.database.models import CryptoIntradayPrice
+from src.telemetry import metrics as _metrics
 from src.utils.logger import get_logger
 
 log = get_logger("crawler.crypto")
@@ -198,6 +199,7 @@ class CryptoCrawler(BaseCrawler):
             errors += 1
 
         log.info("crypto.crawl.done", saved=saved, errors=errors)
+        _metrics.record_crawl_saved("CRYPTO", saved)
         return saved
 
     def crawl_intraday(self) -> int:

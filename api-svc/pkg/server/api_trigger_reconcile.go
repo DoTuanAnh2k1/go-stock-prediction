@@ -22,7 +22,7 @@ import (
 //	@Security     BearerAuth
 //	@Router       /api/trigger/reconcile [post]
 func TriggerReconcileHandler(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Info("TriggerReconcileHandler: manual reconcile triggered")
+	logger.Ctx(r.Context()).Info("TriggerReconcileHandler: manual reconcile triggered")
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
@@ -32,7 +32,7 @@ func TriggerReconcileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := client.TriggerReconcile(ctx, &pb.Empty{}); err != nil {
-		logger.Logger.Errorf("TriggerReconcileHandler: reconcile failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("TriggerReconcileHandler: reconcile failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

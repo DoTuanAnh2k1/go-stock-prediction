@@ -1,8 +1,11 @@
 """Cron job definitions registered with the scheduler."""
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Callable
+
+import structlog.contextvars
 
 from src.utils.logger import get_logger
 
@@ -76,6 +79,12 @@ def _run_pipeline(market_key: str, crawl_fn: Callable) -> None:
         crawled_count = saved if isinstance(saved, int) else 0
         log.info("pipeline.crawl.done", market=market_key, saved=saved)
         steps.append({"label": "Crawl", "status": "success", "detail": f"saved {saved}"})
+        # Record total rows saved by this crawl run (supplement per-row counters in repository.py)
+        try:
+            from src.telemetry import metrics as _metrics
+            _metrics.record_crawl_rows(market_key, crawled_count)
+        except Exception:
+            pass
     except Exception as exc:
         log.error("pipeline.crawl.error", market=market_key, error=str(exc))
         error_msg = str(exc)
@@ -354,8 +363,32 @@ def job_crawl_fundamentals() -> None:
 # and runs mysqldump itself, so the prediction service no longer performs backups.
 
 
-# Job registry — maps job_key → callable
-JOB_FUNCTIONS = {
+def _with_request_id(fn: Callable) -> Callable:
+    """Wrap *fn* so each invocation runs with a fresh ``request_id`` bound into
+    structlog contextvars.  One crawl/train/reconcile run == one request_id,
+    which lets log lines from the entire run be correlated by that id.
+
+    The id is cleared (via ``unbind_contextvars``) in a ``finally`` block so it
+    never leaks into an unrelated subsequent job that might reuse the same thread
+    (APScheduler uses a thread-pool).
+    """
+    def _wrapped() -> None:
+        rid = uuid.uuid4().hex
+        structlog.contextvars.bind_contextvars(request_id=rid)
+        try:
+            fn()
+        finally:
+            structlog.contextvars.unbind_contextvars("request_id")
+
+    _wrapped.__name__ = getattr(fn, "__name__", repr(fn))
+    _wrapped.__qualname__ = getattr(fn, "__qualname__", repr(fn))
+    return _wrapped
+
+
+# Job registry — maps job_key → callable.
+# Every callable is wrapped with _with_request_id so each scheduler/CronJob
+# invocation gets its own correlation id in the logs.
+JOB_FUNCTIONS = {k: _with_request_id(v) for k, v in {
     "crawler_gold": job_crawl_gold,
     "crawler_nasdaq": job_crawl_nasdaq,
     "crawler_crypto": job_crawl_crypto,
@@ -378,4 +411,4 @@ JOB_FUNCTIONS = {
     "crawler_fundamentals": job_crawl_fundamentals,
     # Mid-week transformer refresh (Mon/Wed/Fri)
     "train_transformer": job_train_transformer,
-}
+}.items()}

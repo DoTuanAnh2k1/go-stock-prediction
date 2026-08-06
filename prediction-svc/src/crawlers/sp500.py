@@ -14,6 +14,7 @@ from src.crawlers import sanity
 from src.crawlers.base import DEFAULT_HEADERS, BaseCrawler
 from src.database import repository as repo
 from src.database.models import SP500IntradayPrice
+from src.telemetry import metrics as _metrics
 from src.utils.logger import get_logger
 
 log = get_logger("crawler.sp500")
@@ -96,6 +97,7 @@ class SP500Crawler(BaseCrawler):
             time.sleep(REQUEST_DELAY)
 
         log.info("sp500.crawl.done", saved=saved, errors=errors, new_splits=new_splits)
+        _metrics.record_crawl_saved("SP500", saved)
 
         if new_splits > 0:
             try:

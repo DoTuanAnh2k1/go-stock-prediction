@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -39,7 +40,7 @@ func GetSchedulesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	store := repository.GetSingleton()
-	schedules, err := store.GetAllCronSchedules()
+	schedules, err := store.GetAllCronSchedules(r.Context())
 	if err != nil {
 		ResponseError(w, http.StatusInternalServerError, "failed to fetch schedules")
 		return
@@ -103,7 +104,7 @@ func UpdateScheduleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store := repository.GetSingleton()
-	existing, err := store.GetCronScheduleByKey(key)
+	existing, err := store.GetCronScheduleByKey(r.Context(), key)
 	if err != nil {
 		ResponseError(w, http.StatusNotFound, "schedule not found")
 		return
@@ -118,7 +119,7 @@ func UpdateScheduleHandler(w http.ResponseWriter, r *http.Request) {
 	existing.CronExpression = req.CronExpression
 	existing.Enabled = req.Enabled
 
-	if err := store.UpsertCronSchedule(existing); err != nil {
+	if err := store.UpsertCronSchedule(r.Context(), existing); err != nil {
 		ResponseError(w, http.StatusInternalServerError, "failed to update schedule")
 		return
 	}
@@ -129,6 +130,7 @@ func UpdateScheduleHandler(w http.ResponseWriter, r *http.Request) {
 // seedCronSchedules inserts default schedule rows for well-known jobs if they do not already exist.
 // Called at startup so the table is never empty on first run.
 func seedCronSchedules(store repository.DatabaseStore) {
+	ctx := context.Background()
 	defaults := []modelsdb.CronSchedule{
 		{JobKey: "crawler_daily", JobName: "Daily Stock Crawler", CronExpression: "0 0 12 * * *", Enabled: true},
 		{JobKey: "predict_daily", JobName: "Daily Prediction", CronExpression: "0 0 18 * * *", Enabled: true},
@@ -139,10 +141,10 @@ func seedCronSchedules(store repository.DatabaseStore) {
 		{JobKey: "simulation_daily", JobName: "Daily Simulation Step", CronExpression: "0 0 19 * * *", Enabled: true},
 	}
 	for i := range defaults {
-		existing, err := store.GetCronScheduleByKey(defaults[i].JobKey)
+		existing, err := store.GetCronScheduleByKey(ctx, defaults[i].JobKey)
 		if err != nil || existing == nil {
 			// Row does not exist — insert.
-			_ = store.UpsertCronSchedule(&defaults[i])
+			_ = store.UpsertCronSchedule(ctx, &defaults[i])
 		}
 	}
 }

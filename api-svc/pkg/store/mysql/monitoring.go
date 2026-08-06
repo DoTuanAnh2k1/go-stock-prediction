@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -37,7 +38,7 @@ var marketPredMeta = map[string]string{
 }
 
 // GetMarketCrawlStats returns crawl freshness stats for the given market.
-func (c *Client) GetMarketCrawlStats(market string) (*modelsapi.MarketCrawlStats, error) {
+func (c *Client) GetMarketCrawlStats(_ context.Context, market string) (*modelsapi.MarketCrawlStats, error) {
 	meta, ok := monitorMeta[strings.ToUpper(market)]
 	if !ok {
 		return nil, fmt.Errorf("unknown market: %q (valid: GOLD, NASDAQ, CRYPTO, SP500)", market)
@@ -100,7 +101,7 @@ func (c *Client) GetMarketCrawlStats(market string) (*modelsapi.MarketCrawlStats
 }
 
 // GetMarketPredStats returns per-algorithm prediction counts for today for the given market.
-func (c *Client) GetMarketPredStats(market string) ([]modelsapi.AlgoPredStats, error) {
+func (c *Client) GetMarketPredStats(_ context.Context, market string) ([]modelsapi.AlgoPredStats, error) {
 	table, ok := marketPredMeta[strings.ToUpper(market)]
 	if !ok {
 		return nil, fmt.Errorf("unknown market: %q (valid: GOLD, NASDAQ, CRYPTO, SP500)", market)
@@ -115,7 +116,6 @@ func (c *Client) GetMarketPredStats(market string) ([]modelsapi.AlgoPredStats, e
 		LastPredictAt *time.Time
 	}
 
-	// Group by algorithm, count today's rows, pick max created_at as last_predict_at.
 	query := fmt.Sprintf(`
 		SELECT
 			algorithm_name,

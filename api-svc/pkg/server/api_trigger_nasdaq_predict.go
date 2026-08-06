@@ -21,14 +21,14 @@ import (
 //	@Security     BearerAuth
 //	@Router       /api/trigger/nasdaq-predict [post]
 func TriggerNasdaqPredictHandler(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Info("[trigger] NASDAQ predict handler called")
+	logger.Ctx(r.Context()).Info("[trigger] NASDAQ predict handler called")
 	client := requireGRPCClient(w)
 	if client == nil {
 		return
 	}
 	_, err := client.TriggerNasdaqPredict(r.Context(), &pb.Empty{})
 	if err != nil {
-		logger.Logger.Errorf("[trigger] NASDAQ prediction failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("[trigger] NASDAQ prediction failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

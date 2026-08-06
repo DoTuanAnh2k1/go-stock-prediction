@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -11,7 +12,7 @@ import (
 // GetSessionDirAccuracy returns per-algorithm direction accuracy for predictions
 // created in [from, to) for the given market. Only reconciled rows (direction_correct
 // IS NOT NULL) are counted.
-func (c *Client) GetSessionDirAccuracy(market string, from, to time.Time) ([]modelsapi.SessionDirAccRow, error) {
+func (c *Client) GetSessionDirAccuracy(ctx context.Context, market string, from, to time.Time) ([]modelsapi.SessionDirAccRow, error) {
 	info, ok := marketTableMap[strings.ToUpper(market)]
 	if !ok {
 		return nil, fmt.Errorf("unknown market: %q (valid: GOLD, NASDAQ, CRYPTO, SP500)", market)
@@ -38,7 +39,7 @@ func (c *Client) GetSessionDirAccuracy(market string, from, to time.Time) ([]mod
 		Correct   int64
 	}
 	var rows []rawRow
-	if err := c.Db.Raw(query, from, to).Scan(&rows).Error; err != nil {
+	if err := c.db(ctx).Raw(query, from, to).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("GetSessionDirAccuracy(%s): %w", market, err)
 	}
 
@@ -60,7 +61,7 @@ func (c *Client) GetSessionDirAccuracy(market string, from, to time.Time) ([]mod
 
 // GetSessionBotTrades returns per-bot trade stats with portfolio snapshot data for SELL trades
 // closed in [from, to) for the given market. Results are ordered by session_pnl DESC.
-func (c *Client) GetSessionBotTrades(market string, from, to time.Time) ([]modelsapi.SessionBotDetail, error) {
+func (c *Client) GetSessionBotTrades(ctx context.Context, market string, from, to time.Time) ([]modelsapi.SessionBotDetail, error) {
 	type rawRow struct {
 		BotID          string
 		DisplayName    string
@@ -115,7 +116,7 @@ func (c *Client) GetSessionBotTrades(market string, from, to time.Time) ([]model
 		ORDER BY session_pnl DESC
 	`
 
-	if err := c.Db.Raw(query, from, to, strings.ToUpper(market)).Scan(&rows).Error; err != nil {
+	if err := c.db(ctx).Raw(query, from, to, strings.ToUpper(market)).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("GetSessionBotTrades(%s): %w", market, err)
 	}
 

@@ -133,9 +133,9 @@ func GetMarketSessionStats(w http.ResponseWriter, r *http.Request) {
 
 	store := repository.GetSingleton()
 
-	dirAcc, err := store.GetSessionDirAccuracy(marketKey, from, to)
+	dirAcc, err := store.GetSessionDirAccuracy(r.Context(), marketKey, from, to)
 	if err != nil {
-		logger.Logger.Errorf("[api/markets/%s/session-stats] GetSessionDirAccuracy: %v", key, err)
+		logger.Ctx(r.Context()).Errorf("[api/markets/%s/session-stats] GetSessionDirAccuracy: %v", key, err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get direction accuracy")
 		return
 	}
@@ -143,9 +143,9 @@ func GetMarketSessionStats(w http.ResponseWriter, r *http.Request) {
 		dirAcc = []modelsapi.SessionDirAccRow{}
 	}
 
-	botTrades, err := store.GetSessionBotTrades(marketKey, from, to)
+	botTrades, err := store.GetSessionBotTrades(r.Context(), marketKey, from, to)
 	if err != nil {
-		logger.Logger.Errorf("[api/markets/%s/session-stats] GetSessionBotTrades: %v", key, err)
+		logger.Ctx(r.Context()).Errorf("[api/markets/%s/session-stats] GetSessionBotTrades: %v", key, err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get bot trades")
 		return
 	}

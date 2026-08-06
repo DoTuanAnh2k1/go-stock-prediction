@@ -1,36 +1,33 @@
 package mysql
 
 import (
+	"context"
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 	"strings"
 )
 
-func (c *Client) CreateTrainingLog(log *modelsdb.TrainingLog) error {
+func (c *Client) CreateTrainingLog(_ context.Context, log *modelsdb.TrainingLog) error {
 	return c.Db.Create(log).Error
 }
 
-func (c *Client) GetTrainingLogByID(id uint) (*modelsdb.TrainingLog, error) {
+func (c *Client) GetTrainingLogByID(_ context.Context, id uint) (*modelsdb.TrainingLog, error) {
 	var log modelsdb.TrainingLog
 	err := c.Db.First(&log, id).Error
 	return &log, err
 }
 
-func (c *Client) GetTrainingLogsBySessionID(sessionID string) ([]modelsdb.TrainingLog, error) {
+func (c *Client) GetTrainingLogsBySessionID(_ context.Context, sessionID string) ([]modelsdb.TrainingLog, error) {
 	var logs []modelsdb.TrainingLog
 	err := c.Db.Where("session_id = ?", sessionID).Order("algorithm_name ASC").Find(&logs).Error
 	return logs, err
 }
 
 // GetTrainingSessions returns training logs grouped by session, ordered by most recent first.
-// It returns one representative row per session (the first algorithm's log) plus total count.
-// The caller should use GetTrainingLogsBySessionID to get the full per-algorithm breakdown.
-func (c *Client) GetTrainingSessions(limit, offset int) ([]modelsdb.TrainingLog, int64, error) {
+func (c *Client) GetTrainingSessions(_ context.Context, limit, offset int) ([]modelsdb.TrainingLog, int64, error) {
 	var total int64
 
-	// Count distinct sessions
 	c.Db.Model(&modelsdb.TrainingLog{}).Select("COUNT(DISTINCT session_id)").Scan(&total)
 
-	// Get distinct session IDs ordered by most recent
 	var sessionIDs []string
 	c.Db.Model(&modelsdb.TrainingLog{}).
 		Select("session_id").
@@ -44,7 +41,6 @@ func (c *Client) GetTrainingSessions(limit, offset int) ([]modelsdb.TrainingLog,
 		return nil, total, nil
 	}
 
-	// Get all logs for these sessions
 	var logs []modelsdb.TrainingLog
 	err := c.Db.Where("session_id IN ?", sessionIDs).
 		Order("started_at DESC, algorithm_name ASC").
@@ -54,8 +50,7 @@ func (c *Client) GetTrainingSessions(limit, offset int) ([]modelsdb.TrainingLog,
 }
 
 // GetLatestTrainingLogByAlgorithm returns the single most-recent TrainingLog per algorithm.
-func (c *Client) GetLatestTrainingLogByAlgorithm() ([]modelsdb.TrainingLog, error) {
-	// Sub-query: max id per algorithm_name (proxy for latest completed_at)
+func (c *Client) GetLatestTrainingLogByAlgorithm(_ context.Context) ([]modelsdb.TrainingLog, error) {
 	type algMax struct {
 		AlgorithmName string
 		MaxID         uint
@@ -84,7 +79,7 @@ func (c *Client) GetLatestTrainingLogByAlgorithm() ([]modelsdb.TrainingLog, erro
 }
 
 // GetTrainingSessionsByMarket returns paginated training logs filtered by market_key.
-func (c *Client) GetTrainingSessionsByMarket(marketKey string, page, limit int, algorithm, sortBy, sortDir string) ([]modelsdb.TrainingLog, int64, error) {
+func (c *Client) GetTrainingSessionsByMarket(_ context.Context, marketKey string, page, limit int, algorithm, sortBy, sortDir string) ([]modelsdb.TrainingLog, int64, error) {
 	var logs []modelsdb.TrainingLog
 	var total int64
 
@@ -121,20 +116,18 @@ func (c *Client) GetTrainingSessionsByMarket(marketKey string, page, limit int, 
 }
 
 // GetTrainingMetricsAggregate returns aggregated stats across all training logs.
-func (c *Client) GetTrainingMetricsAggregate() (modelsdb.TrainingMetricsAggregate, error) {
+func (c *Client) GetTrainingMetricsAggregate(_ context.Context) (modelsdb.TrainingMetricsAggregate, error) {
 	var agg modelsdb.TrainingMetricsAggregate
 
-	// Count distinct sessions
 	c.Db.Model(&modelsdb.TrainingLog{}).
 		Select("COUNT(DISTINCT session_id)").
 		Scan(&agg.TotalSessions)
 
-	// Average duration, success rate, data quality in a single query
 	type rawStats struct {
-		AvgDurationMs    float64
-		TotalSuccess     float64
-		TotalError       float64
-		AvgDataQuality   float64
+		AvgDurationMs  float64
+		TotalSuccess   float64
+		TotalError     float64
+		AvgDataQuality float64
 	}
 	var raw rawStats
 	err := c.Db.Model(&modelsdb.TrainingLog{}).
@@ -158,7 +151,6 @@ func (c *Client) GetTrainingMetricsAggregate() (modelsdb.TrainingMetricsAggregat
 		agg.SuccessRate = raw.TotalSuccess / total
 	}
 
-	// Total predictions (from predictions table)
 	c.Db.Raw("SELECT COUNT(*) FROM predictions WHERE deleted_at IS NULL").Scan(&agg.TotalPredictions)
 
 	return agg, nil

@@ -19,13 +19,14 @@ import (
 //	@Failure      500  {object}  ResponseFailure
 //	@Router       /api/training/metrics [get]
 func GetTrainingMetrics(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Info("Getting training metrics...")
+	ctx := r.Context()
+	logger.Ctx(ctx).Info("Getting training metrics...")
 
 	store := repository.GetSingleton()
 
-	agg, err := store.GetTrainingMetricsAggregate()
+	agg, err := store.GetTrainingMetricsAggregate(ctx)
 	if err != nil {
-		logger.Logger.Errorf("Failed to get training metrics aggregate: %v", err)
+		logger.Ctx(ctx).Errorf("Failed to get training metrics aggregate: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get training metrics")
 		return
 	}

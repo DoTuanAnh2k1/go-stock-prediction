@@ -25,7 +25,7 @@ import (
 //	@Failure      500    {object}  ResponseFailure
 //	@Router       /api/training/history [get]
 func GetTrainingHistory(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Info("Getting training history...")
+	logger.Ctx(r.Context()).Info("Getting training history...")
 
 	limitStr := r.URL.Query().Get("limit")
 	limit := 10
@@ -42,9 +42,9 @@ func GetTrainingHistory(w http.ResponseWriter, r *http.Request) {
 	levelFilter := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("level")))
 
 	store := repository.GetSingleton()
-	logs, totalCount, err := store.GetTrainingSessions(limit, 0)
+	logs, totalCount, err := store.GetTrainingSessions(r.Context(), limit, 0)
 	if err != nil {
-		logger.Logger.Errorf("Failed to get training history: %v", err)
+		logger.Ctx(r.Context()).Errorf("Failed to get training history: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get training history")
 		return
 	}

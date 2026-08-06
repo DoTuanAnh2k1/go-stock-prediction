@@ -74,7 +74,8 @@ func StopBackupScheduler() {
 // seedDefault inserts the daily_backup row if it does not already exist
 // (insert-if-not-exists — never overwrites a user-edited schedule).
 func (bs *backupScheduler) seedDefault() {
-	if existing, err := bs.store.GetCronScheduleByKey(backupJobKey); err == nil && existing != nil {
+	ctx := context.Background()
+	if existing, err := bs.store.GetCronScheduleByKey(ctx, backupJobKey); err == nil && existing != nil {
 		return
 	}
 	row := &modelsdb.CronSchedule{
@@ -83,7 +84,7 @@ func (bs *backupScheduler) seedDefault() {
 		CronExpression: backupDefaultCron,
 		Enabled:        true,
 	}
-	if err := bs.store.UpsertCronSchedule(row); err != nil {
+	if err := bs.store.UpsertCronSchedule(ctx, row); err != nil {
 		logger.Logger.Errorf("backup scheduler: failed to seed default schedule: %v", err)
 	}
 }
@@ -93,7 +94,7 @@ func (bs *backupScheduler) sync() {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	sched, err := bs.store.GetCronScheduleByKey(backupJobKey)
+	sched, err := bs.store.GetCronScheduleByKey(context.Background(), backupJobKey)
 	if err != nil || sched == nil {
 		return
 	}

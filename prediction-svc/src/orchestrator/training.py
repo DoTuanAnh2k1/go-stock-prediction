@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import os
 import threading
+import time as _time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from src.algorithms.base import PredictionAlgorithm
+from src.telemetry import metrics as _metrics
 from src.algorithms.registry import (
     PER_SYMBOL_ALGO_MIN_POINTS,
     _DEFAULT_PS_MIN_POINTS,
@@ -445,6 +447,7 @@ def train_for_market(market_key: str) -> tuple[bool, str]:
 
     for key, algo in algos.items():
         algo_started = datetime.now()
+        _algo_t0 = _time.monotonic()
         try:
             if key == "transformer_nn" and intraday_labeled:
                 algo.train_batch_labeled(intraday_labeled)
@@ -452,12 +455,15 @@ def train_for_market(market_key: str) -> tuple[bool, str]:
                 algo.train_batch_labeled(series_labeled)
             success = len(series_data)
             error = 0
+            _train_status = "success"
         except Exception as exc:
             log.warning("training.market.algo.failed", market=mk, algo=key, error=str(exc))
             success = 0
             error = len(series_data)
+            _train_status = "failed"
 
-        duration_ms = int((datetime.now() - algo_started).total_seconds() * 1000)
+        _algo_duration_s = _time.monotonic() - _algo_t0
+        duration_ms = int(_algo_duration_s * 1000)
         accuracy = Decimal(str(round(success / max(1, success + error), 4)))
 
         try:
@@ -476,6 +482,8 @@ def train_for_market(market_key: str) -> tuple[bool, str]:
         except Exception as exc:
             log.warning("training.log.failed", error=str(exc))
 
+        _metrics.record_training(mk, key, _train_status)
+        _metrics.observe_training_duration(mk, key, _algo_duration_s)
         total_success += success
         total_error += error
         log.info("training.market.algo.done", market=mk, algo=key, trained=algo.is_trained())
@@ -754,9 +762,11 @@ def reconcile_predictions(only_market: str | None = None) -> int:
                 # past the target hour, or crawl lag) so the latest live price still equals
                 # the entry. Scoring would mark EVERY algorithm wrong — skip and leave the
                 # prediction pending until a real price move can score it.
+                _metrics.record_reconcile("GOLD", "pending")
                 continue
 
             repo.update_gold_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
+            _metrics.record_reconcile("GOLD", "correct" if direction_correct else "wrong")
             total_updated += 1
 
     except Exception as exc:
@@ -798,9 +808,11 @@ def reconcile_predictions(only_market: str | None = None) -> int:
                 # past the target hour, or crawl lag) so the latest live price still equals
                 # the entry. Scoring would mark EVERY algorithm wrong — skip and leave the
                 # prediction pending until a real price move can score it.
+                _metrics.record_reconcile("NASDAQ100", "pending")
                 continue
 
             repo.update_nasdaq_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
+            _metrics.record_reconcile("NASDAQ100", "correct" if direction_correct else "wrong")
             total_updated += 1
 
     except Exception as exc:
@@ -841,9 +853,11 @@ def reconcile_predictions(only_market: str | None = None) -> int:
                 # past the target hour, or crawl lag) so the latest live price still equals
                 # the entry. Scoring would mark EVERY algorithm wrong — skip and leave the
                 # prediction pending until a real price move can score it.
+                _metrics.record_reconcile("SP500", "pending")
                 continue
 
             repo.update_sp500_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
+            _metrics.record_reconcile("SP500", "correct" if direction_correct else "wrong")
             total_updated += 1
 
     except Exception as exc:
@@ -885,9 +899,11 @@ def reconcile_predictions(only_market: str | None = None) -> int:
                 # past the target hour, or crawl lag) so the latest live price still equals
                 # the entry. Scoring would mark EVERY algorithm wrong — skip and leave the
                 # prediction pending until a real price move can score it.
+                _metrics.record_reconcile("CRYPTO", "pending")
                 continue
 
             repo.update_crypto_prediction_actual(pred.id, actual, accuracy, status, direction_correct)
+            _metrics.record_reconcile("CRYPTO", "correct" if direction_correct else "wrong")
             total_updated += 1
 
     except Exception as exc:

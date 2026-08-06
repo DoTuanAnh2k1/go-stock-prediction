@@ -16,6 +16,7 @@ from src.database.models import SimBot, SimSession, SimTrade, SimPortfolioSnapsh
 from src.database.repository import update_session_kpis
 from src.simulation.bot import TradingBot, BotConfig
 from src.simulation.signal import SignalGenerator
+from src.telemetry import metrics as _metrics
 from src.utils.logger import get_logger
 
 log = get_logger("simulation.engine")
@@ -656,11 +657,20 @@ class SimulationEngine:
                     session.add(db_trade)
                 session.commit()
 
+            # Record trade metrics after DB commit (BUY/SELL only, skip HOLD)
+            for trade in trades:
+                _action = trade.action.lower()
+                if _action in ("buy", "sell"):
+                    _metrics.record_trade(config.market, _action)
+
             # Snapshot with hourly snap_at so upsert creates 1 row per hour
             snap = bot.get_snapshot(today, snap_at=now)
             with session_scope() as session:
                 _upsert_snapshot(session, session_id, bot_id, snap)
                 session.commit()
+
+            # Update portfolio value gauge
+            _metrics.set_bot_portfolio(config.market, bot_id, snap.get("total_value", 0.0))
 
             # Refresh KPI columns after each live step so leaderboard/monitoring
             # queries can read directly from sim_sessions without aggregating.

@@ -74,7 +74,7 @@ var startTime = time.Now()
 //	@Success		503	{object}	HealthStatus	"System is unhealthy or degraded"
 //	@Router			/health [get]
 func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Debugf("Health check requested from %s", getClientIP(r))
+	logger.Ctx(r.Context()).Debugf("Health check requested from %s", getClientIP(r))
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -119,7 +119,7 @@ func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	// Marshal and send JSON response
 	response, err := json.Marshal(health)
 	if err != nil {
-		logger.Logger.Errorf("Failed to marshal health check response: %v", err)
+		logger.Ctx(r.Context()).Errorf("Failed to marshal health check response: %v", err)
 		http.Error(w, `{"status":"error","message":"Failed to generate health status"}`, http.StatusInternalServerError)
 		return
 	}

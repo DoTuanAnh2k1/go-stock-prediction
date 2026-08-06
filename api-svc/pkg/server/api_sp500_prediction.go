@@ -39,10 +39,11 @@ type sp500PredictionsResponse struct {
 //	@Failure      500  {object}  ResponseFailure
 //	@Router       /api/sp500/predictions/latest [get]
 func GetSP500PredictionsLatest(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	store := repository.GetSingleton()
-	preds, err := store.GetLatestSP500Predictions()
+	preds, err := store.GetLatestSP500Predictions(ctx)
 	if err != nil {
-		logger.Logger.Errorf("[api/sp500/predictions/latest] Failed: %v", err)
+		logger.Ctx(ctx).Errorf("[api/sp500/predictions/latest] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get latest S&P 500 predictions")
 		return
 	}
@@ -76,10 +77,11 @@ func GetSP500PredictionsLatest(w http.ResponseWriter, r *http.Request) {
 //	@Failure      500  {object}  ResponseFailure
 //	@Router       /api/sp500/predictions/latest-results [get]
 func GetSP500PredictionsLatestResults(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	store := repository.GetSingleton()
-	preds, err := store.GetLatestConfirmedSP500Predictions()
+	preds, err := store.GetLatestConfirmedSP500Predictions(ctx)
 	if err != nil {
-		logger.Logger.Errorf("[api/sp500/predictions/latest-results] Failed: %v", err)
+		logger.Ctx(ctx).Errorf("[api/sp500/predictions/latest-results] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get latest confirmed S&P 500 predictions")
 		return
 	}
@@ -130,6 +132,7 @@ type sp500PredictionChartResponse struct {
 //	@Failure      500        {object}  ResponseFailure
 //	@Router       /api/sp500/predictions/chart [get]
 func GetSP500PredictionsChart(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	symbol := r.URL.Query().Get("symbol")
 	algorithm := r.URL.Query().Get("algorithm")
 
@@ -144,9 +147,9 @@ func GetSP500PredictionsChart(w http.ResponseWriter, r *http.Request) {
 	to := time.Now()
 	from := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, to.Location()).AddDate(0, 0, -(days - 1))
 
-	preds, err := store.GetSP500PredictionsByDateRange(symbol, from, to)
+	preds, err := store.GetSP500PredictionsByDateRange(ctx, symbol, from, to)
 	if err != nil {
-		logger.Logger.Errorf("[api/sp500/predictions/chart] Failed: %v", err)
+		logger.Ctx(ctx).Errorf("[api/sp500/predictions/chart] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get S&P 500 prediction chart data")
 		return
 	}
@@ -205,6 +208,7 @@ type sp500PredictionsPageResponse struct {
 //	@Failure      500        {object}  ResponseFailure
 //	@Router       /api/sp500/predictions [get]
 func GetSP500Predictions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	q := r.URL.Query()
 	symbol := q.Get("symbol")
 	algorithm := q.Get("algorithm")
@@ -226,9 +230,9 @@ func GetSP500Predictions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store := repository.GetSingleton()
-	preds, total, err := store.GetSP500PredictionsPage(page, limit, symbol, algorithm, statusFilter, sortBy, sortDir)
+	preds, total, err := store.GetSP500PredictionsPage(ctx, page, limit, symbol, algorithm, statusFilter, sortBy, sortDir)
 	if err != nil {
-		logger.Logger.Errorf("[api/sp500/predictions] Failed: %v", err)
+		logger.Ctx(ctx).Errorf("[api/sp500/predictions] Failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get S&P 500 predictions")
 		return
 	}

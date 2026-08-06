@@ -1,73 +1,71 @@
 package postgres
 
 import (
+	"context"
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 	"time"
 )
 
-// ===============================
-// SYNC LOG HANDLERS
-// ===============================
-
-// GetAllSyncLogs - lấy tất cả sync logs
-func (c *Client) GetAllSyncLogs() ([]modelsdb.SyncLog, error) {
+// GetAllSyncLogs returns all sync logs ordered by sync_date DESC.
+func (c *Client) GetAllSyncLogs(ctx context.Context) ([]modelsdb.SyncLog, error) {
 	var syncLogs []modelsdb.SyncLog
-	err := c.Db.Order("sync_date DESC").Find(&syncLogs).Error
+	err := c.db(ctx).Order("sync_date DESC").Find(&syncLogs).Error
 	return syncLogs, err
 }
 
-// GetSyncLogByID - lấy sync log theo ID
-func (c *Client) GetSyncLogByID(id uint) (*modelsdb.SyncLog, error) {
+// GetSyncLogByID returns a sync log by ID.
+func (c *Client) GetSyncLogByID(ctx context.Context, id uint) (*modelsdb.SyncLog, error) {
 	var syncLog modelsdb.SyncLog
-	err := c.Db.First(&syncLog, id).Error
+	err := c.db(ctx).First(&syncLog, id).Error
 	if err != nil {
 		return nil, err
 	}
 	return &syncLog, nil
 }
 
-// GetLatestSyncLogs - lấy sync logs mới nhất (limit)
-func (c *Client) GetLatestSyncLogs(limit int) ([]modelsdb.SyncLog, error) {
+// GetLatestSyncLogs returns the most recent sync logs up to the given limit.
+func (c *Client) GetLatestSyncLogs(ctx context.Context, limit int) ([]modelsdb.SyncLog, error) {
 	var syncLogs []modelsdb.SyncLog
-	err := c.Db.Order("sync_date DESC").Limit(limit).Find(&syncLogs).Error
+	err := c.db(ctx).Order("sync_date DESC").Limit(limit).Find(&syncLogs).Error
 	return syncLogs, err
 }
 
-// GetSyncLogsBySource - lấy sync logs theo source
-func (c *Client) GetSyncLogsBySource(source string) ([]modelsdb.SyncLog, error) {
+// GetSyncLogsBySource returns sync logs for a given source.
+func (c *Client) GetSyncLogsBySource(ctx context.Context, source string) ([]modelsdb.SyncLog, error) {
 	var syncLogs []modelsdb.SyncLog
-	err := c.Db.Where("source = ?", source).Order("sync_date DESC").Find(&syncLogs).Error
+	err := c.db(ctx).Where("source = ?", source).Order("sync_date DESC").Find(&syncLogs).Error
 	return syncLogs, err
 }
 
-// GetSyncLogsByDateRange - lấy sync logs theo khoảng thời gian
-func (c *Client) GetSyncLogsByDateRange(fromDate, toDate time.Time) ([]modelsdb.SyncLog, error) {
+// GetSyncLogsByDateRange returns sync logs within a date range.
+func (c *Client) GetSyncLogsByDateRange(ctx context.Context, fromDate, toDate time.Time) ([]modelsdb.SyncLog, error) {
 	var syncLogs []modelsdb.SyncLog
-	err := c.Db.Where("sync_date BETWEEN ? AND ?", fromDate, toDate).
+	err := c.db(ctx).Where("sync_date BETWEEN ? AND ?", fromDate, toDate).
 		Order("sync_date DESC").Find(&syncLogs).Error
 	return syncLogs, err
 }
 
-// SaveSyncLog - save sync log (create hoặc update)
-func (c *Client) SaveSyncLog(syncLog *modelsdb.SyncLog) error {
-	return c.Db.Save(syncLog).Error
+// SaveSyncLog saves (create or update) a sync log.
+func (c *Client) SaveSyncLog(ctx context.Context, syncLog *modelsdb.SyncLog) error {
+	return c.db(ctx).Save(syncLog).Error
 }
 
-// CreateSyncLog - tạo sync log mới
-func (c *Client) CreateSyncLog(syncLog *modelsdb.SyncLog) error {
-	return c.Db.Create(syncLog).Error
+// CreateSyncLog inserts a new sync log.
+func (c *Client) CreateSyncLog(ctx context.Context, syncLog *modelsdb.SyncLog) error {
+	return c.db(ctx).Create(syncLog).Error
 }
 
-// UpdateSyncLog - update sync log
-func (c *Client) UpdateSyncLog(syncLog *modelsdb.SyncLog) error {
-	return c.Db.Save(syncLog).Error
+// UpdateSyncLog updates a sync log.
+func (c *Client) UpdateSyncLog(ctx context.Context, syncLog *modelsdb.SyncLog) error {
+	return c.db(ctx).Save(syncLog).Error
 }
 
-// DeleteSyncLog - xóa sync log (soft delete)
-func (c *Client) DeleteSyncLog(id uint) error {
-	return c.Db.Delete(&modelsdb.SyncLog{}, id).Error
+// DeleteSyncLog soft-deletes a sync log by ID.
+func (c *Client) DeleteSyncLog(ctx context.Context, id uint) error {
+	return c.db(ctx).Delete(&modelsdb.SyncLog{}, id).Error
 }
 
-func (c *Client) TruncateSyncLogs() error {
-	return c.Db.Exec("TRUNCATE sync_logs").Error
+// TruncateSyncLogs truncates the sync_logs table.
+func (c *Client) TruncateSyncLogs(ctx context.Context) error {
+	return c.db(ctx).Exec("TRUNCATE sync_logs").Error
 }

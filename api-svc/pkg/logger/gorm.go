@@ -27,32 +27,34 @@ func (l *GormLogger) LogMode(gormlogger.LogLevel) gormlogger.Interface {
 }
 
 func (l *GormLogger) Info(ctx context.Context, s string, args ...interface{}) {
-	Logger.Info(s, args...)
+	Ctx(ctx).Info(s, args...)
 }
 
 func (l *GormLogger) Warn(ctx context.Context, s string, args ...interface{}) {
-	Logger.Warn(s, args...)
+	Ctx(ctx).Warn(s, args...)
 }
 
 func (l *GormLogger) Error(ctx context.Context, s string, args ...interface{}) {
-	Logger.Error(s, args...)
+	Ctx(ctx).Error(s, args...)
 }
 
 func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
 	elapsed := time.Since(begin)
 	sql, _ := fc()
 
+	log := Ctx(ctx)
+
 	if err != nil && !(errors.Is(err, gorm.ErrRecordNotFound) && l.SkipErrRecordNotFound) {
-		Logger.Errorf("%s [%s]", sql, elapsed)
+		log.Errorf("%s [%s]", sql, elapsed)
 		return
 	}
 
 	if l.SlowThreshold != 0 && elapsed > l.SlowThreshold {
-		Logger.Warnf("%s [%s]", sql, elapsed)
+		log.Warnf("%s [%s]", sql, elapsed)
 		return
 	}
 
 	if l.Debug {
-		Logger.Warnf("%s [%s]", sql, elapsed)
+		log.Warnf("%s [%s]", sql, elapsed)
 	}
 }

@@ -72,6 +72,7 @@ Internal DNS (between containers): `api-svc:8118`, `prediction-svc:8119`, `auth-
 - **Interactive CLI over SSH (`cli-svc`):** `ssh <user>@<host> -p 2345` (dashboard credentials) opens a shell that renders API data as tables. Four verbs `get`/`set`/`update`/`delete`, tab-completion, multi-session.
 - **Command RBAC:** Admins declare commands (a cli handler + fixed args), group them, and assign users to groups — a user may execute only the commands in their groups (`super_admin` runs all). Managed from the web dashboard (`/admin/commands`, `/admin/command-groups`) or the CLI. RBAC lives in `auth-svc` (Flyway V3); `cli-svc` enforces it client-side.
 - **Service discovery (optional, `SERVICE_MGT_ENABLED`):** When enabled, `api-svc`, `auth-svc`, `prediction-svc`, and `gateway-svc` register with `service-mgt` and resolve peers dynamically (client-side discovery, push lease-TTL heartbeat). Disabled by default — services use static endpoints. Always falls back to static targets if the registry is unreachable. `cli-svc` (HTTP via gateway) and `web-svc` (static nginx) do not register.
+- **Request correlation ID (`X-Request-ID`):** Every log line carries a `request_id` (UUID v4) so a single transaction can be traced across all six services with `grep request_id=<id>`. The gateway mints/forwards `x-request-id`; each service reads it (HTTP header or gRPC metadata), binds it to its logger (Go `logger.Ctx(ctx)`, Java SLF4J MDC → `%X{requestId}`, Python `structlog.contextvars`), and re-injects it on outbound gRPC/HTTP calls. Background cron jobs mint their own id per run. Independent of OpenTelemetry tracing (`trace_id` still chains to Tempo separately).
 
 ## Repository Layout
 
@@ -175,10 +176,13 @@ curl -X POST "http://localhost/api/trigger/historical-backtest?train_window=30&s
 
 ## Kubernetes / CKAD Capstone
 
-Besides Docker Compose, the whole stack deploys to Kubernetes via a Helm **umbrella chart**
-(`deploy/helm/stock/`, one subchart per service). This section is the CKAD deliverable runbook.
-Item-by-item mapping of every mandatory requirement → resource → file → verify command lives in
-[`docs/ckad-checklist.md`](docs/ckad-checklist.md).
+Besides Docker Compose, the whole stack deploys to Kubernetes via **per-service independent Helm
+charts** (`deploy/helm/<svc>/`, one chart per service — install/upgrade/rollback each on its own).
+Shared partials live in the `common` library chart (backend charts pull it via `file://../common`);
+namespace-wide governance (quota, pod-reader RBAC, PDBs, default-deny + multi-target NetworkPolicies)
+lives in the `bootstrap` chart; batch jobs live in the `cronjobs` chart. This section is the CKAD
+deliverable runbook. Item-by-item mapping of every mandatory requirement → resource → file → verify
+command lives in [`docs/ckad-checklist.md`](docs/ckad-checklist.md).
 
 ### Prerequisites
 
@@ -204,22 +208,33 @@ Full deploy + verify walkthrough (English + Vietnamese): **[VERIFY.md](VERIFY.md
 kubectl create namespace stock
 # db-schema ConfigMap is NOT Helm-managed — create it first
 kubectl create configmap db-schema -n stock --from-file=01-schema.sql=database.sql
-helm install stock deploy/helm/stock -n stock
 
-# Production secrets (never committed): override placeholders in values.yaml
-cp deploy/helm/stock/values-secret.yaml.example deploy/helm/stock/values-secret.yaml   # edit real creds
-helm upgrade stock deploy/helm/stock -n stock -f deploy/helm/stock/values-secret.yaml
+# scripts/deploy.sh installs every chart in dependency order:
+#   bootstrap → db → minio → service-mgt → prediction-svc → auth-svc → api-svc
+#   → gateway-svc → web-svc → cli-svc → pgadmin → cronjobs
+# (backend charts need `helm dependency build` first to vendor the `common` library)
+./scripts/deploy.sh
+
+# ...or install a single chart manually, e.g. api-svc:
+helm dependency build deploy/helm/api-svc          # vendor `common` (backend charts only)
+helm install api-svc deploy/helm/api-svc -n stock
+
+# Production secrets (never committed): override each chart's placeholder secrets with -f.
+# Each chart carries only the secrets it needs (imageTag/secrets are self-contained per chart).
+helm upgrade api-svc deploy/helm/api-svc -n stock -f api-svc-secret.yaml
 ```
 
-Toggles `quota`, `rbac`, `pdb`, `bluegreen`, `pgadmin` are **on by default**. HPA, Ingress and
+Toggles `quota`, `rbac`, `pdb` (on `bootstrap`) and `bluegreen` (on `api-svc`/`web-svc`) are **on by
+default**; pgAdmin is now install-or-not (just skip `helm install pgadmin`). HPA, Ingress and
 NetworkPolicy are **demo-gated off** (they need ingress-nginx / metrics-server or would cut idle
-metrics) — enable them for the graded cluster state:
+metrics) — enable them per chart for the graded cluster state:
 
 ```bash
-helm upgrade stock deploy/helm/stock -n stock \
-  --set global.hpa.enabled=true \
-  --set global.ingress.enabled=true \
-  --set global.networkPolicy.enabled=true
+helm upgrade api-svc     deploy/helm/api-svc     -n stock --set hpa.enabled=true
+helm upgrade gateway-svc deploy/helm/gateway-svc -n stock --set hpa.enabled=true --set ingress.enabled=true
+# the netpol graph is split — enable on BOTH bootstrap (default-deny + multi-target) and db (allow-db)
+helm upgrade bootstrap   deploy/helm/bootstrap   -n stock --set networkPolicy.enabled=true
+helm upgrade db          deploy/helm/db          -n stock --set networkPolicy.enabled=true
 ```
 
 ### Verify the CKAD mandatory items
@@ -235,7 +250,7 @@ kubectl get resourcequota,limitrange -n stock    # C5
 kubectl get netpol,ingress -n stock              # N3/N4
 kubectl auth can-i list pods \
   --as=system:serviceaccount:stock:pod-reader -n stock   # C4 — expect "yes"
-helm history stock -n stock                      # P6 — upgrade/rollback trail
+helm history api-svc -n stock                    # P6 — per-chart upgrade/rollback trail
 ```
 
 ### Debug runbook (O4)
@@ -259,7 +274,7 @@ Container names per backend: init `wait-db` → app (`<svc>`) → `nginx` ambass
 ```bash
 kubectl set image deploy/api-svc-green api-svc=api-svc:v2 -n stock && kubectl rollout status deploy/api-svc-green -n stock
 kubectl patch svc api-svc -n stock -p '{"spec":{"selector":{"color":"blue"}}}'   # blue/green flip
-helm rollback stock <REV> -n stock                                               # Helm rollback
+helm rollback api-svc <REV> -n stock                                             # Helm rollback (per chart)
 ```
 
 ### Kustomize overlay (P5)
@@ -271,9 +286,10 @@ kubectl apply -k deploy/k8s/kustomize/overlays/dev         # apply into ns stock
 
 ### Known limitations
 
-- `global.bluegreen.enabled` must stay **true** — gateway-svc hard-routes `/api → api-svc-<color>`.
-- `values.yaml` secrets are **dev placeholders only**; real credentials go in the gitignored
-  `values-secret.yaml` (see `values-secret.yaml.example`).
+- `bluegreen.enabled` (on the `api-svc` chart) must stay **true** — gateway-svc hard-routes
+  `/api → api-svc-<color>`.
+- Each chart's `values.yaml` secrets are **dev placeholders only**; real credentials go in a
+  gitignored per-chart secret file overridden with `-f` at `helm upgrade`.
 - prediction-svc uses a `startupProbe` (~150s for torch import); gRPC health is a `tcpSocket` probe.
 
 ## Configuration

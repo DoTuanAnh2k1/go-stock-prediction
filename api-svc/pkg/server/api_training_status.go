@@ -18,7 +18,7 @@ import (
 //	@Failure      500  {object}  ResponseFailure
 //	@Router       /api/training/status [get]
 func GetTrainingStatus(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Info("Getting training status...")
+	logger.Ctx(r.Context()).Info("Getting training status...")
 
 	client := requireGRPCClient(w)
 	if client == nil {
@@ -26,7 +26,7 @@ func GetTrainingStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	grpcResp, err := client.GetTrainingStatus(r.Context(), &pb.Empty{})
 	if err != nil {
-		logger.Logger.Errorf("GetTrainingStatus: gRPC call failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("GetTrainingStatus: gRPC call failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

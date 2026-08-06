@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"context"
 	"fmt"
 	"go-stock-prediction/pkg/logger"
 	"go-stock-prediction/pkg/models/models_config"
@@ -70,4 +71,11 @@ func (c *Client) Commit() error {
 
 func (c *Client) Rollback() error {
 	return c.Db.Rollback().Error
+}
+
+// db returns a GORM session scoped to ctx so that GORM's Trace callback
+// receives the request context and can emit the request_id log field.
+// All query methods in the postgres package call c.db(ctx) instead of c.Db directly.
+func (c *Client) db(ctx context.Context) *gorm.DB {
+	return c.Db.WithContext(ctx)
 }

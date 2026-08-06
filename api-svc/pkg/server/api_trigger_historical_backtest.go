@@ -33,7 +33,7 @@ func TriggerHistoricalBacktestHandler(w http.ResponseWriter, r *http.Request) {
 	stepSize := queryInt(r, "step_size", 6)
 	marketKey := r.URL.Query().Get("market")
 
-	logger.Logger.Infof("TriggerHistoricalBacktestHandler: requesting backtest, market=%q train_window=%d step_size=%d",
+	logger.Ctx(r.Context()).Infof("TriggerHistoricalBacktestHandler: requesting backtest, market=%q train_window=%d step_size=%d",
 		marketKey, trainWindow, stepSize)
 
 	client := requireGRPCClient(w)
@@ -51,7 +51,7 @@ func TriggerHistoricalBacktestHandler(w http.ResponseWriter, r *http.Request) {
 			ResponseError(w, http.StatusConflict, st.Message())
 			return
 		}
-		logger.Logger.Errorf("HistoricalBacktest: failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("HistoricalBacktest: failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

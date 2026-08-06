@@ -52,7 +52,7 @@ func ListMarketGroupsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := client.ListMarketGroups(r.Context(), callerFromClaims(getClaims(r)))
 	if err != nil {
-		logger.Logger.Errorf("authclient.ListMarketGroups: %v", err)
+		logger.Ctx(r.Context()).Errorf("authclient.ListMarketGroups: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "auth service error")
 		return
 	}
@@ -91,7 +91,7 @@ func CreateMarketGroupHandler(w http.ResponseWriter, r *http.Request) {
 			ResponseError(w, http.StatusConflict, "group name already exists")
 			return
 		}
-		logger.Logger.Errorf("authclient.CreateMarketGroup: %v", err)
+		logger.Ctx(r.Context()).Errorf("authclient.CreateMarketGroup: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "auth service error")
 		return
 	}
@@ -340,7 +340,7 @@ func GetUserMarketGroupsHandler(w http.ResponseWriter, r *http.Request) {
 		Caller: callerFromClaims(getClaims(r)), UserId: userID,
 	})
 	if err != nil {
-		logger.Logger.Errorf("authclient.GetUserMarketGroups: %v", err)
+		logger.Ctx(r.Context()).Errorf("authclient.GetUserMarketGroups: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "auth service error")
 		return
 	}

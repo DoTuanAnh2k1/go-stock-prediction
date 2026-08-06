@@ -1,38 +1,39 @@
 package postgres
 
 import (
+	"context"
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 	"strings"
 )
 
-func (c *Client) CreateTrainingLog(log *modelsdb.TrainingLog) error {
-	return c.Db.Create(log).Error
+func (c *Client) CreateTrainingLog(ctx context.Context, log *modelsdb.TrainingLog) error {
+	return c.db(ctx).Create(log).Error
 }
 
-func (c *Client) GetTrainingLogByID(id uint) (*modelsdb.TrainingLog, error) {
+func (c *Client) GetTrainingLogByID(ctx context.Context, id uint) (*modelsdb.TrainingLog, error) {
 	var log modelsdb.TrainingLog
-	err := c.Db.First(&log, id).Error
+	err := c.db(ctx).First(&log, id).Error
 	return &log, err
 }
 
-func (c *Client) GetTrainingLogsBySessionID(sessionID string) ([]modelsdb.TrainingLog, error) {
+func (c *Client) GetTrainingLogsBySessionID(ctx context.Context, sessionID string) ([]modelsdb.TrainingLog, error) {
 	var logs []modelsdb.TrainingLog
-	err := c.Db.Where("session_id = ?", sessionID).Order("algorithm_name ASC").Find(&logs).Error
+	err := c.db(ctx).Where("session_id = ?", sessionID).Order("algorithm_name ASC").Find(&logs).Error
 	return logs, err
 }
 
 // GetTrainingSessions returns training logs grouped by session, ordered by most recent first.
 // It returns one representative row per session (the first algorithm's log) plus total count.
 // The caller should use GetTrainingLogsBySessionID to get the full per-algorithm breakdown.
-func (c *Client) GetTrainingSessions(limit, offset int) ([]modelsdb.TrainingLog, int64, error) {
+func (c *Client) GetTrainingSessions(ctx context.Context, limit, offset int) ([]modelsdb.TrainingLog, int64, error) {
 	var total int64
 
 	// Count distinct sessions
-	c.Db.Model(&modelsdb.TrainingLog{}).Select("COUNT(DISTINCT session_id)").Scan(&total)
+	c.db(ctx).Model(&modelsdb.TrainingLog{}).Select("COUNT(DISTINCT session_id)").Scan(&total)
 
 	// Get distinct session IDs ordered by most recent
 	var sessionIDs []string
-	c.Db.Model(&modelsdb.TrainingLog{}).
+	c.db(ctx).Model(&modelsdb.TrainingLog{}).
 		Select("session_id").
 		Group("session_id").
 		Order("MAX(started_at) DESC").
@@ -46,7 +47,7 @@ func (c *Client) GetTrainingSessions(limit, offset int) ([]modelsdb.TrainingLog,
 
 	// Get all logs for these sessions
 	var logs []modelsdb.TrainingLog
-	err := c.Db.Where("session_id IN ?", sessionIDs).
+	err := c.db(ctx).Where("session_id IN ?", sessionIDs).
 		Order("started_at DESC, algorithm_name ASC").
 		Find(&logs).Error
 
@@ -54,14 +55,14 @@ func (c *Client) GetTrainingSessions(limit, offset int) ([]modelsdb.TrainingLog,
 }
 
 // GetLatestTrainingLogByAlgorithm returns the single most-recent TrainingLog per algorithm.
-func (c *Client) GetLatestTrainingLogByAlgorithm() ([]modelsdb.TrainingLog, error) {
+func (c *Client) GetLatestTrainingLogByAlgorithm(ctx context.Context) ([]modelsdb.TrainingLog, error) {
 	// Sub-query: max id per algorithm_name (proxy for latest completed_at)
 	type algMax struct {
 		AlgorithmName string
 		MaxID         uint
 	}
 	var maxRows []algMax
-	err := c.Db.Model(&modelsdb.TrainingLog{}).
+	err := c.db(ctx).Model(&modelsdb.TrainingLog{}).
 		Select("algorithm_name, MAX(id) as max_id").
 		Group("algorithm_name").
 		Scan(&maxRows).Error
@@ -79,12 +80,12 @@ func (c *Client) GetLatestTrainingLogByAlgorithm() ([]modelsdb.TrainingLog, erro
 	}
 
 	var logs []modelsdb.TrainingLog
-	err = c.Db.Where("id IN ?", ids).Find(&logs).Error
+	err = c.db(ctx).Where("id IN ?", ids).Find(&logs).Error
 	return logs, err
 }
 
 // GetTrainingSessionsByMarket returns paginated training logs filtered by market_key.
-func (c *Client) GetTrainingSessionsByMarket(marketKey string, page, limit int, algorithm, sortBy, sortDir string) ([]modelsdb.TrainingLog, int64, error) {
+func (c *Client) GetTrainingSessionsByMarket(ctx context.Context, marketKey string, page, limit int, algorithm, sortBy, sortDir string) ([]modelsdb.TrainingLog, int64, error) {
 	var logs []modelsdb.TrainingLog
 	var total int64
 
@@ -102,7 +103,7 @@ func (c *Client) GetTrainingSessionsByMarket(marketKey string, page, limit int, 
 		sortDir = "ASC"
 	}
 
-	query := c.Db.Model(&modelsdb.TrainingLog{}).Where("market_key = ?", marketKey)
+	query := c.db(ctx).Model(&modelsdb.TrainingLog{}).Where("market_key = ?", marketKey)
 
 	if algorithm != "" {
 		query = query.Where("algorithm_name = ?", algorithm)
@@ -121,11 +122,11 @@ func (c *Client) GetTrainingSessionsByMarket(marketKey string, page, limit int, 
 }
 
 // GetTrainingMetricsAggregate returns aggregated stats across all training logs.
-func (c *Client) GetTrainingMetricsAggregate() (modelsdb.TrainingMetricsAggregate, error) {
+func (c *Client) GetTrainingMetricsAggregate(ctx context.Context) (modelsdb.TrainingMetricsAggregate, error) {
 	var agg modelsdb.TrainingMetricsAggregate
 
 	// Count distinct sessions
-	c.Db.Model(&modelsdb.TrainingLog{}).
+	c.db(ctx).Model(&modelsdb.TrainingLog{}).
 		Select("COUNT(DISTINCT session_id)").
 		Scan(&agg.TotalSessions)
 
@@ -137,7 +138,7 @@ func (c *Client) GetTrainingMetricsAggregate() (modelsdb.TrainingMetricsAggregat
 		AvgDataQuality float64
 	}
 	var raw rawStats
-	err := c.Db.Model(&modelsdb.TrainingLog{}).
+	err := c.db(ctx).Model(&modelsdb.TrainingLog{}).
 		Select(`
 			AVG(duration_ms)                                          AS avg_duration_ms,
 			SUM(success_count)                                        AS total_success,
@@ -159,7 +160,7 @@ func (c *Client) GetTrainingMetricsAggregate() (modelsdb.TrainingMetricsAggregat
 	}
 
 	// Total predictions (from predictions table)
-	c.Db.Raw(`
+	c.db(ctx).Raw(`
 		SELECT (
 			SELECT COUNT(*) FROM gold_predictions   WHERE deleted_at IS NULL
 		) + (

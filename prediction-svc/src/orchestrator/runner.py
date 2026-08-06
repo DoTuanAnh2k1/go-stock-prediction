@@ -28,6 +28,7 @@ from src.crawlers.sp500 import SP500_SYMBOLS
 from src.database import repository as repo
 from src.utils.logger import get_logger
 from src.utils.market_calendar import is_intraday_open, next_trading_day
+from src.telemetry import metrics as _metrics
 
 log = get_logger("orchestrator")
 
@@ -152,6 +153,8 @@ def _predict_gold(algos: dict, emit: EmitFn) -> int:
 
     dir_acc = repo.get_direction_accuracy("GOLD")
     _apply_ensemble_weights(algos, dir_acc)
+    for _algo_key, _acc_val in dir_acc.items():
+        _metrics.set_direction_accuracy("GOLD", _algo_key, _acc_val)
     count = 0
     now = datetime.now()
     target = now + timedelta(hours=1)
@@ -196,6 +199,7 @@ def _predict_gold(algos: dict, emit: EmitFn) -> int:
                     status="pending",
                 )
                 count += 1
+                _metrics.record_prediction("GOLD", key)
                 done_ops += 1
                 emit("ok", f"  {label} / {key}: {result.predicted_price:,.2f}", done_ops / max(total_ops, 1))
             except Exception as exc:
@@ -300,6 +304,8 @@ def _predict_nasdaq(algos: dict, emit: EmitFn) -> int:
 
     dir_acc = repo.get_direction_accuracy("NASDAQ100")
     _apply_ensemble_weights(algos, dir_acc)
+    for _algo_key, _acc_val in dir_acc.items():
+        _metrics.set_direction_accuracy("NASDAQ100", _algo_key, _acc_val)
     count = 0
     now = datetime.now()
     target = now + timedelta(hours=1)
@@ -345,6 +351,7 @@ def _predict_nasdaq(algos: dict, emit: EmitFn) -> int:
                     status="pending",
                 )
                 count += 1
+                _metrics.record_prediction("NASDAQ100", key)
                 done_ops += 1
                 emit("ok", f"  {symbol} / {key}: {result.predicted_price:,.4f}", done_ops / max(total_ops, 1))
             except Exception as exc:
@@ -438,6 +445,8 @@ def _predict_crypto(algos: dict, emit: EmitFn) -> int:
 
     dir_acc = repo.get_direction_accuracy("CRYPTO")
     _apply_ensemble_weights(algos, dir_acc)
+    for _algo_key, _acc_val in dir_acc.items():
+        _metrics.set_direction_accuracy("CRYPTO", _algo_key, _acc_val)
     count = 0
     now = datetime.now()
     # CRYPTO 24/7 — target = now + 1h (GOLD-style hourly prediction)
@@ -483,6 +492,7 @@ def _predict_crypto(algos: dict, emit: EmitFn) -> int:
                     status="pending",
                 )
                 count += 1
+                _metrics.record_prediction("CRYPTO", key)
                 done_ops += 1
                 emit("ok", f"  {symbol} / {key}: {result.predicted_price:,.2f}", done_ops / max(total_ops, 1))
             except Exception as exc:
@@ -585,6 +595,8 @@ def _predict_sp500(algos: dict, emit: EmitFn) -> int:
 
     dir_acc = repo.get_direction_accuracy("SP500")
     _apply_ensemble_weights(algos, dir_acc)
+    for _algo_key, _acc_val in dir_acc.items():
+        _metrics.set_direction_accuracy("SP500", _algo_key, _acc_val)
     count = 0
     now = datetime.now()
     target = now + timedelta(hours=1)
@@ -630,6 +642,7 @@ def _predict_sp500(algos: dict, emit: EmitFn) -> int:
                     status="pending",
                 )
                 count += 1
+                _metrics.record_prediction("SP500", key)
                 done_ops += 1
                 emit("ok", f"  {symbol} / {key}: {result.predicted_price:,.4f}", done_ops / max(total_ops, 1))
             except Exception as exc:

@@ -37,16 +37,16 @@ type nasdaqLatestResponse struct {
 func GetNasdaqLatest(w http.ResponseWriter, r *http.Request) {
 	store := repository.GetSingleton()
 
-	symbols, err := store.GetNasdaqSymbols()
+	symbols, err := store.GetNasdaqSymbols(r.Context())
 	if err != nil {
-		logger.Logger.Errorf("[api/nasdaq/latest] Failed to get NASDAQ symbols: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/nasdaq/latest] Failed to get NASDAQ symbols: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get NASDAQ symbols")
 		return
 	}
 
 	items := make([]nasdaqLatestItem, 0, len(symbols))
 	for _, sym := range symbols {
-		p, err := store.GetLatestNasdaqPrice(sym)
+		p, err := store.GetLatestNasdaqPrice(r.Context(), sym)
 		if err != nil || p == nil {
 			continue
 		}
@@ -107,9 +107,9 @@ func GetNasdaqPrices(w http.ResponseWriter, r *http.Request) {
 	from := to.AddDate(0, 0, -days)
 	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
-	prices, err := store.GetNasdaqPricesByDateRange(symbol, from, to)
+	prices, err := store.GetNasdaqPricesByDateRange(r.Context(), symbol, from, to)
 	if err != nil {
-		logger.Logger.Errorf("[api/nasdaq/prices] Failed to get NASDAQ prices: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/nasdaq/prices] Failed to get NASDAQ prices: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get NASDAQ prices")
 		return
 	}
@@ -171,9 +171,9 @@ func GetNasdaqChart(w http.ResponseWriter, r *http.Request) {
 	if days == 1 {
 		// Use 96h window so weekends show the last trading day (Friday US close = Saturday ~03:00 VN)
 		from := to.Add(-96 * time.Hour)
-		intradayPrices, err := store.GetNasdaqIntradayByRange(symbol, from, to)
+		intradayPrices, err := store.GetNasdaqIntradayByRange(r.Context(), symbol, from, to)
 		if err != nil {
-			logger.Logger.Errorf("[api/nasdaq/chart] Failed to get NASDAQ intraday prices: %v", err)
+			logger.Ctx(r.Context()).Errorf("[api/nasdaq/chart] Failed to get NASDAQ intraday prices: %v", err)
 			ResponseError(w, http.StatusInternalServerError, "Failed to get NASDAQ intraday prices")
 			return
 		}
@@ -213,9 +213,9 @@ func GetNasdaqChart(w http.ResponseWriter, r *http.Request) {
 	from := to.AddDate(0, 0, -days)
 	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
-	prices, err := store.GetNasdaqPricesByDateRange(symbol, from, to)
+	prices, err := store.GetNasdaqPricesByDateRange(r.Context(), symbol, from, to)
 	if err != nil {
-		logger.Logger.Errorf("[api/nasdaq/chart] Failed to get NASDAQ prices: %v", err)
+		logger.Ctx(r.Context()).Errorf("[api/nasdaq/chart] Failed to get NASDAQ prices: %v", err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get NASDAQ prices")
 		return
 	}

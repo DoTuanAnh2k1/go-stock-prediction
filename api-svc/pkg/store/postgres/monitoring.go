@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -37,7 +38,7 @@ var marketPredMeta = map[string]string{
 }
 
 // GetMarketCrawlStats returns crawl freshness stats for the given market.
-func (c *Client) GetMarketCrawlStats(market string) (*modelsapi.MarketCrawlStats, error) {
+func (c *Client) GetMarketCrawlStats(ctx context.Context, market string) (*modelsapi.MarketCrawlStats, error) {
 	meta, ok := monitorMeta[strings.ToUpper(market)]
 	if !ok {
 		return nil, fmt.Errorf("unknown market: %q (valid: GOLD, NASDAQ, CRYPTO, SP500)", market)
@@ -58,7 +59,7 @@ func (c *Client) GetMarketCrawlStats(market string) (*modelsapi.MarketCrawlStats
 
 	// ── last daily crawl timestamp ──────────────────────────────────────────
 	var dailyLast tsRow
-	err := c.Db.Raw(
+	err := c.db(ctx).Raw(
 		fmt.Sprintf(`SELECT %s AS ts FROM %s WHERE deleted_at IS NULL ORDER BY %s DESC LIMIT 1`,
 			meta.dailyTsCol, meta.dailyTable, meta.dailyTsCol),
 	).Scan(&dailyLast).Error
@@ -69,7 +70,7 @@ func (c *Client) GetMarketCrawlStats(market string) (*modelsapi.MarketCrawlStats
 
 	// ── daily count today ───────────────────────────────────────────────────
 	var dailyCnt cntRow
-	_ = c.Db.Raw(
+	_ = c.db(ctx).Raw(
 		fmt.Sprintf(`SELECT COUNT(*) AS cnt FROM %s WHERE deleted_at IS NULL AND %s >= ?`,
 			meta.dailyTable, meta.dailyTsCol),
 		todayStart,
@@ -78,7 +79,7 @@ func (c *Client) GetMarketCrawlStats(market string) (*modelsapi.MarketCrawlStats
 
 	// ── last intraday crawl timestamp ───────────────────────────────────────
 	var intradayLast tsRow
-	err = c.Db.Raw(
+	err = c.db(ctx).Raw(
 		fmt.Sprintf(`SELECT %s AS ts FROM %s ORDER BY %s DESC LIMIT 1`,
 			meta.intradayTsCol, meta.intradayTable, meta.intradayTsCol),
 	).Scan(&intradayLast).Error
@@ -89,7 +90,7 @@ func (c *Client) GetMarketCrawlStats(market string) (*modelsapi.MarketCrawlStats
 
 	// ── intraday count today ────────────────────────────────────────────────
 	var intradayCnt cntRow
-	_ = c.Db.Raw(
+	_ = c.db(ctx).Raw(
 		fmt.Sprintf(`SELECT COUNT(*) AS cnt FROM %s WHERE %s >= ?`,
 			meta.intradayTable, meta.intradayTsCol),
 		todayStart,
@@ -100,7 +101,7 @@ func (c *Client) GetMarketCrawlStats(market string) (*modelsapi.MarketCrawlStats
 }
 
 // GetMarketPredStats returns per-algorithm prediction counts for today for the given market.
-func (c *Client) GetMarketPredStats(market string) ([]modelsapi.AlgoPredStats, error) {
+func (c *Client) GetMarketPredStats(ctx context.Context, market string) ([]modelsapi.AlgoPredStats, error) {
 	table, ok := marketPredMeta[strings.ToUpper(market)]
 	if !ok {
 		return nil, fmt.Errorf("unknown market: %q (valid: GOLD, NASDAQ, CRYPTO, SP500)", market)
@@ -128,7 +129,7 @@ func (c *Client) GetMarketPredStats(market string) ([]modelsapi.AlgoPredStats, e
 	`, table)
 
 	var rows []rawRow
-	if err := c.Db.Raw(query, todayStart).Scan(&rows).Error; err != nil {
+	if err := c.db(ctx).Raw(query, todayStart).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("GetMarketPredStats(%s): %w", market, err)
 	}
 

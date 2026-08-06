@@ -15,6 +15,7 @@ from src.crawlers import sanity
 from src.crawlers.base import DEFAULT_HEADERS, USER_AGENT, BaseCrawler
 from src.database import repository as repo
 from src.database.models import GoldIntradayPrice
+from src.telemetry import metrics as _metrics
 from src.utils.logger import get_logger
 from src.utils.number_parser import safe_parse_vnd
 
@@ -117,6 +118,7 @@ class GoldCrawler(BaseCrawler):
             errors += 1
 
         log.info("gold.crawl.done", saved=saved, errors=errors)
+        _metrics.record_crawl_saved("GOLD", saved)
         return saved
 
     def crawl_history(self, days: int = 180) -> int:

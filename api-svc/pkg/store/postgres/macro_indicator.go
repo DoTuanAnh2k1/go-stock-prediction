@@ -1,13 +1,14 @@
 package postgres
 
 import (
+	"context"
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 )
 
 // GetMacroIndicators returns macro indicators filtered by name, ordered by indicator_date DESC.
-func (c *Client) GetMacroIndicators(name string, limit int) ([]modelsdb.MacroIndicator, error) {
+func (c *Client) GetMacroIndicators(ctx context.Context, name string, limit int) ([]modelsdb.MacroIndicator, error) {
 	var indicators []modelsdb.MacroIndicator
-	query := c.Db.Order("indicator_date DESC")
+	query := c.db(ctx).Order("indicator_date DESC")
 	if name != "" {
 		query = query.Where("indicator_name = ?", name)
 	}
@@ -19,9 +20,9 @@ func (c *Client) GetMacroIndicators(name string, limit int) ([]modelsdb.MacroInd
 }
 
 // GetLatestMacroIndicator returns the most recent macro indicator for a given name.
-func (c *Client) GetLatestMacroIndicator(name string) (*modelsdb.MacroIndicator, error) {
+func (c *Client) GetLatestMacroIndicator(ctx context.Context, name string) (*modelsdb.MacroIndicator, error) {
 	var indicator modelsdb.MacroIndicator
-	err := c.Db.Where("indicator_name = ?", name).Order("indicator_date DESC").First(&indicator).Error
+	err := c.db(ctx).Where("indicator_name = ?", name).Order("indicator_date DESC").First(&indicator).Error
 	if err != nil {
 		return nil, err
 	}
@@ -29,8 +30,8 @@ func (c *Client) GetLatestMacroIndicator(name string) (*modelsdb.MacroIndicator,
 }
 
 // UpsertMacroIndicator creates or updates a macro indicator record.
-func (c *Client) UpsertMacroIndicator(indicator *modelsdb.MacroIndicator) error {
-	return c.Db.Where("indicator_name = ? AND indicator_date = ?",
+func (c *Client) UpsertMacroIndicator(ctx context.Context, indicator *modelsdb.MacroIndicator) error {
+	return c.db(ctx).Where("indicator_name = ? AND indicator_date = ?",
 		indicator.IndicatorName, indicator.IndicatorDate).
 		Assign(indicator).
 		FirstOrCreate(indicator).Error

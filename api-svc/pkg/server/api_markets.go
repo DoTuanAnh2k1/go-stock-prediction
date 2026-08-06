@@ -163,9 +163,9 @@ func GetMarketPredictions(w http.ResponseWriter, r *http.Request) {
 
 	switch key {
 	case "gold":
-		preds, total, err := store.GetGoldPredictionsPage(page, limit, search, algorithm, status, sortBy, sortDir)
+		preds, total, err := store.GetGoldPredictionsPage(r.Context(), page, limit, search, algorithm, status, sortBy, sortDir)
 		if err != nil {
-			logger.Logger.Errorf("[api/markets/%s/predictions] DB error: %v", key, err)
+			logger.Ctx(r.Context()).Errorf("[api/markets/%s/predictions] DB error: %v", key, err)
 			ResponseError(w, http.StatusInternalServerError, "Failed to get predictions")
 			return
 		}
@@ -248,9 +248,9 @@ func GetMarketTraining(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store := repository.GetSingleton()
-	logs, total, err := store.GetTrainingSessionsByMarket(key, page, limit, algorithm, sortBy, sortDir)
+	logs, total, err := store.GetTrainingSessionsByMarket(r.Context(), key, page, limit, algorithm, sortBy, sortDir)
 	if err != nil {
-		logger.Logger.Errorf("[api/markets/%s/training] DB error: %v", key, err)
+		logger.Ctx(r.Context()).Errorf("[api/markets/%s/training] DB error: %v", key, err)
 		ResponseError(w, http.StatusInternalServerError, "Failed to get training sessions")
 		return
 	}

@@ -1,25 +1,26 @@
 package mysql
 
 import (
+	"context"
 	modelsdb "go-stock-prediction/pkg/models/models_db"
 	"strings"
 	"time"
 )
 
 // CreateCryptoPrice inserts a new cryptocurrency price record.
-func (c *Client) CreateCryptoPrice(p *modelsdb.CryptoPrice) error {
+func (c *Client) CreateCryptoPrice(_ context.Context, p *modelsdb.CryptoPrice) error {
 	return c.Db.Create(p).Error
 }
 
 // UpsertCryptoPrice creates or updates a crypto price record identified by (coin_id, trading_date).
-func (c *Client) UpsertCryptoPrice(p *modelsdb.CryptoPrice) error {
+func (c *Client) UpsertCryptoPrice(_ context.Context, p *modelsdb.CryptoPrice) error {
 	return c.Db.Where("coin_id = ? AND trading_date = ?", p.CoinID, p.TradingDate).
 		Assign(p).
 		FirstOrCreate(p).Error
 }
 
 // GetCryptoPricesByDateRange returns crypto prices for a coinID within a date range, ordered DESC.
-func (c *Client) GetCryptoPricesByDateRange(coinID string, from, to time.Time) ([]modelsdb.CryptoPrice, error) {
+func (c *Client) GetCryptoPricesByDateRange(_ context.Context, coinID string, from, to time.Time) ([]modelsdb.CryptoPrice, error) {
 	var prices []modelsdb.CryptoPrice
 	err := c.Db.Where("coin_id = ? AND trading_date BETWEEN ? AND ?", coinID, from, to).
 		Order("trading_date DESC").
@@ -28,7 +29,7 @@ func (c *Client) GetCryptoPricesByDateRange(coinID string, from, to time.Time) (
 }
 
 // GetLatestCryptoPrice returns the most recent price record for a given coinID.
-func (c *Client) GetLatestCryptoPrice(coinID string) (*modelsdb.CryptoPrice, error) {
+func (c *Client) GetLatestCryptoPrice(_ context.Context, coinID string) (*modelsdb.CryptoPrice, error) {
 	var price modelsdb.CryptoPrice
 	err := c.Db.Where("coin_id = ?", coinID).
 		Order("trading_date DESC").
@@ -40,7 +41,7 @@ func (c *Client) GetLatestCryptoPrice(coinID string) (*modelsdb.CryptoPrice, err
 }
 
 // GetCryptoCoins returns one representative (latest) record per distinct coinID.
-func (c *Client) GetCryptoCoins() ([]modelsdb.CryptoPrice, error) {
+func (c *Client) GetCryptoCoins(_ context.Context) ([]modelsdb.CryptoPrice, error) {
 	var coins []modelsdb.CryptoPrice
 	subQuery := c.Db.Model(&modelsdb.CryptoPrice{}).
 		Select("coin_id, MAX(trading_date) as max_date").
@@ -54,32 +55,32 @@ func (c *Client) GetCryptoCoins() ([]modelsdb.CryptoPrice, error) {
 }
 
 // GetAllCryptoPricesForCoin returns all historical prices for a coinID, ordered DESC.
-func (c *Client) GetAllCryptoPricesForCoin(coinID string) ([]modelsdb.CryptoPrice, error) {
+func (c *Client) GetAllCryptoPricesForCoin(_ context.Context, coinID string) ([]modelsdb.CryptoPrice, error) {
 	var prices []modelsdb.CryptoPrice
 	err := c.Db.Where("coin_id = ?", coinID).Order("trading_date DESC").Find(&prices).Error
 	return prices, err
 }
 
 // BulkCreateCryptoPredictions inserts multiple crypto predictions using CreateInBatches.
-func (c *Client) BulkCreateCryptoPredictions(preds []modelsdb.CryptoPrediction) error {
+func (c *Client) BulkCreateCryptoPredictions(_ context.Context, preds []modelsdb.CryptoPrediction) error {
 	return c.Db.CreateInBatches(preds, 200).Error
 }
 
 // DeleteCryptoPredictionsBeforeDate hard-deletes all crypto predictions whose target_date < before
 // and that already have an actual_price (i.e. backtest rows).
-func (c *Client) DeleteCryptoPredictionsBeforeDate(before time.Time) error {
+func (c *Client) DeleteCryptoPredictionsBeforeDate(_ context.Context, before time.Time) error {
 	return c.Db.Where("target_date < ? AND actual_price IS NOT NULL", before).
 		Delete(&modelsdb.CryptoPrediction{}).Error
 }
 
 // CreateCryptoPrediction saves a new cryptocurrency prediction record.
-func (c *Client) CreateCryptoPrediction(p *modelsdb.CryptoPrediction) error {
+func (c *Client) CreateCryptoPrediction(_ context.Context, p *modelsdb.CryptoPrediction) error {
 	return c.Db.Create(p).Error
 }
 
 // GetCryptoPredictions returns predictions filtered by coinID and algorithm.
 // Empty strings mean no filter. Results are ordered by prediction_date DESC.
-func (c *Client) GetCryptoPredictions(coinID, algorithm string, limit int) ([]modelsdb.CryptoPrediction, error) {
+func (c *Client) GetCryptoPredictions(_ context.Context, coinID, algorithm string, limit int) ([]modelsdb.CryptoPrediction, error) {
 	var preds []modelsdb.CryptoPrediction
 	query := c.Db.Order("prediction_date DESC")
 	if coinID != "" {
@@ -97,7 +98,7 @@ func (c *Client) GetCryptoPredictions(coinID, algorithm string, limit int) ([]mo
 
 // GetLatestCryptoPredictions returns the most recent prediction per (coin_id, algorithm_name).
 // Uses MAX(id) to avoid duplicates when multiple rows share the same prediction_date.
-func (c *Client) GetLatestCryptoPredictions() ([]modelsdb.CryptoPrediction, error) {
+func (c *Client) GetLatestCryptoPredictions(_ context.Context) ([]modelsdb.CryptoPrediction, error) {
 	var preds []modelsdb.CryptoPrediction
 	subQuery := c.Db.Model(&modelsdb.CryptoPrediction{}).
 		Select("MAX(id) as max_id").
@@ -114,7 +115,7 @@ func (c *Client) GetLatestCryptoPredictions() ([]modelsdb.CryptoPrediction, erro
 // GetLatestConfirmedCryptoPredictions returns the most recent prediction
 // per (coin_id, algorithm_name), regardless of status.
 // Uses MAX(id) to avoid duplicates when multiple rows share the same prediction_date.
-func (c *Client) GetLatestConfirmedCryptoPredictions() ([]modelsdb.CryptoPrediction, error) {
+func (c *Client) GetLatestConfirmedCryptoPredictions(_ context.Context) ([]modelsdb.CryptoPrediction, error) {
 	var preds []modelsdb.CryptoPrediction
 	subQuery := c.Db.Model(&modelsdb.CryptoPrediction{}).
 		Select("MAX(id) as max_id").
@@ -130,7 +131,7 @@ func (c *Client) GetLatestConfirmedCryptoPredictions() ([]modelsdb.CryptoPredict
 
 // GetCryptoPredictionsByDateRange returns crypto predictions for a coinID within a date range.
 // Filters by prediction_date (when the prediction was created).
-func (c *Client) GetCryptoPredictionsByDateRange(coinID string, from, to time.Time) ([]modelsdb.CryptoPrediction, error) {
+func (c *Client) GetCryptoPredictionsByDateRange(_ context.Context, coinID string, from, to time.Time) ([]modelsdb.CryptoPrediction, error) {
 	var preds []modelsdb.CryptoPrediction
 	query := c.Db.Where("prediction_date BETWEEN ? AND ?", from, to).Order("prediction_date ASC")
 	if coinID != "" {
@@ -141,7 +142,7 @@ func (c *Client) GetCryptoPredictionsByDateRange(coinID string, from, to time.Ti
 }
 
 // GetCryptoPredictionsPage returns paginated crypto predictions with optional filters.
-func (c *Client) GetCryptoPredictionsPage(page, limit int, search, algorithm, status, sortBy, sortDir string) ([]modelsdb.CryptoPrediction, int64, error) {
+func (c *Client) GetCryptoPredictionsPage(_ context.Context, page, limit int, search, algorithm, status, sortBy, sortDir string) ([]modelsdb.CryptoPrediction, int64, error) {
 	var preds []modelsdb.CryptoPrediction
 	var total int64
 

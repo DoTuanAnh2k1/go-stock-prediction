@@ -25,7 +25,7 @@ func GetDashboardStats(w http.ResponseWriter, r *http.Request) {
 	}
 	store := repository.GetSingleton()
 	var lastCrawl *time.Time
-	if syncLogs, err := store.GetLatestSyncLogs(1); err == nil && len(syncLogs) > 0 {
+	if syncLogs, err := store.GetLatestSyncLogs(r.Context(), 1); err == nil && len(syncLogs) > 0 {
 		t := syncLogs[0].SyncDate
 		lastCrawl = &t
 	}

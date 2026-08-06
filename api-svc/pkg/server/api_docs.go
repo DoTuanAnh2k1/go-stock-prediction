@@ -158,7 +158,7 @@ func ListDocsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		logger.Logger.Errorf("ListDocsHandler: walk %s failed: %v", docsRoot, err)
+		logger.Ctx(r.Context()).Errorf("ListDocsHandler: walk %s failed: %v", docsRoot, err)
 		ResponseError(w, http.StatusInternalServerError, "failed to list documentation files")
 		return
 	}
@@ -215,7 +215,7 @@ func GetDocHandler(w http.ResponseWriter, r *http.Request) {
 	// Resolve absolute paths and verify the resolved file stays within docsRoot.
 	absRoot, err := filepath.Abs(docsRoot)
 	if err != nil {
-		logger.Logger.Errorf("GetDocHandler: cannot resolve docsRoot %s: %v", docsRoot, err)
+		logger.Ctx(r.Context()).Errorf("GetDocHandler: cannot resolve docsRoot %s: %v", docsRoot, err)
 		ResponseError(w, http.StatusInternalServerError, "internal error resolving docs root")
 		return
 	}
@@ -223,7 +223,7 @@ func GetDocHandler(w http.ResponseWriter, r *http.Request) {
 	// filepath.Clean("/"+relPath) strips any leading "../" sequences before joining.
 	absResolved, err := filepath.Abs(filepath.Join(absRoot, filepath.Clean("/"+relPath)))
 	if err != nil {
-		logger.Logger.Errorf("GetDocHandler: cannot resolve path %s: %v", relPath, err)
+		logger.Ctx(r.Context()).Errorf("GetDocHandler: cannot resolve path %s: %v", relPath, err)
 		ResponseError(w, http.StatusBadRequest, "invalid path")
 		return
 	}
@@ -243,7 +243,7 @@ func GetDocHandler(w http.ResponseWriter, r *http.Request) {
 			ResponseError(w, http.StatusNotFound, "documentation file not found")
 			return
 		}
-		logger.Logger.Errorf("GetDocHandler: stat %s: %v", absResolved, err)
+		logger.Ctx(r.Context()).Errorf("GetDocHandler: stat %s: %v", absResolved, err)
 		ResponseError(w, http.StatusInternalServerError, "failed to read file")
 		return
 	}
@@ -255,7 +255,7 @@ func GetDocHandler(w http.ResponseWriter, r *http.Request) {
 	// --- Read content ---
 	raw, err := os.ReadFile(absResolved)
 	if err != nil {
-		logger.Logger.Errorf("GetDocHandler: read %s: %v", absResolved, err)
+		logger.Ctx(r.Context()).Errorf("GetDocHandler: read %s: %v", absResolved, err)
 		ResponseError(w, http.StatusInternalServerError, "failed to read file")
 		return
 	}

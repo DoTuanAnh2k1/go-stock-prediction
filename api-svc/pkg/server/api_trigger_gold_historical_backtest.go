@@ -25,7 +25,7 @@ import (
 //	@Security     BearerAuth
 //	@Router       /api/trigger/gold-historical-backtest [post]
 func TriggerGoldHistoricalBacktestHandler(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Info("TriggerGoldHistoricalBacktestHandler: requesting gold historical backtest")
+	logger.Ctx(r.Context()).Info("TriggerGoldHistoricalBacktestHandler: requesting gold historical backtest")
 
 	client := requireGRPCClient(w)
 	if client == nil {
@@ -43,7 +43,7 @@ func TriggerGoldHistoricalBacktestHandler(w http.ResponseWriter, r *http.Request
 			ResponseError(w, http.StatusConflict, st.Message())
 			return
 		}
-		logger.Logger.Errorf("GoldHistoricalBacktest: failed: %v", err)
+		logger.Ctx(r.Context()).Errorf("GoldHistoricalBacktest: failed: %v", err)
 		ResponseError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
