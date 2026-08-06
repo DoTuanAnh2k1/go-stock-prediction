@@ -170,6 +170,34 @@ Hệ thống gồm 6 service chính được viết bằng 4 ngôn ngữ khác n
 
 **Observability:** OpenTelemetry distributed tracing xuyên 6 service (gateway → api-svc → auth-svc/prediction-svc), Prometheus metrics, Grafana + Tempo — đặt trong namespace `observability` độc lập với vòng đời app. `X-Request-ID` correlation cho phép `grep request_id=<uuid>` ra toàn bộ hành trình một request qua log của cả 6 service.
 
+## Kiến trúc logging & Observability
+
+Ba trụ observability (logs · metrics · traces) được nối với nhau bằng **`X-Request-ID`** (UUID v4, độc lập với OTel trace_id) — một request có thể truy vết qua cả log, metric và trace của 6 service.
+
+### Logging — cách sinh, tương quan, thu thập, tổng hợp
+
+| Tầng | Cơ chế |
+|------|--------|
+| **Sinh log (structured)** | 1 dòng, có màu (ANSI ép cả trong Docker), không emoji, tiếng Anh. api-svc `zerolog` · auth-svc `logback + GrpcLoggingInterceptor` (1 dòng/RPC) · prediction-svc `structlog ConsoleRenderer` · gateway-svc `tracing` · service-mgt/cli-svc (Go). Toggle `LOG_FORMAT=console\|json` (json cho log aggregator). |
+| **Tương quan (correlation)** | `X-Request-ID` bơm/nhận ở gateway, propagate qua HTTP header + gRPC metadata `x-request-id`; mỗi service bind vào logger (`request_id=<uuid>`). Cron/job tự mint 1 ID/lần chạy. |
+| **Xuất** | Toàn bộ ra **stdout/stderr** (12-factor XI) — không tự quản file. |
+| **Thu thập (k8s)** | **log-sidecar** trên 5 backend pod: app ghi `/var/log/app/<svc>.log` qua `emptyDir`, sidecar `tail -f` → `kubectl logs <pod> -c log-sidecar` (ambassador multi-container). |
+| **Tổng hợp tập trung** | **Loki + Promtail** (chart `observability`): Promtail DaemonSet đọc `/var/log/pods` mọi node → đẩy vào **Loki** (:3100) → truy vấn/tìm kiếm trong **Grafana**. |
+| **Logs ↔ Traces** | Grafana datasource Loki có `derivedFields` bắt `trace_id` → mở trace trong **Tempo**; và Tempo `tracesToLogsV2` lọc Loki theo `request_id` → xem log của đúng request đó xuyên mọi container. |
+
+```
+app (stdout) ──► log-sidecar (kubectl logs)         # xem nhanh per-pod
+     │
+     └─► /var/log/pods ──► Promtail (DaemonSet) ──► Loki ──► Grafana  # tìm kiếm tập trung
+                                                      ▲
+                                    Tempo (traces) ◄──┘  # nhảy qua lại logs↔traces bằng request_id
+```
+
+### Metrics & Traces
+- **Metrics** — Prometheus scrape: api-svc `/metrics` :8118, gateway :9100, prediction/cli/service-mgt :9464, auth `/actuator/prometheus` :8120. Business metrics: `predictions_total`, `crawl_total`, `reconcile_total`, `direction_accuracy`, `bot_portfolio_value`, `training_*`...
+- **Traces** — OTel SDK/agent → OTLP/gRPC `otel-collector:4317` → Tempo; chuỗi trace nối `gateway(Rust)→api-svc(Go)→{auth-svc(Java),prediction-svc(Python)}`.
+- **Dashboards** — Grafana (Prometheus + Tempo + Loki datasource), service map, node graph.
+
 ## Services
 
 | Service (dir) | Tech | Port | Role |
@@ -482,6 +510,21 @@ REGISTRY_GRPC_TARGET=service-mgt:8121 # address used by services to reach servic
 ```
 
 `JWT_SECRET` is injected into both `api-svc` (for local JWT validation) and `auth-svc` (for token signing) via the Compose file.
+
+## Kiểm thử (Testing)
+
+Bốn tầng test, đa ngôn ngữ. Tầng unit chạy tự động trong CI (`.github/workflows/ci.yml`); integration/E2E cần stack live nên chạy tay/local.
+
+| Tầng | Hiện có | Chạy | Trong CI? |
+|------|---------|------|-----------|
+| **Unit** | Go api-svc **13 file** (handler mock-store, config, testutil) · Python **31 file** (13 thuật toán + sanity/calendar/reconcile/simulation/request_id...) · Java auth-svc **2** (RBAC, gRPC) · Rust gateway **8 module** `#[test]` · **web-svc Vitest** (i18n, marketHours, instruments, UI components — 39 test) | `cd api-svc && go test ./... -short` · `cd prediction-svc && pytest tests/unit/` · `cd auth-svc && mvn test` · `cd gateway-svc && cargo test` · `cd web-svc && npm run test` | ✅ tất cả |
+| **Component** | Go handler test (api-svc cô lập + mock `DatabaseStore`) · web-svc component test (`@testing-library/react`) · Python per-subsystem | (nằm trong unit runner ở trên) | ✅ |
+| **Integration** | Python `tests/integration/` **11 file** (`test_phase1..5`: api_backend · grpc · crawlers · predictions · training · simulation) — qua HTTP/gRPC tới stack đang chạy | `make up` rồi `docker exec prediction-svc pytest tests/integration/` | ⚠️ local (cần stack) |
+| **E2E** | `scripts/smoke-test.sh` (login→version→monitoring qua gateway) · `scripts/run-labs.sh` (CKAD lab trên cluster kind) · **Playwright** `web-svc/e2e/smoke.spec.ts` (app shell + /guide) · `test_phase5_full_regression.py` | `BASE_URL=http://localhost ./scripts/smoke-test.sh` · `cd web-svc && npm run e2e` · `./scripts/run-labs.sh` | ⚠️ local (cần app/cluster) |
+
+**Lệnh nhanh (web-svc):** `npm run test` (Vitest, chạy 1 lần) · `npm run test:watch` · `npm run test:coverage` · `npm run e2e` (Playwright, cần app tại `BASE_URL`).
+
+**Giới hạn:** integration/E2E chưa dựng stack trong CI (chạy local); có thể thêm job compose-based sau.
 
 ## Development
 

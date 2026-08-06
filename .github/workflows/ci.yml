@@ -332,7 +332,7 @@ jobs:
   # ╚═══════════════════════════════════════════════════════════════════════════
 
   frontend-build:
-    name: "[Frontend] Type-check & Build"
+    name: "[Frontend] Test, Type-check & Build"
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -349,6 +349,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Unit/component tests (Vitest)
+        run: npm run test
 
       - name: Type-check & build
         run: npm run build

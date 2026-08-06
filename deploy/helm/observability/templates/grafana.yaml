@@ -48,17 +48,35 @@ data:
             queries:
               - name: "Request rate"
                 query: 'sum(rate(http_requests_total{$$__tags}[5m]))'
-          # Trace -> logs (nếu sau này thêm Loki, đổi datasourceUid).
+          # Trace -> logs: từ 1 span, nhảy sang Loki query theo request_id
+          # (X-Request-ID correlation) và service label.
           tracesToLogsV2:
-            datasourceUid: prometheus
-            spanStartTimeShift: "-1h"
-            spanEndTimeShift: "1h"
+            datasourceUid: loki
+            spanStartTimeShift: "-5m"
+            spanEndTimeShift: "5m"
+            filterByTraceID: false
+            filterBySpanID: false
+            customQuery: true
+            query: '{app=~".+"} |= "$$${__span.tags.request_id}"'
             tags:
-              - { key: service.name, value: service }
+              - { key: service.name, value: app }
           serviceMap:
             datasourceUid: prometheus
           nodeGraph:
             enabled: true
+      - name: Loki
+        type: loki
+        access: proxy
+        uid: loki
+        url: http://loki.{{ .Release.Namespace }}:3100
+        jsonData:
+          # Loki -> Tempo correlation: từ log line có traceID field,
+          # nhảy sang Tempo để xem full trace.
+          derivedFields:
+            - name: TraceID
+              matcherRegex: '"trace_id":"(\w+)"'
+              url: '$${__value.raw}'
+              datasourceUid: tempo
 ---
 apiVersion: v1
 kind: ConfigMap

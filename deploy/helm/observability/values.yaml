@@ -18,3 +18,15 @@ nodeExporter:
   enabled: true
 kubeStateMetrics:
   enabled: true
+
+# Log aggregation — Loki (backend) + Promtail (shipper DaemonSet).
+loki:
+  enabled: true
+  image: grafana/loki
+  tag: "3.3.2"
+  pvcSize: 1Gi
+
+promtail:
+  enabled: true
+  image: grafana/promtail
+  tag: "3.3.2"

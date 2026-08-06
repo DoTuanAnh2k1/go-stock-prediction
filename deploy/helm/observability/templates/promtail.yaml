@@ -1,0 +1,201 @@
+{{- if .Values.promtail.enabled }}
+# =============================================================================
+# Promtail — DaemonSet log shipper. Đọc /var/log/pods trên mọi node,
+# enrich với metadata k8s (namespace/pod/container/app) qua kubernetes_sd,
+# rồi đẩy vào Loki :3100/loki/api/v1/push.
+#
+# RBAC cần để kubernetes_sd resolve pod metadata: ClusterRole get/list/watch
+# pods + ClusterRoleBinding vào ServiceAccount promtail (ns observability).
+#
+# Tolerations: chạy trên mọi node kể cả control-plane (điều kiện thật sự
+# cần cho kind single-node cluster).
+# =============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: promtail
+  namespace: {{ .Release.Namespace }}
+  labels: { app: promtail }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: promtail
+  labels: { app: promtail }
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/proxy", "services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: promtail
+  labels: { app: promtail }
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: promtail
+subjects:
+  - kind: ServiceAccount
+    name: promtail
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: promtail-config
+  namespace: {{ .Release.Namespace }}
+  labels: { app: promtail }
+data:
+  promtail.yaml: |
+    server:
+      http_listen_port: 9080
+      grpc_listen_port: 0
+      log_level: warn
+
+    positions:
+      filename: /var/promtail/positions.yaml
+
+    clients:
+      - url: http://loki.{{ .Release.Namespace }}:3100/loki/api/v1/push
+
+    scrape_configs:
+      # -----------------------------------------------------------------------
+      # Scrape tất cả pod trên cluster qua kubernetes_sd role: pod.
+      # __path__ trỏ đến file log thực trên node: /var/log/pods/<ns>_<pod>_<uid>/<container>/*.log
+      # Relabel tách namespace / pod / container / app để dễ lọc trong Grafana.
+      # -----------------------------------------------------------------------
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+
+        # Giải mã dòng log Docker JSON (containerd format) — mỗi dòng JSON có
+        # trường "log" chứa nội dung thật. pipeline_stages bóc "log" ra làm
+        # content, giữ stream label (stdout/stderr).
+        pipeline_stages:
+          - cri: {}
+
+        relabel_configs:
+          # Chỉ scrape pod có annotation prometheus.io/scrape=true HOẶC
+          # tất cả pod (không filter annotation — log thường không cần annotation).
+          # Bỏ comment dưới đây nếu muốn chỉ scrape pod đã opt-in:
+          # - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+          #   action: keep
+          #   regex: "true"
+
+          # Bỏ pod trong phase Succeeded/Failed (job completed).
+          - source_labels: [__meta_kubernetes_pod_phase]
+            action: drop
+            regex: (Succeeded|Failed)
+
+          # namespace label.
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: namespace
+
+          # pod label.
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: pod
+
+          # container label — từng container trong pod.
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            action: replace
+            target_label: container
+
+          # app label — từ pod label "app" (set bởi deployment selector).
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: replace
+            target_label: app
+
+          # __path__ — glob đến file log của container này trên host.
+          # Format: /var/log/pods/<namespace>_<pod>_<uid>/<container>/*.log
+          - source_labels:
+              - __meta_kubernetes_pod_uid
+              - __meta_kubernetes_pod_container_name
+            separator: "/"
+            target_label: __path__
+            replacement: /var/log/pods/*$1/$2/*.log
+
+          # Thêm node name để biết log từ node nào (hữu ích khi multi-node).
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            action: replace
+            target_label: node
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: promtail
+  namespace: {{ .Release.Namespace }}
+  labels: { app: promtail }
+spec:
+  selector:
+    matchLabels: { app: promtail }
+  template:
+    metadata:
+      labels: { app: promtail }
+    spec:
+      serviceAccountName: promtail
+      # Promtail cần đọc /var/log/pods trên host — chạy non-root nhưng
+      # cần supplementalGroups hoặc chỉ cần read access (log files thường
+      # readable bởi all). Không cần privileged.
+      securityContext:
+        runAsUser: 0      # root để đọc được /var/log/pods (containerd logs owner root)
+        runAsGroup: 0
+      tolerations:
+        # Chạy được trên control-plane node (kind single-node) và bất kỳ taint nào.
+        - operator: Exists
+          effect: NoSchedule
+        - operator: Exists
+          effect: NoExecute
+      containers:
+        - name: promtail
+          image: "{{ .Values.promtail.image }}:{{ .Values.promtail.tag }}"
+          imagePullPolicy: IfNotPresent
+          args:
+            - "-config.file=/etc/promtail/promtail.yaml"
+          ports:
+            - { name: http, containerPort: 9080 }
+          env:
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          readinessProbe:
+            httpGet: { path: /ready, port: 9080 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /ready, port: 9080 }
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          resources:
+            requests: { cpu: "25m", memory: "64Mi" }
+            limits:   { cpu: "200m", memory: "256Mi" }
+          volumeMounts:
+            # Config.
+            - name: config
+              mountPath: /etc/promtail
+            # Log files từ tất cả pod trên node (read-only).
+            - name: pods-log
+              mountPath: /var/log/pods
+              readOnly: true
+            # /var/log gốc — cần để theo symlink từ /var/log/pods nếu có.
+            - name: varlog
+              mountPath: /var/log
+              readOnly: true
+            # Positions file — Promtail ghi offset đã đọc để không bỏ sót
+            # hoặc đọc lại sau khi pod restart.
+            - name: positions
+              mountPath: /var/promtail
+      volumes:
+        - name: config
+          configMap: { name: promtail-config }
+        - name: pods-log
+          hostPath: { path: /var/log/pods }
+        - name: varlog
+          hostPath: { path: /var/log }
+        - name: positions
+          emptyDir: {}
+{{- end }}
