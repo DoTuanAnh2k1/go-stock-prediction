@@ -125,7 +125,7 @@ Các bất biến (invariant) của miền nghiệp vụ — mọi thay đổi c
 
 ### Sở hữu dữ liệu (data ownership)
 - **BR-19 — Database-per-service:** `auth-svc` sở hữu `auth_db`, `prediction-svc` sở hữu `market_db`, `service-mgt` sở hữu `registry_db` — mỗi service 1 role least-privilege, không chạm DB của service khác ở tầng SQL.
-- **BR-20 — api-svc read-model:** api-svc đọc `market_db` bằng role read-only `api_svc` (SELECT toàn bộ + chỉ ghi `cron_schedules`/`sim_bots`); truy cập user/RBAC qua gRPC tới auth-svc.
+- **BR-20 — api-svc DB-less:** api-svc không sở hữu/không kết nối DB nào; đọc dữ liệu `market_db` qua gRPC tới `prediction-svc` (RPC `Query`) và user/RBAC qua gRPC tới `auth-svc`.
 
 ## Kiến trúc hệ thống
 
@@ -741,7 +741,7 @@ Danh sách dưới đây mô tả các hạn chế thực tế, được ghi nh�
 
 **Shared DB instance, chưa phải instance-per-service.** Ba database (`auth_db`, `market_db`, `registry_db`) tách biệt về credential và DDL, nhưng vẫn cùng một TimescaleDB instance. Một service OOM hoặc query nặng có thể ảnh hưởng shared pool. Tách instance hoàn toàn là bước tiếp theo nếu cần hard isolation.
 
-**`api-svc` vẫn đọc `market_db` trực tiếp.** Trong kiến trúc microservice thuần túy, `api-svc` nên lấy data qua gRPC facade từ `prediction-svc` thay vì kết nối DB trực tiếp. Hiện tại `api-svc` dùng role `api_svc` read-limited — đây là Phase-1. Phase-2 (gRPC facade hoàn toàn) đang được thiết kế (`DESIGN.md`).
+**`api-svc` giờ DB-less hoàn toàn (Phase 2).** api-svc không còn kết nối Postgres — mọi read `market_db` đi qua `prediction-svc` bằng gRPC (`grpcstore` implement `DatabaseStore` qua RPC `Query`), user/RBAC qua auth-svc gRPC. Nó không giữ credential DB nào. (Phase 1 trước đó dùng role `api_svc` read-only trực tiếp.) Lưu ý: parity JSON field-level nên được smoke-test dashboard sau mỗi thay đổi facade.
 
 **DB init chỉ chạy trên volume trống.** Script `00-init-databases.sh` và schema SQL chỉ được chạy bởi TimescaleDB khi `/var/lib/postgresql/data` chưa có dữ liệu (volume mới). Data cũ không tự migrate khi schema thay đổi — cần apply DDL thay đổi thủ công hoặc `pg_dump` + restore.
 
