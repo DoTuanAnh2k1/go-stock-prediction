@@ -11,14 +11,14 @@ data:
   DB_DRIVER: postgresql
   POSTGRES_HOST: "db"            # = tên Service DB
   POSTGRES_PORT: "5432"
-  POSTGRES_DB: go_stock_prediction
-  POSTGRES_USER: postgres
+  # database-per-service: api-svc is a read-only consumer of market_db (role api_svc).
+  POSTGRES_DB: market_db
+  POSTGRES_USER: api_svc
   GRPC_TARGET: "prediction-svc:8119"
   AUTH_GRPC_TARGET: "auth-svc:8120"
   SERVICE_MGT_ENABLED: "false"
   LOG_LEVEL: INFO
   DB_LOG_LEVEL: WARN
-  ADMIN_USERNAME: admin
   BACKUP_DIR: /backups
   DOCS_ROOT: /repo
   ALLOWED_ORIGINS: "https://localhost"

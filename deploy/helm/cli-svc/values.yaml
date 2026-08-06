@@ -1,6 +1,7 @@
 # Cấu hình self-contained cho cli-svc (chart độc lập, không còn global: của umbrella).
 replicas: 2
-imageTag: dev
+imageTag: "1.0.0"            # release tag; CI overrides: --set imageTag=$(git rev-parse --short HEAD)
 image: cli-svc
+# secrets: provided at deploy time via -f values-secret.yaml (see values-secret.yaml.example); no weak defaults shipped.
 secrets:
-  internalSecret: change-me-in-dev
+  internalSecret: ""

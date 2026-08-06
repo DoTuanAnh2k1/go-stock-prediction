@@ -8,10 +8,11 @@ metadata:
   name: auth-config
   namespace: {{ .Release.Namespace }}
 data:
+  SUPER_ADMIN_USERNAME: "chon"
   DB_HOST: "db"
   DB_PORT: "5432"
-  DB_NAME: go_stock_prediction
-  DB_USER: postgres
+  DB_NAME: auth_db
+  DB_USER: auth_svc
   GRPC_PORT: "8120"
   SERVICE_MGT_ENABLED: "false"
   REGISTRY_GRPC_TARGET: "service-mgt:8121"

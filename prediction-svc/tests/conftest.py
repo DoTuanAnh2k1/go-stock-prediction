@@ -82,7 +82,11 @@ def api_base_url() -> str:
 def admin_token(api_base_url: str) -> str:
     """POST /api/auth/login and return the JWT token."""
     url = f"{api_base_url}/api/auth/login"
-    payload = {"username": "admin", "password": "admin123"}
+    # Credentials come from the same env the auth-svc seeder reads — no hardcoded admin.
+    payload = {
+        "username": os.environ.get("SUPER_ADMIN_USERNAME", "chon"),
+        "password": os.environ.get("SUPER_ADMIN_PASSWORD", ""),
+    }
 
     for attempt in range(3):
         try:

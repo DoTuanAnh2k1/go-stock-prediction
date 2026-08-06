@@ -1,5 +1,5 @@
 # web-svc — chart độc lập, self-contained values (không còn global: của umbrella).
 replicas: 2
-imageTag: dev
+imageTag: "1.0.0"            # release tag; CI overrides: --set imageTag=$(git rev-parse --short HEAD)
 image: web-svc
 bluegreen: { enabled: true, activeColor: green }

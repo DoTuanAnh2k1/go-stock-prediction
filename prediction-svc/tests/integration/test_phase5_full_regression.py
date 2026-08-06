@@ -16,10 +16,14 @@ Run:
 """
 from __future__ import annotations
 
+import os
 import time
 
 import pytest
 import requests
+
+_SUPER_ADMIN_USERNAME = os.environ.get("SUPER_ADMIN_USERNAME", "chon")
+_SUPER_ADMIN_PASSWORD = os.environ.get("SUPER_ADMIN_PASSWORD", "")
 
 pytestmark = pytest.mark.integration
 
@@ -47,7 +51,7 @@ class TestAuthSmoke:
     def test_login_returns_token(self, api_base_url):
         resp = requests.post(
             f"{api_base_url}/api/auth/login",
-            json={"username": "admin", "password": "admin123"},
+            json={"username": _SUPER_ADMIN_USERNAME, "password": _SUPER_ADMIN_PASSWORD},
             timeout=10,
         )
         assert resp.status_code == 200
@@ -58,7 +62,7 @@ class TestAuthSmoke:
         resp = requests.get(f"{api_base_url}/api/auth/me", headers=auth_headers, timeout=10)
         assert resp.status_code == 200
         data = resp.json()
-        assert data.get("username") == "admin"
+        assert data.get("username") == _SUPER_ADMIN_USERNAME
 
     def test_trigger_without_token_returns_401(self, api_base_url):
         for endpoint in CRAWLER_ENDPOINTS[:2]:

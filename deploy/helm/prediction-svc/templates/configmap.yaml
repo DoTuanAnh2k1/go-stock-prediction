@@ -13,8 +13,8 @@ data:
   DB_DRIVER: postgresql
   POSTGRES_HOST: "db"
   POSTGRES_PORT: "5432"
-  POSTGRES_USER: postgres
-  POSTGRES_DB: go_stock_prediction
+  POSTGRES_USER: prediction_svc
+  POSTGRES_DB: market_db
   POSTGRES_DEBUG: "false"
   LOG_LEVEL: INFO
   LOG_FORMAT: console

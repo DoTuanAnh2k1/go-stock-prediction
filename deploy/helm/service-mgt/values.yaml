@@ -1,6 +1,6 @@
 # Cấu hình self-contained cho service-mgt (chart độc lập, không còn global: của umbrella).
 replicas: 2
-imageTag: dev
+imageTag: "1.0.0"            # release tag; CI overrides: --set imageTag=$(git rev-parse --short HEAD)
 image: service-mgt
 secrets:
-  postgresPassword: "123"
+  postgresPassword: ""

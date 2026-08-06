@@ -5,7 +5,7 @@ song song với các Helm chart per-service (`deploy/helm/<svc>/`, ví dụ `dep
 Khác lab `day_2/kustomize/` (dùng nginx demo).
 
 ```
-base/                 name=api-kz · replicas=2 · image=api-svc:dev · KHÔNG namespace
+base/                 name=api-kz · replicas=2 · image=api-svc:1.0.0 · KHÔNG namespace
 overlays/dev/         + namespace=stock · namePrefix dev-  · replicas=1 · tag dev
 overlays/prod/        + namespace=stock · namePrefix prod- · replicas=3 · tag v2 · strategy zero-downtime
 ```

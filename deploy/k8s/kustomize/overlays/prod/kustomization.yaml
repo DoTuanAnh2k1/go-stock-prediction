@@ -16,7 +16,7 @@ replicas:
 
 images:
   - name: api-svc
-    newTag: v2
+    newTag: 1.1.0
 
 # Patch chiến lược rollout cho prod (maxUnavailable 0 — zero-downtime).
 patches:

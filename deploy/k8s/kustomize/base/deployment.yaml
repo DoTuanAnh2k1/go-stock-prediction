@@ -24,7 +24,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: api-svc
-          image: api-svc:dev        # overlay patch tag qua images:
+          image: api-svc:1.0.0      # overlay patch tag qua images:
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

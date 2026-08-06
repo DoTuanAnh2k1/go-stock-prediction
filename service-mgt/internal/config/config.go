@@ -27,9 +27,9 @@ func Load() Config {
 		GRPCPort:             env("GRPC_PORT", "8121"),
 		DBHost:               env("POSTGRES_HOST", "localhost"),
 		DBPort:               env("POSTGRES_PORT", "5432"),
-		DBUser:               env("POSTGRES_USER", "postgres"),
-		DBPassword:           env("POSTGRES_PASSWORD", "123"),
-		DBName:               env("POSTGRES_DB", "go_stock_prediction"),
+		DBUser:               env("POSTGRES_USER", "service_mgt"),   // database-per-service: registry_db owner
+		DBPassword:           env("POSTGRES_PASSWORD", ""),
+		DBName:               env("POSTGRES_DB", "registry_db"),
 		DefaultTTLSeconds:    30,
 		EvictGraceSeconds:    60,
 		FlushIntervalSeconds: 30,

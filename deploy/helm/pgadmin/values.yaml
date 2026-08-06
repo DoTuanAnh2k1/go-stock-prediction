@@ -5,5 +5,6 @@
 # → KHÔNG có imageTag/image ở đây.
 # =============================================================================
 replicas: 2
+# secrets: provided at deploy time via -f values-secret.yaml (see values-secret.yaml.example); no weak defaults shipped.
 secrets:
-  pgadminPassword: admin
+  pgadminPassword: ""

@@ -17,6 +17,8 @@ Run:
 """
 from __future__ import annotations
 
+import os
+
 import pytest
 import requests
 
@@ -31,7 +33,10 @@ def test_api_auth_login(api_base_url):
     """POST /api/auth/login returns a JWT token."""
     resp = requests.post(
         f"{api_base_url}/api/auth/login",
-        json={"username": "admin", "password": "admin123"},
+        json={
+            "username": os.environ.get("SUPER_ADMIN_USERNAME", "chon"),
+            "password": os.environ.get("SUPER_ADMIN_PASSWORD", ""),
+        },
         timeout=10,
     )
     assert resp.status_code == 200

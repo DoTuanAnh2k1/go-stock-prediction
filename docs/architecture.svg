@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="760" viewBox="0 0 1120 760" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#5b6b7a"/>
+    </marker>
+    <marker id="arrowOwn" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#2e8b57"/>
+    </marker>
+    <style>
+      .svc  { rx:10; ry:10; stroke-width:1.5; }
+      .t    { fill:#1c2733; font-size:15px; font-weight:600; }
+      .st   { fill:#54636f; font-size:11px; }
+      .lbl  { fill:#5b6b7a; font-size:11px; }
+      .lblg { fill:#2e8b57; font-size:11px; font-weight:600; }
+      .grp  { fill:none; stroke:#c7d0d8; stroke-width:1.3; stroke-dasharray:5 4; rx:14; ry:14; }
+      .grpt { fill:#8794a1; font-size:12px; font-weight:700; letter-spacing:.5px; }
+      .sync { stroke:#5b6b7a; stroke-width:1.6; fill:none; marker-end:url(#arrow); }
+      .own  { stroke:#2e8b57; stroke-width:1.6; fill:none; marker-end:url(#arrowOwn); stroke-dasharray:6 3; }
+    </style>
+  </defs>
+
+  <rect width="1120" height="760" fill="#f7f9fb"/>
+  <text x="28" y="38" font-size="22" font-weight="700" fill="#1c2733">go-stock-prediction — Kiến trúc microservice (polyglot, database-per-service)</text>
+  <text x="28" y="58" font-size="12" fill="#8794a1">6 backend service (Go · Java · Python · Rust) + web + observability. Client→gateway (north-south); gRPC/HTTP east-west; mỗi service sở hữu 1 database riêng.</text>
+
+  <!-- Clients -->
+  <rect x="40" y="86" width="150" height="46" fill="#eef2f6" stroke="#c7d0d8" class="svc"/>
+  <text x="115" y="106" text-anchor="middle" class="t">Browser</text>
+  <text x="115" y="122" text-anchor="middle" class="st">Web dashboard (SPA)</text>
+  <rect x="210" y="86" width="150" height="46" fill="#eef2f6" stroke="#c7d0d8" class="svc"/>
+  <text x="285" y="106" text-anchor="middle" class="t">SSH client</text>
+  <text x="285" y="122" text-anchor="middle" class="st">terminal → cli-svc</text>
+
+  <!-- Gateway -->
+  <rect x="40" y="170" width="320" height="52" fill="#fdeee0" stroke="#e0a86b" class="svc"/>
+  <text x="200" y="192" text-anchor="middle" class="t">gateway-svc · Rust (Axum) :80/:443</text>
+  <text x="200" y="209" text-anchor="middle" class="st">TLS · longest-prefix routing · security headers · request-id</text>
+
+  <!-- Edge -->
+  <rect x="40" y="262" width="150" height="56" fill="#e8f0fb" stroke="#7fa9dd" class="svc"/>
+  <text x="115" y="284" text-anchor="middle" class="t">web-svc</text>
+  <text x="115" y="300" text-anchor="middle" class="st">React/nginx :3000</text>
+
+  <rect x="210" y="262" width="150" height="56" fill="#e6f3ee" stroke="#63b98d" class="svc"/>
+  <text x="285" y="284" text-anchor="middle" class="t">api-svc · Go</text>
+  <text x="285" y="300" text-anchor="middle" class="st">HTTP :8118 · thin proxy</text>
+
+  <!-- cli-svc -->
+  <rect x="40" y="360" width="150" height="52" fill="#e6f3ee" stroke="#63b98d" class="svc"/>
+  <text x="115" y="381" text-anchor="middle" class="t">cli-svc · Go</text>
+  <text x="115" y="397" text-anchor="middle" class="st">SSH TUI :2345</text>
+
+  <!-- Backends -->
+  <rect x="470" y="252" width="180" height="74" fill="#f3e9f6" stroke="#b184c9" class="svc"/>
+  <text x="560" y="278" text-anchor="middle" class="t">auth-svc · Java</text>
+  <text x="560" y="296" text-anchor="middle" class="st">Spring Boot · gRPC :8120</text>
+  <text x="560" y="311" text-anchor="middle" class="st">JWT/RBAC · Flyway</text>
+
+  <rect x="470" y="352" width="180" height="86" fill="#fdecec" stroke="#e08b8b" class="svc"/>
+  <text x="560" y="378" text-anchor="middle" class="t">prediction-svc · Python</text>
+  <text x="560" y="395" text-anchor="middle" class="st">gRPC :8119 · 13 ML algos</text>
+  <text x="560" y="410" text-anchor="middle" class="st">crawlers · simulation</text>
+  <text x="560" y="425" text-anchor="middle" class="st">CronJob/ofelia batch</text>
+
+  <rect x="470" y="150" width="180" height="56" fill="#eef2f6" stroke="#a9b6c2" class="svc"/>
+  <text x="560" y="172" text-anchor="middle" class="t">service-mgt · Go</text>
+  <text x="560" y="188" text-anchor="middle" class="st">registry/discovery :8121</text>
+
+  <!-- Data layer group -->
+  <rect x="710" y="130" width="370" height="330" class="grp"/>
+  <text x="726" y="150" class="grpt">DATA — 1 TimescaleDB instance · database-per-service</text>
+
+  <rect x="732" y="164" width="150" height="60" fill="#eaf4ef" stroke="#63b98d" class="svc"/>
+  <text x="807" y="187" text-anchor="middle" class="t">auth_db</text>
+  <text x="807" y="204" text-anchor="middle" class="st">role auth_svc</text>
+  <text x="807" y="217" text-anchor="middle" class="st">users · RBAC (Flyway)</text>
+
+  <rect x="732" y="238" width="150" height="72" fill="#eaf4ef" stroke="#63b98d" class="svc"/>
+  <text x="807" y="261" text-anchor="middle" class="t">market_db</text>
+  <text x="807" y="278" text-anchor="middle" class="st">role prediction_svc</text>
+  <text x="807" y="291" text-anchor="middle" class="st">prices · predictions</text>
+  <text x="807" y="304" text-anchor="middle" class="st">sim · pipeline (hypertables)</text>
+
+  <rect x="732" y="324" width="150" height="60" fill="#eaf4ef" stroke="#63b98d" class="svc"/>
+  <text x="807" y="347" text-anchor="middle" class="t">registry_db</text>
+  <text x="807" y="364" text-anchor="middle" class="st">role service_mgt</text>
+  <text x="807" y="377" text-anchor="middle" class="st">service_instances</text>
+
+  <rect x="902" y="238" width="158" height="72" fill="#fff5e6" stroke="#e0a86b" class="svc"/>
+  <text x="981" y="261" text-anchor="middle" class="t">MinIO (S3)</text>
+  <text x="981" y="278" text-anchor="middle" class="st">bucket models</text>
+  <text x="981" y="291" text-anchor="middle" class="st">RL/transformer/meta</text>
+  <text x="981" y="304" text-anchor="middle" class="st">checkpoints</text>
+
+  <text x="902" y="356" class="lblg" font-weight="700">api_svc role</text>
+  <text x="902" y="372" class="st">read-only on market_db</text>
+  <text x="902" y="386" class="st">(SELECT + cron/sim writes;</text>
+  <text x="902" y="400" class="st">no auth_db/registry_db)</text>
+
+  <!-- Observability group -->
+  <rect x="710" y="474" width="370" height="88" class="grp"/>
+  <text x="726" y="494" class="grpt">OBSERVABILITY (ns observability)</text>
+  <rect x="726" y="504" width="118" height="44" fill="#eef2f6" stroke="#a9b6c2" class="svc"/>
+  <text x="785" y="524" text-anchor="middle" class="t" font-size="13">OTel Collector</text>
+  <text x="785" y="539" text-anchor="middle" class="st">OTLP :4317</text>
+  <rect x="854" y="504" width="100" height="44" fill="#eef2f6" stroke="#a9b6c2" class="svc"/>
+  <text x="904" y="524" text-anchor="middle" class="t" font-size="13">Prometheus</text>
+  <text x="904" y="539" text-anchor="middle" class="st">+ Tempo</text>
+  <rect x="964" y="504" width="98" height="44" fill="#eef2f6" stroke="#a9b6c2" class="svc"/>
+  <text x="1013" y="524" text-anchor="middle" class="t" font-size="13">Grafana</text>
+  <text x="1013" y="539" text-anchor="middle" class="st">dashboards</text>
+
+  <!-- edges: client -> gateway -->
+  <path class="sync" d="M115,132 L115,168"/>
+  <path class="sync" d="M285,132 L200,168"/>
+  <!-- gateway -> web / api -->
+  <path class="sync" d="M150,222 L120,260"/>
+  <path class="sync" d="M250,222 L282,260"/>
+  <!-- ssh client -> cli-svc -> api -->
+  <path class="sync" d="M285,132 L285,150 Q285,340 192,384"/>
+  <path class="sync" d="M190,382 Q330,360 300,318"/>
+  <!-- api -> auth (gRPC) -->
+  <path class="sync" d="M360,286 L468,282"/>
+  <text x="405" y="276" class="lbl">gRPC</text>
+  <!-- api -> prediction (gRPC) -->
+  <path class="sync" d="M360,300 L468,388"/>
+  <text x="398" y="360" class="lbl">gRPC (triggers)</text>
+  <!-- api -> service-mgt -->
+  <path class="sync" d="M360,272 L468,182"/>
+  <!-- ownership: services -> their DB -->
+  <path class="own" d="M650,282 Q700,240 732,200"/>
+  <text x="660" y="232" class="lblg">owns</text>
+  <path class="own" d="M650,392 L732,282"/>
+  <text x="672" y="352" class="lblg">owns</text>
+  <path class="own" d="M650,178 Q700,300 732,352"/>
+  <text x="660" y="330" class="lblg">owns</text>
+  <!-- api read-only -> market_db -->
+  <path class="sync" d="M360,306 Q560,470 806,312" stroke-dasharray="3 3"/>
+  <text x="560" y="452" class="lbl" fill="#2e8b57">api_svc: read-only market_db</text>
+  <!-- prediction -> minio -->
+  <path class="sync" d="M650,400 Q820,360 902,290"/>
+  <text x="720" y="392" class="lbl">S3</text>
+  <!-- all services -> otel (representative) -->
+  <path class="sync" d="M560,438 L740,502" stroke-dasharray="2 3"/>
+  <text x="600" y="486" class="lbl">traces/metrics (all 6 svc)</text>
+
+  <!-- legend -->
+  <rect x="40" y="620" width="640" height="110" fill="#ffffff" stroke="#dfe6ec" rx="10"/>
+  <text x="58" y="644" font-size="13" font-weight="700" fill="#1c2733">Chú thích</text>
+  <line x1="58" y1="664" x2="96" y2="664" class="sync"/>
+  <text x="104" y="668" class="st">Sync HTTP/gRPC (north-south + east-west)</text>
+  <line x1="58" y1="686" x2="96" y2="686" class="own"/>
+  <text x="104" y="690" class="st">Data ownership — service ↔ database riêng (least-privilege role)</text>
+  <text x="58" y="712" class="st">north-south: client → gateway → web/api · east-west: api → gRPC → auth/prediction · batch: CronJob/ofelia → prediction-svc</text>
+  <text x="58" y="726" class="st">Async: không có message bus — điều phối bằng cron + gRPC + trạng thái DB (xem Limitations).</text>
+</svg>

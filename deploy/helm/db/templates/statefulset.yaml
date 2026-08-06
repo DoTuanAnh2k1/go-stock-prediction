@@ -2,10 +2,15 @@
 # db — TimescaleDB (PostgreSQL 16) dưới dạng StatefulSet.
 # PVC sinh tự động từ volumeClaimTemplates (data-db-0) — KHÔNG khai báo PVC rời.
 #
-# LƯU Ý schema init: tạo ConfigMap db-schema từ database.sql TRƯỚC khi apply
-# (1 lần, chạy từ repo root — file quá lớn nên không đặt static yaml):
-#   kubectl create configmap db-schema -n stock \
-#     --from-file=01-schema.sql=database.sql
+# Schema init: hai ConfigMap được tạo ngoài Helm (idempotent) bởi scripts/deploy.sh:
+#   - db-init    (from deploy/db-init/00-init-databases.sh, defaultMode 0755)
+#                Mounted at /docker-entrypoint-initdb.d — creates roles + databases.
+#   - db-schemas (from deploy/db-init/schemas/*.sql)
+#                Mounted at /schemas — sourced by 00-init-databases.sh during init.
+#
+# The 4 per-role passwords (AUTH_DB_PASSWORD, MARKET_DB_PASSWORD,
+# REGISTRY_DB_PASSWORD, API_DB_PASSWORD) are injected via envFrom secretRef
+# db-secret (same Secret as POSTGRES_USER/PASSWORD/DB) — no separate env block.
 # =============================================================================
 apiVersion: apps/v1
 kind: StatefulSet
@@ -27,7 +32,7 @@ spec:
           ports:
             - containerPort: 5432
           envFrom:
-            - secretRef: { name: db-secret }
+            - secretRef: { name: db-secret }   # POSTGRES_USER/PASSWORD/DB + *_DB_PASSWORD role creds
           env:
             - name: PGTZ
               value: Asia/Ho_Chi_Minh
@@ -40,18 +45,24 @@ spec:
             limits:   { cpu: "500m", memory: "512Mi" }
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", "postgres", "-d", "go_stock_prediction"]
+              command: ["pg_isready", "-U", "postgres", "-d", "postgres"]
             initialDelaySeconds: 10
             periodSeconds: 10
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
-            - name: schema
+            - name: db-init
               mountPath: /docker-entrypoint-initdb.d
+            - name: db-schemas
+              mountPath: /schemas
       volumes:
-        - name: schema
+        - name: db-init
           configMap:
-            name: db-schema
+            name: db-init
+            defaultMode: 0755    # 00-init-databases.sh must be executable
+        - name: db-schemas
+          configMap:
+            name: db-schemas     # contains 10-market_db.sql, 20-registry_db.sql
   # volumeClaimTemplates: STS tự tạo 1 PVC riêng cho mỗi pod (data-db-0).
   # Đây là điểm khác cốt lõi so với Deployment.
   volumeClaimTemplates:

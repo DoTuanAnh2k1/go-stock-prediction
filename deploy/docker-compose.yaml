@@ -16,22 +16,31 @@ services:
     container_name: timescaledb
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../database.sql:/docker-entrypoint-initdb.d/01-schema.sql
-      - backup_data:/backups          # ofelia daily-backup ghi pg_dump vào đây (parity với k8s daily-backup CronJob)
+      # database-per-service init: creates roles + auth_db/market_db/registry_db.
+      # (schemas mounted at /schemas, referenced by the init script — NOT in initdb.d)
+      - ./db-init/00-init-databases.sh:/docker-entrypoint-initdb.d/00-init-databases.sh:ro
+      - ./db-init/schemas:/schemas:ro
+      - backup_data:/backups          # ofelia daily-backup ghi pg_dumpall vào đây (parity với k8s daily-backup CronJob)
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123}
-      POSTGRES_DB: ${POSTGRES_DB:-go_stock_prediction}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}   # superuser
+      POSTGRES_DB: postgres                                                    # superuser default DB
+      # per-service role passwords consumed by 00-init-databases.sh:
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?set AUTH_DB_PASSWORD in .env}
+      MARKET_DB_PASSWORD: ${MARKET_DB_PASSWORD:?set MARKET_DB_PASSWORD in .env}
+      REGISTRY_DB_PASSWORD: ${REGISTRY_DB_PASSWORD:?set REGISTRY_DB_PASSWORD in .env}
+      API_DB_PASSWORD: ${API_DB_PASSWORD:?set API_DB_PASSWORD in .env}
       PGTZ: Asia/Ho_Chi_Minh
     # Ofelia daily_backup (thay BackupScheduler in-app của api-svc). $$ = escape để
     # compose KHÔNG nội suy — sh trong container db mới đánh giá $ lúc chạy.
+    # pg_dumpall (superuser) captures ALL three databases + roles in one archive.
     labels:
       ofelia.enabled: "true"
       ofelia.job-exec.daily-backup.schedule: "0 0 3 * * *"
-      ofelia.job-exec.daily-backup.command: 'sh -c "PGPASSWORD=$$POSTGRES_PASSWORD pg_dump -h localhost -U $$POSTGRES_USER -d $$POSTGRES_DB | gzip > /backups/backup_$$(date +%Y%m%d_%H%M%S).sql.gz; ls -1t /backups/backup_*.sql.gz | tail -n +11 | xargs -r rm -f"'
+      ofelia.job-exec.daily-backup.command: 'sh -c "PGPASSWORD=$$POSTGRES_PASSWORD pg_dumpall -h localhost -U $$POSTGRES_USER | gzip > /backups/backup_$$(date +%Y%m%d_%H%M%S).sql.gz; ls -1t /backups/backup_*.sql.gz | tail -n +11 | xargs -r rm -f"'
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d go_stock_prediction"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -66,9 +75,9 @@ services:
       DB_DRIVER: postgresql
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123}
-      POSTGRES_DB: go_stock_prediction
+      POSTGRES_USER: prediction_svc
+      POSTGRES_PASSWORD: ${MARKET_DB_PASSWORD:?set MARKET_DB_PASSWORD in .env}
+      POSTGRES_DB: market_db
       POSTGRES_DEBUG: "${POSTGRES_DEBUG:-false}"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
       LOG_FORMAT: "${LOG_FORMAT:-console}"
@@ -133,12 +142,14 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: "5432"
-      DB_NAME: go_stock_prediction
-      DB_USER: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-123}
+      DB_NAME: auth_db
+      DB_USER: auth_svc
+      DB_PASSWORD: ${AUTH_DB_PASSWORD:?set AUTH_DB_PASSWORD in .env}
       JWT_SECRET: ${JWT_SECRET}
       GRPC_PORT: "8120"
       INTERNAL_SECRET: "${INTERNAL_SECRET}"
+      SUPER_ADMIN_USERNAME: "${SUPER_ADMIN_USERNAME:?set SUPER_ADMIN_USERNAME in .env}"
+      SUPER_ADMIN_PASSWORD: "${SUPER_ADMIN_PASSWORD:?set SUPER_ADMIN_PASSWORD in .env}"
       SERVICE_MGT_ENABLED: "${SERVICE_MGT_ENABLED:-false}"
       REGISTRY_GRPC_TARGET: "service-mgt:8121"
     expose:
@@ -162,9 +173,9 @@ services:
       GRPC_PORT: "8121"
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123}
-      POSTGRES_DB: go_stock_prediction
+      POSTGRES_USER: service_mgt
+      POSTGRES_PASSWORD: ${REGISTRY_DB_PASSWORD:?set REGISTRY_DB_PASSWORD in .env}
+      POSTGRES_DB: registry_db
       LOG_FORMAT: "${LOG_FORMAT:-console}"
     expose:
       - "8121"
@@ -200,15 +211,13 @@ services:
       DB_DRIVER: postgresql
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123}
-      POSTGRES_DB: go_stock_prediction
+      POSTGRES_USER: api_svc
+      POSTGRES_PASSWORD: ${API_DB_PASSWORD:?set API_DB_PASSWORD in .env}
+      POSTGRES_DB: market_db
       POSTGRES_DEBUG: "${POSTGRES_DEBUG:-false}"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
       DB_LOG_LEVEL: "${DB_LOG_LEVEL:-WARN}"
       API_KEY: ""
-      ADMIN_USERNAME: "admin"
-      ADMIN_PASSWORD: "${ADMIN_PASSWORD}"
       JWT_SECRET: "${JWT_SECRET}"
       BACKUP_DIR: "/backups"
       # Parity với k8s: KHÔNG chạy BackupScheduler in-app. Backup do ofelia gọi
@@ -283,8 +292,8 @@ services:
     ports:
       - "127.0.0.1:8081:80"
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@local.dev
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: "${PGADMIN_DEFAULT_EMAIL:-admin@local.dev}"
+      PGADMIN_DEFAULT_PASSWORD: "${PGADMIN_DEFAULT_PASSWORD:?set PGADMIN_DEFAULT_PASSWORD in .env}"
     networks:
       - app-network
 

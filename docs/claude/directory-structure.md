@@ -268,7 +268,18 @@ service-mgt/                                # Go Service Registry — gRPC :8121
 ```
 deploy/
 ├── docker-compose.yaml          # Toàn bộ stack; thêm service ofelia (container-native cron); SCHEDULER_ENABLED=false + BACKUP_SCHEDULER_ENABLED=false trên các service liên quan
-├── docker-compose.test.yml      # Test stack
+├── docker-compose.test.yml      # Test stack (dùng database.sql monolithic — single-DB test harness)
+├── db-init/                     # Init scripts cho container db (database-per-service)
+│   ├── 00-init-databases.sh     # Tạo 3 DB (auth_db/market_db/registry_db) + 4 role least-privilege
+│   │                            #   (auth_svc/prediction_svc/api_svc/service_mgt) + GRANT tối thiểu;
+│   │                            #   đọc env AUTH_DB_PASSWORD/MARKET_DB_PASSWORD/API_DB_PASSWORD/REGISTRY_DB_PASSWORD.
+│   │                            #   Compose: mount → /docker-entrypoint-initdb.d (auto-run lần đầu).
+│   │                            #   k8s: deploy.sh tạo ConfigMap `db-init` từ script này.
+│   └── schemas/
+│       ├── 10-market_db.sql     # DDL market_db: hypertables giá/dự đoán/sim/pipeline/training,
+│       │                        #   cron_schedules, stock_fundamentals, stock_splits, ...
+│       │                        #   Compose: mount → /schemas; k8s: ConfigMap `db-schemas`.
+│       └── 20-registry_db.sql   # DDL registry_db: bảng service_instances
 ├── api-svc.Dockerfile           # Go API Backend (build context = repo root)
 ├── auth-svc.Dockerfile          # Java Auth Service
 ├── prediction-svc.Dockerfile    # Python Prediction (build context = repo root)
@@ -280,14 +291,14 @@ deploy/
 │   ├── README.md                # Hướng dẫn deploy Helm (per-chart install/upgrade + thứ tự phụ thuộc)
 │   ├── common/                  # LIBRARY CHART (type: library) — templates/_ambassador.tpl: named template stock.tolerations / topologySpread / waitDb / logSidecar / nginxAmbassador / nginxConf.grpc. Backend chart phụ thuộc qua `file://../common` (helm dependency build vendor vào charts/)
 │   ├── bootstrap/               # NS GOVERNANCE (cài ĐẦU TIÊN) — templates/{quota,rbac,pdb,networkpolicy,NOTES.txt}. ResourceQuota+LimitRange (quota.enabled), pod-reader SA/Role/RB (rbac.enabled), PDB mọi service (pdb.enabled), netpol default-deny + 3 policy multi-target (networkPolicy.enabled). values.yaml self-contained các toggle này (+ pgadmin.enabled cho PDB pgadmin)
-│   ├── api-svc/                 # {deployment,bluegreen,configmap,secret,service,serviceaccount,hpa}.yaml — 4-container; bluegreen gated `.Values.bluegreen.enabled` (2 màu range blue/green + Service api-svc-{blue,green} targetPort 18118; nginx proxy_buffering off cho SSE); HPA api + blue/green gated `.Values.hpa.enabled`; dep common. values.yaml: replicas, imageTag, image, secrets{postgresPassword,jwtSecret,internalSecret,adminPassword}, bluegreen, hpa, serviceAccount
+│   ├── api-svc/                 # {deployment,bluegreen,configmap,secret,service,serviceaccount,hpa}.yaml — 4-container; bluegreen gated `.Values.bluegreen.enabled` (2 màu range blue/green + Service api-svc-{blue,green} targetPort 18118; nginx proxy_buffering off cho SSE); HPA api + blue/green gated `.Values.hpa.enabled`; dep common. values.yaml: replicas, imageTag(default 1.0.0), image, secrets{postgresPassword=api_svc role password,jwtSecret,internalSecret}, bluegreen, hpa, serviceAccount
 │   ├── auth-svc/                # {deployment,configmap,secret,service,serviceaccount} — nginx grpc :18120; mgmt 9464 thẳng; dep common. secrets{postgresPassword,jwtSecret,internalSecret}
 │   ├── prediction-svc/          # {deployment,configmap,secret,service,serviceaccount,pvc} — replicas=2, nginx grpc :18119, fsGroup 2000, dnsConfig ndots:1; dep common. secrets{postgresPassword,s3AccessKey,s3SecretKey}
 │   ├── service-mgt/             # {deployment,configmap,secret,service,serviceaccount} — nginx grpc :18121, fsGroup 2000; dep common. secrets{postgresPassword}
 │   ├── cli-svc/                 # {deployment,configmap,secret,service,serviceaccount} — init fix-keys-perms + nginx stream TCP :12345 (runAsUser 0); Service NodePort targetPort 12345; dep common. secrets{internalSecret}
 │   ├── gateway-svc/             # {deployment,configmap,rbac,service,hpa,ingress} — LoadBalancer :80/:443; KHÔNG áp ambassador; SA+Role gateway-bluegreen riêng; HPA gated `.Values.hpa.enabled`; Ingress `/`→web-svc,`/api`→api-svc gated `.Values.ingress.enabled`
 │   ├── web-svc/                 # {deployment,bluegreen,service} — bluegreen gated `.Values.bluegreen.enabled`
-│   ├── db/                      # {statefulset,service,secret,networkpolicy} — StatefulSet TimescaleDB; netpol allow-backends-to-db (single-target) gated `.Values.networkPolicy.enabled`. secrets{postgresUser,postgresPassword,postgresDb}
+│   ├── db/                      # {statefulset,service,secret,networkpolicy} — StatefulSet TimescaleDB; netpol allow-backends-to-db (single-target) gated `.Values.networkPolicy.enabled`. secrets{postgresUser,postgresPassword(superuser),authDbPassword,marketDbPassword,apiDbPassword,registryDbPassword} — 4 role passwords phải khớp với secrets của service charts tương ứng
 │   ├── minio/                   # templates/minio.yaml — Secret+PVC+Deployment+Service+createbucket Job (bucket models). secrets{minioRootUser,minioRootPassword}
 │   ├── pgadmin/                 # {deployment,configmap,secret,service} — cài-hay-không (bỏ toggle enabled). secrets{pgadminPassword}
 │   ├── cronjobs/                # cronjob-{gold,nasdaq,crypto,sp500,train,weekly,backup,simulation}.yaml + job-manual.yaml (gated `.Values.manualJob.enabled`). imageTag, image=prediction-svc
@@ -302,9 +313,12 @@ deploy/
 **Deploy k8s (Helm):**
 
 ```bash
-# Lần đầu — tạo namespace + ConfigMap schema (ngoài Helm quản lý), rồi install
+# Lần đầu — tạo namespace; deploy.sh tự tạo 2 ConfigMap (ngoài Helm quản lý), rồi install
 kubectl create namespace stock
-kubectl create configmap db-schema -n stock --from-file=01-schema.sql=database.sql
+# deploy.sh tạo tự động:
+#   kubectl create configmap db-init    -n stock --from-file=deploy/db-init/00-init-databases.sh
+#   kubectl create configmap db-schemas -n stock --from-file=deploy/db-init/schemas/
+# (thay thế configmap db-schema cũ từ database.sql)
 
 # scripts/deploy.sh: helm dependency build (5 backend chart) + install mọi chart đúng thứ tự:
 #   bootstrap → db → minio → service-mgt → prediction-svc → auth-svc → api-svc
@@ -317,7 +331,7 @@ helm upgrade api-svc deploy/helm/api-svc -n stock [--set imageTag=v2]
 helm upgrade observability deploy/helm/observability -n observability
 ```
 
-Lưu ý: db-schema ConfigMap KHÔNG do Helm quản lý (tạo thủ công trước khi install). Backend chart cần `helm dependency build deploy/helm/<svc>` (hoặc `make helm-deps`) để vendor library `common` trước.
+Lưu ý: ConfigMap `db-init` và `db-schemas` KHÔNG do Helm quản lý — `deploy.sh` tạo tự động từ `deploy/db-init/` (thay thế `db-schema` cũ). Backend chart cần `helm dependency build deploy/helm/<svc>` (hoặc `make helm-deps`) để vendor library `common` trước.
 
 **Per-service charts (không umbrella):** mỗi service = 1 chart top-level `deploy/helm/<svc>/`, self-contained values (imageTag/image/secrets/toggle riêng — KHÔNG còn `global:`). Đường dẫn `--set` là per-chart:
 - Toggle per-chart: `--set bluegreen.enabled=false` (api-svc/web-svc, default **true**), `--set manualJob.enabled=true` (cronjobs), `--set quota.enabled=false`/`rbac.enabled`/`pdb.enabled` (bootstrap). pgAdmin nay cài-hay-không (bỏ `helm install pgadmin` thay cho toggle).

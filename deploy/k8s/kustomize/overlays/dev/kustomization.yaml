@@ -16,4 +16,4 @@ replicas:
 
 images:
   - name: api-svc
-    newTag: dev
+    newTag: 1.0.0

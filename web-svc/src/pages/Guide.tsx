@@ -359,14 +359,14 @@ function GuideAPI() {
         <GCode>{`# Đăng nhập, lấy JWT token — credential nằm trong header X-Token = base64("user:pass")
 curl -s -X POST http://localhost/api/x/grant \\
      -H "Content-Type: application/json" \\
-     -H "X-Token: $(printf '%s' 'admin:admin123' | base64)" \\
+     -H "X-Token: $(printf '%s' "$STOCK_USER:$STOCK_PASS" | base64)" \\
      -d '{"request":""}' | jq -r '.token'`}</GCode>
         <GTip>Token hợp lệ trong 24 giờ. Dùng trong header: <code>Authorization: Bearer &lt;token&gt;</code>. Trigger endpoints yêu cầu role <GBadge color="yellow">admin</GBadge> hoặc <GBadge color="blue">super_admin</GBadge>.</GTip>
       </GSection>
       <GSection title="Trigger endpoints">
         <GCode>{`TOKEN=$(curl -s -X POST http://localhost/api/x/grant \\
   -H "Content-Type: application/json" \\
-  -H "X-Token: $(printf '%s' 'admin:admin123' | base64)" \\
+  -H "X-Token: $(printf '%s' "$STOCK_USER:$STOCK_PASS" | base64)" \\
   -d '{"request":""}' | jq -r '.token')
 
 # Crawl + dự đoán từng thị trường

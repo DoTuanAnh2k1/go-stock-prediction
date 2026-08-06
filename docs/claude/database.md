@@ -2,29 +2,67 @@
 
 ## Database
 
-- **Engine:** TimescaleDB (PostgreSQL 16) — image `timescale/timescaledb:latest-pg16`, container `timescaledb`, port 5432
-- **ORM:** GORM v2 (`api-svc/pkg/store/postgres/`)
-- **Auto-migrate:** Tắt — schema do `database.sql` quản lý (hypertable composite PK xung đột AutoMigrate). Init tự động qua mount `/docker-entrypoint-initdb.d/01-schema.sql`.
-- **Schema đầy đủ:** `database.sql` ở root (BIGSERIAL, NUMERIC, TIMESTAMP, NOW())
+- **Engine:** TimescaleDB (PostgreSQL 16) — image `timescale/timescaledb:latest-pg16`, container `db`, port 5432
+- **ORM:** GORM v2 (`api-svc/pkg/store/postgres/`) cho Go; SQLAlchemy cho Python (prediction-svc)
+- **Auto-migrate:** Tắt — schema quản lý bằng init scripts (xem bên dưới). GORM `AutoMigrate` tắt vì hypertable composite PK xung đột.
+
+### Database-per-service (1 instance, 3 databases, 4 roles)
+
+Một TimescaleDB instance nhưng ba database tách biệt, mỗi service dùng dedicated login role (không phải superuser):
+
+| Database | Owner role | Người dùng | Nội dung |
+|----------|-----------|-----------|---------|
+| `auth_db` | `auth_svc` | auth-svc | users, market_groups, user_market_groups, command RBAC — 100% do Flyway V1–V3 (auth-svc) quản lý; KHÔNG có trong init SQL |
+| `market_db` | `prediction_svc` (R/W) | prediction-svc, jobs_cli | Mọi bảng giá, dự đoán, simulation, pipeline, training, cron_schedules, stock_fundamentals, stock_splits |
+| `market_db` | `api_svc` (read-limited) | api-svc | SELECT toàn bộ bảng market_db + INSERT/UPDATE/DELETE chỉ trên `cron_schedules` và `sim_bots` |
+| `registry_db` | `service_mgt` | service-mgt | `service_instances` only |
+
+**Superuser** (`postgres`): chỉ dùng bởi container `db` và job backup — không inject vào app service.
+
+### Init mechanism
+
+`deploy/db-init/00-init-databases.sh` — script chạy khi container `db` lần đầu khởi động:
+- Tạo 4 login role (`auth_svc`, `prediction_svc`, `api_svc`, `service_mgt`) đọc password từ env (`AUTH_DB_PASSWORD`, `MARKET_DB_PASSWORD`, `API_DB_PASSWORD`, `REGISTRY_DB_PASSWORD`)
+- Tạo 3 database + gán ownership + GRANT tối thiểu
+- `deploy/db-init/schemas/10-market_db.sql` — DDL toàn bộ hypertable + bảng `market_db` (BIGSERIAL, NUMERIC, TIMESTAMP, TimescaleDB hypertables)
+- `deploy/db-init/schemas/20-registry_db.sql` — DDL bảng `registry_db`
+
+**Compose:** script mount vào `/docker-entrypoint-initdb.d`; sql files mount vào `/schemas`.
+**k8s:** `deploy.sh` tạo 2 ConfigMap (`db-init` từ script, `db-schemas` từ sql files) thay thế ConfigMap `db-schema` cũ (vốn từ `database.sql` monolithic). StatefulSet `db` mount cả hai.
+
+`database.sql` monolithic ở repo root còn lại CHỈ để phục vụ integration test harness (single-DB test stack) — KHÔNG dùng cho stack thực tế.
+
+### Cross-chart password pairing (k8s)
+
+Mỗi service chart's `secrets.postgresPassword` phải khớp với password tương ứng trong chart `db`:
+
+| Service chart | `secrets.postgresPassword` phải bằng |
+|---|---|
+| `auth-svc` | `db.authDbPassword` |
+| `prediction-svc` | `db.marketDbPassword` |
+| `api-svc` | `db.apiDbPassword` |
+| `service-mgt` | `db.registryDbPassword` |
+
+Secrets cung cấp qua `values-secret.yaml` (gitignored); Helm `required` guards — không có weak default committed.
 
 ### Tables chính
 
 | Table | Loại | Ghi chú |
 |-------|------|---------|
-| `gold_prices`, `nasdaq_prices`, `sp500_prices`, `crypto_prices` | Hypertable | Composite PK (id + time column) |
-| `*_intraday_prices` | Hypertable | — |
-| `gold_predictions`, `nasdaq_predictions`, `sp500_predictions`, `crypto_predictions` | Hypertable | partition by `prediction_date`; có cột `direction_correct *bool` nullable |
-| `sim_trades` | Hypertable | partition by `trade_date`; thêm cột `trade_at TIMESTAMP` (backfill = trade_date) |
-| `sim_portfolio_snapshots` | Hypertable | partition by `snapshot_date`; thêm cột `snapshot_at TIMESTAMP` — upsert theo giờ, unique index `uq_sim_snap_session_at (session_id, snapshot_at)` |
-| `sync_logs`, `training_logs` | Hypertable | partition by `created_at` |
-| `training_metrics` | — | — |
-| `users` | — | Flyway V2: thêm `full_name`, `email`, `phone` nullable |
-| `cron_schedules` | — | `job_key` PK, `cron_expression`, `enabled`, `updated_at` |
+| `gold_prices`, `nasdaq_prices`, `sp500_prices`, `crypto_prices` | Hypertable | `market_db` — Composite PK (id + time column) |
+| `*_intraday_prices` | Hypertable | `market_db` |
+| `gold_predictions`, `nasdaq_predictions`, `sp500_predictions`, `crypto_predictions` | Hypertable | `market_db` — partition by `prediction_date`; có cột `direction_correct *bool` nullable |
+| `sim_trades` | Hypertable | `market_db` — partition by `trade_date`; thêm cột `trade_at TIMESTAMP` (backfill = trade_date) |
+| `sim_portfolio_snapshots` | Hypertable | `market_db` — partition by `snapshot_date`; thêm cột `snapshot_at TIMESTAMP` — upsert theo giờ, unique index `uq_sim_snap_session_at (session_id, snapshot_at)` |
+| `sync_logs`, `training_logs` | Hypertable | partition by `created_at` — `market_db` |
+| `training_metrics` | — | `market_db` |
+| `users` | — | **`auth_db`** — Flyway V1; V2: thêm `full_name`, `email`, `phone` nullable |
+| `cron_schedules` | — | `market_db` — `job_key` PK, `cron_expression`, `enabled`, `updated_at` |
 | `pipeline_reports` | — | Không hypertable; retention 7 ngày tự động; cột: `pipeline_key`, `status`, `steps` JSONB, `duration_ms`, `crawled_count`, `predictions_count`, `trained` |
 | `pipeline_crawl_counters` | — | Không hypertable; `market_key` PK, `crawl_count` BIGINT; atomic upsert + RETURNING |
-| `service_instances` | — | service-mgt; 4 dòng UP khi `SERVICE_MGT_ENABLED=true` |
-| `market_groups`, `market_group_markets`, `user_market_groups` | — | Flyway V1; quản lý bởi Java Auth Service |
-| `cli_handlers`, `commands`, `command_groups`, `command_group_commands`, `user_command_groups` | — | Flyway V3; Command RBAC |
+| `service_instances` | — | **`registry_db`** — service-mgt; 4 dòng UP khi `SERVICE_MGT_ENABLED=true` |
+| `market_groups`, `market_group_markets`, `user_market_groups` | — | **`auth_db`** — Flyway V1; quản lý bởi Java Auth Service |
+| `cli_handlers`, `commands`, `command_groups`, `command_group_commands`, `user_command_groups` | — | **`auth_db`** — Flyway V3; Command RBAC |
 | `sim_bots` | — | Cột `symbol` nullable — NULL = pooled per-market; có giá trị = per-symbol (algo key với hậu tố `__ps`). Cột `trailing_stop BOOLEAN NOT NULL DEFAULT FALSE` — `TRUE` = SL tính theo đỉnh giá intraday kể từ lúc entry (stateless, `MAX(price)` trên `*_intraday_prices` mỗi step, KHÔNG lưu peak trong DB) thay vì entry price cố định; TP không đổi (vẫn entry-anchored). Hai variant pooled `_v11` ("Trailing Tight", sl=3%, tp=99% — gần như chỉ trail) và `_v12` ("Trailing Wide", sl=6%, tp=20%) seed cho mọi (market × algorithm) — 4×12×2=96 bot, chỉ pooled (không seed per-symbol). |
 | `stock_fundamentals` | — | Không hypertable; 1 row/(market_key, symbol) — snapshot báo cáo tài chính mới nhất (yfinance, upsert ON CONFLICT); unique `uq_fundamentals_market_symbol`; dùng bởi `transformer_nn` |
 | `stock_splits` | — | Không hypertable; cột: `id, market_key, symbol, split_date, ratio, numerator, denominator, applied_at, created_at`; unique `uq_stock_splits_sym_date (market_key, symbol, split_date)`; `applied_at NULL` = chưa apply history adjustment; chỉ NASDAQ/SP500 |
@@ -34,7 +72,7 @@
 | Volume / PVC | ns | Mount | Ghi chú |
 |---|---|---|---|
 | `postgres_data` (PVC) | stock | `/var/lib/postgresql/data` (db pod) | TimescaleDB data |
-| `backup-data` (PVC, 2Gi) | stock | `/backups` (daily-backup CronJob) | pg_dump files; retention 10 file; k8s dùng PVC (persistent), compose dùng Docker volume `backup_data` |
+| `backup-data` (PVC, 2Gi) | stock | `/backups` (daily-backup CronJob) | `pg_dumpall` archive (3 DB + roles); retention 10 file; k8s dùng PVC (persistent), compose dùng Docker volume `backup_data` |
 | `rl_models` / `emptyDir` | stock | `/models` (prediction-svc) | compose: Docker volume `rl_models` (persistent); k8s: `emptyDir` (ephemeral cache) + checkpoint thật ở MinIO |
 | MinIO PVC | stock | `/data` (minio pod) | Object storage bucket `models`; dùng khi `MODEL_STORE_BACKEND=s3` |
 | Tempo PVC | observability | `/var/tempo` (tempo pod) | Traces storage |
@@ -61,7 +99,7 @@ Lưu trong bảng `cron_schedules` (reference/display). Chỉnh live qua `/api/s
 - **Compose** (default `SCHEDULER_ENABLED:-false`, `BACKUP_SCHEDULER_ENABLED:-false`): APScheduler in-app và BackupScheduler tắt. Mọi lịch do `ofelia` container chạy (`python -m src.jobs_cli <job>` trên prediction-svc; pg_dump trên db). Có thể bật lại bằng cách set `=true` trong `.env` (hành vi cũ — APScheduler in-app).
 - **k8s** (`SCHEDULER_ENABLED=false`, `BACKUP_SCHEDULER_ENABLED=false`): APScheduler và BackupScheduler tắt. Mọi lịch do k8s CronJob (template `deploy/helm/cronjobs/templates/cronjob-*.yaml` trong chart `cronjobs`) nắm — chạy `python -m src.jobs_cli <job_key>` hoặc pg_dump trực tiếp.
 
-**`daily_backup` k8s:** CronJob riêng (`cronjob-backup.yaml`) pg_dump trực tiếp → PVC `backup-data` (2Gi, ns `stock`). Khác với compose (ofelia label trên `db`). api-svc không liên quan khi `BACKUP_SCHEDULER_ENABLED=false`.
+**`daily_backup` k8s:** CronJob riêng (`cronjob-backup.yaml`) chạy `pg_dumpall` (superuser) → PVC `backup-data` (2Gi, ns `stock`) — capture cả 3 database + roles trong 1 archive. Compose: ofelia label trên `db`, cũng dùng `pg_dumpall`. api-svc không liên quan khi `BACKUP_SCHEDULER_ENABLED=false`.
 
 ### Danh sách jobs hiện tại
 
@@ -82,7 +120,7 @@ k8s runner = CronJob template trong `deploy/helm/cronjobs/templates/` (chart `cr
 | `crawler_fundamentals` | `0 0 6 * * 6` | bật | Crawl báo cáo tài chính yfinance → `stock_fundamentals` (Thứ Bảy 6AM) — feeds `transformer_nn` | `cronjob-weekly.yaml` |
 | `train_transformer` | `0 30 2 * * 1,3,5` | bật | Refresh transformer_nn trên intraday bars (Thứ 2/4/6 2:30AM — giữa các lần train Chủ nhật) | `cronjob-weekly.yaml` |
 | `simulation_daily` | `0 0 20 * * *` | bật | Bot trading (8PM); live-step theo giờ; NASDAQ/SP500 skip nếu is_intraday_open=False | `cronjob-simulation.yaml` |
-| `daily_backup` | `0 0 3 * * *` | bật | Backup PostgreSQL lúc 3AM; k8s: pg_dump → PVC `backup-data`; compose: ofelia label trên `db` | `cronjob-backup.yaml` |
+| `daily_backup` | `0 0 3 * * *` | bật | Backup toàn bộ instance lúc 3AM dùng `pg_dumpall` (superuser — capture 3 DB + roles trong 1 archive); k8s: `cronjob-backup.yaml` → PVC `backup-data`; compose: ofelia label trên `db` | `cronjob-backup.yaml` |
 | `gold_predict`, `predict_nasdaq`, `predict_crypto`, `predict_sp500` | — | **tắt** | Disabled — đã chạy trong pipeline | — |
 | `weekly_training`, `daily_prediction` | — | **tắt** | Disabled — thay bằng per-market jobs | — |
 

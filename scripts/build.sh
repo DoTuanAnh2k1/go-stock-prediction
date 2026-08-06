@@ -13,7 +13,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-TAG="${TAG:-dev}"
+TAG="${TAG:-1.0.0}"                        # release tag; CI: TAG=$(git rev-parse --short HEAD)
 KIND_CLUSTER="${KIND_CLUSTER:-ckad}"
 
 # svc | dockerfile | build-context   (context bám compose: api/prediction = repo root)

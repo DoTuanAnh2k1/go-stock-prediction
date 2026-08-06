@@ -1,10 +1,19 @@
 # =============================================================================
 # db — TimescaleDB/Postgres. Self-contained values (không còn global: umbrella).
 # =============================================================================
+# All secrets below MUST be provided via -f values-secret.yaml at deploy time.
+# Do NOT ship real passwords here — leave empty defaults and use required guards
+# in templates/secret.yaml to catch missing values early.
 secrets:
   postgresUser: postgres
-  postgresPassword: "123"
-  postgresDb: go_stock_prediction
+  postgresPassword: ""     # superuser password — provide via -f values-secret.yaml
+  postgresDb: postgres     # superuser default DB (NOT go_stock_prediction anymore)
+  # Per-role passwords for the 4 application service accounts.
+  # Created by deploy/db-init/00-init-databases.sh on first init.
+  authDbPassword: ""       # auth_svc role → auth_db
+  marketDbPassword: ""     # prediction_svc + api_svc roles → market_db
+  registryDbPassword: ""   # service_mgt role → registry_db
+  apiDbPassword: ""        # api_svc role → market_db (read-only consumer)
 
 # NetworkPolicy allow-backends-to-db (single-target, podSelector app=db).
 # Default OFF — chỉ bật khi demo netpol; PHẢI bật cùng bootstrap:
