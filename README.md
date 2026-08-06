@@ -91,6 +91,42 @@ Mỗi bot gắn với một thuật toán và một thị trường; chạy qua 
 
 KPI leaderboard: `return_pct`, `unrealized_pnl`, `open_positions`, `win_rate` (chỉ lệnh SELL đã đóng), `profit_factor`, Sharpe, max drawdown. Bot NASDAQ/SP500 split-aware: khi tái dựng vị thế mở qua split, quantity × ratio và entry_price / ratio được điều chỉnh (`engine.py _restore_portfolio_state`).
 
+## Quy tắc nghiệp vụ (Business Rules)
+
+Các bất biến (invariant) của miền nghiệp vụ — mọi thay đổi code phải giữ đúng các quy tắc này.
+
+### Dự đoán & chấm điểm
+- **BR-1 — Chân trời dự đoán:** mọi market dự đoán **`target_date = now + 1h`** (giờ kế tiếp). Input là chuỗi giá daily-live (1 dòng/ngày, ghi đè mỗi lần crawl).
+- **BR-2 — Giới hạn biến động (clamp):** giá dự đoán bị chặn theo market — GOLD/SP500 **±15%**, NASDAQ100 **±20%**, CRYPTO **±50%** (`get_max_change_pct`). Vượt ngưỡng → clamp về biên.
+- **BR-3 — Chấm hướng (reconcile):** một prediction được chấm khi **`target_date <= now`**; `actual` = giá **live mới nhất**; `direction_correct = (sign(predicted − entry) == sign(actual − entry))`.
+- **BR-4 — Frozen-actual guard:** nếu `actual == current` (giá chưa nhích khỏi entry — đóng phiên sau target hoặc crawl trễ), **để `NULL` (pending)**, KHÔNG chấm sai. `direction_correct`: `NULL`=chưa chấm, `true`=đúng hướng, `false`=sai.
+- **BR-5 — Nhãn huấn luyện direction:** nhãn direction head = **dấu return thô** (`ret > 0`).
+- **BR-6 — Ensemble:** 10 base algo (`ma, ema, lstm, arima, lgbm, sarima, egarch, gru, rf, xgb`); **`rl_dqn` và `transformer_nn` KHÔNG nằm trong Ensemble**. Trọng số Ensemble = direction accuracy rolling của từng algo, cập nhật mỗi lần chạy.
+
+### Lịch thị trường & pipeline
+- **BR-7 — Giờ mở cửa:** CRYPTO **24/7**; GOLD **24/5** (đóng T7+CN); NASDAQ/SP500 chỉ **giờ phiên Mỹ** (≈20:30–03:00 ICT) + đóng cuối tuần & lễ NYSE. `is_market_open()` gác ngày, `is_intraday_open()` gác giờ.
+- **BR-8 — Skip predict:** NASDAQ/SP500 **bỏ qua predict** khi `is_intraday_open()` = False (crawl vẫn chạy nếu `is_market_open`).
+- **BR-9 — Cadence train:** mỗi market đếm số lần chạy pipeline; **cứ 10 lần → `train_for_market()`**; ngoài ra train đầy đủ theo lịch Chủ nhật; meta-stack train Chủ nhật 8AM.
+- **BR-10 — Thời gian ICT-at-rest:** mọi `TIMESTAMP` lưu wallclock **Asia/Ho_Chi_Minh**, không timezone. Python luôn `datetime.now()` (không `utcnow()`).
+
+### Chất lượng dữ liệu
+- **BR-11 — Sanity guard (daily-live):** tick giá lệch ngoài ngưỡng market-aware bị **giữ pending**, chỉ chấp nhận khi crawl kế tiếp xác nhận lại (persistence-confirmation 2 nhịp). Ngưỡng: GOLD 0.30, NASDAQ/SP500 0.40, CRYPTO 0.80.
+- **BR-12 — Stock split:** chỉ NASDAQ/SP500. Chỉ điều chỉnh bảng **intraday** (daily của Yahoo đã split-adjust; KHÔNG chỉnh predictions). Idempotent (`applied_at`).
+
+### Giao dịch mô phỏng (bot)
+- **BR-13 — SL/TP là hard guard:** stop-loss/take-profit (kể cả trailing) **luôn chạy TRƯỚC** logic chiến thuật, ở mọi bot.
+- **BR-14 — Quyết định theo chiến thuật:** threshold %-giá / RL action policy / P(up) direction head (conviction, floor 0.52/0.48) / meta-stack P(up) calibrate — size vị thế theo conviction.
+- **BR-15 — Snapshot theo giờ:** `sim_portfolio_snapshots` upsert **1 row/session/giờ** (`ON CONFLICT (session_id, snapshot_at)`).
+
+### Xác thực & phân quyền (RBAC)
+- **BR-16 — Ba vai trò:** `super_admin` > `admin` > `user`. `super_admin` (seed từ env, mặc định `chon`) **không thể bị xóa/reset** bởi ai khác; không tự xóa chính mình.
+- **BR-17 — Bypass & giới hạn:** `admin`/`super_admin` **bypass** market-group RBAC và command RBAC; `user` chỉ truy cập market thuộc `accessible_markets` (union qua market groups). Trigger endpoints yêu cầu `admin`+.
+- **BR-18 — JWT:** token HS256, hạn **24h**, claims `sub/role/user_id/accessible_markets`. auth-svc (Java) là nguồn sự thật RBAC; api-svc validate JWT local.
+
+### Sở hữu dữ liệu (data ownership)
+- **BR-19 — Database-per-service:** `auth-svc` sở hữu `auth_db`, `prediction-svc` sở hữu `market_db`, `service-mgt` sở hữu `registry_db` — mỗi service 1 role least-privilege, không chạm DB của service khác ở tầng SQL.
+- **BR-20 — api-svc read-model:** api-svc đọc `market_db` bằng role read-only `api_svc` (SELECT toàn bộ + chỉ ghi `cron_schedules`/`sim_bots`); truy cập user/RBAC qua gRPC tới auth-svc.
+
 ## Kiến trúc hệ thống
 
 ![Architecture](docs/architecture.svg)
