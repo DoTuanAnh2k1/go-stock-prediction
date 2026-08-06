@@ -432,6 +432,109 @@ services:
     networks:
       - app-network
 
+  # ---------------------------------------------------------------------------
+  # Kafka consumers — event-driven pipeline mode (optional — profile kafka).
+  # Start together with Kafka infra:
+  #   docker compose --env-file .env -f deploy/docker-compose.yaml --profile kafka up -d
+  # Each consumer calls prediction-svc business logic that hits market_db, and
+  # consumes / produces Kafka topics (market.crawled → predictions.ready → ...).
+  # ---------------------------------------------------------------------------
+  predict-consumer:
+    build:
+      context: ..
+      dockerfile: deploy/prediction-svc.Dockerfile
+    container_name: predict-consumer
+    profiles: ["kafka"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["python", "-m", "src.events.consumers.predict"]
+    environment:
+      KAFKA_ENABLED: "true"
+      KAFKA_BROKERS: "kafka:9092"
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: prediction_svc
+      POSTGRES_PASSWORD: ${MARKET_DB_PASSWORD:?set MARKET_DB_PASSWORD in .env}
+      POSTGRES_DB: market_db
+      POSTGRES_DEBUG: "${POSTGRES_DEBUG:-false}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      LOG_FORMAT: "${LOG_FORMAT:-console}"
+      RL_MODEL_DIR: "${RL_MODEL_DIR:-/models}"
+      SCHEDULER_ENABLED: "false"
+      TZ: "Asia/Ho_Chi_Minh"
+    volumes:
+      - rl_models:/models
+    networks:
+      - app-network
+
+  reconcile-consumer:
+    build:
+      context: ..
+      dockerfile: deploy/prediction-svc.Dockerfile
+    container_name: reconcile-consumer
+    profiles: ["kafka"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["python", "-m", "src.events.consumers.reconcile"]
+    environment:
+      KAFKA_ENABLED: "true"
+      KAFKA_BROKERS: "kafka:9092"
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: prediction_svc
+      POSTGRES_PASSWORD: ${MARKET_DB_PASSWORD:?set MARKET_DB_PASSWORD in .env}
+      POSTGRES_DB: market_db
+      POSTGRES_DEBUG: "${POSTGRES_DEBUG:-false}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      LOG_FORMAT: "${LOG_FORMAT:-console}"
+      RL_MODEL_DIR: "${RL_MODEL_DIR:-/models}"
+      SCHEDULER_ENABLED: "false"
+      TZ: "Asia/Ho_Chi_Minh"
+    volumes:
+      - rl_models:/models
+    networks:
+      - app-network
+
+  simulation-consumer:
+    build:
+      context: ..
+      dockerfile: deploy/prediction-svc.Dockerfile
+    container_name: simulation-consumer
+    profiles: ["kafka"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["python", "-m", "src.events.consumers.simulation"]
+    environment:
+      KAFKA_ENABLED: "true"
+      KAFKA_BROKERS: "kafka:9092"
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: prediction_svc
+      POSTGRES_PASSWORD: ${MARKET_DB_PASSWORD:?set MARKET_DB_PASSWORD in .env}
+      POSTGRES_DB: market_db
+      POSTGRES_DEBUG: "${POSTGRES_DEBUG:-false}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      LOG_FORMAT: "${LOG_FORMAT:-console}"
+      RL_MODEL_DIR: "${RL_MODEL_DIR:-/models}"
+      SCHEDULER_ENABLED: "false"
+      TZ: "Asia/Ho_Chi_Minh"
+    volumes:
+      - rl_models:/models
+    networks:
+      - app-network
+
 networks:
   app-network:
     driver: bridge

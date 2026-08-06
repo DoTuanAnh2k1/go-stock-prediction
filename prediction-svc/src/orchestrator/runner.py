@@ -74,11 +74,15 @@ def run_all_markets() -> int:
     return total
 
 
-def run_for_market(market_key: str, force: bool = False, emit: EmitFn | None = None) -> int:
+def run_for_market(
+    market_key: str, force: bool = False, emit: EmitFn | None = None, run_sim: bool = True
+) -> int:
     """Run predictions for a single market. Returns prediction count.
 
     force=True bypasses the market-calendar check.
     emit(level, msg, progress) is called with live progress updates.
+    run_sim=False skips the inline bot step — used by the Kafka predict-consumer,
+    which lets the separate simulation-consumer own that stage (event-driven mode).
     """
     _emit = emit or _noop
     mk = market_key.upper()
@@ -103,7 +107,8 @@ def run_for_market(market_key: str, force: bool = False, emit: EmitFn | None = N
     else:
         raise ValueError(f"Unknown market key: {market_key!r}")
 
-    _trigger_sim_step(mk)
+    if run_sim:
+        _trigger_sim_step(mk)
     return count
 
 

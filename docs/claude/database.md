@@ -126,12 +126,29 @@ k8s runner = CronJob template trong `deploy/helm/cronjobs/templates/` (chart `cr
 
 ### Pipeline logic (_run_pipeline trong jobs.py)
 
+**Chế độ tuần tự (mặc định, `KAFKA_ENABLED=false`):**
+
 1. Crawl — skip nếu `is_market_open` = False
 2. Increment counter per-market (DB atomic) → mỗi 10 lần → `train_for_market()`
 3. `run_for_market()` — NASDAQ/SP500 skip predict nếu `is_intraday_open` = False; `target = now + 1h`
 4. `reconcile_predictions(only_market=market_key)` — chấm prediction đã chín (`target_date <= now`)
 5. Ghi `pipeline_reports` row
 6. `delete_old_pipeline_reports(7)` — retention tự động
+
+**Chế độ event-driven (`KAFKA_ENABLED=true`):**
+
+1. Crawl — skip nếu `is_market_open` = False
+2. Increment counter per-market → mỗi 10 lần → `train_for_market()`
+3. `publish("market.crawled", market, {...})` → **return** (không chạy inline predict/reconcile/sim)
+
+Phần còn lại do consumer process đảm nhận (chạy từ image prediction-svc, entrypoint riêng):
+- **predict-consumer** nhận `market.crawled` → `run_for_market(market, run_sim=False)` → publish `predictions.ready`
+- **reconcile-consumer** nhận `predictions.ready` → `reconcile_predictions(only_market=market)` → publish `predictions.reconciled`
+- **simulation-consumer** nhận `predictions.ready` → `run_live_step_for_market(market)`
+
+Deliver at-least-once (commit offset sau handler thành công); reconcile idempotent; predict dedup bởi upsert DB constraint.
+
+Deploy: k8s — chart `deploy/helm/kafka/` (Zookeeper + Kafka + topic-init Job) + `deploy/helm/kafka-consumers/` (3 Deployment opt-in `--set enabled=true`); compose — profile `kafka` (services `zookeeper`, `kafka`, `kafka-init`, 3 consumer).
 
 ### Bot RL DQN
 

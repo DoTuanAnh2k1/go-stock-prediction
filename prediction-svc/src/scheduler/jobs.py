@@ -132,6 +132,44 @@ def _run_pipeline(market_key: str, crawl_fn: Callable) -> None:
             if status == "success":
                 status = "partial"
 
+    # Event-driven hand-off: when Kafka is enabled, this cron job does crawl(+train)
+    # only, then publishes market.crawled. The predict/reconcile/simulation consumers
+    # drive the remaining stages asynchronously. A crawl-stage report is written so the
+    # pipeline UI still shows the run.
+    from src.config import get_settings as _get_settings
+    if _get_settings().kafka_enabled:
+        try:
+            from src.events.producer import publish as _publish
+            cfg = _get_settings()
+            _publish(
+                cfg.kafka_topic_crawled,
+                key=market_key,
+                payload={"market": market_key, "crawled": crawled_count, "trained": trained},
+            )
+            steps.append({"label": "Publish", "status": "success", "detail": "market.crawled"})
+        except Exception as exc:
+            log.warning("pipeline.kafka.publish.error", market=market_key, error=str(exc))
+        finished_at = datetime.now()
+        try:
+            create_pipeline_report(
+                pipeline_key=pipeline_key,
+                market=market_key,
+                status=status,
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_ms=int((finished_at - started_at).total_seconds() * 1000),
+                crawled_count=crawled_count,
+                predictions_count=0,
+                trained=trained,
+                steps=steps,
+                error=error_msg,
+            )
+            delete_old_pipeline_reports(7)
+        except Exception as exc:
+            log.warning("pipeline.report.write.error", market=market_key, error=str(exc))
+        log.info("pipeline.kafka.handoff", market=market_key)
+        return
+
     # Step 3: Predict (run_for_market also triggers sim step internally)
     try:
         from src.orchestrator.runner import run_for_market

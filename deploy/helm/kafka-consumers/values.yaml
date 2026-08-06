@@ -1,0 +1,20 @@
+# Cấu hình self-contained cho kafka-consumers (chart độc lập, không còn global:).
+# Ba consumer Deployment chạy từ image prediction-svc.
+# secrets: provided at deploy time via -f values-secret.yaml (see values-secret.yaml.example); no weak defaults shipped.
+replicas: 1
+imageTag: "1.0.0"            # release tag; CI overrides: --set imageTag=$(git rev-parse --short HEAD)
+image: prediction-svc
+
+# Kafka broker address (in-cluster service name matches compose service name)
+kafkaBrokers: "kafka:9092"
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "384Mi"
+  limits:
+    cpu: "500m"
+    memory: "768Mi"
+
+secrets:
+  postgresPassword: ""    # prediction_svc role password for market_db — provide via -f values-secret.yaml
